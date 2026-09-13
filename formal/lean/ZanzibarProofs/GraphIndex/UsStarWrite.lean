@@ -206,13 +206,30 @@ end ThroughShapeWitness
 /-- **Ensure the in-bridge for a concrete userset endpoint**
     (`index_v4/wildcard.py::WildcardIndex._ensure_bridges`, `bridged_in_shapes` arm):
     if `c` is a concrete node of a bridged-in shape, create the
-    `w_any(c.type, c.pred)` node (lazily) and add the bridge edge `c → w_any`, under the
-    same cycle-rejection guard the core edge-add uses. Idempotence at the reachability
-    level is automatic (`NReaches` is membership, not multiplicity); a non-bridged node
-    is left untouched. The caller ensures `c` is already a live node. -/
+    `w_any(c.type, c.pred)` node (lazily) and — **iff no copy of the bridge edge is
+    already present** — add the bridge edge `c → w_any`, under the same cycle-rejection
+    guard the core edge-add uses. A non-bridged node is left untouched. The caller
+    ensures `c` is already a live node.
+
+    ⚠ **The presence guard is `P6` step 2 (2026-09-13b) and it is a FIDELITY repair, not
+    an optimization.** Until then this definition re-added the edge unconditionally, so it
+    was idempotent on `NReaches` (membership, not multiplicity) and NOT idempotent on the
+    edge MULTISET: `formal/probes/p6_step1_logged_bridge_2026-09-13.lean` measured
+    `(0 calls, 1, 2, 3) = (0, 1, 2, 3)` bridge copies. That was inert only because no live
+    chain called it (see `isSubjectWildcardUserset`'s note); increment B calls it **once per
+    member of the leaf-routed list**, so copies would accumulate per write — the
+    `_leak_accumulates` shape. Python does not: `index_v4/wildcard.py::WildcardIndex.
+    _ensure_own_bridges` interns the `w_any` node and then guards with
+    `if not self.idx.direct_edge_exists_by_id(node.id, w_any.id)` before `add_edge_by_id`.
+    The guard order here is Python's: intern first (the node is added on every bridged
+    branch, present edge included), test the edge second. The multiset statement is pinned
+    by `ensureInBridges_idem` + `InBridgeIdemWitness` below — do not weaken either to a
+    reachability-level claim, which is what let this through for a month. -/
 def GraphState.ensureInBridges (σ : GraphState) (c : NodeKey) : GraphState :=
   if σ.bridgedInConcrete c then
-    if (σ.addNode (wAnyNode (c.type, c.pred))).admitEdge c (wAnyNode (c.type, c.pred)) then
+    if (c, wAnyNode (c.type, c.pred)) ∈ σ.edges then
+      σ.addNode (wAnyNode (c.type, c.pred))
+    else if (σ.addNode (wAnyNode (c.type, c.pred))).admitEdge c (wAnyNode (c.type, c.pred)) then
       (σ.addNode (wAnyNode (c.type, c.pred))).addEdge c (wAnyNode (c.type, c.pred))
     else σ.addNode (wAnyNode (c.type, c.pred))
   else σ
@@ -239,7 +256,21 @@ def GraphState.writeUsStar (σ : GraphState) (t : Tuple) : GraphState :=
     (σ.ensureInBridges c).schema = σ.schema := by
   unfold GraphState.ensureInBridges
   split
-  · split <;> simp
+  · split
+    · simp
+    · split <;> simp
+  · rfl
+
+/-- Residues are untouched by the in-bridge machinery — it only ever adds a node and an
+    edge. (Added by `P6` step 2 for `Cascade.lean::ensureInBridgesLogged_residue`; the
+    `schema` twin above had been enough while nothing downstream needed `residue`.) -/
+@[simp] theorem ensureInBridges_residue (σ : GraphState) (c : NodeKey) :
+    (σ.ensureInBridges c).residue = σ.residue := by
+  unfold GraphState.ensureInBridges
+  split
+  · split
+    · simp
+    · split <;> simp
   · rfl
 
 /-! ## `w_any` nodes are encoding-valid -/
@@ -260,9 +291,123 @@ theorem ensureInBridges_mono {σ : GraphState} {c k : NodeKey} (hk : k ∈ σ.no
   · rw [if_pos hbr]
     have hk' : k ∈ (σ.addNode (wAnyNode (c.type, c.pred))).nodes := List.mem_cons_of_mem _ hk
     split
-    · simpa using hk'
     · exact hk'
+    · split
+      · simpa using hk'
+      · exact hk'
   · rw [if_neg hbr]; exact hk
+
+/-! ## ★ The bridge multiplicity is at most one (`P6` step 2, 2026-09-13b)
+
+The property the presence guard exists for, stated on the edge **multiset** — the level at
+which the old definition was wrong and at which every reachability-shaped statement in this
+file is blind. `ensureInBridges_count_le_one` is an INVARIANT, not a one-shot idempotence
+claim: that is the form the step-3 fold needs, where `writeLoggedOne`'s leaf-routed list
+calls the bridge once per member and the interesting state is the one after `k` calls, not
+after two. -/
+
+/-- The bridged edge is left alone when a copy is already present — the presence branch,
+    isolated for reuse. Mirrors the short-circuit in `index_v4/wildcard.py::WildcardIndex.
+    _ensure_own_bridges` (`if not …direct_edge_exists_by_id`): the `w_any` node is still
+    interned, only the edge-add is skipped. -/
+theorem ensureInBridges_edges_of_mem {σ : GraphState} {c : NodeKey}
+    (h : (c, wAnyNode (c.type, c.pred)) ∈ σ.edges) :
+    (σ.ensureInBridges c).edges = σ.edges := by
+  unfold GraphState.ensureInBridges
+  by_cases hbr : σ.bridgedInConcrete c = true
+  · rw [if_pos hbr, if_pos h, addNode_edges]
+  · rw [if_neg hbr]
+
+/-- ★ **`ensureInBridges` never lets the bridge edge exceed multiplicity one.** With the
+    presence guard this is an inductive invariant of the write leg: the bridged branch adds
+    a copy only when `count = 0`. Without the guard it is FALSE — the measured
+    `(0 calls, 1, 2, 3) = (0, 1, 2, 3)` of
+    `formal/probes/p6_step1_logged_bridge_2026-09-13.lean` §9 is a counterexample at the
+    second call — so this theorem is the positive pin for the P6-step-2 fidelity repair
+    (`docs/sabotage-procedure.md` prefers a positive pin to an `xfail`, and a permanent
+    statement to a probe). `InBridgeIdemWitness` below supplies the red-to-green arm. -/
+theorem ensureInBridges_count_le_one {σ : GraphState} {c : NodeKey}
+    (h : σ.edges.count (c, wAnyNode (c.type, c.pred)) ≤ 1) :
+    (σ.ensureInBridges c).edges.count (c, wAnyNode (c.type, c.pred)) ≤ 1 := by
+  unfold GraphState.ensureInBridges
+  by_cases hbr : σ.bridgedInConcrete c = true
+  · rw [if_pos hbr]
+    by_cases hpres : (c, wAnyNode (c.type, c.pred)) ∈ σ.edges
+    · rw [if_pos hpres, addNode_edges]; exact h
+    · rw [if_neg hpres]
+      have h0 : σ.edges.count (c, wAnyNode (c.type, c.pred)) = 0 :=
+        List.count_eq_zero.mpr hpres
+      split
+      · rw [addEdge_edges, addNode_edges, List.count_cons_self, h0]
+      · rw [addNode_edges]; exact h
+  · rw [if_neg hbr]; exact h
+
+/-! ### ★ Red-to-green witness for the presence guard
+
+The invariant above is provable from the guard and *unprovable without it*, but a reader
+cannot see that from the statement. These pins are the executable half: the literal
+`(0, 1, 2, 3)` measurement from the step-1 probe, re-run as `decide` against the shipped
+definition, where it now reads `(0, 1, 1, 1)`. Delete the guard and `copies_2` / `copies_3`
+red by `decide` with the observed multiplicities printed in the error.
+
+⚠ **Non-vacuity, per arm** (`P6` step 0's lesson): `bridged_control` asserts the node is
+actually bridge-eligible, and `unbridged_control` asserts the count stays `0` at a node of
+the SAME store that is not — without both, a state where `ensureInBridges` is the identity
+would satisfy `copies_*` and prove nothing.
+
+**SWEPT, and the table is one file over**: these pins are swept together with the three
+legs that consume them, in `GraphIndex/Cascade.lean`'s §"CONTROLLED — MUTATION SWEEP over
+everything `P6` step 2 added". Dropping the guard (`M1`) reds `copies_2`, `copies_3`,
+`edges_are_the_bridge_alone`, `ensureInBridges_count_le_one` **and**
+`Cascade.lean::InBridgeLegWitness.logged_second_call_silent`; reversing it (`M2`) reds the
+same set bar the schema/mono projections; `M11`/`M12` are the witness-side mutations that
+earn the two controls their red. `copies_0` is never reddened and says so there. -/
+namespace InBridgeIdemWitness
+
+/-- The through-shape concrete of `ThroughShapeWitness.Sthru`. -/
+def c0 : NodeKey := ⟨"folder", "f1", "viewer", Variant.plain⟩
+
+/-- Its `w_any` bridge target. -/
+def w0 : NodeKey := wAnyNode (c0.type, c0.pred)
+
+/-- A node of the same store that is NOT of a bridged-in shape (`doc#parent` is not a
+    subject-wildcard userset shape), used as the attribution control. -/
+def cUn : NodeKey := ⟨"doc", "d1", "parent", Variant.plain⟩
+
+/-- The caller's precondition: `c0` is live before the bridge is ensured. -/
+def base : GraphState := (emptyState ThroughShapeWitness.Sthru).addNode c0
+
+/-- `n` successive `ensureInBridges c0` calls — the shape a leaf-routed fold produces when
+    the same subject appears in more than one routed member (the step-1 probe's `tSub`
+    had two). -/
+def callN : Nat → GraphState
+  | 0     => base
+  | n + 1 => (callN n).ensureInBridges c0
+
+/-- **NON-VACUITY**: the subject really is bridge-eligible here. -/
+theorem bridged_control : base.bridgedInConcrete c0 = true := by decide
+
+/-- **ATTRIBUTION CONTROL**: an un-bridged node of the same store never gains the edge, so
+    the counts below are the guard's doing and not a state that changes under every call. -/
+theorem unbridged_control :
+    ((base.ensureInBridges cUn).edges.count (cUn, wAnyNode (cUn.type, cUn.pred))) = 0 := by
+  decide
+
+theorem copies_0 : ((callN 0).edges.count (c0, w0)) = 0 := by decide
+theorem copies_1 : ((callN 1).edges.count (c0, w0)) = 1 := by decide
+
+/-- ★ **The pin that was FALSE before the guard** (measured `2`). -/
+theorem copies_2 : ((callN 2).edges.count (c0, w0)) = 1 := by decide
+
+/-- ★ **The pin that was FALSE before the guard** (measured `3`) — two calls could be an
+    accident of `admitEdge`, three cannot. -/
+theorem copies_3 : ((callN 3).edges.count (c0, w0)) = 1 := by decide
+
+/-- The whole edge list stays a singleton, not merely the counted entry: a guard that
+    dropped the duplicate but added some OTHER edge would satisfy `copies_*`. -/
+theorem edges_are_the_bridge_alone : (callN 3).edges = [(c0, w0)] := by decide
+
+end InBridgeIdemWitness
 
 /-! ## Structural-invariant preservation -/
 
@@ -270,7 +415,8 @@ theorem ensureInBridges_mono {σ : GraphState} {c k : NodeKey} (hk : k ∈ σ.no
     endpoint is already live). On the non-bridged branch the state is unchanged; on
     the bridged branch the `w_any` node is encoding-valid (`nodeEnc_wAnyNode`) and the
     bridge edge is admitted by cycle-rejection, so `structInv_addNode` /
-    `structInv_addEdge` apply. -/
+    `structInv_addEdge` apply. The P6-step-2 presence branch adds the node and no edge,
+    so `structInv_addNode` alone discharges it. -/
 theorem structInv_ensureInBridges {S : Schema} {σ : GraphState} (h : StructInv S σ)
     {c : NodeKey} (hc : c ∈ σ.nodes) : StructInv S (σ.ensureInBridges c) := by
   unfold GraphState.ensureInBridges
@@ -279,6 +425,10 @@ theorem structInv_ensureInBridges {S : Schema} {σ : GraphState} (h : StructInv 
     set w := wAnyNode (c.type, c.pred) with hw_def
     have h1 : StructInv S (σ.addNode w) :=
       structInv_addNode h (by rw [hw_def]; exact nodeEnc_wAnyNode (c.type, c.pred))
+    -- the presence branch adds no edge at all (P6 step 2)
+    by_cases hpres : (c, w) ∈ σ.edges
+    · rw [if_pos hpres]; exact h1
+    rw [if_neg hpres]
     by_cases hadmit : (σ.addNode w).admitEdge c w = true
     · rw [if_pos hadmit]
       unfold GraphState.admitEdge at hadmit

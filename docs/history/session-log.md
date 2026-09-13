@@ -30,6 +30,123 @@ from here.
 
 ---
 
+## 2026-09-13c — `P6` step 2 LANDED: guard + four defs in their FINAL home; the `Cascade → UsStarWrite` import is free
+
+rows: `P6` (Log `2026-09-13c`, brief set, size `M` → `L`, summary + `## Traps` + `## Read
+first` rewritten, stays `NOW`, now startable at step 3). Nothing closed, nothing re-ranked.
+
+task lint: clean (13 checks, 182 task file(s) parsed), 24 warning(s)
+read: board + note
+
+Executed step 2 of the 2026-09-12b plan, plus the one thing 2026-09-13b listed as still
+owed. Everything below was built and run first-hand.
+
+**The fidelity bug is fixed at the level it was wrong on.**
+`GraphIndex/UsStarWrite.lean::GraphState.ensureInBridges` now carries Python's presence
+guard, in Python's order (intern the `w_any` node first, test the edge second) — mirroring
+`index_v4/wildcard.py::WildcardIndex._ensure_own_bridges`. The step-1 measurement
+`(0 calls, 1, 2, 3) = (0, 1, 2, 3)` now reads `(0, 1, 1, 1)`. The pin is a **positive
+invariant**, not a two-call idempotence claim: `::ensureInBridges_count_le_one` says
+`count ≤ 1` in implies `count ≤ 1` out, which is the form step 3's fold needs, where the
+bridge is called once per leaf-routed member and the interesting state is after `k` calls.
+The forecast cost was paid and came in cheaper than billed: `structInv_ensureInBridges` and
+`ensureInBridges_edges_mem` (both audited) were re-proved but **kept their statements** —
+the new branch leaves `edges` alone, so it lands in the existing left disjunct. Three
+further proofs in `UsStarClosure.lean` needed the extra branch; one of those,
+`ensureInBridges_creates_bridge`, also kept its statement, because on the presence branch
+the edge is there already and that IS its conclusion.
+
+**★ The step-3 decision I took here, and the measurement behind it.** The four new defs
+(`ensureInBridgesLogged`, `inBridgeOnly`, `releaseInBridges`, `releaseInBridgesLogged`) went
+into `GraphIndex/Cascade.lean` beside `pushDelta` and `removeLoggedOne` — **their final
+home**, not a temporary one — which needed a new `Cascade → UsStarWrite` import. I measured
+that edge before writing a line: `UsStarWrite`'s 18-module cone contains no `Cascade*` and
+no `Reconcile*` module, so it is acyclic; the whole-tree build after adding it was green
+with the job count **unchanged at 1087**, i.e. no new module and no proof cone. The
+alternative was a temporary home in `TtuStarWide.lean`, the only `P6` module that already
+sees both sides. Rejected, and the reason generalises: **the final home must be UPSTREAM of
+the composition site**, `TtuStarWide` is downstream of `writeLoggedOne`, so those defs would
+have had to move at step 3 and every `file::symbol` anchor written for them would have
+broken. The direction is also the trap — `UsStarWrite` importing `Cascade` reads like the
+tidy choice and would have made step 3's needed edge a **cycle**. Step 3 is now a pure
+composition edit.
+
+Two design points recorded rather than left implicit. `ensureInBridgesLogged` emits **iff
+the direct-edge multiset actually grew**, stated on the edges rather than on the guard, so
+the model's "emit on an actual flip" rule survives the presence guard and whatever step 3
+does to it. And `releaseInBridges` deliberately does **not** delete the node: this model has
+no node GC on any leg, so inventing one here would break `StructInv.edgesClosed` rather than
+mirror Python's implicit GC. Both are in the defs' docstrings; the second is a bounded
+over-approximation of `reach`'s fuel and nothing else.
+
+**The sweep: 14 mutations, table in `Cascade.lean` §"CONTROLLED — MUTATION SWEEP over
+everything `P6` step 2 added".** Both halves in one run, because
+`InBridgeLegWitness.logged_second_call_silent` is the pin that couples them — without the
+presence guard the second call grows the multiset, so the logged leg emits a SECOND delta
+row, and a delta per redundant routed member is worse than the duplicate edge. `M10` shows
+the `≤ 1` bound is TIGHT (weakening it to `≤ 2` reds the theorem). Two rows are honest
+negatives and say so in the table: `M6` (dropping `bridgedInConcrete` from `inBridgeOnly`)
+is INERT because the release then fires at nodes with no bridge edge to erase and
+`removeEdgeOne` on an absent edge is the identity — the conjunct is defensive, and the table
+says do not delete it on that row's strength and do not cite it as load-bearing either; and
+`copies_0` cannot be reddened by any mutation because it reads the state BEFORE any call.
+
+★ **Three instrument failures in one sweep, which is the entire argument for controls.**
+(1) `M0` — flip `copies_1`'s own claim — attributed correctly, so step 0's inverted-regex
+bug has not returned. (2) `M0` did **not** catch the new one: ten of fourteen mutations came
+back `ANCHOR MISS` because the Lean sources are CRLF and my multi-line anchors were LF. That
+one at least fails loudly. (3) The quiet one: `M12`'s first form (`doc#parent → doc#viewer`)
+read `INERT`, and it was not — the edit does not change the property under test, because
+`("doc","viewer")` is no more a bridged-in shape of `Sthru` than `("doc","parent")` is (the
+star restriction is `[folder:*]`). **An edit that does not move the property measures
+nothing and is indistinguishable from a clean pin.** Re-aimed at `cUn := c0`, it reddened
+`unbridged_control`. Generalised: a mutation needs its own non-vacuity argument, the same
+way an arm does.
+
+**The 2026-09-13b "still owed" is discharged: the phantom-subject parity result is a PIN.**
+`tests/test_p6_phantom_subject.py` (9 tests, inside the gate) runs the probe's schema, store
+and seven queries through `tests/parity.py::ParityEngine`, with expectations asserted (a
+unanimously WRONG answer must not pass as parity), an arm refusing the 3-way degrade, and an
+arm asserting the phantom is really absent from the index while the control resolves.
+Sabotage table in the module docstring: `S1` — make Python's userset arm require a
+materialised node, i.e. adopt the Lean model's edges-alone reading — reds all nine **at
+fixture setup**, because `ParityEngine._apply` runs a full-grid parity assertion after every
+write and its grid already carries ghost subjects. It dies of the property, not of a
+`TypeError`. `S2`/`S3` are INERT and the docstring names which lines they leave unexercised
+and why widening the schema to chase them would decouple the pin from its evidence.
+
+**Both owed `formal/CORRESPONDENCE.md` §7.3 entries are written** (anchor check: 619 parsed,
+619 resolved): the phantom-subject derived read path, and the stratum-2 reader gap. The
+second one **bounds step 3** and is now a `## Traps` row on `P6`:
+`GraphIndex/ReconcileWrite.lean::GraphState.checkFn` reads `false` where
+`GraphIndex/State.lean::GraphModel.check` and `sem` both read `true`, at userset subjects,
+stratum 2 only — so a step-3 proof must not route a stratum-2 userset-subject obligation
+through `checkFn` and call it settled.
+
+**★ The definition pin earned its keep, on something no reviewer would have flagged.** The
+first `lean` run went RED at `[4c/7]` with one discrepancy:
+`ambient:formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean`. Not the new import — a
+three-name `open InBridgeIdemWitness (c0 w0 base)` I had written at column 0 *inside* the
+witness namespace, for convenience. `statement_pin.py`'s `AMBIENT_RE` is `^(?:variable|open)`
+and has no notion of the enclosing namespace's `end`, so it read that as the ambient context
+of the whole file: the environment every bare name in a central module resolves against. The
+refusal is right even though my `open` was scoped, because the pin cannot tell the two apart
+and the file-wide case genuinely changes what the headline statements MEAN. I did not
+regenerate the golden — I removed the `open` and used three transparent aliases instead, so
+the pin stays sensitive and the `decide` pins are unaffected. The reason is recorded in the
+Lean source at the aliases, where the next person to reach for an `open` will be standing.
+**Generalisable:** in `formal/lean/`, a column-0 `open` is a definition-pin event; write
+`open … in`, or alias. The mutation sweep was then re-run against the shipped (aliased) form
+and reproduced its table row for row.
+
+Counts regenerated (`doc_counts --generate`): `tests/` 1131 → 1140, anchors 612 → 619;
+the headline definition pin is unchanged at 251, which is the expected reading — the new
+defs are not in the headline statements' dependency closure because nothing composes them
+yet.
+
+Still owed: nothing from this session's Rhythm. The four carried items below the banner are
+untouched and still unfiled.
+
 ## 2026-09-13b — `P6` step 1: GO. Bridged leg 14 -> 2 of 546, ceiling 0; `ensureInBridges` leaks a copy per call
 
 rows: `P6` (Log `2026-09-13b`, brief set, `## Read first` rewritten, stays `NOW`, now

@@ -6,6 +6,17 @@ import ZanzibarProofs.GraphIndex.ReconcileDiff
 -- `Spec.Stabilize`} plus `RulesSound`'s 29-module cone, and no module in it is a
 -- `Cascade*` module, so no cycle is created and no new module is added to the build.
 import ZanzibarProofs.GraphIndex.LeafRules
+-- `P6` step 2 (increment B, the in-bridge on the leaf-routed write path): this module
+-- needs `GraphState.ensureInBridges` / `::bridgedInConcrete` (`UsStarWrite.lean:213`,
+-- `:127`) to define their LOGGED and RELEASE counterparts next to `pushDelta` /
+-- `removeEdgeOne`, which is where step 3 composes them into `writeLoggedOne` /
+-- `removeLoggedOne`. **Cycle-checked by transitive closure, as the `LeafRules` note
+-- above was**: `UsStarWrite`'s 18-module cone is Mathlib + `Core.*` + {`GraphIndex.
+-- State`, `Write`, `Closure`, `ObjStarWrite`} + `Spec.Stratify`, and contains no
+-- `Cascade*` module and no `Reconcile*` module, so the edge `Cascade → UsStarWrite` is
+-- acyclic and adds no module to the build (all 18 are already in `Cascade`'s own cone
+-- except `ObjStarWrite`/`UsStarWrite` themselves). Measured 2026-09-13b.
+import ZanzibarProofs.GraphIndex.UsStarWrite
 
 /-!
 # The cascade scheduling layer — logged writes, delta→key mapping, the drain loop (ROADMAP W3d-1a)
@@ -166,6 +177,312 @@ theorem pushDelta_maxOutboxId (σ : GraphState) (k : NodeKey) (r : String) (b : 
   have : σ.nextDeltaId = max σ.maxOutboxId σ.watermark + 1 := rfl
   omega
 
+/-! ## ★ The in-bridge, LOGGED — `P6` increment B, step 2 (2026-09-13b)
+
+**These definitions are ADDITIVE and nothing calls them yet.** Step 3 of the `P6` plan
+composes `ensureInBridgesLogged` into `writeLoggedOne` below (and `ensureInBridges` into
+the unlogged `RulesWrite.lean::writeRules` twin, so `EvalEq` survives) and
+`releaseInBridgesLogged` into `removeLoggedOne`. They live HERE, rather than beside
+`ensureInBridges` in `UsStarWrite.lean`, because they need `pushDelta` (`:142` above) and
+`removeEdgeOne` (`ReconcileDiff.lean:143`), neither of which `UsStarWrite` can see — and
+because this is their final home, so step 3 is a pure composition edit with no file move.
+The `Cascade → UsStarWrite` import that makes it possible is the one added at the top of
+this file; it was measured free (whole-tree build green, job count unchanged, 2026-09-13b).
+
+**Why logged.** Python's bridges go through `index_v4/core.py::ReachabilityIndex.
+add_edge_by_id` / `::remove_edge_by_id`, which record reachability flips in the delta
+outbox (`:1101-1107`) — so the LOGGED variant is the faithful one, and the step-1 probe
+measured what that buys: with the bridge UNLOGGED, tier-1 stability (`uReachStable` /
+`uGraphRecStable` / `uCheckFnStable`) is **false** at 3 unmapped keys; with it LOGGED all
+three are true, because the delta moves those keys out of `hunmapped` and into
+`cascadeKeys`, which is `CascadeStable.lean:367`'s premise doing its job. That is what
+keeps all 23 at-risk stability theorems' STATEMENTS at step 3
+(`formal/probes/p6_step1_logged_bridge_2026-09-13.lean` §6).
+
+⚠ **The delta's KEY (`wAnyNode`, the bridge TARGET) is a free choice, not a measured one.**
+The step-1 probe ran SRC and TGT arms and they were INDISTINGUISHABLE on every number it
+reported. TGT is chosen for symmetry with `writeLoggedOne`, which emits at the edge's
+object node. Do not cite that probe as evidence for the choice; if step 3 ever needs SRC,
+nothing measured here forbids it. -/
+
+/-- **Ensure the in-bridge and log it.** `ensureInBridges` (`UsStarWrite.lean:213`) plus a
+    delta row at the bridge TARGET, emitted **iff the direct-edge multiset actually grew** —
+    the same "emit on an actual flip" rule `writeLoggedOne` uses, stated directly on the
+    edges so it stays correct under the presence guard (an `ensureInBridges` that finds the
+    bridge already there is not a flip and must not emit; Python's `_emit` sits inside
+    `add_edge_by_id`, which that call never reaches). -/
+def GraphState.ensureInBridgesLogged (σ : GraphState) (c : NodeKey) : GraphState :=
+  if (σ.ensureInBridges c).edges = σ.edges then σ.ensureInBridges c
+  else (σ.ensureInBridges c).pushDelta (wAnyNode (c.type, c.pred)) c.pred true
+
+/-- **Is `c` now nothing but its own in-bridge?** The guard of
+    `index_v4/wildcard.py::WildcardIndex._maybe_remove_bridges` (`:363-386`) — "implicit and
+    `reference_count == bridge degree`" — as a predicate on the edge list: `c` is of a
+    bridged-in shape and carries no incident edge other than `c → w_any(c)`. The Python
+    guard also defers to `::_sync_entity_middles` for CROSSING middles (a shape bridged in
+    AND out); this fragment has no object wildcards, so nothing is crossable and that arm is
+    inert — see the entity-middle boundary entry in `formal/CORRESPONDENCE.md` §7. -/
+def GraphState.inBridgeOnly (σ : GraphState) (c : NodeKey) : Bool :=
+  σ.bridgedInConcrete c &&
+    (σ.edges.filter (fun e =>
+      (e.1 == c || e.2 == c) && !(e.1 == c && e.2 == wAnyNode (c.type, c.pred)))).isEmpty
+
+/-- **Release a dead in-bridge** — the retract dual of `ensureInBridges`, and the second of
+    the two mechanisms Wall 2 turned out to need. Erase ONE copy of the bridge edge (the
+    ref-counted `-1`, as `removeEdgeOne` is everywhere on this leg) when `c` has become
+    bridge-only, so the write-then-remove round trip returns the edge multiset to its
+    pre-write value. The step-1 probe measured the residue this collects: `W2-DOM-TGT`
+    leaves `residue := 1` without it and `releaseFixes := true` with it, and it declines
+    correctly on a node that is still live.
+
+    ⚠ **The NODE is deliberately left behind, and that is a MODEL/Python gap, not a
+    decision.** Python's implicit GC deletes the stripped node once its reference count
+    reaches zero. This model has no node GC anywhere — `removeEdgeOne_nodes` is `σ.nodes`
+    on every leg — and inventing one here would break `StructInv.edgesClosed` for the
+    general case rather than mirror anything. The consequence is bounded and is exactly the
+    consequence of every other node the model never collects: `reach`'s fuel
+    (`nodes.length + 1`) stays larger than Python's, which can only over-approximate, and
+    no read consults `nodes` otherwise. -/
+def GraphState.releaseInBridges (σ : GraphState) (c : NodeKey) : GraphState :=
+  if σ.inBridgeOnly c then σ.removeEdgeOne c (wAnyNode (c.type, c.pred)) else σ
+
+/-- **Release the in-bridge and log it** — the retract mirror of `ensureInBridgesLogged`,
+    emitting iff the direct-edge multiset actually SHRANK, exactly as `removeLoggedOne`
+    emits iff a copy was present to remove. Delta at the same `wAnyNode` key the write side
+    uses, so a bridge that comes and goes leaves a balanced pair of rows. -/
+def GraphState.releaseInBridgesLogged (σ : GraphState) (c : NodeKey) : GraphState :=
+  if (σ.releaseInBridges c).edges = σ.edges then σ.releaseInBridges c
+  else (σ.releaseInBridges c).pushDelta (wAnyNode (c.type, c.pred)) c.pred true
+
+/-! ### ★ Red-to-green witnesses for the bridge legs (`P6` step 2)
+
+A definition nothing calls is INERT: the whole gate stays green if these three are wrong,
+which is exactly the position part (i) of `ttuStarFree` was in for a month
+(`UsStarWrite.lean:130`). So, as there, `decide` pins are the only evidence, and as there
+each one carries its own non-vacuity/attribution control. The store is
+`ThroughShapeWitness.Sthru` and the concrete is `InBridgeIdemWitness.c0` —
+the same subject the multiset pins use, so a reader comparing the two sees one scenario.
+
+⚠ `logged_second_call_silent` is the load-bearing one. It couples the two step-2 changes:
+without the presence guard in `ensureInBridges` the second call adds a second edge copy,
+the multiset GROWS, and this leg emits a SECOND delta row — so a future "simplification"
+that drops the guard reddens the outbox pin as well as `InBridgeIdemWitness.copies_2`.
+A delta per redundant call is worse than a duplicate edge: it dirties a key per routed
+member and the cascade re-reconciles it. -/
+namespace InBridgeLegWitness
+
+/-! The three names shared with `UsStarWrite.lean::InBridgeIdemWitness` are ALIASED here
+rather than `open`ed, and that is not a style choice: `formal/conformance/statement_pin.py`
+reads any `open` at column 0 as the hosting FILE's ambient context
+(`AMBIENT_RE = ^(?:variable|open)`), with no notion of the enclosing namespace's `end`. So
+a convenience `open` inside this witness would have registered as a new
+`ambient:…/Cascade.lean` row in the headline DEFINITION pin — the gate caught exactly that
+on 2026-09-13c and refused, correctly: the pin cannot tell a scoped `open` from one that
+changes how every bare name in a central module resolves. Aliases are definitionally
+transparent, so the `decide` pins below are unaffected. -/
+
+/-- `UsStarWrite.lean::InBridgeIdemWitness.c0` — the through-shape concrete. -/
+def c0 : NodeKey := InBridgeIdemWitness.c0
+
+/-- `UsStarWrite.lean::InBridgeIdemWitness.w0` — its `w_any` bridge target. -/
+def w0 : NodeKey := InBridgeIdemWitness.w0
+
+/-- `UsStarWrite.lean::InBridgeIdemWitness.base` — `c0` live over `Sthru`. -/
+def base : GraphState := InBridgeIdemWitness.base
+
+/-- A second endpoint, so the "still live" arm has an incident edge that is not the
+    bridge. -/
+def other : NodeKey := ⟨"doc", "d1", "viewer", Variant.plain⟩
+
+/-- The bridge, materialised and logged once. -/
+def logged1 : GraphState := base.ensureInBridgesLogged c0
+
+/-- The same leg run a second time on the already-bridged state. -/
+def logged2 : GraphState := logged1.ensureInBridgesLogged c0
+
+/-- **NON-VACUITY**: the leg FIRES — one row, at the bridge TARGET, carrying the concrete's
+    predicate and the leaf flag `writeLoggedOne` uses. Pin the whole row, not its length:
+    a row at the wrong key would keep a length pin green. -/
+theorem logged_emits : logged1.outbox = [⟨1, w0, "viewer", true⟩] := by decide
+
+/-- ★ **The presence guard, observed through the OUTBOX**: a redundant call is not a flip,
+    so it emits nothing. Reds if the guard in `UsStarWrite.lean::ensureInBridges` is
+    removed. -/
+theorem logged_second_call_silent : logged2.outbox = logged1.outbox := by decide
+
+/-- **ATTRIBUTION**: at a node of a shape that is NOT bridged-in, the leg is silent from
+    the start — so `logged_emits` is the bridge firing, not "this leg always emits". -/
+theorem logged_unbridged_silent :
+    (base.ensureInBridgesLogged InBridgeIdemWitness.cUn).outbox = [] := by decide
+
+/-- The bridged state whose ONLY incident edge at `c0` is its bridge. -/
+def bridgedOnly : GraphState := base.ensureInBridges c0
+
+/-- The same, plus a live grant `c0 → doc:d1#viewer`. -/
+def stillLive : GraphState := ((base.addNode other).addEdge c0 other).ensureInBridges c0
+
+/-- **NON-VACUITY**: the release FIRES on a dead bridge — the edge multiset returns to
+    empty, which is the `releaseFixes := true` the step-1 probe measured. -/
+theorem release_fires : (bridgedOnly.releaseInBridges c0).edges = [] := by decide
+
+/-- ★ **THE CONTROL that makes the release safe**: at a node that still carries a real
+    edge the release DECLINES, leaving the bridge in place. A GC that fired here would
+    silently revoke a grant — `_maybe_remove_bridges`'s `reference_count == degree` guard
+    is what forbids it. -/
+theorem release_declines : (stillLive.releaseInBridges c0).edges = stillLive.edges := by
+  decide
+
+/-- …and the two arms really are different states, so the pair above is not one scenario
+    read twice. -/
+theorem release_arms_differ : bridgedOnly.edges ≠ stillLive.edges := by decide
+
+/-- The logged release emits exactly one row when it fires, at the same key the write side
+    uses — so a bridge that comes and goes leaves a balanced pair. -/
+theorem release_logged_emits :
+    (bridgedOnly.releaseInBridgesLogged c0).outbox = [⟨1, w0, "viewer", true⟩] := by decide
+
+/-- **ATTRIBUTION**: and nothing at all when it declines. -/
+theorem release_logged_silent_when_declined :
+    (stillLive.releaseInBridgesLogged c0).outbox = stillLive.outbox := by decide
+
+end InBridgeLegWitness
+
+/-! ### ★ CONTROLLED — MUTATION SWEEP over everything `P6` step 2 added (2026-09-13b)
+
+Covers BOTH halves of step 2 in one run — the presence guard and its multiset pins in
+`UsStarWrite.lean::InBridgeIdemWitness`, and the three new legs and their pins here — since
+`logged_second_call_silent` is precisely the pin that couples them. Rule applied: every pin
+must be reddened by at least one mutation, or it is inert and says so out loud
+(`docs/sabotage-procedure.md` §"Sweep the TEST MODULE with mutations").
+
+`M0` is the INSTRUMENT CONTROL: it flips `copies_1`'s own claim and the sweep must
+attribute the red to exactly `copies_1`. `P6` step 0's first sweep had an inverted
+error-location regex, reported `<unattributed>` for every mutation, and therefore listed
+the whole module as candidate-inert — a broken harness that reads like a finding. The
+step-2 sweep's own instrument failure was different and M0 did not catch it: the multi-line
+anchors matched **zero** times because the sources are CRLF and the anchors were LF, so
+ten of fourteen mutations came back `ANCHOR MISS` — which is at least loud. `M12`'s first
+form was a third kind of instrument failure, an edit that does not change the property
+under test (`doc#viewer` is no more bridged-in than `doc#parent`), and it read as `INERT`.
+
+```text
+M0  INSTRUMENT CONTROL: flip copies_1's own claim 1 -> 0     | RED: copies_1
+M1  ensureInBridges: DROP the presence guard (the
+      pre-step-2 definition)                                 | RED: ensureInBridges_schema,
+      ensureInBridges_residue, ensureInBridges_mono, ensureInBridges_edges_of_mem,
+      ensureInBridges_count_le_one, copies_2, copies_3, edges_are_the_bridge_alone,
+      structInv_ensureInBridges
+M2  ensureInBridges: guard tests the REVERSED pair (w_any,c) | RED: ensureInBridges_edges_of_mem,
+      ensureInBridges_count_le_one, copies_2, copies_3, edges_are_the_bridge_alone,
+      structInv_ensureInBridges
+M3  ensureInBridgesLogged: emit unconditionally              | RED: logged_second_call_silent,
+      logged_unbridged_silent, ensureInBridgesLogged_edges, ensureInBridgesLogged_nodes,
+      ensureInBridgesLogged_schema, ensureInBridgesLogged_residue, ensureInBridgesLogged_evalEq
+M4  ensureInBridgesLogged: log at the SOURCE, not the TARGET | RED: logged_emits
+M5  ensureInBridgesLogged: emit with leaf := false           | RED: logged_emits
+M6  inBridgeOnly: drop the bridgedInConcrete conjunct        | INERT (nothing reddened)
+M7  inBridgeOnly: stop excluding the bridge edge itself      | RED: release_fires,
+      release_logged_emits
+M8  inBridgeOnly: ignore incident edges (fire whenever
+      bridged)                                               | RED: release_declines,
+      release_logged_silent_when_declined
+M9  releaseInBridges: erase the bridge the wrong way round   | RED: release_fires,
+      release_logged_emits, releaseInBridges_edges_subset
+M10 ensureInBridges_count_le_one: weaken the bound 1 -> 2    | RED: ensureInBridges_count_le_one
+M11 witness: c0's predicate viewer -> parent (a shape Sthru
+      does NOT bridge in)                                    | RED: bridged_control, copies_1,
+      copies_2, copies_3, edges_are_the_bridge_alone
+M12 witness: the un-bridged control node cUn becomes c0      | RED: unbridged_control
+M13 witness: stillLive loses its non-bridge edge             | RED: release_declines,
+      release_arms_differ, release_logged_silent_when_declined
+```
+
+**M10 is the one that says the count pin is TIGHT.** Weakening its bound from `1` to `2`
+reddens it — the proof genuinely needs `count = 0` on the add branch — so the theorem is not
+a bound that happens to hold with slack.
+
+**M6 is INERT, and that is honest rather than a hole.** Dropping `bridgedInConcrete` from
+`inBridgeOnly` changes no observation here because the release then fires at nodes that have
+no bridge edge to erase, and `removeEdgeOne` on an absent edge is the identity — no edge
+moves, so no delta either. The conjunct is defensive: it keeps the predicate's MEANING
+("this node is bridge-only") rather than guarding a reachable state. Do not delete it on the
+strength of this row; do not cite it as load-bearing either. Note the contrast with `M7`,
+where the *other* half of the same definition is load-bearing twice over.
+
+**`copies_0` is never reddened by any mutation above, and cannot be.** It reads the state
+BEFORE any call, so it is the baseline of the `(0, 1, 1, 1)` sequence rather than a pin on
+the guard — it is there so the sequence is legible next to the probe's `(0, 1, 2, 3)`.
+
+The sweep script is throwaway and gitignored (`.scratch/p6_step2_mutation_sweep.py`); this
+table is the evidence. Baseline and restored builds were both green in the same run.
+-/
+
+/-! ### Projections and `EvalEq` for the bridge legs
+
+The logged legs differ from their unlogged cores in the OUTBOX and nothing else, which is
+precisely what `EvalEq` was introduced to say. Step 3 needs these to carry the
+logged/unlogged correspondence (`writeLoggedRules_evalEq`) through a bridged write leg. -/
+
+@[simp] theorem ensureInBridgesLogged_edges (σ : GraphState) (c : NodeKey) :
+    (σ.ensureInBridgesLogged c).edges = (σ.ensureInBridges c).edges := by
+  unfold GraphState.ensureInBridgesLogged
+  split <;> simp
+
+@[simp] theorem ensureInBridgesLogged_nodes (σ : GraphState) (c : NodeKey) :
+    (σ.ensureInBridgesLogged c).nodes = (σ.ensureInBridges c).nodes := by
+  unfold GraphState.ensureInBridgesLogged
+  split <;> simp
+
+@[simp] theorem ensureInBridgesLogged_schema (σ : GraphState) (c : NodeKey) :
+    (σ.ensureInBridgesLogged c).schema = σ.schema := by
+  unfold GraphState.ensureInBridgesLogged
+  split <;> simp
+
+@[simp] theorem ensureInBridgesLogged_residue (σ : GraphState) (c : NodeKey) :
+    (σ.ensureInBridgesLogged c).residue = σ.residue := by
+  unfold GraphState.ensureInBridgesLogged
+  split <;> simp
+
+@[simp] theorem releaseInBridges_schema (σ : GraphState) (c : NodeKey) :
+    (σ.releaseInBridges c).schema = σ.schema := by
+  unfold GraphState.releaseInBridges
+  split <;> simp
+
+@[simp] theorem releaseInBridges_nodes (σ : GraphState) (c : NodeKey) :
+    (σ.releaseInBridges c).nodes = σ.nodes := by
+  unfold GraphState.releaseInBridges
+  split <;> simp
+
+@[simp] theorem releaseInBridges_residue (σ : GraphState) (c : NodeKey) :
+    (σ.releaseInBridges c).residue = σ.residue := by
+  unfold GraphState.releaseInBridges
+  split <;> simp
+
+/-- Releasing only ever removes edges — the retract-side counterpart of
+    `UsStarClosure.lean::ensureInBridges_edges_mono`, and what an acyclicity argument
+    needs (`NReaches` can only shrink). -/
+theorem releaseInBridges_edges_subset (σ : GraphState) (c : NodeKey) :
+    ∀ e ∈ (σ.releaseInBridges c).edges, e ∈ σ.edges := by
+  unfold GraphState.releaseInBridges
+  split
+  · exact fun e he => removeEdgeOne_edges_subset σ c (wAnyNode (c.type, c.pred)) e he
+  · exact fun _ he => he
+
+@[simp] theorem releaseInBridgesLogged_edges (σ : GraphState) (c : NodeKey) :
+    (σ.releaseInBridgesLogged c).edges = (σ.releaseInBridges c).edges := by
+  unfold GraphState.releaseInBridgesLogged
+  split <;> simp
+
+@[simp] theorem releaseInBridgesLogged_nodes (σ : GraphState) (c : NodeKey) :
+    (σ.releaseInBridgesLogged c).nodes = σ.nodes := by
+  unfold GraphState.releaseInBridgesLogged
+  split <;> simp
+
+@[simp] theorem releaseInBridgesLogged_schema (σ : GraphState) (c : NodeKey) :
+    (σ.releaseInBridgesLogged c).schema = σ.schema := by
+  unfold GraphState.releaseInBridgesLogged
+  split <;> simp
+
 /-! ## Logged writes (decision 1) -/
 
 /-- One logged routed-edge write: materialize the guarded edge and, iff it was
@@ -215,6 +532,23 @@ theorem admitEdge_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (a b : NodeKe
     σ'.admitEdge a b = σ.admitEdge a b := by
   unfold GraphState.admitEdge GraphState.reach
   rw [h.edges, h.nodes]
+
+/-- **The logged in-bridge is `EvalEq` to its unlogged core** (`P6` step 2): the outbox is
+    the only difference, which is what lets step 3 bridge BOTH the logged leg and its
+    unlogged `RulesWrite.lean::writeRules` twin and still carry
+    `writeLoggedRules_evalEq`. -/
+theorem ensureInBridgesLogged_evalEq (σ : GraphState) (c : NodeKey) :
+    EvalEq (σ.ensureInBridgesLogged c) (σ.ensureInBridges c) := by
+  refine ⟨by simp, by simp, by simp, ?_⟩
+  unfold GraphState.ensureInBridgesLogged
+  split <;> simp
+
+/-- The logged release is `EvalEq` to its unlogged core — the retract mirror. -/
+theorem releaseInBridgesLogged_evalEq (σ : GraphState) (c : NodeKey) :
+    EvalEq (σ.releaseInBridgesLogged c) (σ.releaseInBridges c) := by
+  refine ⟨by simp, by simp, by simp, ?_⟩
+  unfold GraphState.releaseInBridgesLogged
+  split <;> simp
 
 /-- `writeDirect` is `EvalEq`-congruent (it reads and writes only edges/nodes). -/
 theorem writeDirect_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (t : Tuple) :

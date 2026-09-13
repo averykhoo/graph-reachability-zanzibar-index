@@ -53,7 +53,11 @@ The three shapes an edge can take, peeled through `writeUsStar`'s nested bridge
 machinery: the grant, an in-bridge (`c → w_any`), or an out-bridge (`w_all → c`). -/
 
 /-- `ensureInBridges`'s edge effect: an edge is either an old edge or the single
-    in-bridge `c → wAnyNode (c.type, c.pred)` (with `c` bridged-in-concrete). -/
+    in-bridge `c → wAnyNode (c.type, c.pred)` (with `c` bridged-in-concrete). Unchanged
+    in STATEMENT by the P6-step-2 presence guard — the new branch leaves `edges` alone,
+    so it lands in the left disjunct — which is the point: the guard is invisible to
+    every consumer that reasons about the edge SET, and visible only to the multiset
+    statement `UsStarWrite.lean::ensureInBridges_idem`. -/
 theorem ensureInBridges_edges_mem {σ : GraphState} {c : NodeKey} {e : NodeKey × NodeKey}
     (he : e ∈ (σ.ensureInBridges c).edges) :
     e ∈ σ.edges ∨ (e = (c, wAnyNode (c.type, c.pred)) ∧ σ.bridgedInConcrete c = true) := by
@@ -61,11 +65,13 @@ theorem ensureInBridges_edges_mem {σ : GraphState} {c : NodeKey} {e : NodeKey �
   by_cases hbr : σ.bridgedInConcrete c = true
   · rw [if_pos hbr] at he
     split at he
-    · rw [addEdge_edges, addNode_edges] at he
-      rcases List.mem_cons.mp he with heq | hmem
-      · exact Or.inr ⟨heq, hbr⟩
-      · exact Or.inl hmem
     · rw [addNode_edges] at he; exact Or.inl he
+    · split at he
+      · rw [addEdge_edges, addNode_edges] at he
+        rcases List.mem_cons.mp he with heq | hmem
+        · exact Or.inr ⟨heq, hbr⟩
+        · exact Or.inl hmem
+      · rw [addNode_edges] at he; exact Or.inl he
   · rw [if_neg (by simpa using hbr)] at he; exact Or.inl he
 
 /-- An edge of a state produced by the two `ensureBridges` (out) then two

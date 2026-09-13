@@ -31,10 +31,14 @@ model gap and not a shipped bug:
     control f1   ('viewer', 'folder', 'f1', 'gate', 'doc', 'd1') -> UNANIMOUS True
     control f2   ('viewer', 'folder', 'f2', 'gate', 'doc', 'd1') -> UNANIMOUS True
 
-(!) STILL OWED, and named on task row P6 rather than left implicit: this is a re-runnable
-probe, NOT a pin. Nothing in the ten-phase gate reddens if the phantom-subject property
-regresses. Promoting it to a permanent parity test is a step-2 item; the durability
-ranking in `docs/sabotage-procedure.md` puts a tracked probe two rungs below a test.
+(!) DISCHARGED 2026-09-13b by P6 step 2: this probe's property is now a PIN --
+`tests/test_p6_phantom_subject.py`, inside the gate (tests-tile), same schema, same store,
+same queries, plus non-vacuity arms (the graph side must be in the matrix; the phantom must
+really be absent from the index) and a recorded sabotage table. The line that used to stand
+here read "STILL OWED ... nothing in the ten-phase gate reddens if the phantom-subject
+property regresses"; something does now. This file stays as the dated measurement that
+turned the Lean residual into a `CORRESPONDENCE.md` sec 7 boundary -- read it for that, and
+read the test for the current state.
 """
 import sys
 import traceback
