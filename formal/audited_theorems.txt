@@ -14,6 +14,7 @@
 #
 #     bash formal/regen_audit_pin.sh
 #
+GraphAdmission.noBridgedDerived
 GraphModel.check_derived_ResidueEmpty
 GraphModel.check_derived_uposOnly
 GraphModel.probeDerived_ResidueEmpty
@@ -85,6 +86,20 @@ ThroughShapeWitness.through_shape_is_bridged_in
 TtuStarFreeW
 W4Witness.accepts
 W4Witness.fragment
+W4Witness.sxThruDerived_not_admitted
+W4Witness.sxThruDerived_other_admission_fields_hold
+W4Witness.sxThruDerived_wsBare_holds_but_usWild_fails
+W4Witness.sxThruPlain_admitted
+W4Witness.sxThruPlain_usWild
+W4Witness.sxThru_literal_disjunct_is_false
+W4Witness.sxThru_shape_present_in_both
+W4Witness.sxUsPlain_admitted
+W4Witness.sxUsPlain_usWild
+W4Witness.sxUsWild_not_admitted
+W4Witness.sxUsWild_other_admission_fields_hold
+W4Witness.sxUsWild_r_is_derived_and_bridged
+W4Witness.sxUsWild_usWild_false
+W4Witness.sx_noBridgedDerived_applies
 W4Witness.within_scope
 W4WitnessDirect.accepts
 W4WitnessDirect.admission

@@ -123,6 +123,30 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
       rank assignment; `RulesSaturate.lean`).
     * `objWild` — object-wildcard shapes never target a derived relation
       (`zanzibar_utils_v1.py::_reject_object_wildcard_scope`, first loop).
+    * `usWild` — **the SUBJECT-wildcard twin of `objWild`, added 2026-09-13e (`TK68`).**
+      A derived key is never a subject-wildcard *userset* shape, i.e. never carries an
+      in-bridge. `UnsupportedByGraphIndex` survives for exactly TWO scope rejections
+      (CLAUDE.md "Layout / mental model"); `objWild` mirrored the first and nothing
+      mirrored the second, so the Lean admission predicate was strictly WEAKER than the
+      shipped compiler. Python refuses both disjuncts of
+      `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset` over a tainted key:
+      - disjunct (a), a literal `[T:*#p]` restriction with `(T, p)` derived —
+        `zanzibar_utils_v1.py::_build_plan_tree` (`:1879-1886`, *"wildcard userset
+        restriction … over the derived relation … needs symbolic composition through
+        residues"*). No untainted container can escape it: `::_mentions` (`:1677-1678`)
+        counts a userset restriction as a reference, so `::compute_taint` taints the
+        container and the plan builder runs on it.
+      - disjunct (b), a star-tupleset TTU through-shape landing on a derived target —
+        `zanzibar_utils_v1.py::_reject_object_wildcard_scope` (`:1484-1492`, the
+        `restr.wildcard and restr.predicate == '...'` branch). Its loop ranges over
+        tainted keys only; an UNTAINTED container whose TTU targets a derived predicate
+        name is refused one check earlier, by `::_validate_ttu_tuplesets` (`:1132-1145`).
+      Stated as a `∀ … ∈ taintedKeys S` exactly like `objWild`'s `∀ … ∈ S.objectWildcards`
+      — a quantifier over a computed LIST, so it is `decide`-shaped at a concrete schema,
+      and `::usWildOfDerived` is the contrapositive the consumers actually want.
+      ⚠ It is a genuine NARROWING, not a consequence of the neighbouring fields:
+      `W4Witness.sxUsWild_other_admission_fields_hold` machine-checks that every other
+      decidable field still holds at the one-declaration variant where this one fails.
     * `storeValid` — write admission: every stored tuple matches a declared
       `Direct` restriction of its `(object.type, relation)` def
       (`TupleSource`/`RuleSet.apply` filter admission). **Widened to
@@ -165,6 +189,7 @@ structure GraphAdmission (S : Schema) (T : Store) : Prop where
   matchDecl : RewriteMatchDeclared S
   ranked : RewriteRanked S
   objWild : ∀ tr ∈ S.objectWildcards, isDerived S tr = false
+  usWild : ∀ k ∈ taintedKeys S, S.isSubjectWildcardUserset k.1 k.2 = false
   storeValid : StoreValidRulesD S T
   ttuNotLeaf : TtuTargetsSat S NotLeafName
   directRestrNotLeaf : DirectRestrictionsNotLeaf S
@@ -218,6 +243,23 @@ theorem GraphAdmission.leafScope {S : Schema} {T : Store} (hA : GraphAdmission S
     LeafScope S :=
   ⟨hA.wf, matchNotLeaf_of_declared hA.wf (fun r hr => (hA.matchDecl r hr).1),
     hA.noLeafSubjects, hA.keysNonempty⟩
+
+/-- **`usWild` in the form its consumers ask for** — `GraphIndex/UsStarWrite.lean::
+    NoBridgedDerived`, the scope carry `P6` step 3b threads (`TK68`).
+
+    The two forms exist for different jobs and neither replaces the other. The FIELD is a
+    membership quantifier over `taintedKeys S`, so it is `decide`-shaped at a concrete
+    schema and all seven `GraphAdmission` construction sites discharge it by `decide`.
+    The CARRY is the ∀-over-strings form every consumer wants, because a consumer arrives
+    holding `isDerived S (dt, R) = true` for a `(dt, R)` it did not choose. This theorem
+    is the whole bridge between them, and it is the reason the field could be stated in
+    the decidable shape without making the consumers pay for it.
+
+    ⚠ The type-index trap that makes the general predicate-string claim unsaveable is on
+    `NoBridgedDerived` itself; read it there before restating anything. -/
+theorem GraphAdmission.noBridgedDerived {S : Schema} {T : Store} (hA : GraphAdmission S T) :
+    NoBridgedDerived S :=
+  fun _ _ hder => hA.usWild _ (List.mem_of_elem_eq_true hder)
 
 /-- **`W4Fragment S T` — the honest fragment carries.** Scope restrictions the
     current proof needs that Python admission does NOT imply (each is a documented
@@ -885,6 +927,7 @@ theorem accepts : GraphAdmission Sx Tx where
   matchDecl := by unfold RewriteMatchDeclared; decide
   ranked := ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩
   objWild := by decide
+  usWild := by decide
   storeValid := by
     intro t ht
     simp only [Tx, List.mem_singleton] at ht
@@ -934,6 +977,374 @@ theorem sxLeafRef_other_admission_fields_hold :
   refine ⟨by unfold NodupKeys; decide, by unfold Stratifiable; decide,
           by unfold TtuTuplesetsDirect; decide, by unfold RewriteMatchDeclared; decide,
           by decide, by decide⟩
+
+/-! ### `usWild` is an INDEPENDENT field too (`TK68`, 2026-09-13e)
+
+Same argument as the block above, and the same reason for running it: a green build vets
+nothing about a new admission field. `usWild` could be a tautology on every schema the
+other twelve fields admit, in which case adding it would mirror nothing and narrow
+nothing, and all seven `by decide` discharges would still go through.
+
+The pair below varies **exactly one bit**: the `wildcard` flag of one `Direct`
+restriction. That is not a stylistic choice — it is the bit Python itself branches on.
+`zanzibar_utils_v1.py::_build_plan_tree` (`:1879-1889`) walks the tainted userset
+restrictions of a derived def and sends them two ways: `if r.wildcard` raises
+`UnsupportedByGraphIndex`, and the `else` builds a `PDerivedUserset` node and COMPILES.
+So `SxUsPlain` is a schema Python accepts and `SxUsWild` is one it refuses, differing in
+that flag alone — which makes the pin a fidelity claim and not just an independence one.
+
+⚠ **The variation has to ADD a declaration rather than edit one, and that is forced.**
+Both `doc#a` and `doc#b` are operands of `doc#r`, so hanging the `[doc:*#r]` restriction
+on either makes `r` and that operand mutually referencing, `taintedKeys` swallows both,
+and `Stratifiable` goes FALSE — which would wreck the independence claim by varying two
+axes at once. The fresh `doc#c` depends on `r` and nothing depends on `c`, so the derived
+dependency graph stays acyclic and only this field moves. -/
+
+/-- `Sx` plus `doc#c := [doc:*#r]` — a **wildcard** userset restriction over the derived
+    relation `doc#r`. `zanzibar_utils_v1.py::_build_plan_tree:1881-1886` refuses it. -/
+def SxUsWild : Schema :=
+  ⟨[(("doc", "a"), .direct [("user", BARE, false)]),
+    (("doc", "b"), .direct [("user", BARE, false)]),
+    (("doc", "r"), .excl (.computed "a") (.computed "b")),
+    (("doc", "c"), .direct [("doc", "r", true)])], []⟩
+
+/-- **THE CONTROL — one bit away.** `Sx` plus `doc#c := [doc#r]`, the *concrete* userset
+    over the same derived relation. `zanzibar_utils_v1.py::_build_plan_tree:1887-1889`
+    compiles it to a `PDerivedUserset`, so Python ACCEPTS this one. -/
+def SxUsPlain : Schema :=
+  ⟨[(("doc", "a"), .direct [("user", BARE, false)]),
+    (("doc", "b"), .direct [("user", BARE, false)]),
+    (("doc", "r"), .excl (.computed "a") (.computed "b")),
+    (("doc", "c"), .direct [("doc", "r", false)])], []⟩
+
+/-- POSITIVE half — the live witness satisfies the new field. -/
+theorem sx_usWild : ∀ k ∈ taintedKeys Sx, Sx.isSubjectWildcardUserset k.1 k.2 = false := by
+  decide
+
+/-- NEGATIVE half — one wildcard flag is enough to refuse admission. -/
+theorem sxUsWild_usWild_false :
+    ¬ (∀ k ∈ taintedKeys SxUsWild, SxUsWild.isSubjectWildcardUserset k.1 k.2 = false) := by
+  decide
+
+/-- **ATTRIBUTION, and the instrument control.** Flipping the bit back re-admits the
+    schema, so the negative half above is carried by the WILDCARD flag and not by the
+    mere presence of a fourth declaration, nor by `doc#c` referencing a derived relation
+    (it still does here, and `doc#c` is still tainted — `sxUsPlain_c_is_derived`). -/
+theorem sxUsPlain_usWild :
+    ∀ k ∈ taintedKeys SxUsPlain, SxUsPlain.isSubjectWildcardUserset k.1 k.2 = false := by
+  decide
+
+/-- The control is not vacuous by having lost its taint: `doc#c` is derived in BOTH
+    variants, so the two schemas' `taintedKeys` agree and the quantifier ranges over the
+    same four-key list on each side. -/
+theorem sxUsPlain_c_is_derived :
+    isDerived SxUsPlain ("doc", "c") = true ∧ isDerived SxUsWild ("doc", "c") = true ∧
+      taintedKeys SxUsPlain = taintedKeys SxUsWild := by decide
+
+/-- The sharp form of the negative half, naming the offending key: `doc#r` is derived AND
+    bridged-in at `SxUsWild`, which is exactly the pair `usWild` forbids and exactly what
+    makes `Cascade.lean::reachedByW3d_edge_source_ne_R` unsaveable once the write leg
+    bridges (`TK68`). Under the control the second conjunct flips. -/
+theorem sxUsWild_r_is_derived_and_bridged :
+    isDerived SxUsWild ("doc", "r") = true ∧
+      SxUsWild.isSubjectWildcardUserset "doc" "r" = true ∧
+      SxUsPlain.isSubjectWildcardUserset "doc" "r" = false := by decide
+
+/-- **The independence half.** Every OTHER decidable `GraphAdmission` field still holds at
+    `SxUsWild`, so none of them implies `usWild` and the field is genuinely load-bearing
+    rather than derivable. (`wf` and `storeValid` are omitted as in the block above:
+    neither is `decide`-shaped. `wf` is immediate — `a`/`b`/`r`/`c` are dot-free — and
+    `storeValid` is store-indexed, so it is `Sx`'s own at the empty store.) -/
+theorem sxUsWild_other_admission_fields_hold :
+    NodupKeys SxUsWild ∧ Stratifiable SxUsWild ∧ TtuTuplesetsDirect SxUsWild ∧
+      RewriteMatchDeclared SxUsWild ∧ DirectRestrictionsNotLeaf SxUsWild ∧
+      ComputedRefsNotLeaf SxUsWild ∧ NoLeafSubjects SxUsWild ∧
+      SxUsWild.keys.all (fun k => k.2 != "") = true ∧
+      (∀ tr ∈ SxUsWild.objectWildcards, isDerived SxUsWild tr = false) := by
+  refine ⟨by unfold NodupKeys; decide, by unfold Stratifiable; decide,
+          by unfold TtuTuplesetsDirect; decide, by unfold RewriteMatchDeclared; decide,
+          by decide, by decide, by decide, by decide, by decide⟩
+
+/-! ### …and `usWild` is not implied by the FRAGMENT either — the through-shape half
+
+★ **The block above is not enough, and saying why is the point of this one.** It shows
+`usWild` is independent of the other *admission* fields. But the headline theorems take
+`GraphAdmission ∧ W4Fragment`, and `W4Fragment.wsBare` forces every shape in
+`wildcardShapes S` to be `BARE` — which makes disjunct (a) of
+`Schema.isSubjectWildcardUserset` **identically false on the whole W4 fragment**
+(`UsStarWrite.lean`'s header records this: `wildcardShapes` sweeps only LITERAL
+restrictions, so the in-bridge machinery was dead code there). `SxUsWild` carries a
+non-bare wildcard restriction, so `wsBare` is FALSE at it. On the fragment alone, the
+pin above therefore leaves `usWild` open to being dismissed as already-implied — and a
+field that claims nothing where the headlines stand would be exactly the tautology the
+whole block exists to refuse.
+
+Disjunct (b) is what survives. It is purely SCHEMATIC (a star-tupleset TTU through-shape),
+while `wsBare` constrains literal restrictions and `ttuStarFree` constrains STORED star
+tuples — so neither touches it, and a schema can have a derived through-shape with no
+stored star tuple at all. The pair below is that schema and its one-axis control, and it
+is also the exact shape `P6` is about: part (i) of the `ttuStarFree` lift (2026-08-14)
+added disjunct (b) precisely because the through-shape was the hole that machine-checked
+`graph_correct` FALSE without `W4Fragment.ttuStarFree`. -/
+
+/-- `folder#viewer := [user] but not banned` (DERIVED) · `doc#parent := [folder, folder:*]`
+    (a **bare** star tupleset — `wsBare`-legal) · `doc#viewer := viewer from parent`. The
+    TTU rewrites `folder:* parent doc:d` into subject shape `(folder, viewer)`, so
+    `(folder, viewer)` is a bridged-in through-shape AND derived.
+    `zanzibar_utils_v1.py::_reject_object_wildcard_scope:1484-1492` refuses it. -/
+def SxThruDerived : Schema :=
+  ⟨[(("folder", "banned"), .direct [("user", BARE, false)]),
+    (("folder", "viewer"), .excl (.direct [("user", BARE, false)]) (.computed "banned")),
+    (("doc", "parent"),    .direct [("folder", BARE, false), ("folder", BARE, true)]),
+    (("doc", "viewer"),    .ttu "viewer" "parent")], []⟩
+
+/-- **THE CONTROL — one axis: the boolean operator.** `folder#viewer := [user]`, so the
+    through-shape is still derived-free. Everything else is byte-identical. -/
+def SxThruPlain : Schema :=
+  ⟨[(("folder", "banned"), .direct [("user", BARE, false)]),
+    (("folder", "viewer"), .direct [("user", BARE, false)]),
+    (("doc", "parent"),    .direct [("folder", BARE, false), ("folder", BARE, true)]),
+    (("doc", "viewer"),    .ttu "viewer" "parent")], []⟩
+
+/-- **THE SHARP CLAIM.** `wsBare` HOLDS at `SxThruDerived` — every wildcard restriction
+    there is bare — and `usWild` FAILS anyway. So `usWild` is not a consequence of
+    `W4Fragment.wsBare`, and the field carries content exactly where the headline
+    theorems stand. -/
+theorem sxThruDerived_wsBare_holds_but_usWild_fails :
+    (∀ sh ∈ wildcardShapes SxThruDerived, sh.2 = BARE) ∧
+      ¬ (∀ k ∈ taintedKeys SxThruDerived,
+          SxThruDerived.isSubjectWildcardUserset k.1 k.2 = false) := by
+  refine ⟨by decide, by decide⟩
+
+/-- **ATTRIBUTION.** Dropping `but not banned` re-admits the schema, so the failure above
+    is carried by `folder#viewer` being DERIVED and not by the star tupleset, the TTU, or
+    the through-shape itself — all three are unchanged here. -/
+theorem sxThruPlain_usWild :
+    ∀ k ∈ taintedKeys SxThruPlain,
+      SxThruPlain.isSubjectWildcardUserset k.1 k.2 = false := by decide
+
+/-- The control is not vacuous by having lost the through-shape: `(folder, viewer)` is a
+    bridged-in shape in BOTH variants, and it is derived in only one. That isolates the
+    axis to the taint. -/
+theorem sxThru_shape_present_in_both :
+    SxThruDerived.isSubjectWildcardUserset "folder" "viewer" = true ∧
+      SxThruPlain.isSubjectWildcardUserset "folder" "viewer" = true ∧
+      isDerived SxThruDerived ("folder", "viewer") = true ∧
+      isDerived SxThruPlain ("folder", "viewer") = false := by decide
+
+/-- …and it is disjunct (b) doing the work on BOTH sides, not the literal disjunct (a):
+    no literal `[folder:*#viewer]` restriction occurs in either schema. Without this the
+    pair above would not distinguish the through-shape half from `SxUsWild`'s half. -/
+theorem sxThru_literal_disjunct_is_false :
+    SxThruDerived.defs.any
+        (fun d => (exprRestrictions d.2).contains ("folder", "viewer", true)) = false ∧
+      SxThruDerived.isStarTuplesetThrough "folder" "viewer" = true := by decide
+
+/-- Every OTHER decidable `GraphAdmission` field still holds at `SxThruDerived`, as at
+    `SxUsWild` — so the through-shape witness is an independence pin in its own right and
+    not merely a `wsBare` observation. -/
+theorem sxThruDerived_other_admission_fields_hold :
+    NodupKeys SxThruDerived ∧ Stratifiable SxThruDerived ∧
+      TtuTuplesetsDirect SxThruDerived ∧ RewriteMatchDeclared SxThruDerived ∧
+      DirectRestrictionsNotLeaf SxThruDerived ∧ ComputedRefsNotLeaf SxThruDerived ∧
+      NoLeafSubjects SxThruDerived ∧
+      SxThruDerived.keys.all (fun k => k.2 != "") = true ∧
+      (∀ tr ∈ SxThruDerived.objectWildcards, isDerived SxThruDerived tr = false) := by
+  refine ⟨by unfold NodupKeys; decide, by unfold Stratifiable; decide,
+          by unfold TtuTuplesetsDirect; decide, by unfold RewriteMatchDeclared; decide,
+          by decide, by decide, by decide, by decide, by decide⟩
+
+/-- **The BEHAVIOURAL pin on the carry**, not on the field. `P6` step 3a's lesson was that
+    a mutation whose only red is a broken PROOF retires evidence rather than finding a
+    defect (`UsStarWrite.lean` sec "CONTROLLED -- MUTATION SWEEP …", `M2`/`M5`); so
+    `GraphAdmission.noBridgedDerived` gets an arm that USES it and reads a concrete answer
+    out the other side, rather than being certified by its own typecheck. Note the route:
+    this goes through the bundle at `Sx`, not through `decide` on the predicate — the same
+    fact by `decide` would stay green under a broken bridge and is therefore no pin. -/
+theorem sx_noBridgedDerived_applies :
+    Sx.isSubjectWildcardUserset "doc" "r" = false :=
+  accepts.noBridgedDerived "doc" "r" (by decide)
+
+/-! ### The four pins that read the FIELD — added because the sweep demanded them
+
+(!) **THE SWEEP CHANGED THIS DELIVERABLE, which is the argument for sweeping** (`TK68`,
+2026-09-13e; `.scratch/tk68_mutation_sweep.py`, table in the `TK68` history note). On the
+first run the two mutations that matter most — `M1`, re-ranging `usWild` over
+`S.objectWildcards` (a plausible copy-paste slip from the field beside it), and `M2`,
+re-ranging it over `[]` (vacuous on EVERY schema) — reddened
+`GraphAdmission.noBridgedDerived` and **nothing else**. That is a broken PROOF, not a
+broken claim, and it is exactly the failure mode `P6` step 3a recorded: rewriting the
+proof would have retired the only evidence against the tautology attack the whole block
+exists to refuse.
+
+The cause was structural and worth naming: every pin above states the predicate
+`∀ k ∈ taintedKeys …` **re-spelled**, so none of them OBSERVES the field. A mutation of
+the field could not move them by construction.
+
+The four below fix that by claiming something about `GraphAdmission` itself — the bundle
+REFUSES the two schemas Python refuses, and ACCEPTS their one-bit-away controls. Each is
+a positive claim whose statement names the structure, so a tautological field makes the
+two refusal claims FALSE rather than merely unproved. The `_admitted` pair is also the
+sharpest non-vacuity statement available here: the bundle is inhabited at a schema that
+differs from a refused one in a single `wildcard` flag / a single boolean operator, so
+neither refusal can be dismissed as the bundle rejecting the whole neighbourhood.
+
+⚠ **AN INSTRUMENT FINDING, from run 2 of the same sweep, and it generalises to every
+mutation sweep in this repo: LEAN ERROR-RECOVERS A FAILED DECLARATION, so a red on an
+intermediate lemma does NOT propagate to that lemma's consumers.** Run 2 added the four
+pins below and `M1`/`M2` *still* reddened `GraphAdmission.noBridgedDerived` alone — because
+when its proof fails, Lean admits the declaration anyway at its stated type, and every
+downstream use keeps elaborating. So routing a pin through a helper lemma makes the pin
+UNABLE to observe a mutation upstream of that helper, and the sweep's attribution list
+silently understates which CLAIMS the mutation breaks. The two refusals are therefore
+proved off `hA.usWild` directly; `sx_noBridgedDerived_applies` keeps the routed proof on
+purpose, because observing the bridge is its whole job. Read this beside the
+already-recorded cross-module truncation limit (a mutation upstream stops the build, so
+downstream pins are never evaluated): both mean an attribution list says *"at least
+these"*, never *"only these"* — and this one is the nastier of the two, because the build
+does not stop and nothing looks wrong. -/
+
+/-- The bundle REFUSES `SxUsWild` — the literal-`[T:*#p]`-over-derived shape, disjunct (a).
+
+    ⚠ **Proved off `hA.usWild` DIRECTLY, not through `hA.noBridgedDerived`, and that is not
+    a style choice** — see the instrument note below. -/
+theorem sxUsWild_not_admitted : ¬ GraphAdmission SxUsWild [] := by
+  intro hA
+  exact absurd (hA.usWild ("doc", "r") (by decide)) (by decide)
+
+/-- The bundle REFUSES `SxThruDerived` — the star-tupleset through-shape over a derived
+    target, disjunct (b): the one that survives `W4Fragment.wsBare` and the one `P6` is
+    about. Same direct route off the field.
+
+    ★ **The two refusals guard one disjunct each, which is why both are here.** Narrow
+    `usWild` to disjunct (a) alone and `SxThruDerived` becomes admissible, so THIS pin
+    goes red while the one above stays green; narrow it to disjunct (b) alone and the
+    reds swap. A single refusal pin would have left half the predicate unguarded — and
+    the sweep's `M3`/`M4` are exactly that pair of mutations. -/
+theorem sxThruDerived_not_admitted : ¬ GraphAdmission SxThruDerived [] := by
+  intro hA
+  exact absurd (hA.usWild ("folder", "viewer") (by decide)) (by decide)
+
+/-- **CONTROL — the bundle ACCEPTS the one-bit-away schema.** `doc#c := [doc#r]`, the
+    concrete userset over the same derived relation, which
+    `zanzibar_utils_v1.py::_build_plan_tree:1887-1889` compiles. -/
+theorem sxUsPlain_admitted : GraphAdmission SxUsPlain [] where
+  ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
+  noLeafSubjects := by decide
+  keysNonempty := by decide
+  directRestrNotLeaf := by decide
+  computedRefsNotLeaf := by decide
+  wf := ⟨by
+    intro p hp
+    simp only [SxUsPlain, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl | rfl | rfl <;> simp [relNameOK]⟩
+  nodup := by unfold NodupKeys; decide
+  strat := by unfold Stratifiable; decide
+  ttuDirect := by unfold TtuTuplesetsDirect; decide
+  matchDecl := by unfold RewriteMatchDeclared; decide
+  ranked := ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩
+  objWild := by decide
+  usWild := by decide
+  storeValid := by intro t ht; simp at ht
+
+/-- **CONTROL — the bundle ACCEPTS the through-shape schema once the target is untainted.**
+    ⚠ Unlike every other witness in this file, `ranked` here needs a REAL rank function
+    rather than the constant `0`: untainting `folder#viewer` also untaints `doc#viewer`,
+    whose TTU then compiles to a live `schemaRewrites` rule `parent → viewer`, so
+    `RewriteRanked` has something to range over. That is the control doing its job — it
+    is a *bigger* schema in the compiled sense, not a degenerate one.
+    `folder#viewer := [user]`: the star tupleset, the TTU and the through-shape are all
+    still there, so the axis is the boolean operator alone. -/
+theorem sxThruPlain_admitted : GraphAdmission SxThruPlain [] where
+  ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
+  noLeafSubjects := by decide
+  keysNonempty := by decide
+  directRestrNotLeaf := by decide
+  computedRefsNotLeaf := by decide
+  wf := ⟨by
+    intro p hp
+    simp only [SxThruPlain, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl | rfl | rfl <;> simp [relNameOK]⟩
+  nodup := by unfold NodupKeys; decide
+  strat := by unfold Stratifiable; decide
+  ttuDirect := by unfold TtuTuplesetsDirect; decide
+  matchDecl := by unfold RewriteMatchDeclared; decide
+  ranked := ⟨fun k => if k.2 == "viewer" then 1 else 0, by decide, by
+    intro k
+    have h4 : SxThruPlain.keys.length = 4 := by decide
+    simp only []
+    split <;> omega⟩
+  objWild := by decide
+  usWild := by decide
+  storeValid := by intro t ht; simp at ht
+
+/-! ### CONTROLLED — MUTATION SWEEP over everything `TK68` added (2026-09-13e)
+
+11 mutations, three runs, `.scratch/tk68_mutation_sweep.py` (throwaway; this table is the
+evidence). Protocol: `docs/sabotage-procedure.md` §"Sweep the TEST MODULE with mutations".
+Baseline and restore both green on every run. `M0` attributed correctly (`P6` step 0's
+error-location regex defect has not returned) and no anchor missed (`P6` step 2's CRLF
+defect has not returned).
+
+**Runs 1 and 2 are part of the evidence, not discarded drafts** — the table below is run 3,
+and what moved between them is the finding. Run 1 had only the re-spelled predicate pins;
+run 2 added the four `_admitted`/`_not_admitted` pins; run 3 rerouted the two refusals off
+`hA.usWild` directly. `M1`/`M2` — **the tautology attack, the one thing this block exists
+to refuse** — reddened `GraphAdmission.noBridgedDerived` ALONE on runs 1 *and* 2, and only
+on run 3 reddened a claim. Run 2 is the interesting one: adding the pins was not enough,
+because they routed through the helper (see the ⚠ instrument note above).
+
+```text
+M0   INSTRUMENT CONTROL: flip sx_usWild's own claim false -> true
+     RED: sx_usWild
+M1   usWild: range over S.objectWildcards (copy-paste slip from objWild)   [TAUTOLOGY]
+     RED: GraphAdmission.noBridgedDerived, sxUsWild_not_admitted, sxThruDerived_not_admitted
+M2   usWild: range over the empty list (vacuous on EVERY schema)           [TAUTOLOGY]
+     RED: GraphAdmission.noBridgedDerived, sxUsWild_not_admitted, sxThruDerived_not_admitted
+M3   usWild: forbid only the LITERAL disjunct (a)
+     RED: GraphAdmission.noBridgedDerived, sxThruDerived_not_admitted
+M4   usWild: forbid only the THROUGH-shape disjunct (b)
+     RED: GraphAdmission.noBridgedDerived, sxUsWild_not_admitted
+M5   NoBridgedDerived: weaken to the through-shape half only
+     RED: GraphAdmission.noBridgedDerived
+M6   NoBridgedDerived: drop the isDerived premise's direction (= false)
+     RED: GraphAdmission.noBridgedDerived, sx_noBridgedDerived_applies
+M7   witness: SxUsWild's wildcard flag true -> false (it becomes the control)
+     RED: sxUsWild_usWild_false, sxUsWild_r_is_derived_and_bridged, sxUsWild_not_admitted
+M8   witness: the SxUsPlain CONTROL's flag false -> true (it stops being one)
+     RED: sxUsPlain_usWild, sxUsWild_r_is_derived_and_bridged, sxUsPlain_admitted
+M9   witness: SxThruDerived's star tupleset [folder:*] -> [folder]
+     RED: sxThruDerived_wsBare_holds_but_usWild_fails, sxThru_shape_present_in_both,
+          sxThru_literal_disjunct_is_false, sxThruDerived_not_admitted
+M10  witness: SxThruDerived's folder#viewer loses `but not banned` (= the control)
+     RED: sxThruDerived_wsBare_holds_but_usWild_fails, sxThru_shape_present_in_both,
+          sxThruDerived_not_admitted
+M11  sx_noBridgedDerived_applies: prove it by `decide`, bypassing the bundle
+     INERT (nothing reddened) — EXPECTED; see below
+```
+
+★ **`M3`/`M4` are COMPLEMENTARY, and that is why both refusals exist.** Narrow the field to
+disjunct (a) and only `sxThruDerived_not_admitted` reddens; narrow it to (b) and only
+`sxUsWild_not_admitted` does. Each disjunct of `isSubjectWildcardUserset` is guarded by
+exactly one refusal pin, so a single pin would have left half the predicate free to be
+"simplified" away.
+
+⚠ **`M11` is INERT BY DESIGN and the row is the point** (`P6` step 2's `M12` rule: say what
+the edit was supposed to move). Proving `sx_noBridgedDerived_applies` by `decide` instead of
+through the bundle changes nothing, which is exactly the claim in that theorem's own
+docstring — the same fact proved directly would stay green under a broken bridge and is
+therefore no pin. Read it beside `M6`, which DOES redden that arm, because today the arm is
+routed through the bridge.
+
+⚠ **`M5` reddens only a PROOF, and the reason is worth knowing rather than filing as a
+gap.** `sx_noBridgedDerived_applies` cannot observe `M5` even though it routes through the
+carry: at a CONCRETE schema `Sx.isStarTuplesetThrough "doc" "r" = false` and
+`Sx.isSubjectWildcardUserset "doc" "r" = false` are **definitionally equal** — both sides
+evaluate to `false = false` — so the weakened carry still typechecks at that application.
+An arm instantiated at a concrete witness is defeq-blind to a mutation that preserves the
+witness's value. `M5` is still guarded (it reddens `noBridgedDerived`, and `P6` step 3b's
+restatement would not go through), but it is guarded by a proof, and this row says so
+instead of implying a claim covers it. -/
 
 /-- The fragment bundle is inhabited by the witness schema/store. `Sx` is
     `ComputedOnly`, so the five derived-def clauses the leg-5 widening introduced
@@ -1049,6 +1460,7 @@ theorem accepts : GraphAdmission Sy Ty where
   matchDecl := by unfold RewriteMatchDeclared; decide
   ranked := ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩
   objWild := by decide
+  usWild := by decide
   storeValid := by
     intro t ht
     simp only [Ty, List.mem_cons, List.not_mem_nil, or_false] at ht
@@ -1815,6 +2227,7 @@ theorem admission : GraphAdmission Sd Td where
   matchDecl := accepts.2.2.2.2.1
   ranked := accepts.2.2.2.2.2.1
   objWild := by decide
+  usWild := by decide
   storeValid := accepts.2.2.2.2.2.2
 
 /-- The leg-5 `W4Fragment` is inhabited at the Direct-arm pair — including
@@ -1983,6 +2396,7 @@ theorem admission4 : GraphAdmission Sd Td4 where
   matchDecl := accepts.2.2.2.2.1
   ranked := accepts.2.2.2.2.2.1
   objWild := by decide
+  usWild := by decide
   storeValid := by
     intro t ht
     simp only [Td4, List.mem_cons, List.not_mem_nil, or_false] at ht

@@ -30,6 +30,111 @@ from here.
 
 ---
 
+## 2026-09-13e — `TK68` CLOSED: the admission bundle gains `usWild`; the R-node cone is 47 decls, not one theorem
+
+rows: `P6` (Log `2026-09-13e`, brief set, lead `## Traps` paragraph rewritten + two new
+`## Read first` entries; stays `NOW`, step 3b now UNBLOCKED), `TK68` (CLOSED). Nothing
+re-ranked.
+
+task lint: clean (13 checks, 183 task file(s) parsed), 26 warning(s)
+read: board only
+
+**A fidelity gap closed, and a sizing error on the row it unblocks.** `TK68` was sized `S`
+on the scope *"add the field, discharge it, and use it at
+`reachedByW3d_Rnode_not_source`"*. The field half was indeed `S` and is done; the third
+clause is not, and the row named half the work. Detail on the closed row and in
+[`formal/history/tk68-uswild-admission-field-2026-09-13.md`](../../formal/history/tk68-uswild-admission-field-2026-09-13.md)
+(FROZEN) — which exists because `formal/verify.sh` step 4c demanded it, and which is the
+worked precedent for the next definition-pin firing.
+
+**What landed.** `FullScope.lean::GraphAdmission.usWild` — no derived key is a
+subject-wildcard *userset* shape. `zanzibar_utils_v1.py` raises `UnsupportedByGraphIndex`
+for exactly two schema-scope shapes; `objWild` mirrored one and **nothing mirrored the
+other**, so the Lean admission predicate was strictly WEAKER than the shipped compiler and
+admitted schemas `compile_ruleset` refuses. Stated as a quantifier over `taintedKeys S`,
+exactly `objWild`'s shape, so all **seven** construction sites discharge it `by decide` —
+seven, not the four a grep for `where`-blocks suggests: three are positional
+`refine ⟨…⟩` in `GraphIndex/Exec.lean` and a positional constructor breaks silently on an
+arity change. Alongside it, `GraphIndex/UsStarWrite.lean::NoBridgedDerived` (the
+schema-level, store-free carry) and `::GraphAdmission.noBridgedDerived` (the bridge from
+the decidable field to it).
+
+**Direction, stated because it matters:** a new admission field makes the headline theorems
+cover FEWER schemas. That is legitimate here for one reason only — the schemas removed are
+exactly the ones the shipped compiler REFUSES, so no shipped behaviour left the claim. It
+is the fragment catching up to the code, not the narrowing `CLAUDE.md` "Who decides"
+forbids. Inhabitance is untouched: all seven sites discharge, so nothing went vacuous.
+
+**★ The sweep changed the deliverable twice, and the second time is the transferable
+finding.** Three runs. The two mutations that matter — re-ranging `usWild`'s quantifier over
+`S.objectWildcards` (the plausible copy-paste slip from the field beside it) and over `[]`
+(vacuous on every schema), i.e. **the tautology attack the evidence block exists to
+refuse** — reddened the helper lemma `noBridgedDerived` and nothing else on run 1. Run 2
+added four pins that name `GraphAdmission` in their statements and got **the same one-name
+table**: **Lean error-recovers a failed declaration**, admitting it at its stated type, so
+downstream uses elaborate cleanly and a pin routed through a helper cannot observe anything
+upstream of it. Run 3 rerouted the two refusals off `hA.usWild` directly and they reddened.
+Filed as a general rule in
+[`docs/sabotage-procedure.md`](../sabotage-procedure.md) §"Sweep the TEST MODULE with
+mutations": it joins the cross-module truncation limit, and it is the nastier of the two
+because the build does not stop and nothing looks wrong. `M3`/`M4` also turned out
+**complementary** — each disjunct of `isSubjectWildcardUserset` is guarded by exactly one
+refusal pin, so one pin would have left half the predicate free to be "simplified" away.
+Two rows are recorded as non-reds with their reasons rather than smoothed over, one of them
+because an arm instantiated at a CONCRETE witness is defeq-blind to a mutation that
+preserves the witness's value.
+
+**★ The independence pin the precedent would have produced was not enough.** Copying
+`sxLeafRef_other_admission_fields_hold` (4c-ii step 10) shows `usWild` independent of the
+other *admission* fields — and leaves it dismissible at the headlines, because
+`W4Fragment.wsBare` forces every literal wildcard shape BARE and so makes disjunct (a)
+identically false on the whole W4 fragment. `sxThruDerived_wsBare_holds_but_usWild_fails`
+closes that: `wsBare` HOLDS and `usWild` fails anyway, through the purely schematic
+star-tupleset through-shape, which neither `wsBare` nor the store-indexed `ttuStarFree`
+constrains. That is also the disjunct `P6` is about.
+
+**The sizing correction, measured first-hand** (`.scratch/tk68_declcone.py`; unit:
+APPLICATIONS = occurrences in comment-stripped bodies, CONE = transitive consumer closure
+excluding the seeds). `TK68` and `P6`'s `2026-09-13d` entry both name only
+`Cascade.lean::reachedByW3d_edge_source_ne_R` and its one consumer. There is a **second,
+verbatim twin pair** — `CascadeStrata.lean:1595::reachedByW3d2_edge_source_ne_R` and
+`:1667::reachedByW3d2_Rnode_not_source` — taking the same
+`writeLoggedRules_evalEq → writeRulesRaw → foldl_writeDirect_edges_sound` step, so it goes
+false for the same reason once the leg bridges. Union: **12 application sites, 47
+declarations across 12 files** (51 counting the four seeds — state the unit). The W3d cone
+terminates below the headlines; the **W3d2 cone reaches `FullScope.lean`** and contains
+`graph_correct`, `graph_correct_public`, `backend_equivalence`, `exclusion_effective`,
+`no_ghost_grant` and `graph_reached_inv`. A subagent raised the twin; it was confirmed
+first-hand before going on a row, per `CLAUDE.md` "Delegation does not transfer judgement".
+
+Two facts make 47 affordable, and they are why the carry is shaped as it is: it **terminates
+in `GraphAdmission`**, so no headline gains a hypothesis (`graph_correct` already binds `hA`
+and passes field projections down — the `leafScope` route); and it is **store-free**, so it
+threads through a `write`/`remove` step verbatim. The obvious-looking alternative, extending
+`W4Fragment.term`'s conclusion by a conjunct, is a **134-declaration** edit needing a
+two-line weakening lambda at 22 of them — recorded on the row as a do-not.
+
+**The definition pin fired as designed and was regenerated deliberately**: `GraphAdmission`
+gained a field, and `Schema.isSubjectWildcardUserset` + `::isStarTuplesetThrough` became
+newly reachable from a headline statement. No row was removed and
+`headline_statements.txt` did not move (51/51) — correct, since no headline's statement text
+changed. One pin-layout fact that makes step 3b's restatements legal, and it was measured:
+neither `edge_source_ne_R` theorem's STATEMENT is pinned. Only their NAMES are, in
+`formal/audited_theorems.txt` — and `reachedByW3d2_edge_source_ne_R` is not even there.
+
+**A gate fix fell out of it, and it was a guard reddening on a benign input.** The `lean` phase failed with `non-standard axioms in the audit` on a theorem whose axioms are the standard three: **Lean wraps a `#print axioms` message at ~100 columns**, and step 4's allowlist was anchored `\]$`, so a long enough declaration name left the head line ending `[propext,` with no closing bracket. The trigger is name length, so it would have recurred. The tempting repair — drop the anchor, or prefix-match `[propext` — would have made the check blind to a wrapped list whose TAIL carries `sorryAx`, i.e. the one axiom the audit exists to catch; so the allowlist was moved to `formal/audit_axiom_filter.sh`, which rejoins the wrap and keeps the match anchored and exact. Pinned by the new `tests/test_gate_axiom_filter.py` (9 tests), which runs the SHIPPED script rather than a reimplementation of its pipeline. **Its sabotage table had two false rows when first written and the sweep is what found them, not review:** `S1` (drop the `$`) is honestly INERT and now says so, and `S4` (join any line) was invisible until the arm was re-aimed at the ordering that actually glues — chatter immediately after a terminated report, with no intervening prefixed line to flush the buffer. A sabotage table asserting a red that does not happen is the same defect as a trap citing a symbol that does not exist. Method lesson filed in [`docs/gate-runbook.md`](../gate-runbook.md) §2 (4a).
+
+**Not done, deliberately:** the restatements themselves. They only become *provable* once the
+write leg actually bridges, and restating now would move an audited theorem to a form nothing
+yet needs. No `P6` code moved this session.
+
+Still owed: nothing from this session's write-back. `P6` step 3b is unchanged in scope except
+that its R-node obligation is now unblocked and measured — the three re-points, the
+`CascadeStable` 27-error map, the `FoldAdmits` 21-move/3-stay, the `two_stratum_cascade`
+multiplicity re-measure and the honest-direction restatements all remain owed there.
+
+---
+
 ## 2026-09-13d — `P6` step 3 SPLIT: 3a lands the bridged twins + hinge; 3b is three re-points and a measured map
 
 rows: `P6` (Log `2026-09-13d`, brief set, summary + two new `## Traps` + `## Read first`

@@ -383,6 +383,36 @@ sweep's attribution bug had not returned), and ten of fourteen anchors matched z
 because the sources were CRLF and the anchor strings LF. A loud instrument failure costs a
 re-run; the quiet one costs a wrong conclusion.
 
+**★ A RED ON A HELPER LEMMA DOES NOT PROPAGATE — Lean error-recovers a failed declaration
+(2026-09-13e, `TK68`).** This is the quietest instrument failure found so far, because
+nothing about the run looks wrong: the build fails, one name is attributed, the table reads
+like a clean single-cause result.
+
+`TK68` added an admission field and a helper (`GraphAdmission.noBridgedDerived`) turning it
+into the form consumers want. The two mutations that mattered — **the tautology attack**,
+re-ranging the field's quantifier over an always-empty list, i.e. exactly the "new field
+claims nothing" failure the evidence block existed to refuse — reddened the helper and
+**nothing else**. Run 2 added four pins that state the fidelity claim directly (*the bundle
+REFUSES the schemas Python refuses*), re-ran, and got **the same one-name table**: when a
+declaration's proof fails, Lean still admits it at its stated type, so every downstream use
+elaborates cleanly and the pins never observe the mutation.
+
+Two things follow, and the second is the general one:
+* **Do not route an evidence pin through a helper.** Prove it off the primitive the
+  mutation would touch. Rerouting the two refusals off the field directly is what finally
+  made them red. A pin routed through a helper is unable, *by construction*, to observe
+  anything upstream of that helper.
+* **A sweep's attribution list means "at least these", never "only these"** — and this is
+  the second independent reason, joining the cross-module one (a mutation upstream stops
+  the build, so downstream pins are never evaluated; `P6` step 3a). That one is at least
+  visible in the log. This one is not: the build proceeds, the pins compile, and the
+  understatement is invisible.
+
+The generalisation worth carrying past Lean: **whenever the sweep attributes a red to a
+helper rather than to a claim, treat the run as incomplete and ask what the helper was
+shielding.** Under the repo's durability ranking that is also the fix — the two refusal
+pins are now permanent tests, not a docstring note about a limitation.
+
 ### A check that PARSES before it compares has two halves, and the easy sabotage tests one (2026-08-24c)
 
 Most checks in this repo are *extract, then compare*. A sabotage input chosen in a shape

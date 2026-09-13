@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: Step 3 SPLIT: 3a (twins+hinge+sweep) LANDED 2026-09-13d. Start at 3b: 3 re-points + the measured cone
+brief: Step 3b UNBLOCKED (TK68 closed). 3 re-points; the R-node cone is MEASURED at 47 decls / 12 files
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-13d
-updated: 2026-09-13d
+moved: 2026-09-13e
+updated: 2026-09-13e
 closed:
 ---
 
@@ -77,17 +77,36 @@ multiplicities (expect `1…5`) before regenerating a golden (PROOF_STATUS `2026
 
 ## Traps
 
-⚠ **STEP 3b IS BLOCKED ON `TK68` — and the blocker is a FIDELITY gap, not a proof
-convenience.** `Cascade.lean::reachedByW3d_edge_source_ne_R` (audited, `Audit.lean:714`)
-goes FALSE the moment the write leg bridges: a bridge edge is sourced at its CONCRETE
-endpoint, whose predicate can be the derived `R`. Its ONE Lean consumer,
-`::reachedByW3d_Rnode_not_source`, needs `isSubjectWildcardUserset S dt R = false` at the
-same key it already knows is derived — which is Python's second `UnsupportedByGraphIndex`
-scope rejection, and `FullScope.lean::GraphAdmission` has `objWild` for the FIRST one and
-no field for it. ⚠ **Do not try to save the general statement with a premise**: a literal
-`[x:*#R]` restriction at an untainted key `(x, R)` is legal Python and bridges a node whose
-pred is `R`, so `a.pred ≠ R` is false as a general claim whatever field is added. The
-wrapper survives because it fixes the type to `dt`. Detail on `TK68`.
+⚠ **STEP 3b IS UNBLOCKED -- `TK68` CLOSED 2026-09-13e -- BUT THE OBLIGATION IS TWO
+THEOREM PAIRS, NOT ONE, AND THE PAIR THIS TRAP USED TO NAME IS THE LESS IMPORTANT ONE.**
+`Cascade.lean::reachedByW3d_edge_source_ne_R` (audited) goes FALSE the moment the write leg
+bridges: a bridge edge is sourced at its CONCRETE endpoint, whose predicate can be the
+derived `R`. So does its verbatim two-round twin `CascadeStrata.lean:1595
+::reachedByW3d2_edge_source_ne_R`, whose `write` case takes the SAME
+`writeLoggedRules_evalEq -> writeRulesRaw -> foldl_writeDirect_edges_sound` step -- and it is
+the W3d2 pair that is ON THE HEADLINE PATH (the W3d cone stops below the headlines; the W3d2
+cone reaches `FullScope.lean` and contains `graph_correct`, `graph_correct_public`,
+`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`, `graph_reached_inv`).
+Measured union: **12 application sites, 47 declarations across 12 files** (`.scratch/
+tk68_declcone.py`, 2026-09-13e; 51 counting the four seeds -- state the unit).
+
+The carry to thread is `GraphIndex/UsStarWrite.lean::NoBridgedDerived`, supplied by
+`FullScope.lean::GraphAdmission.noBridgedDerived`. It terminates in `GraphAdmission`, so NO
+HEADLINE GAINS A HYPOTHESIS.
+
+⚠ **Do NOT extend `W4Fragment.term` to carry it -- that is a 134-SITE EDIT.** Every one of
+the 47 already holds `hterm`, so adding a conjunct there looks like the cheap fix. `hterm` is
+a bare lambda at 134 declarations with no abbreviation, and being STORE-indexed it needs a
+two-line weakening lambda at 22 of them. `NoBridgedDerived` is store-free precisely so it
+threads through a `write`/`remove` step verbatim.
+
+⚠ **RESTATE, do not re-premise -- the type-index trap.** `isDerived` and
+`isSubjectWildcardUserset` are keyed on `(type, relation)` while both `edge_source_ne_R`
+theorems conclude about the predicate STRING. A literal `[x:*#R]` restriction at an UNTAINTED
+key `(x, R)` is legal Python and bridges a node whose pred is `R`, so `a.pred != R` is false
+as a general claim whatever premise is added; the restatement must carry the TYPE. Legal to
+do: neither theorem's STATEMENT is pinned (only the NAMES, in `formal/audited_theorems.txt`
+-- and note `reachedByW3d2_edge_source_ne_R` is not even there).
 
 ⚠ **`writeLoggedOne_watermark` ALREADY EXISTS, in `CascadeStable.lean`.** Step 3a tried to
 add it to `Cascade.lean` and the build refused with `has already been declared`. Any
@@ -179,6 +198,24 @@ materialises the edge, and the rest of the leg is inert until it lands.
 
 ## Read first
 
+- **The `2026-09-13e` Log entry is what step 3b starts from for the R-NODE obligation** --
+  `TK68` is closed, the field/carry/bridge are in the tree, and the cone is MEASURED at 12
+  application sites / 47 declarations / 12 files across BOTH twin pairs (the entry names the
+  W3d2 pair the earlier entries missed, and it is the one on the headline path). The code:
+  `formal/lean/ZanzibarProofs/GraphIndex/UsStarWrite.lean::NoBridgedDerived` (the carry to
+  thread, and the type-index trap in its docstring),
+  `formal/lean/ZanzibarProofs/FullScope.lean::GraphAdmission.usWild` /
+  `::GraphAdmission.noBridgedDerived`, and
+  `formal/lean/ZanzibarProofs/FullScope.lean` sec "CONTROLLED -- MUTATION SWEEP over
+  everything `TK68` added" (the evidence table and the two instrument findings). ⚠ That
+  sweep's lesson is one step 3b will hit: **Lean error-recovers a failed declaration**, so a
+  pin routed through a helper lemma cannot observe a mutation upstream of it -- the
+  tautology attack reddened the helper alone across two runs.
+  `docs/sabotage-procedure.md` sec "Sweep the TEST MODULE with mutations".
+- `formal/history/tk68-uswild-admission-field-2026-09-13.md` (FROZEN) -- the def-pin
+  adjudication `formal/verify.sh` step 4c demands, the three sweep runs compared, and the measured
+  cone table. Read it for the PRECEDENT the next def-pin firing needs, and for why
+  extending `W4Fragment.term` is the wrong route.
 - [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
 - **The plan is the `2026-09-12b` Log entry** (`show P6`): decisions on both walls, steps 0–4, what each step must not touch. **Start at step 3** — steps 0, 1 and 2 landed 2026-09-13 / 2026-09-13b / 2026-09-13c, and the first two of those Log entries correct the entry before them. ⚠ **Read newest-first and do not trust a payoff figure without re-reading its source**: 2026-09-12b mis-attributed the `14 → 9` payoff failure to the out-of-fragment store `Sd`, step 0 carried that forward, and step 1 found it was measured on the IN-FRAGMENT `Sp` all along (`formal/probes/p6_inbridge_stability_2026-09-12.lean:872-887` is written against `Sp`, `Sd` appears only in `§7`).
 - **The `2026-09-13d` Log entry is what step 3b starts from** — the three re-points, the
@@ -1143,3 +1180,95 @@ obligation through `checkFn`; do NOT narrow `TtuStarFreeW`; do NOT touch
 adjudication, and the honest-direction restatements (`writeLoggedRules_edge_delta`, the two
 tier-0 `..._edges_target_plain`, `count_removeLoggedRules`) -- to which today adds
 `writeRulesRaw_untaintedSchema` and `reachedByW3d_edge_source_ne_R`.
+
+### 2026-09-13e
+
+STEP 3b IS UNBLOCKED: `TK68` is CLOSED (2026-09-13e). No `P6` code moved this session -- the
+write leg still does not bridge -- so this is a comment, not a step. What changed is that
+3b's one blocking obligation is paid and its cone is MEASURED instead of forecast.
+Whole-tree Lean build green (1089 jobs, job count UNCHANGED). Full write-up:
+`formal/history/tk68-uswild-admission-field-2026-09-13.md` (FROZEN).
+
+WHAT 3b CAN NOW ASSUME, already in the tree, audited and swept:
+* `FullScope.lean::GraphAdmission.usWild` -- no derived key is a subject-wildcard userset
+  shape. Discharged `by decide` at all SEVEN construction sites.
+* `GraphIndex/UsStarWrite.lean::NoBridgedDerived` -- the schema-level, store-FREE carry, and
+  `FullScope.lean::GraphAdmission.noBridgedDerived` as the bridge from the decidable field.
+
+(!) THE ROW NAMED HALF THE WORK, AND THE HALF IT MISSED IS THE ONE ON THE HEADLINE PATH.
+The `2026-09-13d` entry and `TK68` both name only `reachedByW3d_edge_source_ne_R` and its
+one consumer. There is a SECOND, verbatim twin pair -- `CascadeStrata.lean:1595
+::reachedByW3d2_edge_source_ne_R` and `:1667::reachedByW3d2_Rnode_not_source` -- whose
+`write` case takes the SAME `writeLoggedRules_evalEq -> writeRulesRaw ->
+foldl_writeDirect_edges_sound` step, so it goes false for exactly the same reason once the
+leg bridges. Measured first-hand (`.scratch/tk68_declcone.py`, 2026-09-13e; unit:
+APPLICATIONS = occurrences in comment-stripped bodies, CONE = transitive consumer closure
+excl. the seeds):
+
+  `Cascade.lean::reachedByW3d_edge_source_ne_R`        audited   1 app   14 decls / 5 files
+  `Cascade.lean::reachedByW3d_Rnode_not_source`        audited   2 app   13 decls / 5 files
+  `CascadeStrata.lean::reachedByW3d2_edge_source_ne_R` NOT aud.  1 app   35 decls / 8 files
+  `CascadeStrata.lean::reachedByW3d2_Rnode_not_source` audited   8 app   34 decls / 8 files
+  union of the four                                             12 app   47 decls / 12 files
+                                                                         (51 with the seeds)
+
+The W3d cone TERMINATES BELOW the headlines. The W3d2 cone reaches `FullScope.lean` and
+contains `graph_correct`, `graph_correct_public`, `backend_equivalence`,
+`exclusion_effective`, `no_ghost_grant` and `graph_reached_inv`. Budget both pairs.
+
+(!) DO NOT EXTEND `W4Fragment.term` -- it is the obvious-looking route and it is a 134-SITE
+EDIT. Every one of the 47 already carries `hterm` (that conjunction), so adding a conjunct
+to it looks like the cheap fix. It is not: `hterm` is spelled out as a bare lambda at 134
+declarations (there is no abbreviation for it; the only name is the `W4Fragment.term` field
+itself) and, being STORE-indexed, needs a two-line weakening lambda at 22 of them
+(`t :: T -> T` via `List.mem_cons_of_mem`, `T -> T.erase t` via `List.mem_of_mem_erase`).
+`NoBridgedDerived` is store-free precisely so it threads through a `write` or `remove` step
+VERBATIM. That is the whole reason for its shape.
+
+TWO FACTS THAT MAKE 47 AFFORDABLE:
+(1) it TERMINATES IN `GraphAdmission`, so NO HEADLINE GAINS A HYPOTHESIS. `graph_correct`
+    (`FullScope.lean:616`) already binds `hA : GraphAdmission S T` and passes explicit field
+    projections down to `graph_correct_w3d2E_d`; `hA.noBridgedDerived` is one more entry in
+    that list. Same route `noLeafSubjects`/`keysNonempty` took through
+    `GraphAdmission.leafScope`.
+(2) THE RESTATEMENT IS LEGAL, measured: NEITHER theorem's STATEMENT is pinned. Neither name
+    appears in `formal/headline_statements.txt` or `formal/headline_definitions.txt` (those
+    pin `def`s reachable from headline statements; these are theorems used only inside
+    proofs). Only the NAMES are pinned, in `formal/audited_theorems.txt` -- so 3b may
+    restate freely provided the names stay audited. Note the asymmetry:
+    `reachedByW3d2_edge_source_ne_R` is NOT in the audit pin while the other three are.
+
+(!) THE TYPE-INDEX TRAP STILL GOVERNS, and it is now recorded where the work happens
+(`NoBridgedDerived`'s docstring, not just on the closed `TK68`). `isDerived` and
+`isSubjectWildcardUserset` are keyed on `(type, relation)` while both `edge_source_ne_R`
+theorems conclude about the predicate STRING. A literal `[x:*#R]` restriction at an UNTAINTED
+key `(x, R)` is legal Python and bridges a node whose `pred` is `R`. So RESTATE to carry the
+type; the general claim cannot be rescued by any premise.
+
+(!) A SWEEP LESSON 3b WILL NEED, because it is invisible when it bites: LEAN ERROR-RECOVERS A
+FAILED DECLARATION. `TK68`'s sweep took THREE runs. The tautology attack on the new field
+reddened the helper lemma alone on runs 1 AND 2 -- run 2 having added four pins specifically
+to catch it -- because when a declaration's proof fails Lean still admits it at its stated
+type, so downstream uses elaborate cleanly and a pin routed through a helper cannot observe
+anything upstream of it. Rerouting the pins off the primitive is what finally reddened a
+CLAIM. Filed as a general rule in `docs/sabotage-procedure.md` sec "Sweep the TEST MODULE
+with mutations". Joins the cross-module truncation limit step 3a recorded: an attribution
+list means "at least these", never "only these" -- and this one is worse, because the build
+does not stop and nothing looks wrong. A related one from the same run: an arm instantiated
+at a CONCRETE witness is defeq-blind to a mutation that preserves the witness's value (two
+different `Bool` predicates both evaluating `false` make the two propositions definitionally
+equal at that schema).
+
+STILL OWED AT 3b, unchanged from `2026-09-13d` and none of it paid here: the three re-points
+(`writeLoggedOne` -> `bridgePreLogged`, `writeRulesRaw` -> `writeBridgedOne`,
+`removeLoggedOne`'s then-branch wrapped in `releasePostLogged`); the `CascadeStable` map of 27
+errors across 17 declarations, of which the `untaintedShadow_*` family is the largest block;
+the `FoldAdmits` 21-move/3-stay; the `two_stratum_cascade` multiplicity re-measure; the def-pin
+diff adjudication (the ONE piece of this list now done -- the pin fired on the `usWild` field
+and was regenerated with its justification, so 3b has a worked precedent for the next firing);
+and the honest-direction restatements (`writeLoggedRules_edge_delta`, the two tier-0
+`..._edges_target_plain`, `count_removeLoggedRules`, `writeRulesRaw_untaintedSchema`), to which
+`reachedByW3d_edge_source_ne_R` now adds its W3d2 twin.
+
+BOUNDS UNCHANGED: do NOT route a stratum-2 userset-subject obligation through `checkFn`; do
+NOT narrow `TtuStarFreeW`; do NOT touch `W4Fragment.ttuStarFree` before step 4.
