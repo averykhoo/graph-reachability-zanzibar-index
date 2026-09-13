@@ -250,6 +250,53 @@ def GraphState.writeUsStar (σ : GraphState) (t : Tuple) : GraphState :=
   let σ2 := (σ1.ensureInBridges a).ensureInBridges b
   if σ2.admitEdge a b then σ2.addEdge a b else σ
 
+/-- **The bridge-before-grant PROLOGUE of a leaf-routed write** — `P6` increment B,
+    step 3. `GraphState.writeBridgedOne` below is the unlogged twin of
+    `Cascade.lean::GraphState.writeLoggedOne`, and the per-member step
+    `LeafRules.lean::GraphState.writeRulesRaw` folds. It is `writeDirect` with Python's
+    bridge-before-grant prologue on BOTH endpoints
+    (`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted`'s `_ensure_bridges(subject)`
+    then `_ensure_bridges(obj)`), and nothing else.
+
+    ⚠ **Why this is NOT `writeUsStar`, which is one line above and would have been free.**
+    That one also runs `ensureBridges` (the W1b OUT-bridges) and would have brought its
+    whole existing theory with it — a real temptation. Rejected: out-bridges are the
+    object-wildcard mechanism, `P6` is the SUBJECT-wildcard one, and widening the live
+    write leg by a second mechanism in the same edit would make any resulting divergence
+    unattributable. Python does run both (`_ensure_bridges` = `_ensure_own_bridges` +
+    `_ensure_entity_middles`), so this is a deliberate NARROWING of the model, recorded as
+    such: on this fragment the out-bridge arm is inert (no object wildcards, nothing
+    crossable — the entity-middle boundary entry in `formal/CORRESPONDENCE.md` §7).
+
+    ⚠ **The node prologue is NOT decoration.** `structInv_ensureInBridges` needs
+    `c ∈ σ.nodes` — a bridge out of a node that does not exist breaks
+    `StructInv.edgesClosed` — and Python resolves both endpoints with `create=True`
+    BEFORE `_ensure_bridges`. So `addNode` first, bridge second, grant third, exactly as
+    `writeUsStar` does it. The consequence for `LeafRules.lean::writeRulesRaw_untaintedSchema`
+    is real and is step 3's to pay: the admission probe now reads the BRIDGED state, so
+    this is no longer definitionally `writeDirect` even where no shape is bridged.
+
+    **The rollback is Python's, not a modelling convenience.** A rejected grant returns
+    `σ`, discarding the bridges: `_add_tuple_trusted` raises `AdmissionRejected` out of
+    `add_edge_by_id` and the whole write aborts with its transaction, bridges included.
+    `writeUsStar` already models the same thing the same way (`:251`).
+
+    ⚠ **The prologue is a NAMED definition, not a `let`.** `writeUsStar` above binds its
+    stages with `let`, which elaborates to `have` in a goal and then **blocks `split`** —
+    every downstream proof has to `dsimp only` first. `writeLoggedOne`'s cone is far too
+    large to pay that at every site, so the bridged pre-state gets a name here and the
+    write stays a top-level `if` that `split` can see. -/
+def GraphState.bridgePre (σ : GraphState) (t : Tuple) : GraphState :=
+  (((σ.addNode (subjNode t.subject)).addNode (objNode t.object t.relation)).ensureInBridges
+    (subjNode t.subject)).ensureInBridges (objNode t.object t.relation)
+
+/-- One leaf-routed write, bridged and UNLOGGED — see `GraphState.bridgePre` above for the
+    full rationale (this is the guarded grant on top of that prologue). -/
+def GraphState.writeBridgedOne (σ : GraphState) (t : Tuple) : GraphState :=
+  if (σ.bridgePre t).admitEdge (subjNode t.subject) (objNode t.object t.relation)
+  then (σ.bridgePre t).addEdge (subjNode t.subject) (objNode t.object t.relation)
+  else σ
+
 /-! ## Schema is fixed by the in-bridge machinery -/
 
 @[simp] theorem ensureInBridges_schema (σ : GraphState) (c : NodeKey) :
@@ -492,6 +539,389 @@ theorem structInv_writeUsStar {S : Schema} {σ : GraphState} (h : StructInv S σ
       rw [this] at hreach; exact Bool.noConfusion hreach
     exact structInv_addEdge h2 haσ2 hbσ2 hback hne
   · exact h
+
+/-! ## ★ `writeBridgedOne` preservation — `P6` increment B, step 3 (2026-09-13d)
+
+The fold family `LeafRules.lean::writeRulesRaw` used to inherit for free from
+`RulesWrite.lean`'s `∀ (ts : List Tuple)` lemmas about `writeDirect` (scope doc §11.1's
+"fork the TUPLE, not the write path"). Composing the bridge forks the write path after
+all, so the five preservation facts are re-proved here for the bridged step and re-folded.
+Each one mirrors its `writeUsStar` twin above, minus the out-bridge layer. -/
+
+/-- The in-bridge machinery never touches the outbox (it only adds a node and an edge) —
+    needed for `quiescent_writeBridgedOne`. -/
+@[simp] theorem ensureInBridges_outbox (σ : GraphState) (c : NodeKey) :
+    (σ.ensureInBridges c).outbox = σ.outbox := by
+  unfold GraphState.ensureInBridges
+  split
+  · split
+    · rfl
+    · split <;> rfl
+  · rfl
+
+/-- …nor the watermark. -/
+@[simp] theorem ensureInBridges_watermark (σ : GraphState) (c : NodeKey) :
+    (σ.ensureInBridges c).watermark = σ.watermark := by
+  unfold GraphState.ensureInBridges
+  split
+  · split
+    · rfl
+    · split <;> rfl
+  · rfl
+
+/-- The bridged leaf-routed step preserves the structural invariant — the same argument as
+    `structInv_writeUsStar`, with the out-bridge layer removed. -/
+theorem structInv_writeBridgedOne {S : Schema} {σ : GraphState} (h : StructInv S σ)
+    (t : Tuple) : StructInv S (σ.writeBridgedOne t) := by
+  unfold GraphState.writeBridgedOne GraphState.bridgePre
+  set a := subjNode t.subject with ha_def
+  set b := objNode t.object t.relation with hb_def
+  have h0a : StructInv S (σ.addNode a) :=
+    structInv_addNode h (by rw [ha_def]; exact nodeEnc_subjNode t.subject)
+  have h0 : StructInv S ((σ.addNode a).addNode b) :=
+    structInv_addNode h0a (by rw [hb_def]; exact nodeEnc_objNode t.object t.relation)
+  have haσ0 : a ∈ ((σ.addNode a).addNode b).nodes :=
+    List.mem_cons_of_mem _ List.mem_cons_self
+  have hbσ0 : b ∈ ((σ.addNode a).addNode b).nodes := List.mem_cons_self
+  have h2a : StructInv S (((σ.addNode a).addNode b).ensureInBridges a) :=
+    structInv_ensureInBridges h0 haσ0
+  have hbσ2a : b ∈ (((σ.addNode a).addNode b).ensureInBridges a).nodes :=
+    ensureInBridges_mono hbσ0
+  have h2 : StructInv S ((((σ.addNode a).addNode b).ensureInBridges a).ensureInBridges b) :=
+    structInv_ensureInBridges h2a hbσ2a
+  set σ2 := (((σ.addNode a).addNode b).ensureInBridges a).ensureInBridges b with hσ2_def
+  have haσ2 : a ∈ σ2.nodes := ensureInBridges_mono (ensureInBridges_mono haσ0)
+  have hbσ2 : b ∈ σ2.nodes := ensureInBridges_mono hbσ2a
+  split
+  · rename_i hadmit
+    unfold GraphState.admitEdge at hadmit
+    simp only [Bool.and_eq_true, bne_iff_ne, ne_eq, Bool.not_eq_true'] at hadmit
+    obtain ⟨hne, hreach⟩ := hadmit
+    have hback : ¬ NReaches σ2.edges b a := by
+      intro hr
+      have := reach_complete h2.edgesClosed hr
+      rw [this] at hreach; exact Bool.noConfusion hreach
+    exact structInv_addEdge h2 haσ2 hbσ2 hback hne
+  · exact h
+
+/-- The bridged step keeps the schema fixed. -/
+@[simp] theorem writeBridgedOne_schema (σ : GraphState) (t : Tuple) :
+    (σ.writeBridgedOne t).schema = σ.schema := by
+  unfold GraphState.writeBridgedOne GraphState.bridgePre
+  split <;> simp
+
+/-- The bridged step leaves the outbox alone (it is the UNLOGGED twin — that is the whole
+    difference between it and `Cascade.lean::writeLoggedOne`). -/
+@[simp] theorem writeBridgedOne_outbox (σ : GraphState) (t : Tuple) :
+    (σ.writeBridgedOne t).outbox = σ.outbox := by
+  unfold GraphState.writeBridgedOne GraphState.bridgePre
+  split <;> simp [GraphState.addEdge, GraphState.addNode]
+
+/-- …and the watermark. -/
+@[simp] theorem writeBridgedOne_watermark (σ : GraphState) (t : Tuple) :
+    (σ.writeBridgedOne t).watermark = σ.watermark := by
+  unfold GraphState.writeBridgedOne GraphState.bridgePre
+  split <;> simp [GraphState.addEdge, GraphState.addNode]
+
+/-- The bridged step never touches a residue (untainted fragment; bridges are nodes and
+    edges only). -/
+@[simp] theorem writeBridgedOne_residue (σ : GraphState) (t : Tuple) :
+    (σ.writeBridgedOne t).residue = σ.residue := by
+  unfold GraphState.writeBridgedOne GraphState.bridgePre
+  split <;> simp
+
+/-- The bridged step never drops a residue. -/
+theorem residueEmpty_writeBridgedOne {σ : GraphState} (t : Tuple) (h : ResidueEmpty σ) :
+    ResidueEmpty (σ.writeBridgedOne t) := by
+  intro k r
+  rw [writeBridgedOne_residue]
+  exact h k r
+
+/-- The bridged step preserves the full `Inv` on the residue-free fragment — structural
+    clauses from `structInv_writeBridgedOne`, residue clauses vacuous under
+    `ResidueEmpty`. -/
+theorem inv_writeBridgedOne {S : Schema} {σ : GraphState} (h : Inv S σ)
+    (hre : ResidueEmpty σ) (t : Tuple) : Inv S (σ.writeBridgedOne t) := by
+  have hstruct := structInv_writeBridgedOne h.toStruct t
+  have hre' := residueEmpty_writeBridgedOne t hre
+  exact
+    { schemaEq := hstruct.schemaEq
+      nodeEnc := hstruct.nodeEnc
+      edgesClosed := hstruct.edgesClosed
+      acyclic := hstruct.acyclic
+      negStarCovered := by
+        intro k r res hr _ _; exact absurd (hr.symm.trans (hre' k r)) (Option.some_ne_none res)
+      negEdgeFree := by
+        intro k r res hr _ _; exact absurd (hr.symm.trans (hre' k r)) (Option.some_ne_none res)
+      uposEdgeFree := by
+        intro k r res hr _ _; exact absurd (hr.symm.trans (hre' k r)) (Option.some_ne_none res)
+      uposNegDisjoint := by
+        intro k r res hr _ _; exact absurd (hr.symm.trans (hre' k r)) (Option.some_ne_none res) }
+
+/-- The bridged step preserves cascade-quiescence (outbox/watermark untouched). -/
+theorem quiescent_writeBridgedOne {σ : GraphState} (hq : Quiescent σ) (t : Tuple) :
+    Quiescent (σ.writeBridgedOne t) := by
+  intro d hd
+  rw [writeBridgedOne_outbox] at hd
+  rw [writeBridgedOne_watermark]
+  exact hq d hd
+
+/-! ### The fold family — the drop-in replacements for `RulesWrite.lean`'s
+`*_foldl_writeDirect` at `LeafRules.lean`'s five corollaries. -/
+
+theorem structInv_foldl_writeBridgedOne {S : Schema} (ts : List Tuple) :
+    ∀ {σ : GraphState}, StructInv S σ →
+      StructInv S (ts.foldl (fun acc u => acc.writeBridgedOne u) σ) := by
+  induction ts with
+  | nil => intro σ h; exact h
+  | cons t rest ih => intro σ h; exact ih (structInv_writeBridgedOne h t)
+
+theorem residueEmpty_foldl_writeBridgedOne (ts : List Tuple) :
+    ∀ {σ : GraphState}, ResidueEmpty σ →
+      ResidueEmpty (ts.foldl (fun acc u => acc.writeBridgedOne u) σ) := by
+  induction ts with
+  | nil => intro σ h; exact h
+  | cons t rest ih => intro σ h; exact ih (residueEmpty_writeBridgedOne t h)
+
+theorem inv_foldl_writeBridgedOne {S : Schema} (ts : List Tuple) :
+    ∀ {σ : GraphState}, Inv S σ → ResidueEmpty σ →
+      Inv S (ts.foldl (fun acc u => acc.writeBridgedOne u) σ) := by
+  induction ts with
+  | nil => intro σ h _; exact h
+  | cons t rest ih =>
+    intro σ h hre
+    exact ih (inv_writeBridgedOne h hre t) (residueEmpty_writeBridgedOne t hre)
+
+theorem quiescent_foldl_writeBridgedOne (ts : List Tuple) :
+    ∀ {σ : GraphState}, Quiescent σ →
+      Quiescent (ts.foldl (fun acc u => acc.writeBridgedOne u) σ) := by
+  induction ts with
+  | nil => intro σ h; exact h
+  | cons t rest ih => intro σ h; exact ih (quiescent_writeBridgedOne h t)
+
+theorem schema_foldl_writeBridgedOne (ts : List Tuple) :
+    ∀ {σ : GraphState},
+      (ts.foldl (fun acc u => acc.writeBridgedOne u) σ).schema = σ.schema := by
+  induction ts with
+  | nil => intro σ; rfl
+  | cons t rest ih =>
+    intro σ
+    simp only [List.foldl_cons]
+    rw [ih]; exact writeBridgedOne_schema σ t
+
+/-! ### ★ Red-to-green witnesses for the bridged step (`P6` step 3a, 2026-09-13d)
+
+`writeBridgedOne` is ADDITIVE: `writeRulesRaw` still folds `writeDirect`, so the whole
+ten-phase gate stays green if every definition above is wrong. That is the same position
+part (i) of `ttuStarFree` sat in for a month (`:112`), and the response is the same one:
+`decide` pins are the ONLY evidence, and each carries its own non-vacuity or attribution
+control (`docs/sabotage-procedure.md`).
+
+The store is `ThroughShapeWitness.Sthru`, so a reader comparing these with
+`InBridgeIdemWitness` and `Cascade.lean::InBridgeLegWitness` sees ONE scenario throughout.
+⚠ `control_agrees_with_writeDirect` is the load-bearing control: without it,
+`bridged_creates_the_bridge` would be satisfied by a `writeBridgedOne` that differs from
+`writeDirect` *everywhere*, which would say nothing about the bridge. -/
+namespace BridgedWriteWitness
+
+/-- The TTU-rewritten member this whole item exists for: the through-shape subject
+    `folder:f1#viewer` granting `doc:d1#viewer`. -/
+def tThru : Tuple := ⟨⟨"folder", "f1", "viewer"⟩, "viewer", ⟨"doc", "d1"⟩⟩
+
+/-- The SAME subject, a second object — the shape a leaf-routed fold produces when two
+    routed members share a subject (the step-1 probe's `tSub` had exactly two). -/
+def tThru2 : Tuple := ⟨⟨"folder", "f1", "viewer"⟩, "viewer", ⟨"doc", "d2"⟩⟩
+
+/-- **CONTROL member**: neither endpoint is of a bridged-in shape (`(folder, BARE)` is
+    filtered by the outer `p ≠ BARE`; `(doc, parent)` is not a through-shape — `doc#parent`
+    carries `[folder:*]`, not `[doc:*]`). -/
+def tCtrl : Tuple := ⟨⟨"folder", "f1", BARE⟩, "parent", ⟨"doc", "d1"⟩⟩
+
+/-- A grant whose two endpoints are the SAME node, so admission refuses it — the arm that
+    shows the rollback is real. -/
+def tSelf : Tuple := ⟨⟨"folder", "f1", "viewer"⟩, "viewer", ⟨"folder", "f1"⟩⟩
+
+def base : GraphState := emptyState ThroughShapeWitness.Sthru
+
+/-- The bridge target of `tThru`'s subject. -/
+def w0 : NodeKey := wAnyNode ("folder", "viewer")
+
+/-- **NON-VACUITY**: the subject endpoint really is bridge-eligible at this store, so the
+    bridged branch of `bridgePre` is the one being exercised. -/
+theorem subject_is_bridged_in :
+    base.bridgedInConcrete (subjNode tThru.subject) = true := by decide
+
+/-- **NON-VACUITY**: the OBJECT endpoint is not, so these pins are about the subject
+    bridge and a future reader cannot mistake which `ensureInBridges` call fired. -/
+theorem object_is_not_bridged_in :
+    base.bridgedInConcrete (objNode tThru.object tThru.relation) = false := by decide
+
+/-- ★ **THE POINT OF `P6` (ii): the bridged step materialises the in-bridge.** -/
+theorem bridged_creates_the_bridge :
+    (subjNode tThru.subject, w0) ∈ (base.writeBridgedOne tThru).edges := by decide
+
+/-- ★ **…and `writeDirect` — what the live leg still folds until step 3b — does not.**
+    This is the divergence from `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges`,
+    exhibited rather than described. -/
+theorem writeDirect_misses_the_bridge :
+    (subjNode tThru.subject, w0) ∉ (base.writeDirect tThru).edges := by decide
+
+/-- The grant survives the prologue: bridging does not cost the edge the write was for. -/
+theorem bridged_keeps_the_grant :
+    (subjNode tThru.subject, objNode tThru.object tThru.relation)
+      ∈ (base.writeBridgedOne tThru).edges := by decide
+
+/-- ★ **ATTRIBUTION CONTROL**: at a member with no bridged-in endpoint the bridged step
+    and `writeDirect` agree on the edges. So the two pins above are the BRIDGE's doing,
+    not "the two definitions differ everywhere". -/
+theorem control_agrees_with_writeDirect :
+    (base.writeBridgedOne tCtrl).edges = (base.writeDirect tCtrl).edges := by decide
+
+/-- ★ **The presence guard survives COMPOSITION** — the property step 3b makes live, and
+    the reason `ensureInBridges_count_le_one` is an invariant rather than a two-call
+    idempotence claim. Folding the bridged step over two members that share a subject
+    leaves exactly ONE copy of the bridge; before the step-2 guard this read `2`. -/
+theorem fold_keeps_one_bridge_copy :
+    (([tThru, tThru2].foldl (fun acc u => acc.writeBridgedOne u) base).edges.count
+      (subjNode tThru.subject, w0)) = 1 := by decide
+
+/-- A member whose **OBJECT** endpoint is of a bridged-in shape: `user:u1` granted
+    `folder:f1#viewer`, whose object node IS the through-shape concrete.
+
+    ⚠ **This arm exists because the sweep asked for it.** With only `tThru`, mutation `M2`
+    — *bridge the SUBJECT only, dropping Python's `_ensure_bridges(obj)` call* — reddened
+    `structInv_writeBridgedOne` and NOTHING ELSE: a broken PROOF, not a broken claim, and
+    a future rewrite of that proof would have retired the only evidence. The arms below
+    are the behavioural pin, and they are the reason
+    `object_is_not_bridged_in` above states which endpoint `tThru` exercises. -/
+def tObj : Tuple := ⟨⟨"user", "u1", BARE⟩, "viewer", ⟨"folder", "f1"⟩⟩
+
+/-- **NON-VACUITY**: `tObj`'s object endpoint really is bridge-eligible… -/
+theorem object_endpoint_is_bridged_in :
+    base.bridgedInConcrete (objNode tObj.object tObj.relation) = true := by decide
+
+/-- …and its SUBJECT endpoint is not (a `BARE` predicate is filtered by the outer guard),
+    so the pin below is the object-side `ensureInBridges` call and cannot be passed off as
+    the subject-side one. -/
+theorem tObj_subject_is_not_bridged_in :
+    base.bridgedInConcrete (subjNode tObj.subject) = false := by decide
+
+/-- ★ **Python bridges BOTH endpoints, and so does this**: the object-side bridge fires. -/
+theorem object_bridge_fires :
+    (objNode tObj.object tObj.relation, w0) ∈ (base.writeBridgedOne tObj).edges := by decide
+
+/-- …and `writeDirect` misses it, exactly as it misses the subject-side one. -/
+theorem writeDirect_misses_the_object_bridge :
+    (objNode tObj.object tObj.relation, w0) ∉ (base.writeDirect tObj).edges := by decide
+
+/-- A wildcard-userset grant whose OBJECT is the very concrete its own bridge points out
+    of: `folder:*#viewer viewer folder:f1`. The bridge `folder:f1#viewer → w_any` closes a
+    cycle with it.
+
+    ⚠ **This arm also exists because the sweep asked for it**: mutation `M5` — *probe
+    admission on the UNBRIDGED state* — reddened only `structInv_writeBridgedOne`, so
+    "bridge-before-grant" had no behavioural pin. It has one now, and the pair below is
+    what makes the ORDER observable rather than a stated preference. -/
+def tCycle : Tuple := ⟨⟨"folder", STAR, "viewer"⟩, "viewer", ⟨"folder", "f1"⟩⟩
+
+/-- ★ **Bridge-before-grant REFUSES it** — Python's order, where "cycle errors then attach
+    to the grant (the offending write)". -/
+theorem bridged_probe_refuses_the_cycle :
+    (base.bridgePre tCycle).admitEdge (subjNode tCycle.subject)
+      (objNode tCycle.object tCycle.relation) = false := by decide
+
+/-- ★ **ATTRIBUTION**: the UNBRIDGED probe ADMITS the same grant. So the refusal above is
+    the bridge's doing, and a model that probed admission before bridging would accept a
+    write the shipped index rejects. -/
+theorem unbridged_probe_admits_the_cycle :
+    base.admitEdge (subjNode tCycle.subject)
+      (objNode tCycle.object tCycle.relation) = true := by decide
+
+/-- ★ **…so the write materialises NOTHING** — bridge and grant roll back together. This
+    is the arm that actually observes the ORDER through `writeBridgedOne`: the two pins
+    above sit on `bridgePre` and `admitEdge` directly, and the sweep showed (`M5`) that a
+    definition probing the unbridged state leaves both of them green. -/
+theorem cycle_write_materialises_nothing :
+    (base.writeBridgedOne tCycle).edges = base.edges := by decide
+
+/-- **NON-VACUITY for the rollback arm**: the self-grant really is refused. -/
+theorem self_grant_is_refused :
+    (base.bridgePre tSelf).admitEdge (subjNode tSelf.subject)
+      (objNode tSelf.object tSelf.relation) = false := by decide
+
+/-- ★ **The rollback is Python's**: a refused grant discards the bridges with it, so a
+    write the index rejects leaves no edge behind. Were the else-branch `σ₂` instead of
+    `σ`, this would hold the bridge. -/
+theorem refused_write_leaves_no_bridge :
+    (base.writeBridgedOne tSelf).edges = base.edges := by decide
+
+end BridgedWriteWitness
+
+/-! ### ★ CONTROLLED — MUTATION SWEEP over everything `P6` step 3a added (2026-09-13d)
+
+Eleven mutations, run against the whole `Cascade` target (so both files are covered by one
+run, as step 2's sweep was). Harness: `.scratch/p6-step3/sweep.py`, anchors read with
+`newline=''` and asserted to occur EXACTLY once — the step-2 lesson, where ten of fourteen
+anchors matched zero times on a CRLF/LF mismatch and the run read like a clean module.
+Literal observed output, restored baseline `rc=0`:
+
+```text
+M0   RED  flip `subject_is_bridged_in`'s own claim   -> UsStarWrite::subject_is_bridged_in
+M1   RED  drop BOTH bridges from `bridgePre`         -> structInv_writeBridgedOne,
+          bridged_creates_the_bridge, fold_keeps_one_bridge_copy, object_bridge_fires,
+          bridged_probe_refuses_the_cycle
+M2   RED  bridge the SUBJECT only                    -> structInv_writeBridgedOne,
+          object_bridge_fires, bridged_probe_refuses_the_cycle
+M3   RED  bridge the OBJECT twice, never the subject -> structInv_writeBridgedOne,
+          bridged_creates_the_bridge, fold_keeps_one_bridge_copy
+M4   RED  keep bridges when the grant is REFUSED     -> structInv_writeBridgedOne,
+          cycle_write_materialises_nothing, refused_write_leaves_no_bridge
+M5   RED  probe admission on the UNBRIDGED state     -> structInv_writeBridgedOne,
+          cycle_write_materialises_nothing
+M6   RED  drop the step-2 PRESENCE GUARD             -> ensureInBridges_edges_of_mem,
+          ensureInBridges_count_le_one, copies_2, copies_3, edges_are_the_bridge_alone,
+          structInv_ensureInBridges, fold_keeps_one_bridge_copy
+M7   RED  logged prologue made UNLOGGED              -> Cascade::bridgePreLogged_evalEq,
+          Cascade::prologue_emits, Cascade::prologue_outboxes_differ
+M8   RED  release the OBJECT endpoint only           -> Cascade::epilogue_fires
+M9   RED  release epilogue made the IDENTITY         -> Cascade::epilogue_fires
+M10  INERT release without the bridged-in guard
+```
+
+★ **`M6` is the row that justifies step 3a as a unit.** Dropping the step-2 presence guard
+now reds `fold_keeps_one_bridge_copy` — a COMPOSED pin — as well as step 2's own
+single-call ones, so the guard and the composition are pinned together, which is what
+`ensureInBridges_count_le_one`'s invariant form was chosen for.
+
+⚠ **Attribution lists for a mutation of THIS file are TRUNCATED, and the harness cannot
+help it.** `Cascade` imports `UsStarWrite`, so when `M1`–`M6` red a declaration here the
+build never compiles `Cascade` and no `Cascade::` pin is ever evaluated. Read those rows
+as "reds at least these", never as "reds only these" — in particular `M6` very likely reds
+`Cascade::prologue_second_member_silent` too, and this sweep did **not** observe that.
+`M7`–`M10` mutate `Cascade` itself and so carry complete lists.
+
+⚠ **Two arms of this file exist only because the sweep asked for them, and that is the
+point of sweeping instead of sabotaging once.** On the first run `M2` and `M5` reddened
+`structInv_writeBridgedOne` and **nothing else** — a broken PROOF, not a broken claim, so
+rewriting that proof would have retired the only evidence that the model bridges BOTH
+endpoints and bridges BEFORE the grant. `BridgedWriteWitness.tObj` and `::tCycle` are the
+behavioural pins added in response; `M2`/`M5` red them now. Note also that `tCycle`'s first
+two pins were NOT enough: they sit on `bridgePre`/`admitEdge` directly, and `M5` mutates
+`writeBridgedOne`, so `cycle_write_materialises_nothing` — which reads the write — is the
+arm that actually observes the order.
+
+⚠ **`M10` is INERT and says so rather than being deleted or dressed up.** Dropping
+`bridgedInConcrete` from `Cascade.lean::inBridgeOnly` changes no observation, because the
+release then fires at nodes with no bridge edge to erase and `removeEdgeOne` on an absent
+edge is the identity. This is the SAME row step 2's sweep recorded as `M6`; the conjunct is
+defensive. Do not delete it on the strength of that, and do not cite it as load-bearing.
+
+⚠ **What this sweep does NOT cover, stated so the next session does not mistake silence
+for coverage.** Every definition above is ADDITIVE — `writeRulesRaw` still folds
+`writeDirect` and `writeLoggedOne` is still bridge-free — so the ten-phase gate is blind to
+all of it, and these `decide` pins are the entire net. In particular no conformance test,
+no hypothesis campaign and no golden can see a regression here until `P6` step 3b
+re-points the live legs. -/
 
 /-! ## Write-effect projections -/
 

@@ -324,12 +324,13 @@ theorem mem_rawWriteTuples_self {S : Schema} {t : Tuple}
 def GraphState.writeRulesRaw (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
   (rewriteClosureL S (rawWriteTuples S t)).foldl (fun acc u => acc.writeDirect u) σ
 
-/-- **The subsumption theorem the leg's honesty rests on**: on a schema with no derived
-    keys, the leaf-routed write IS today's rule-routed write. Not "we checked the tests
-    still pass" — the two definitions are equal. -/
-theorem writeRulesRaw_untaintedSchema {σ : GraphState} {S : Schema} {t : Tuple}
+/-- **The subsumption theorem's LIST half** — extracted by `P6` step 3 from
+    `writeRulesRaw_untaintedSchema` below, because after the bridge composition the list
+    half is the part that survives unchanged. On a schema with no derived keys the
+    leaf-routed expansion IS the plain rewrite-closure, as lists. -/
+theorem rewriteClosureL_rawWriteTuples_untaintedSchema {S : Schema} {t : Tuple}
     (h : ∀ d ∈ S.defs, isDerived S d.1 = false) :
-    σ.writeRulesRaw S t = σ.writeRules S t := by
+    rewriteClosureL S (rawWriteTuples S t) = rewriteClosure S t := by
   have hd : isDerived S (t.object.type, t.relation) = false := by
     by_cases hne : isDerived S (t.object.type, t.relation) = true
     · exfalso
@@ -340,10 +341,35 @@ theorem writeRulesRaw_untaintedSchema {σ : GraphState} {S : Schema} {t : Tuple}
       rw [← hde, h d hdmem] at hne
       exact Bool.noConfusion hne
     · simpa using hne
-  unfold GraphState.writeRulesRaw GraphState.writeRules
   rw [rawWriteTuples_untainted hd]
   unfold rewriteClosureL rewriteClosure
   rw [rewriteClosureRawL_singleton h]
+
+/-- **The subsumption theorem the leg's honesty rests on**: on a schema with no derived
+    keys, the leaf-routed write IS today's rule-routed write. Not "we checked the tests
+    still pass" — the two definitions are equal.
+
+    ⚠ **`P6` step 3b will restate this, and the restatement is already decided**
+    (measured 2026-09-13d). Once `writeRulesRaw` folds
+    `UsStarWrite.lean::GraphState.writeBridgedOne` — Python's bridge-before-grant
+    prologue — while `RulesWrite.lean::GraphState.writeRules` keeps folding the bare
+    `writeDirect`, this equation is FALSE: the two differ at any `bridged_in_shapes`
+    endpoint, and because the admission probe then reads the post-`addNode` bridged state
+    they are not definitionally equal even where nothing is bridged. The honest
+    restatement is the LIST half, `rewriteClosureL_rawWriteTuples_untaintedSchema` above,
+    which is why that half was extracted here rather than at the flip. **Not bridging
+    `writeRules` too is the recorded decision**: it is the PLAIN shadow rebuild
+    `ReachedByRulesAdmitted` folds (see the caller note on `writeRulesRaw`), its reverse
+    cone is 40 modules against `UsStarWrite`'s 24, and the live chain reaches it only
+    through `CascadeStrataSettle.lean::untOccCount_eq_plainOcc_of_notLeaf`. The cost of
+    restating is bounded and MEASURED: this theorem has **no consumer anywhere in the Lean
+    development** — grep 2026-09-13d found only `Audit.lean`'s `#print axioms` row and two
+    prose citations. -/
+theorem writeRulesRaw_untaintedSchema {σ : GraphState} {S : Schema} {t : Tuple}
+    (h : ∀ d ∈ S.defs, isDerived S d.1 = false) :
+    σ.writeRulesRaw S t = σ.writeRules S t := by
+  unfold GraphState.writeRulesRaw GraphState.writeRules
+  rw [rewriteClosureL_rawWriteTuples_untaintedSchema h]
 
 /-! ## Invariant preservation — free, via `RulesWrite`'s list-generic fold family
 

@@ -30,6 +30,69 @@ from here.
 
 ---
 
+## 2026-09-13d — `P6` step 3 SPLIT: 3a lands the bridged twins + hinge; 3b is three re-points and a measured map
+
+rows: `P6` (Log `2026-09-13d`, brief set, summary + two new `## Traps` + `## Read first`
+entry; stays `NOW`, now startable at step 3b), `TK68` (NEW, `LATER`/`S`, the blocker).
+Nothing closed, nothing re-ranked.
+
+task lint: clean (13 checks, 183 task file(s) parsed), 26 warning(s)
+read: board + note
+
+**The session did the whole of step 3 first, then undid two thirds of it on purpose.** The
+composition — `writeLoggedOne` → a bridged prologue, `LeafRules.lean::writeRulesRaw` →
+the bridged unlogged twin, `removeLoggedOne` → a release epilogue — was written, built, and
+the first two modules of fallout were paid; the one substantive obligation was then stubbed
+to see how far the damage runs, and the answer (`CascadeStable.lean`: 27 errors across 17
+declarations, with nothing past it measurable because the build stops there) made clear that
+finishing in one session was not on the table. The rule is that each numbered step ends on a
+green committable tree, so the additive half landed and the re-points were reverted. **Step
+3b is now a three-line edit against a measured map instead of a forecast.** Detail on the
+row's `2026-09-13d` Log entry; the model↔code state is written up in
+[`formal/CORRESPONDENCE.md`](../../formal/CORRESPONDENCE.md) §7.3, which now says in one
+place that the live write leg still does not bridge and that the twins are inert.
+
+**What landed, all additive and all inert:** `GraphIndex/UsStarWrite.lean::GraphState.bridgePre`
+/ `::GraphState.writeBridgedOne` with a five-lemma preservation family and its fold twins;
+`GraphIndex/Cascade.lean::GraphState.bridgePreLogged` / `::GraphState.releasePostLogged`;
+and the hinge — `::ensureInBridges_evalEq`, `::bridgePreLogged_evalEq`,
+`::writeBridgedOne_logged_evalEq` — stated now, while additive, so that the flip is a
+re-point and `writeLoggedRules_evalEq` keeps its statement. Whole-tree build green with the
+job count **unchanged**; gate `lean` PASSED with `audits=587, pinned=587`, i.e. no audited
+name re-opened.
+
+**Three decisions taken under `CLAUDE.md` "Who decides"**, each recorded at the site as well
+as on the row: not to reuse `writeUsStar` (it also carries the W1b out-bridges, and widening
+the live leg by two mechanisms at once makes a divergence unattributable); not to bridge
+`RulesWrite.lean::writeRules` (it is the plain shadow rebuild, reverse cone 40 modules
+against `UsStarWrite`'s 24, and the theorem tying the two has **zero** Lean consumers, so
+restating it at 3b is free); and to give the bridge prologue a NAME rather than a `let`,
+because a `let` elaborates to `have` and blocks `split` at every site in a 20-module cone.
+
+**`TK68` is a fidelity finding, not a proof obstacle.** `Cascade.lean::reachedByW3d_edge_source_ne_R`
+(audited) is FALSE the moment the write leg bridges, because a bridge edge is sourced at its
+concrete endpoint. Its one Lean consumer needs exactly the schema fact that Python enforces
+and Lean does not: `zanzibar_utils_v1.py` raises `UnsupportedByGraphIndex` on wildcard
+usersets over derived relations, and `FullScope.lean::GraphAdmission` has `objWild` for the
+*object*-wildcard twin of that rejection and no field for this one. So the Lean admission
+predicate is strictly weaker than the shipped compiler, and would be worth fixing even if
+`P6` were abandoned.
+
+**The sweep changed what shipped, which is the argument for sweeping rather than sabotaging
+once.** Eleven mutations (table in `UsStarWrite.lean`, harness `.scratch/p6-step3/sweep.py`).
+Two of them — bridge one endpoint instead of two, and probe admission before bridging
+instead of after — reddened a single broken PROOF and no claim at all, so rewriting that
+proof would have retired the only evidence for two thirds of what the definition asserts.
+Two behavioural witnesses were added in response and one needed three pins before the
+one-word mutation reddened. A second instrument fact is recorded with the table: a mutation
+of an upstream module stops the build, so downstream pins are never evaluated and every such
+attribution list means "at least these", never "only these".
+
+Still owed: nothing skipped from the Rhythm. Carried from before: the ledger receipt
+vocabulary has no token for "entered via `show`"; a percentage still has no mechanical guard
+(`GC-1`); `MIN_TESTS_ALL` is still ratcheted by hand; `TT-8` left one behaviour observed but
+unpinned.
+
 ## 2026-09-13c — `P6` step 2 LANDED: guard + four defs in their FINAL home; the `Cascade → UsStarWrite` import is free
 
 rows: `P6` (Log `2026-09-13c`, brief set, size `M` → `L`, summary + `## Traps` + `## Read
