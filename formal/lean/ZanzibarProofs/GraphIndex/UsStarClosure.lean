@@ -129,33 +129,10 @@ theorem writeUsStar_eq_ite (σ : GraphState) (t : Tuple) :
 
 /-! ## Edge and node effects of the in-bridge machinery -/
 
-/-- `ensureInBridges` only ever adds edges. -/
-theorem ensureInBridges_edges_mono {σ : GraphState} {c : NodeKey} {e : NodeKey × NodeKey}
-    (he : e ∈ σ.edges) : e ∈ (σ.ensureInBridges c).edges := by
-  unfold GraphState.ensureInBridges
-  by_cases hbr : σ.bridgedInConcrete c = true
-  · rw [if_pos hbr]; split
-    · rw [addNode_edges]; exact he
-    · split
-      · rw [addEdge_edges, addNode_edges]; exact List.mem_cons_of_mem _ he
-      · rw [addNode_edges]; exact he
-  · rw [if_neg (by simpa using hbr)]; exact he
-
-/-- A node of `ensureInBridges` is old or the single `w_any` node it may add. -/
-theorem ensureInBridges_nodes_mem {σ : GraphState} {c k : NodeKey}
-    (hk : k ∈ (σ.ensureInBridges c).nodes) :
-    k ∈ σ.nodes ∨ k = wAnyNode (c.type, c.pred) := by
-  unfold GraphState.ensureInBridges at hk
-  by_cases hbr : σ.bridgedInConcrete c = true
-  · rw [if_pos hbr] at hk; split at hk
-    · rw [addNode_nodes] at hk
-      rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
-    · split at hk
-      · rw [addEdge_nodes, addNode_nodes] at hk
-        rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
-      · rw [addNode_nodes] at hk
-        rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
-  · rw [if_neg (by simpa using hbr)] at hk; exact Or.inl hk
+/-! `ensureInBridges_edges_mono` and `ensureInBridges_nodes_mem` used to live here; `P6`
+step 3b (2026-09-13) moved them verbatim to `UsStarWrite.lean`, which `Cascade.lean` can
+see and this file cannot be seen from. Their uses below are unchanged — this file imports
+`UsStarCorrect`, which reaches `UsStarWrite`. -/
 
 /-- A node of `ensureBridges` is old or the single `w_all` node it may add. -/
 theorem ensureBridges_nodes_mem {σ : GraphState} {c k : NodeKey}

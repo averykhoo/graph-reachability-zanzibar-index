@@ -70,6 +70,33 @@ IVM delta processor.
   * Correctness of the tool is pinned by `tests/test_tasktool.py`, INSIDE the gate since
     2026-08-29d (the sabotage cases are permanent tests; the historical record is
     [`docs/history/tasktool-proof-2026-08.md`](docs/history/tasktool-proof-2026-08.md)).
+- **SCOUTING IS A DELIVERABLE, NOT A BYPRODUCT** (rule added 2026-09-13g, user instruction:
+  *"hand off whatever state you have … so the next session doesn't need to do so much
+  scouting"*). Measuring the tree is the expensive half of an `L`-sized item — cone counts,
+  call-site censuses, symbol/line maps, go/no-go adjudications, "which of these seven claims
+  survives first-hand". A session that measures and then only *acts* has thrown the
+  measurement away, and the next session pays for it again. So:
+  * **The measurement lands in a TRACKED file the same hour it is made**, before the edit it
+    was made for. Not `.scratch/`, not a subagent report you summarised in chat, not the task
+    row's prose — a file. The shape is an **ACTIVE-PLAN** doc (`docs/README.md` §3),
+    `docs/<id>-<topic>-<YYYY-MM-DD>.md`, corrections appended **dated at the top**, FROZEN when
+    the item closes. The worked precedent is
+    [`docs/p6-step3b-plan-2026-09-13.md`](docs/p6-step3b-plan-2026-09-13.md) — a nine-agent
+    sweep reconciled first-hand, which turned "step 3b is three re-points" into an ordered
+    fifteen-step map with the blockers named.
+  * **Label every claim by provenance**: first-hand READ, REASONED, or UNVERIFIED, and say
+    which agent/probe produced it. A subagent report is evidence, not a finding
+    (§ Delegation) — an unlabelled one gets re-verified from scratch, which is the scouting
+    done twice. Flag the not-yet-verified items *in place*, not in a footnote.
+  * **Cite `file::symbol`, and date any line number.** Line numbers rot within one session
+    (steps 1–2 of `P6` moved every `UsStarWrite.lean` cite in the plan above). A map whose
+    anchors do not resolve sends the next session back to grepping.
+  * **The task row is the index, the doc is the body.** Close with
+    `task.py comment <id> --session <key>` naming the file, what LANDED, what BUILDS, what is
+    RED, and the single next action. `show <id>` alone must be enough to resume.
+  * **This applies to a session that runs out of room, not just one that finishes.** Before
+    clearing context or stopping mid-item, write the state down first — a half-finished item
+    with its map recorded is resumable; a finished measurement that was never written is lost.
 - **Always run the gate before pushing.** Never push red or unverified: the phased
   `verify.sh` (`lean` → `conf-tile:1/5`…`5/5` → `tests-tile:1/4`…`4/4`) all `PASSED`
   (+ a fuzz sweep for an algorithm change). The cap-safe recipe is in
