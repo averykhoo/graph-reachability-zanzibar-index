@@ -30,6 +30,109 @@ from here.
 
 ---
 
+## 2026-09-13b — `P6` step 1: GO. Bridged leg 14 -> 2 of 546, ceiling 0; `ensureInBridges` leaks a copy per call
+
+rows: `P6` (Log `2026-09-13b`, brief set, `## Read first` rewritten, stays `NOW`, now
+startable at step 2). Nothing closed, nothing re-ranked.
+
+task lint: clean (13 checks, 182 task file(s) parsed), 24 warning(s)
+read: board only
+
+Executed step 1 of the 2026-09-12b plan — the zero-cone go/no-go probe. No Lean model
+touched, no gated file touched; two new tracked probes and the row.
+
+**The correction this session owed the previous two.** 2026-09-12b recorded, and the
+`2026-09-13` entry above repeated, that the "14 → 9 of 546 mismatches" payoff failure "was
+measured on a store part (ii) owes nothing to". **That is false**, and the probe's own
+source says so: `formal/probes/p6_inbridge_stability_2026-09-12.lean:872-887
+P6BridgeProbe.repair` is written entirely against `Sp` — `cascadeLeg Sp`, `legB Sp`,
+`sem Sp` — and `Sp` IS the in-fragment `WideWitness.SwT`-shaped store (`:488-503`), pinned
+by that file's own `NARROW rejects / WIDE admits == some (false, true)`. `Sd` appears only
+in its `§7 routing`, a different measurement with different numbers. Two sections were
+conflated into one sentence. I re-ran the 2026-09-12 probe first-hand before writing a line
+(rc=0, 335 lines, byte-identical, `baseMismatch := 14 / bridgedMismatch := 9`), so the
+payoff criterion was measured IN scope and it FAILED — step 1's stop condition was live.
+★ The generalisable lesson, and the reason this is three sessions in a row: **a figure
+inherited across entries decays into a claim about a different thing.** Nothing in the
+tooling walks a Log entry's citations. Re-read the cited source before carrying a number
+forward, and re-run it if it is cheap — this one was 40 seconds.
+
+**Why it had failed: the instrument, not the bridge.** `repair` builds its pre-state with
+the PLAIN driver and only then bridges the single write `tObj`, so `tView`'s object
+endpoint `folder:f1#viewer` — the concrete node the whole through-shape hangs off — was
+written by a bridge-free leg and no arm went back for it. Increment B composes the bridge
+INTO the write leg, so every write bridges. `formal/probes/p6_step1_logged_bridge_2026-09-13.lean`
+measures THAT design (`bridgedRunOps`, the bridged twin of `Exec.lean:449 graphRunOpsAux`);
+rc=0, 244 lines, literal transcript in the header, re-run byte-identical after pasting it.
+
+**The verdict is GO.** Over the 546-query routing-independent grid, every arm carrying
+per-arm non-vacuity (step 0's lesson: `rewrites := 1` so the widening predicates are
+engaged, `narrowRej && wideAdm`, `bridges > 0`): `R-OLD-BASE`/`R-OLD-BR` reproduce **14**
+and **9** exactly (same instrument, so the delta is attributable to the prefix alone);
+`R-BASE` **14**; all four bridged arms **2**; `R-CEIL`, maximal schema-declared bridging,
+**0**. The ceiling is zero, so the bridge is the complete mechanism for every node a write
+leg touches.
+
+**Per-domain, the 2026-09-12b prediction is confirmed and Wall 2's repair is settled.** On
+the subject-endpoint write the old probe called FALSE: unlogged, `uReachStable` /
+`uGraphRecStable` / `uCheckFnStable` are all **false** at 3 unmapped keys — the tier-1
+statements are FALSE, not premise-repairable. Logged, all three are **true**, because the
+delta moves those keys into `cascadeKeys` (unmapped 3 → 1). So `hunmapped` excludes exactly
+the perturbed keys and **all 23 at-risk stability theorems keep their statements**; only the
+proofs need a "new edges are routed-or-bridged" case. (!) SRC and TGT logging are
+indistinguishable on every number measured — step 2's choice of TGT is free, not pinned.
+
+**★ NEW FINDING, a model-fidelity bug, and Wall 2 is two mechanisms not one.** (a) The
+dead-node GC 2026-09-12b specified is right: `W2-DOM-TGT` leaves `residue := 1` and the
+`_maybe_remove_bridges`-mirroring prototype collects it exactly, declining correctly on a
+still-live node. (b) **`ensureInBridges` is not idempotent on the edge multiset** —
+measured `(0 calls, 1, 2, 3) = (0, 1, 2, 3)`. The leg calls it once per member of the
+leaf-routed list, so a 2-member list leaves `residue := 2` that `RESIDUE DETAIL` shows is
+EMPTY of new edges: two extra copies of a bridge already present, accumulating per write.
+**Python does not do this** — `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges`
+guards with `if not self.idx.direct_edge_exists_by_id(node.id, w_any.id)`. The Lean def
+(`UsStarWrite.lean:213-218`) has no guard; its docstring claims only reachability-level
+idempotence, which is true and is not enough once a live chain calls it per routed member.
+Inert today; increment B is what makes it live. **Decision taken here** (`CLAUDE.md` "Who
+decides"): step 2 adds the presence guard, mirroring Python — the proof must describe the
+shipped code. It re-opens `structInv_ensureInBridges` (audited `Audit.lean:159`) and
+`ensureInBridges_edges_mem` (`:166`), and is ADDITIONAL to the 2026-09-12b step-2 list.
+
+**The residual 2 is a phantom subject — a Lean-model gap, not a shipped bug.** Both are
+`folder:f9#viewer` on `doc:d1` at the DERIVED relations, where `folder:f9` is mentioned by
+no written tuple so no write leg creates the node. The asymmetry is the content: at the same
+subject the PLAIN relation `access` answers correctly in the bridged model; only the derived
+ones are wrong. Checked against the shipped Python the same hour —
+`formal/probes/p6_phantom_subject_2026-09-13.py`, `tests/parity.py::ParityEngine` (graph +
+both `SetOps` + oracle, unanimity asserted): **all seven queries UNANIMOUS `True`, no
+divergence.** Python is right because its derived read path is edge probe *plus residue*,
+i.e. symbolic, where the Lean model's is edges alone. A `CORRESPONDENCE.md` §7 boundary of
+the entity-middle class, not something increment B owes.
+
+**Tier 2 needed diagnosis, not the replacement instrument the plan asked for.**
+`guardPre`/`guardPost` were false in all eight 2026-09-12 arms, BASE included, so tier 2
+measured nothing. Reason now named: **8** failures unbridged, halved to **4** under bridging
+— they were false at BASE because this is exactly the store the unbridged graph gets WRONG
+(`TtuStarWide.lean:32-39`), which is the point of the widening. The residual 4 are printed
+as rows and are not a bridge question: all four are `gate` — **stratum 2 only, never
+`admin`** — at userset subjects, with `checkFn = false`, `GraphModel.check = true`,
+`sem = true`. At the ceiling the two readers disagree with each other; the model's `check`
+is right and the proof-side `checkFn` under-reads. Bounded, named step-2 item.
+
+**Method note for [`docs/sabotage-procedure.md`](../sabotage-procedure.md).** Step 0's
+lesson was "a sweep needs an instrument control". Step 1 adds the dual: **a green needs a
+CEILING control.** `R-CEIL` bridges more than any routing can and is the only arm that
+distinguishes "the bridge is incomplete" from "these particular nodes were never bridged" —
+without it, `2` would have read as a partial failure of the mechanism and step 3 would have
+been re-planned for no reason. Every arm also reports its own non-vacuity, and the three
+nonzero residuals are each named rather than reported: an unattributed number is
+indistinguishable from a broken instrument.
+
+**Still owed:** the phantom-subject parity result is a tracked, re-runnable PROBE, not a
+pin — nothing in the ten-phase gate reddens if that property regresses. Promoting it to a
+permanent parity test is recorded as a step-2 item on `P6` and in the probe's own docstring;
+it was deliberately not done here to keep step 1 zero-cone.
+
 ## 2026-09-13 — `P6` step 0 LANDED; the 2026-09-12b `term` reason was FALSE and the conclusion survives, stronger
 
 rows: `P6` (Log `2026-09-13`, brief set, stays `NOW`, now startable at step 1); `P25`

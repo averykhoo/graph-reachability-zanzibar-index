@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: Step 0 LANDED 2026-09-13; the 2026-09-12b `term` reason was FALSE -- exclusion is via the taint filter. Start at step 1
+brief: Step 1 LANDED 2026-09-13b: GO -- bridged leg 14->2 of 546, ceiling 0, logged bridge saves all 23. Start at step 2
 pri: NOW
 size: M
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-13
-updated: 2026-09-13
+moved: 2026-09-13b
+updated: 2026-09-13b
 closed:
 ---
 
@@ -109,8 +109,9 @@ materialises the edge, and the rest of the leg is inert until it lands.
 ## Read first
 
 - [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
-- **The plan is the `2026-09-12b` Log entry** (`show P6`): decisions on both walls, steps 0–4, what each step must not touch. **Start at step 1** — step 0 landed 2026-09-13, whose Log entry CORRECTS 2026-09-12b's Wall-1 reason; read the newer entry first.
-- `formal/lean/ZanzibarProofs/GraphIndex/TtuStarWide.lean` — what step 0 put there: `::ttuStarFreeW_through_untainted` (the consumer-side Wall-1 lemma), `::Zanzibar.RoutingArmWitness` (which stores are OUT of scope, and why — `no_rewrite_arms` is the load-bearing pin), `::Zanzibar.TermNonvacuityWitness` (that `term` excludes anything at all), and the mutation-sweep table. ⚠ **Step 1's probe must assert per-arm non-vacuity**: an arm measured where `schemaRewrites = []` is measuring nothing, which is exactly how the 2026-09-12 ROUTING arm produced a number that meant nothing.
+- **The plan is the `2026-09-12b` Log entry** (`show P6`): decisions on both walls, steps 0–4, what each step must not touch. **Start at step 2** — steps 0 and 1 landed 2026-09-13 / 2026-09-13b, and BOTH of their Log entries correct the entry before them. ⚠ **Read newest-first and do not trust a payoff figure without re-reading its source**: 2026-09-12b mis-attributed the `14 → 9` payoff failure to the out-of-fragment store `Sd`, step 0 carried that forward, and step 1 found it was measured on the IN-FRAGMENT `Sp` all along (`formal/probes/p6_inbridge_stability_2026-09-12.lean:872-887` is written against `Sp`, `Sd` appears only in `§7`).
+- `formal/probes/p6_step1_logged_bridge_2026-09-13.lean` — **step 1's verdict and every number behind it**, literal transcript in the header (rc=0, 244 lines). The GO: bridged leg `14 → 2` of 546, ceiling `0`. What step 2 inherits: the `ensureInBridges` presence guard (NEW — the Lean def is not multiset-idempotent, `(0,1,2,3)`, and Python's `_ensure_own_bridges` guards where Lean does not, so this re-opens `formal/lean/ZanzibarProofs/Audit.lean:159` / `:166`); `ensureInBridgesLogged` with SRC-vs-TGT UNPINNED by measurement; `releaseInBridges` confirmed as specified; two `formal/CORRESPONDENCE.md` §7 boundary entries. Companion: `formal/probes/p6_phantom_subject_2026-09-13.py` (the residual 2 is a Lean-model gap — the shipped backends are unanimous).
+- `formal/lean/ZanzibarProofs/GraphIndex/TtuStarWide.lean` — what step 0 put there: `::ttuStarFreeW_through_untainted` (the consumer-side Wall-1 lemma), `::Zanzibar.RoutingArmWitness` (which stores are OUT of scope, and why — `no_rewrite_arms` is the load-bearing pin), `::Zanzibar.TermNonvacuityWitness` (that `term` excludes anything at all), and the mutation-sweep table. ⚠ **Every arm must assert per-arm non-vacuity**: an arm measured where `schemaRewrites = []` is measuring nothing, which is exactly how the 2026-09-12 ROUTING arm produced a number that meant nothing. Step 1 honoured this (its `Vac` carries `rewrites`, `bridges`, `narrowRej && wideAdm`, `unmapped`); step 2 and after must keep doing so.
 - Python's side of the bridge, read before modelling it: `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` (write), `::_maybe_remove_bridges` (retract), `index_v4/core.py::ReachabilityIndex.add_edge_by_id` (why the bridge is logged), `index_v4/processor.py::DeltaProcessor._write_derived` (the out-of-fragment derived case).
 - board pointer: `ttuStarFree` **(ii)** — bridges on the rule-routed write path. **Promoted `NEXT` → `NOW` MECHANICALLY on 2026-09-05b** — `P3` LANDED (write leg now folds `rewriteClosureL S (rawWriteTuples S t)`, `formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean:190-191`), so "NOT parallel-safe with `P3`" is moot and **increment B must bridge on the LEAF-routed list, not the public one**. Fresh evidence 2026-08-31b that this is a live hole: `ttuStarFree` classifies **SILENT** in the `W4Fragment` scope pin (`formal/conformance/test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE`)
 
@@ -698,3 +699,114 @@ must report PER DOMAIN. Note for that probe: `RoutingArmWitness` is now the mach
 statement of which stores are OUT of scope, so an arm measured on a store where
 `schemaRewrites = []` is measuring nothing — check `no_rewrite_arms`-style non-vacuity per
 arm before reading any mismatch count.
+
+### 2026-09-13b
+
+STEP 1 RAN, AND THE ANSWER IS **GO** (zero cone; no Lean model, no gated file touched).
+New tracked probe `formal/probes/p6_step1_logged_bridge_2026-09-13.lean` (rc=0, 244 lines,
+literal transcript in its header, re-run byte-identical after the transcript was pasted in)
+plus `formal/probes/p6_phantom_subject_2026-09-13.py`.
+
+**FIRST, A CORRECTION THAT THIS ROW HAS NOW CARRIED TWICE — and it is the reverse of the
+2026-09-12b one.** That entry recorded, and the 2026-09-13 step-0 entry carried forward,
+that the '14 -> 9 of 546 mismatches' payoff failure "was measured on the out-of-fragment
+store `Sd`" / "on a store increment B owes nothing to". **False.**
+`p6_inbridge_stability_2026-09-12.lean:872-887 P6BridgeProbe.repair` is written entirely
+against `Sp` — `cascadeLeg Sp`, `legB Sp`, `sem Sp` — and `Sp` IS the in-fragment
+`WideWitness.SwT`-shaped store (`:488-503`), pinned by that file's own
+`NARROW rejects / WIDE admits the prefix store == some (false, true)`. `Sd` appears only in
+`§7 routing` (`:902-941`), a different measurement with different numbers. Two sections
+were conflated into one sentence. Re-ran the 2026-09-12 probe first-hand before writing
+anything: rc=0, 335 lines, byte-identical, `baseMismatch := 14 / bridgedMismatch := 9`.
+So the payoff criterion was NOT "unmeasured in scope" — it was measured IN scope and it
+FAILED. Step 1's stop condition was live, not hypothetical.
+
+**WHY IT FAILED: an instrument defect, now fixed and confirmed.** `repair` builds its
+pre-state with `graphRunOps Sp prefixOps` — the PLAIN driver — and only then bridges the
+single write `tObj`. So `tView`'s object endpoint `folder:f1#viewer`, the concrete node the
+whole through-shape hangs off, was written by a bridge-free leg and no arm ever went back
+for it. Increment B composes the bridge INTO the write leg, so every write bridges, prefix
+included. The new probe measures that design (`bridgedRunOps`, the bridged twin of
+`Exec.lean:449 graphRunOpsAux`).
+
+**THE GO/NO-GO NUMBERS** (546-query routing-independent grid, all arms carrying per-arm
+non-vacuity per step 0's lesson: `rewrites := 1` so the widening predicates are ENGAGED,
+`narrowRej && wideAdm` true, `bridges > 0`):
+* `R-OLD-BASE` / `R-OLD-BR` reproduce **14** and **9** exactly — same instrument, so the
+  delta below is attributable to the prefix and to nothing else;
+* `R-BASE` (whole op stream, plain leg) **14**;
+* `R-BR-OFF` / `R-BR-SRC` / `R-BR-TGT` / `R-BR-OBJ` (bridged leg) **2** — all four
+  identical;
+* `R-CEIL` (maximal schema-declared bridging) **0**.
+The ceiling is ZERO, so the bridge is the COMPLETE mechanism for every node a write leg
+touches. Step 1's criterion is met.
+
+**PER-DOMAIN VERDICT — the 2026-09-12b prediction is CONFIRMED, and this is the Wall-2
+repair.** On the subject-endpoint write the old probe called FALSE:
+* `D-SUB` (bridge UNLOGGED): `uReachStable` / `uGraphRecStable` / `uCheckFnStable` all
+  **false** at 3 UNMAPPED keys — the tier-1 statements are FALSE, not premise-repairable;
+* `D-SUB-S` / `D-SUB-T` (bridge LOGGED): all three **true**, because the delta moves those
+  keys from unmapped (3 -> 1) into `cascadeKeys`.
+So `hunmapped` excludes exactly the perturbed keys and **all 23 at-risk stability theorems
+keep their statements**; only the proofs need a "new edges are routed-or-bridged" case.
+(!) SRC and TGT logging are INDISTINGUISHABLE on every number measured — step 2's choice of
+TGT is free, not pinned, and this probe must not be cited as evidence for it.
+
+**★ NEW FINDING, a MODEL-FIDELITY BUG, and Wall 2 is TWO mechanisms not one.**
+(a) The dead-node GC the 2026-09-12b Wall-2 decision specified is CORRECT: `W2-DOM-TGT`
+    leaves `residue := 1` and the `_maybe_remove_bridges`-mirroring prototype collects it
+    exactly (`releaseFixes := true`), declining correctly on a still-live node.
+(b) **`ensureInBridges` is NOT idempotent on the EDGE MULTISET** — measured
+    `(0 calls, 1, 2, 3) = (0, 1, 2, 3)`. `legB` calls it once per member of the leaf-routed
+    list, so `tSub`'s 2-member list (both members subject `folder:f1`) leaves `residue := 2`
+    that `RESIDUE DETAIL` shows is **EMPTY of new edges** — two extra COPIES of a bridge
+    already present. The GC correctly declines (node still live), so copies accumulate per
+    write: the `_leak_accumulates` shape. **Python does NOT do this** —
+    `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` guards with
+    `if not self.idx.direct_edge_exists_by_id(node.id, w_any.id)` before `add_edge_by_id`.
+    The Lean def (`UsStarWrite.lean:213-218`) has no guard; its docstring claims only
+    reachability-level idempotence, which is true and is not enough once a live chain calls
+    it once per routed member. Inert today (`UsStarWrite.lean:112`: no live chain calls it);
+    increment B is exactly what makes it live.
+    **DECISION taken here (CLAUDE.md "Who decides"): step 2 adds the presence guard,
+    mirroring Python.** Forced direction — the proof must describe the shipped code, and the
+    shipped code guards. Cost: re-opens `structInv_ensureInBridges` (audited
+    `Audit.lean:159`) and `ensureInBridges_edges_mem` (audited `Audit.lean:166`). This is
+    ADDITIONAL to the 2026-09-12b step-2 list.
+
+**THE RESIDUAL 2 IS A PHANTOM SUBJECT — a Lean-model gap, NOT a shipped bug.** Both are
+`folder:f9#viewer` on `doc:d1` at the DERIVED relations `admin`/`gate`; `folder:f9` is
+mentioned by no written tuple, so no write leg creates the node (`PHANTOM NODE PRESENT?`
+false on plain and bridged legs, true only at the ceiling). The asymmetry is the content:
+at the SAME subject the PLAIN relation `access` answers **correctly** in the bridged graph
+model — only the derived relations are wrong. Checked against the shipped Python the same
+hour via `tests/parity.py::ParityEngine` (graph + both SetOps + oracle, unanimity
+asserted): **all seven queries UNANIMOUS True, no divergence.** Python gets it right
+because its derived read path is edge probe PLUS residue, i.e. symbolic, where the Lean
+model's is edges alone. That is a `CORRESPONDENCE.md` sec 7 boundary of the same class as
+the entity-middle half — not something increment B owes, and not a reason to stop.
+
+**TIER 2 NEEDED DIAGNOSIS, NOT A REPLACEMENT INSTRUMENT.** `guardPre`/`guardPost` were
+false in all eight 2026-09-12 arms, BASE included, so tier 2 measured nothing. Reason now
+named: **8** failures at `G-PLAIN`, halved to **4** under bridging (`G-BR-TGT` and `G-CEIL`
+alike) — they were false at BASE because this is exactly the store the unbridged graph gets
+WRONG (`TtuStarWide.lean:32-39`), which is the point of the widening. The residual 4 are
+printed as rows and are NOT a bridge question: all four are `gate` — **stratum 2 only,
+never `admin`** — at userset subjects `folder:f1#viewer` / `f2` / `f9`, with
+`checkFn = false`, `GraphModel.check = true`, `sem = true`. At the ceiling the two READERS
+disagree: the model's `check` is right, the proof-side `checkFn` under-reads the stratum-2
+derived relation at a userset subject. Bounded, named step-2 item
+(`writeLeg_sem_stable2`'s tier); the instrument itself is fine.
+
+**STILL OWED, stated rather than left implicit.** The phantom-subject parity result is a
+tracked, re-runnable PROBE, not a pin — nothing in the ten-phase gate reddens if that
+property regresses. `docs/sabotage-procedure.md`'s durability ranking puts a tracked probe
+two rungs below a permanent test. Promoting it is a step-2 item, deliberately not done here
+to keep step 1 zero-cone.
+
+**NEXT: step 2**, unchanged from the 2026-09-12b plan except that it now inherits four
+things from this run: the `ensureInBridges` presence guard (new, re-opens two audited
+names); `ensureInBridgesLogged` with TGT chosen for `writeLoggedOne` symmetry and SAID to
+be unpinned; `releaseInBridges` confirmed as specified; and two `CORRESPONDENCE.md` sec 7
+boundary entries (phantom-subject derived read path, stratum-2 `checkFn`-vs-`check` gap).
+Re-size M -> L at step 2 as the plan says.
