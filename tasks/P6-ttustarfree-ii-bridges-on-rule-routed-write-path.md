@@ -1,9 +1,9 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: Step 1 LANDED 2026-09-13b: GO -- bridged leg 14->2 of 546, ceiling 0, logged bridge saves all 23. Start at step 2
+brief: Step 2 LANDED 2026-09-13c: guard + 4 defs + lemmas in Cascade.lean (final home, import free). Start at step 3
 pri: NOW
-size: M
+size: L
 deps: []
 related: []
 parent:
@@ -11,16 +11,30 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-13b
-updated: 2026-09-13b
+moved: 2026-09-13c
+updated: 2026-09-13c
 closed:
 ---
 
 Materialise the in-bridge on the rule-routed write path so the widened star-freeness
 predicate is actually inhabited.
 
-**STEP 0 LANDED 2026-09-13; START AT STEP 1.** Both walls were DECIDED on 2026-09-12b and
-the plan is that key's Log entry; step 0 executed it, and **corrected its reason**. Wall 1
+**STEPS 0, 1 AND 2 ARE LANDED; START AT STEP 3 — THE CONE PAYMENT.** Step 2 (2026-09-13c)
+put every additive definition in its FINAL home: `Cascade.lean::ensureInBridgesLogged` /
+`::inBridgeOnly` / `::releaseInBridges` / `::releaseInBridgesLogged`, beside `pushDelta` and
+`removeLoggedOne`, reachable because the `Cascade → UsStarWrite` import was measured free
+(acyclic; whole-tree build green, job count unchanged). **So step 3 is a pure composition
+edit, with no file move and no anchor churn.** Step 2 also fixed the model-fidelity bug step
+1 found — `ensureInBridges` now carries Python's presence guard, `(0,1,2,3)` copies became
+`(0,1,1,1)` — at the cost of re-proving the two audited names, **both of which kept their
+statements**. The two `CORRESPONDENCE.md` §7 boundary entries are written and the
+phantom-subject property is now a gated pin (`tests/test_p6_phantom_subject.py`). Read the
+`2026-09-13c` Log entry for what step 3 inherits, including the ONE NEW BOUND on it: the
+stratum-2 `checkFn` gap.
+
+**Step 0's record, kept because its walls still govern.** Both walls were DECIDED on
+2026-09-12b and the plan is that key's Log entry; step 0 executed it, and **corrected its
+reason**. Wall 1
 (the "scope defect") is dissolved — but NOT by `W4Fragment.term`, which the probe store
 `Sd` **satisfies** (`htermB Sd Td = true`, measured). The exclusion is the TAINT FILTER:
 `schemaRewrites` drops derived defs, the arm's own owner key is tainted via `exprRefs`'s
@@ -31,9 +45,9 @@ lemma, consumer-side) plus 14 `decide` pins in `::Zanzibar.RoutingArmWitness` /
 `::Zanzibar.TermNonvacuityWitness`, a mutation-sweep table, and a `CORRESPONDENCE.md` §7.3
 entry. No edit to `TtuStarFreeW`, no audited name re-opened. Wall 2 is unchanged: the remove
 leg gets a NEW `releaseInBridges` mirroring Python's `_maybe_remove_bridges`, LOGGED on both
-legs because Python's is. Remaining order is steps 1–4 in the `2026-09-12b` entry; step 1 is
-the zero-cone go/no-go probe, step 3 is the cone payment (`P3`-class, several sessions).
-Re-size `M` → `L` at step 2.
+legs because Python's is — **built at step 2, not yet composed**. Remaining order is the
+`2026-09-12b` entry's steps 3–4; step 3 is the cone payment (`P3`-class, several sessions).
+Re-sized `M` → `L` on 2026-09-13c, as that plan said to.
 
 What `P3` changed for this item: the write leg is no longer
 `writeLoggedOne` over the public closure — `GraphState.writeLoggedRules` folds
@@ -52,6 +66,35 @@ touching `affectedKeys` or the candidate lists re-measures `two_stratum_cascade`
 multiplicities (expect `1…5`) before regenerating a golden (PROOF_STATUS `2026-09-05b` §10).
 
 ## Traps
+
+⚠ **STEP 3 MAY NOT ROUTE A STRATUM-2 USERSET-SUBJECT OBLIGATION THROUGH `checkFn`**
+(measured 2026-09-13b, recorded as a `CORRESPONDENCE.md` §7.3 boundary 2026-09-13c). At the
+bridging CEILING the two Lean-side readers disagree with each other: `GraphState.checkFn`
+(`GraphIndex/ReconcileWrite.lean`) reads `false` where `GraphModel.check`
+(`GraphIndex/State.lean`) and `sem` both read `true` — at userset subjects, on the
+**stratum-2** derived relation only, never stratum 1. Four such keys, printed as rows in
+`formal/probes/p6_step1_logged_bridge_2026-09-13.lean` §tier-2. This is NOT a bridge
+question and bridging does not fix it (the count is 4 at `G-BR-TGT` and at `G-CEIL` alike);
+it is a gap between two model readers with no Python counterpart —
+`index_v4/wildcard.py::WildcardIndex._check_derived` is the single shipped read path and the
+parity suite pins it. `CascadeStrataSettle.lean::writeLeg_sem_stable2`'s tier is the one
+that consumes `checkFn` at exactly these keys, so a step-3 proof that leans on it there will
+be settling an obligation the reader cannot discharge.
+
+⚠ **Do NOT "simplify" `ensureInBridges` by dropping its presence guard, and do not weaken
+`ensureInBridges_count_le_one` to a reachability claim.** The guard is fidelity, not
+optimization (Python guards; `UsStarWrite.lean::ensureInBridges`'s docstring carries the
+measurement). It is swept: `Cascade.lean` §"CONTROLLED — MUTATION SWEEP…" row `M1` reds nine
+declarations including `InBridgeLegWitness.logged_second_call_silent`, and `M10` shows the
+`≤ 1` bound is TIGHT. The reachability-level idempotence the old docstring claimed is true
+and is not enough once a live chain calls the bridge once per routed member — which is
+exactly what step 3 makes it do.
+
+⚠ **The import direction is `Cascade → UsStarWrite`, and getting it backwards is a CYCLE.**
+The step-2 defs sit in `Cascade.lean` because `writeLoggedOne` / `removeLoggedOne` (the
+step-3 composition sites) are there and must see them. `UsStarWrite.lean` therefore must
+never import `Cascade` — a plausible-looking "put the logged variant next to the unlogged
+one" edit that would make step 3 impossible rather than merely awkward.
 
 ⚠ **The 2026-09-12 "scope defect" was measured OUTSIDE the fragment — do not re-derive it,
 and do not re-derive the WRONG REASON for it either.** The ROUTING and REPAIR arms of
@@ -109,8 +152,9 @@ materialises the edge, and the rest of the leg is inert until it lands.
 ## Read first
 
 - [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
-- **The plan is the `2026-09-12b` Log entry** (`show P6`): decisions on both walls, steps 0–4, what each step must not touch. **Start at step 2** — steps 0 and 1 landed 2026-09-13 / 2026-09-13b, and BOTH of their Log entries correct the entry before them. ⚠ **Read newest-first and do not trust a payoff figure without re-reading its source**: 2026-09-12b mis-attributed the `14 → 9` payoff failure to the out-of-fragment store `Sd`, step 0 carried that forward, and step 1 found it was measured on the IN-FRAGMENT `Sp` all along (`formal/probes/p6_inbridge_stability_2026-09-12.lean:872-887` is written against `Sp`, `Sd` appears only in `§7`).
-- `formal/probes/p6_step1_logged_bridge_2026-09-13.lean` — **step 1's verdict and every number behind it**, literal transcript in the header (rc=0, 244 lines). The GO: bridged leg `14 → 2` of 546, ceiling `0`. What step 2 inherits: the `ensureInBridges` presence guard (NEW — the Lean def is not multiset-idempotent, `(0,1,2,3)`, and Python's `_ensure_own_bridges` guards where Lean does not, so this re-opens `formal/lean/ZanzibarProofs/Audit.lean:159` / `:166`); `ensureInBridgesLogged` with SRC-vs-TGT UNPINNED by measurement; `releaseInBridges` confirmed as specified; two `formal/CORRESPONDENCE.md` §7 boundary entries. Companion: `formal/probes/p6_phantom_subject_2026-09-13.py` (the residual 2 is a Lean-model gap — the shipped backends are unanimous).
+- **The plan is the `2026-09-12b` Log entry** (`show P6`): decisions on both walls, steps 0–4, what each step must not touch. **Start at step 3** — steps 0, 1 and 2 landed 2026-09-13 / 2026-09-13b / 2026-09-13c, and the first two of those Log entries correct the entry before them. ⚠ **Read newest-first and do not trust a payoff figure without re-reading its source**: 2026-09-12b mis-attributed the `14 → 9` payoff failure to the out-of-fragment store `Sd`, step 0 carried that forward, and step 1 found it was measured on the IN-FRAGMENT `Sp` all along (`formal/probes/p6_inbridge_stability_2026-09-12.lean:872-887` is written against `Sp`, `Sd` appears only in `§7`).
+- **The `2026-09-13c` Log entry is what step 3 starts from** — where the four new definitions live and why there, the two audited names re-proved (statements unchanged), the 14-mutation sweep and its two honest INERT rows, and the ONE NEW BOUND on step 3 (the stratum-2 `checkFn` gap). The code to read before composing anything: `formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean` §"The in-bridge, LOGGED" (the four defs + their projections/`EvalEq`), its §"CONTROLLED — MUTATION SWEEP over everything `P6` step 2 added" (the evidence table), `formal/lean/ZanzibarProofs/GraphIndex/CascadeInv.lean::structInv_ensureInBridgesLogged` and its two siblings, and `formal/lean/ZanzibarProofs/GraphIndex/UsStarWrite.lean::ensureInBridges_count_le_one` + `::InBridgeIdemWitness` (the multiset invariant and its red-to-green arm).
+- `formal/probes/p6_step1_logged_bridge_2026-09-13.lean` — **step 1's verdict and every number behind it**, literal transcript in the header (rc=0, 244 lines). The GO: bridged leg `14 → 2` of 546, ceiling `0`. Everything it listed as owed to step 2 is DONE as of 2026-09-13c (presence guard; `ensureInBridgesLogged`, TGT chosen and SAID to be unpinned; `releaseInBridges`; both `formal/CORRESPONDENCE.md` §7 entries) — read it now for the NUMBERS step 3 relies on, not for a to-do list. Companion: `formal/probes/p6_phantom_subject_2026-09-13.py` (the residual 2 is a Lean-model gap — the shipped backends are unanimous), whose property is now the pin `tests/test_p6_phantom_subject.py`.
 - `formal/lean/ZanzibarProofs/GraphIndex/TtuStarWide.lean` — what step 0 put there: `::ttuStarFreeW_through_untainted` (the consumer-side Wall-1 lemma), `::Zanzibar.RoutingArmWitness` (which stores are OUT of scope, and why — `no_rewrite_arms` is the load-bearing pin), `::Zanzibar.TermNonvacuityWitness` (that `term` excludes anything at all), and the mutation-sweep table. ⚠ **Every arm must assert per-arm non-vacuity**: an arm measured where `schemaRewrites = []` is measuring nothing, which is exactly how the 2026-09-12 ROUTING arm produced a number that meant nothing. Step 1 honoured this (its `Vac` carries `rewrites`, `bridges`, `narrowRej && wideAdm`, `unmapped`); step 2 and after must keep doing so.
 - Python's side of the bridge, read before modelling it: `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` (write), `::_maybe_remove_bridges` (retract), `index_v4/core.py::ReachabilityIndex.add_edge_by_id` (why the bridge is logged), `index_v4/processor.py::DeltaProcessor._write_derived` (the out-of-fragment derived case).
 - board pointer: `ttuStarFree` **(ii)** — bridges on the rule-routed write path. **Promoted `NEXT` → `NOW` MECHANICALLY on 2026-09-05b** — `P3` LANDED (write leg now folds `rewriteClosureL S (rawWriteTuples S t)`, `formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean:190-191`), so "NOT parallel-safe with `P3`" is moot and **increment B must bridge on the LEAF-routed list, not the public one**. Fresh evidence 2026-08-31b that this is a live hole: `ttuStarFree` classifies **SILENT** in the `W4Fragment` scope pin (`formal/conformance/test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE`)
@@ -810,3 +854,128 @@ names); `ensureInBridgesLogged` with TGT chosen for `writeLoggedOne` symmetry an
 be unpinned; `releaseInBridges` confirmed as specified; and two `CORRESPONDENCE.md` sec 7
 boundary entries (phantom-subject derived read path, stratum-2 `checkFn`-vs-`check` gap).
 Re-size M -> L at step 2 as the plan says.
+
+### 2026-09-13c
+
+STEP 2 LANDED. All four additive definitions are in, in their FINAL home, with StructInv +
+EvalEq lemmas, a 14-mutation sweep, and the two owed `CORRESPONDENCE.md` sec 7 entries. The
+still-owed phantom-subject property is now a gated PIN. Whole-tree Lean build green
+(1087 jobs, 0 errors); gate run at the end of the session.
+
+**THE FIDELITY BUG IS FIXED, and the fix is pinned at the level it was wrong on.**
+`GraphState.ensureInBridges` (`UsStarWrite.lean`) now guards with
+`if (c, wAnyNode (c.type, c.pred)) in sigma.edges`, mirroring
+`index_v4/wildcard.py::WildcardIndex._ensure_own_bridges`'s
+`if not self.idx.direct_edge_exists_by_id(...)` -- including Python's ORDER, intern the
+`w_any` node first (it is added on every bridged branch, present-edge included), test the
+edge second. The probe's measured `(0 calls, 1, 2, 3) = (0, 1, 2, 3)` now reads
+`(0, 1, 1, 1)`.
+* Positive pin, not an xfail: `UsStarWrite.lean::ensureInBridges_count_le_one` -- an
+  INVARIANT (`count <= 1` in implies `count <= 1` out), not a two-call idempotence claim,
+  because that is the form the step-3 fold needs, where the bridge is called once per
+  leaf-routed member and the interesting state is after `k` calls.
+* Executable half: `UsStarWrite.lean::InBridgeIdemWitness` -- `copies_0/1/2/3`,
+  `edges_are_the_bridge_alone`, plus `bridged_control` / `unbridged_control` for per-arm
+  non-vacuity.
+* COST PAID, as forecast: `structInv_ensureInBridges` (audited `Audit.lean:159`) and
+  `ensureInBridges_edges_mem` (audited `Audit.lean:166`) were re-proved. **Both keep their
+  STATEMENTS** -- the new branch leaves `edges` alone, so it lands in the existing left
+  disjunct. Three more proofs in `UsStarClosure.lean` needed the extra branch
+  (`ensureInBridges_edges_mono`, `ensureInBridges_nodes_mem`,
+  `ensureInBridges_creates_bridge`); `ensureInBridges_creates_bridge` also keeps its
+  statement, because on the presence branch the edge is there already, which is its
+  conclusion.
+
+**THE DEFINITIONS LANDED IN `Cascade.lean`, NOT IN A TEMPORARY HOME -- a step-3 decision
+taken here.** `ensureInBridgesLogged`, `inBridgeOnly`, `releaseInBridges`,
+`releaseInBridgesLogged`, next to `pushDelta` and `removeLoggedOne`, which is where step 3
+composes them. That needed a new `Cascade -> UsStarWrite` import edge, so I measured it
+before writing anything: `UsStarWrite`'s 18-module cone contains no `Cascade*` and no
+`Reconcile*` module, so the edge is acyclic, and the whole-tree build after adding it was
+green with the job count UNCHANGED at 1087 -- zero proof cone, zero new modules.
+* (!) The alternative was a temporary home in `TtuStarWide.lean` (the only P6 module that
+  already sees both sides). REJECTED: the final home must be upstream of `writeLoggedOne`,
+  `TtuStarWide` is downstream of it, so those defs would have had to MOVE at step 3 --
+  and moving them would have broken every `file::symbol` anchor written for them. The
+  import direction matters and is easy to get backwards: `UsStarWrite` importing `Cascade`
+  would have made step 3's needed direction a CYCLE.
+* `ensureInBridgesLogged` emits **iff the direct-edge multiset actually grew**
+  (`if (sigma.ensureInBridges c).edges = sigma.edges then ... else ... pushDelta`), stated
+  on the edges rather than on the guard, so the "emit on an actual flip" rule stays correct
+  under the presence guard and under whatever step 3 does to it. Delta at the TARGET
+  (`wAnyNode`), and the docstring SAYS the SRC/TGT choice is free -- step 1 found the two
+  indistinguishable, so nothing measured forbids SRC later.
+* `releaseInBridges` fires on `inBridgeOnly` (Python's "implicit and
+  `reference_count == bridge degree`", as a predicate on the edge list) and erases ONE copy.
+  (!) It deliberately does NOT delete the node: this model has no node GC on any leg
+  (`removeEdgeOne_nodes = sigma.nodes` everywhere), so inventing one here would break
+  `StructInv.edgesClosed` rather than mirror Python. Recorded in the def's docstring; the
+  only consequence is that `reach`'s `nodes.length + 1` fuel stays larger than Python's,
+  which can only over-approximate.
+* Lemmas: `structInv_ensureInBridgesLogged` / `structInv_releaseInBridges` /
+  `structInv_releaseInBridgesLogged` in `CascadeInv.lean` (with the other logged-leg
+  StructInv lemmas); `ensureInBridgesLogged_evalEq` / `releaseInBridgesLogged_evalEq` plus
+  the edges/nodes/schema/residue projections in `Cascade.lean`. `EvalEq` is what lets step 3
+  bridge the logged leg AND its unlogged `writeRules` twin and still carry
+  `writeLoggedRules_evalEq`. NAMING TRAP honoured: no tail collides with `.writeLoggedRules`
+  / `.addEdge` / `.reach`, and `GraphState.ensureInBridgesLogged` does not end in
+  `.ensureInBridges`, so `statement_pin.py::_refs`'s suffix resolution is unambiguous.
+* New `UsStarWrite.lean::ensureInBridges_residue` (`@[simp]`), needed by the logged leg's
+  residue projection; the `schema` twin had been enough while nothing consumed `residue`.
+
+**THE SWEEP: 14 mutations, table in `Cascade.lean` sec "CONTROLLED -- MUTATION SWEEP over
+everything P6 step 2 added".** Covers BOTH halves in one run, because
+`logged_second_call_silent` is the pin that couples them: without the presence guard the
+second call grows the multiset, so the logged leg emits a SECOND delta row -- a delta per
+redundant routed member, which is worse than the duplicate edge. Every pin is reddened by
+at least one mutation except two, and both say so out loud:
+* M6 INERT -- dropping `bridgedInConcrete` from `inBridgeOnly` changes no observation,
+  because the release then fires at nodes with no bridge edge to erase and `removeEdgeOne`
+  on an absent edge is the identity. The conjunct is defensive. Do not delete it on the
+  strength of that row; do not cite it as load-bearing either.
+* `copies_0` cannot be reddened -- it reads the state BEFORE any call, so it is the
+  baseline of the `(0,1,1,1)` sequence, not a pin on the guard.
+* (!) THREE instrument failures in one sweep, which is the point of having controls.
+  (1) M0 (flip `copies_1`'s own claim) attributed correctly, so the step-0 regex bug has
+  not returned. (2) But M0 did NOT catch the new one: ten of fourteen mutations came back
+  `ANCHOR MISS` because the sources are CRLF and the anchors were LF -- at least that
+  failed loudly. (3) M12's first form (`doc#parent -> doc#viewer`) read INERT because it
+  does not change the property under test: `("doc","viewer")` is no more a bridged-in
+  shape of `Sthru` than `("doc","parent")` is, the star restriction being `[folder:*]`.
+  An edit that does not move the property measures nothing and looks exactly like a clean
+  pin. Re-aimed at `cUn := c0` and it reddened `unbridged_control`.
+
+**STILL-OWED FROM STEP 1 IS DISCHARGED: the phantom-subject parity result is now a PIN.**
+`tests/test_p6_phantom_subject.py` (9 tests, inside the gate): same schema, store and seven
+queries as `formal/probes/p6_phantom_subject_2026-09-13.py`, through
+`tests/parity.py::ParityEngine`, with expectations asserted (unanimously WRONG must not pass
+as parity), a `test_graph_backend_joined` arm refusing the 3-way degrade, and a
+`test_phantom_object_has_no_graph_node` arm asserting the phantom is really absent while the
+control resolves. Sabotage table in the module docstring: S0 instrument control attributes;
+S1 (make Python's userset arm require a materialised node, i.e. adopt the Lean model's
+edges-alone reading) reds ALL NINE at fixture setup, because `ParityEngine._apply` runs a
+full-grid parity assertion after every write and its grid already carries ghost subjects --
+it dies of the property, not of a `TypeError`. S2/S3 are INERT and the docstring says which
+lines they leave unexercised and why widening the schema to chase them would decouple the
+pin from its evidence. The probe's "STILL OWED" paragraph is replaced by a pointer at the
+test.
+
+**The two `CORRESPONDENCE.md` sec 7.3 entries are written** (anchors resolve: 619 parsed,
+619 resolved): the phantom-subject derived read path (`GraphModel.check` reads edges,
+`WildcardIndex._check_derived` reads edges plus residue), and the stratum-2 reader gap
+(`checkFn` false where `GraphModel.check` and `sem` are true, at userset subjects, stratum 2
+only). The second one BOUNDS step 3: `CascadeStrataSettle.lean::writeLeg_sem_stable2`'s tier
+is the one that consumes `checkFn` at exactly those keys, so a step-3 proof must not route a
+stratum-2 userset-subject obligation through `checkFn` and call it settled.
+
+**Re-sized M -> L**, as the 2026-09-12b plan said to at step 2.
+
+**NEXT: step 3, the cone payment.** Unchanged from the plan, with these step-2 facts to
+carry: the import edge is already in place, so step 3 is a pure composition edit
+(`writeLoggedOne` + the unlogged `writeRules` twin; `removeLoggedOne`); all 23 at-risk
+stability theorems keep their statements and need a "routed-or-bridged" case (step 1);
+`writeLoggedRules_edge_delta`, tier-0 `reachedByW3d_edges_target_plain` /
+`reachedByW3d2_edges_target_plain` and `count_removeLoggedRules` get restated in the honest
+direction; and the stratum-2 `checkFn` bound above is new. `FoldAdmits` 21 move / 3 stay
+(`RulesComplete.lean:115`, `RestrictBase.lean:470`, `:531`) and the `two_stratum_cascade`
+multiplicity re-measure are still owed at step 3, not here.

@@ -135,8 +135,10 @@ theorem ensureInBridges_edges_mono {σ : GraphState} {c : NodeKey} {e : NodeKey 
   unfold GraphState.ensureInBridges
   by_cases hbr : σ.bridgedInConcrete c = true
   · rw [if_pos hbr]; split
-    · rw [addEdge_edges, addNode_edges]; exact List.mem_cons_of_mem _ he
     · rw [addNode_edges]; exact he
+    · split
+      · rw [addEdge_edges, addNode_edges]; exact List.mem_cons_of_mem _ he
+      · rw [addNode_edges]; exact he
   · rw [if_neg (by simpa using hbr)]; exact he
 
 /-- A node of `ensureInBridges` is old or the single `w_any` node it may add. -/
@@ -146,10 +148,13 @@ theorem ensureInBridges_nodes_mem {σ : GraphState} {c k : NodeKey}
   unfold GraphState.ensureInBridges at hk
   by_cases hbr : σ.bridgedInConcrete c = true
   · rw [if_pos hbr] at hk; split at hk
-    · rw [addEdge_nodes, addNode_nodes] at hk
-      rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
     · rw [addNode_nodes] at hk
       rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
+    · split at hk
+      · rw [addEdge_nodes, addNode_nodes] at hk
+        rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
+      · rw [addNode_nodes] at hk
+        rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
   · rw [if_neg (by simpa using hbr)] at hk; exact Or.inl hk
 
 /-- A node of `ensureBridges` is old or the single `w_all` node it may add. -/
@@ -165,14 +170,19 @@ theorem ensureBridges_nodes_mem {σ : GraphState} {c k : NodeKey}
       rcases List.mem_cons.mp hk with h | h; exact Or.inr h; exact Or.inl h
   · rw [if_neg (by simpa using hbr)] at hk; exact Or.inl hk
 
-/-- An admitted, bridged-in concrete endpoint gets its `c → w_any` in-bridge. -/
+/-- An admitted, bridged-in concrete endpoint gets its `c → w_any` in-bridge. Statement
+    unchanged by the `P6`-step-2 presence guard: on the new branch the edge is present
+    already, which is the conclusion. -/
 theorem ensureInBridges_creates_bridge {σ : GraphState} {c : NodeKey}
     (hbc : σ.bridgedInConcrete c = true)
     (hadm : (σ.addNode (wAnyNode (c.type, c.pred))).admitEdge c (wAnyNode (c.type, c.pred)) = true) :
     (c, wAnyNode (c.type, c.pred)) ∈ (σ.ensureInBridges c).edges := by
   unfold GraphState.ensureInBridges
-  rw [if_pos hbc, if_pos hadm, addEdge_edges]
-  exact List.mem_cons_self
+  rw [if_pos hbc]
+  by_cases hpres : (c, wAnyNode (c.type, c.pred)) ∈ σ.edges
+  · rw [if_pos hpres, addNode_edges]; exact hpres
+  · rw [if_neg hpres, if_pos hadm, addEdge_edges]
+    exact List.mem_cons_self
 
 /-- Old edges survive the whole userset-star write (accepted or rejected). -/
 theorem writeUsStar_edges_mono {σ : GraphState} {t : Tuple} {e : NodeKey × NodeKey}

@@ -368,6 +368,21 @@ transferring:
   with the reason, because the alternative is a reader inferring that the unused part of the
   witness is load-bearing.
 
+**★ A MUTATION NEEDS ITS OWN NON-VACUITY ARGUMENT, exactly as an ARM does (2026-09-13c).**
+An `INERT` row means one of two very different things — *the pin does not depend on this*,
+or *the edit did not change what the pin is about* — and the row looks identical either
+way. `P6` step 2's sweep produced one of each, and only found out by re-reading the
+mutation: `M12` retargeted a control node from `doc#parent` to `doc#viewer` to make it
+"bridged", but neither shape is bridged-in at that store (its star restriction is on a third
+type), so the mutation moved nothing and reported a clean pin. Re-aimed at a shape that
+genuinely is bridged, it reddened immediately. **Before recording an `INERT`, state what
+property the edit was supposed to move and check that it moved it** — the same discipline
+§"A MEASUREMENT is an assurance step too" asks of a number. The same run produced two more
+instrument failures for contrast, both louder: the `M0` control worked (so the previous
+sweep's attribution bug had not returned), and ten of fourteen anchors matched zero times
+because the sources were CRLF and the anchor strings LF. A loud instrument failure costs a
+re-run; the quiet one costs a wrong conclusion.
+
 ### A check that PARSES before it compares has two halves, and the easy sabotage tests one (2026-08-24c)
 
 Most checks in this repo are *extract, then compare*. A sabotage input chosen in a shape

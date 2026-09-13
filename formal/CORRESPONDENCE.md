@@ -1130,6 +1130,50 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   untainted at every object type, so `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset`
   is only ever asked about a public (never leaf-minted) relation name.
 
+* **★ The PHANTOM USERSET SUBJECT on the derived read path — the Lean graph model reads
+  EDGES, Python reads edges PLUS residue (added 2026-09-13b, `P6` step 2).** Measured, not
+  inferred: with the in-bridge composed into every write leg, the `P6` step-1 probe's
+  routing-independent grid went from 14 mismatches to **2**, and both survivors are one
+  shape — a userset subject `folder:f9#viewer` whose object is named by no stored tuple, so
+  no write leg ever creates its node, queried at a DERIVED relation. At that same subject
+  the PLAIN relation answers correctly, which is the whole content of the asymmetry:
+
+  > `GraphIndex/State.lean::GraphModel.check` resolves a derived key through materialised
+  > edges, so it needs a node where `index_v4/wildcard.py::WildcardIndex._check_derived`
+  > needs none — Python's userset arm answers from the residue's `stars`/`neg`/`upos`
+  > symbolically, and its "a phantom subject has no node and thus cannot be in `neg`"
+  > reading is what makes the star coverage answer alone.
+
+  **Not a Python bug, and that was checked first-hand rather than argued**: the same
+  schema, store and seven queries run through `tests/parity.py::ParityEngine` (graph index
+  + both `SetOps` + the independent oracle, unanimity asserted internally) came back
+  UNANIMOUS on every one. That measurement is now a gated pin, not a probe —
+  `tests/test_p6_phantom_subject.py`, with non-vacuity arms refusing the 3-way degrade and
+  asserting the phantom is really absent from the index, and a recorded sabotage table
+  whose `S1` (make Python's userset arm require a materialised node, i.e. adopt the Lean
+  model's reading) reds it. Same CLASS as the entity-middle boundary above: increment B
+  owes nothing here, and closing it would mean giving the Lean model a symbolic derived
+  read, which is a project, not a step.
+
+* **★ The STRATUM-2 reader gap: `checkFn` under-reads a derived relation at a userset
+  subject where `check` does not (added 2026-09-13b, `P6` step 2).** The step-1 probe's
+  tier-2 guard was false in all eight arms of its 2026-09-12 predecessor, which made tier 2
+  measure nothing; the diagnosis is that **8** failures at the plain leg halve to **4**
+  under bridging, and those 4 are not a bridge question at all. All four are the
+  stratum-2 relation only — never the stratum-1 one — at userset subjects, with
+  `GraphIndex/ReconcileWrite.lean::GraphState.checkFn` reading `false` while
+  `GraphIndex/State.lean::GraphModel.check` and `sem` both read `true`. So at the bridging
+  CEILING the two Lean-side readers disagree with each other, and the proof-side one is the
+  wrong one.
+
+  Recorded here rather than fixed because it is a gap between two *model* readers, with no
+  Python counterpart to be unfaithful to: Python has one read path
+  (`index_v4/wildcard.py::WildcardIndex._check_derived`) and the parity suite pins it. It
+  bounds what a `P6` step-3 restatement may claim —
+  `GraphIndex/CascadeStrataSettle.lean::writeLeg_sem_stable2`'s tier is the one that
+  consumes `checkFn` at exactly these keys, so a step-3 proof must not route a stratum-2
+  userset-subject obligation through `checkFn` and call it settled.
+
 ### 7.4 Pre-existing entries (carried forward)
 
 * **~~`affectedKeys` omits the LeafFamily own-key branch~~ — RESOLVED 2026-07-20c.**

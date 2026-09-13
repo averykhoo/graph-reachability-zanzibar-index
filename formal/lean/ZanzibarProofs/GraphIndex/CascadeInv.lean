@@ -124,6 +124,44 @@ theorem structInv_setWatermark {S : Schema} {σ : GraphState} (h : StructInv S �
   edgesClosed := h.edgesClosed
   acyclic := h.acyclic
 
+/-! ### `StructInv` for the `P6` bridge legs (step 2, 2026-09-13b)
+
+The additive halves of increment B (`Cascade.lean::ensureInBridgesLogged`,
+`::releaseInBridges`, `::releaseInBridgesLogged`). Nothing calls them yet; step 3 composes
+them into `writeLoggedOne` / `removeLoggedOne`, and these are what its `StructInv` thread
+will hang off. Each is one line over an existing lemma, which is the point: the write side
+reduces to `structInv_ensureInBridges` (`UsStarWrite.lean:274`, audited) and the release
+side to `structInv_removeEdgeOne` — a release only ERASES an edge, so endpoint closure and
+acyclicity are free. -/
+
+/-- The logged in-bridge preserves `StructInv` (given the concrete endpoint is live) —
+    `ensureInBridges` then, on the flip branch, an outbox-only `pushDelta`. -/
+theorem structInv_ensureInBridgesLogged {S : Schema} {σ : GraphState} (h : StructInv S σ)
+    {c : NodeKey} (hc : c ∈ σ.nodes) : StructInv S (σ.ensureInBridgesLogged c) := by
+  unfold GraphState.ensureInBridgesLogged
+  split
+  · exact structInv_ensureInBridges h hc
+  · exact structInv_pushDelta (structInv_ensureInBridges h hc) _ _ true
+
+/-- Releasing a dead in-bridge preserves `StructInv`: the fired branch is `removeEdgeOne`,
+    the declined branch is the identity. No liveness precondition — unlike the write side,
+    a release never needs the endpoint to be a node. -/
+theorem structInv_releaseInBridges {S : Schema} {σ : GraphState} (h : StructInv S σ)
+    (c : NodeKey) : StructInv S (σ.releaseInBridges c) := by
+  unfold GraphState.releaseInBridges
+  split
+  · exact structInv_removeEdgeOne h _ _
+  · exact h
+
+/-- The logged release preserves `StructInv` (retract mirror of
+    `structInv_ensureInBridgesLogged`). -/
+theorem structInv_releaseInBridgesLogged {S : Schema} {σ : GraphState} (h : StructInv S σ)
+    (c : NodeKey) : StructInv S (σ.releaseInBridgesLogged c) := by
+  unfold GraphState.releaseInBridgesLogged
+  split
+  · exact structInv_releaseInBridges h c
+  · exact structInv_pushDelta (structInv_releaseInBridges h c) _ _ true
+
 /-- A single logged routed-edge write preserves `StructInv` (accept branch =
     `writeDirect` then `pushDelta`; reject branch = identity). -/
 theorem structInv_writeLoggedOne {S : Schema} {σ : GraphState} (h : StructInv S σ)
