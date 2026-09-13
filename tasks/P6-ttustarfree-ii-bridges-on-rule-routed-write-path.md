@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: Step 2 LANDED 2026-09-13c: guard + 4 defs + lemmas in Cascade.lean (final home, import free). Start at step 3
+brief: Step 3 SPLIT: 3a (twins+hinge+sweep) LANDED 2026-09-13d. Start at 3b: 3 re-points + the measured cone
 pri: NOW
 size: L
 deps: []
@@ -11,15 +11,25 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-13c
-updated: 2026-09-13c
+moved: 2026-09-13d
+updated: 2026-09-13d
 closed:
 ---
 
 Materialise the in-bridge on the rule-routed write path so the widened star-freeness
 predicate is actually inhabited.
 
-**STEPS 0, 1 AND 2 ARE LANDED; START AT STEP 3 — THE CONE PAYMENT.** Step 2 (2026-09-13c)
+**STEPS 0, 1, 2 AND 3a ARE LANDED; START AT STEP 3b — THE CONE PAYMENT.** Step 3 was SPLIT
+on 2026-09-13d after the composition was written and MEASURED: **3a** landed the bridged
+twins, their preservation theory, the `EvalEq` hinge and an 11-mutation sweep, all additive
+and zero-cone; **3b** is the three re-points and the fallout. The re-points are exactly
+`writeLoggedOne` → `bridgePreLogged`, `LeafRules.lean::writeRulesRaw` → `writeBridgedOne`,
+and `removeLoggedOne`'s then-branch wrapped in `releasePostLogged` — nothing else. The
+measured fallout of doing all three (`LeafRules` 6 errors, `Cascade` 7, `CascadeStable` 27
+across 17 declarations, nothing past that measured) and the one blocking obligation
+(`TK68`) are on the `2026-09-13d` Log entry. Everything below about step 2 still holds.
+
+Step 2 (2026-09-13c)
 put every additive definition in its FINAL home: `Cascade.lean::ensureInBridgesLogged` /
 `::inBridgeOnly` / `::releaseInBridges` / `::releaseInBridgesLogged`, beside `pushDelta` and
 `removeLoggedOne`, reachable because the `Cascade → UsStarWrite` import was measured free
@@ -66,6 +76,24 @@ touching `affectedKeys` or the candidate lists re-measures `two_stratum_cascade`
 multiplicities (expect `1…5`) before regenerating a golden (PROOF_STATUS `2026-09-05b` §10).
 
 ## Traps
+
+⚠ **STEP 3b IS BLOCKED ON `TK68` — and the blocker is a FIDELITY gap, not a proof
+convenience.** `Cascade.lean::reachedByW3d_edge_source_ne_R` (audited, `Audit.lean:714`)
+goes FALSE the moment the write leg bridges: a bridge edge is sourced at its CONCRETE
+endpoint, whose predicate can be the derived `R`. Its ONE Lean consumer,
+`::reachedByW3d_Rnode_not_source`, needs `isSubjectWildcardUserset S dt R = false` at the
+same key it already knows is derived — which is Python's second `UnsupportedByGraphIndex`
+scope rejection, and `FullScope.lean::GraphAdmission` has `objWild` for the FIRST one and
+no field for it. ⚠ **Do not try to save the general statement with a premise**: a literal
+`[x:*#R]` restriction at an untainted key `(x, R)` is legal Python and bridges a node whose
+pred is `R`, so `a.pred ≠ R` is false as a general claim whatever field is added. The
+wrapper survives because it fixes the type to `dt`. Detail on `TK68`.
+
+⚠ **`writeLoggedOne_watermark` ALREADY EXISTS, in `CascadeStable.lean`.** Step 3a tried to
+add it to `Cascade.lean` and the build refused with `has already been declared`. Any
+step-3b lemma named for the write step must be grepped before it is written — the
+`writeLoggedOne_*` / `writeLoggedRules_*` families are spread across `Cascade.lean` and
+`CascadeStable.lean`, not gathered in one file.
 
 ⚠ **STEP 3 MAY NOT ROUTE A STRATUM-2 USERSET-SUBJECT OBLIGATION THROUGH `checkFn`**
 (measured 2026-09-13b, recorded as a `CORRESPONDENCE.md` §7.3 boundary 2026-09-13c). At the
@@ -153,7 +181,17 @@ materialises the edge, and the rest of the leg is inert until it lands.
 
 - [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (`HANDOFF.md`’s pointer rule. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
 - **The plan is the `2026-09-12b` Log entry** (`show P6`): decisions on both walls, steps 0–4, what each step must not touch. **Start at step 3** — steps 0, 1 and 2 landed 2026-09-13 / 2026-09-13b / 2026-09-13c, and the first two of those Log entries correct the entry before them. ⚠ **Read newest-first and do not trust a payoff figure without re-reading its source**: 2026-09-12b mis-attributed the `14 → 9` payoff failure to the out-of-fragment store `Sd`, step 0 carried that forward, and step 1 found it was measured on the IN-FRAGMENT `Sp` all along (`formal/probes/p6_inbridge_stability_2026-09-12.lean:872-887` is written against `Sp`, `Sd` appears only in `§7`).
-- **The `2026-09-13c` Log entry is what step 3 starts from** — where the four new definitions live and why there, the two audited names re-proved (statements unchanged), the 14-mutation sweep and its two honest INERT rows, and the ONE NEW BOUND on step 3 (the stratum-2 `checkFn` gap). The code to read before composing anything: `formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean` §"The in-bridge, LOGGED" (the four defs + their projections/`EvalEq`), its §"CONTROLLED — MUTATION SWEEP over everything `P6` step 2 added" (the evidence table), `formal/lean/ZanzibarProofs/GraphIndex/CascadeInv.lean::structInv_ensureInBridgesLogged` and its two siblings, and `formal/lean/ZanzibarProofs/GraphIndex/UsStarWrite.lean::ensureInBridges_count_le_one` + `::InBridgeIdemWitness` (the multiset invariant and its red-to-green arm).
+- **The `2026-09-13d` Log entry is what step 3b starts from** — the three re-points, the
+  measured per-module fallout, the three decisions taken (not `writeUsStar`; `writeRules`
+  stays unbridged; the prologue is a named def, not a `let`), and the sweep's two
+  instrument findings. The code: `formal/lean/ZanzibarProofs/GraphIndex/UsStarWrite.lean`
+  §"★ `writeBridgedOne` preservation", `::BridgedWriteWitness` and §"CONTROLLED — MUTATION
+  SWEEP over everything `P6` step 3a added" (the evidence table);
+  `formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean::GraphState.bridgePreLogged`,
+  `::GraphState.releasePostLogged`, `::ensureInBridges_evalEq`, `::bridgePreLogged_evalEq`,
+  `::writeBridgedOne_logged_evalEq` (the theorem 3b re-points `writeLoggedOne_evalEq` onto)
+  and `::BridgedLegWitness`.
+- **The `2026-09-13c` Log entry is what step 3a started from** — where the four new definitions live and why there, the two audited names re-proved (statements unchanged), the 14-mutation sweep and its two honest INERT rows, and the ONE NEW BOUND on step 3 (the stratum-2 `checkFn` gap). The code to read before composing anything: `formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean` §"The in-bridge, LOGGED" (the four defs + their projections/`EvalEq`), its §"CONTROLLED — MUTATION SWEEP over everything `P6` step 2 added" (the evidence table), `formal/lean/ZanzibarProofs/GraphIndex/CascadeInv.lean::structInv_ensureInBridgesLogged` and its two siblings, and `formal/lean/ZanzibarProofs/GraphIndex/UsStarWrite.lean::ensureInBridges_count_le_one` + `::InBridgeIdemWitness` (the multiset invariant and its red-to-green arm).
 - `formal/probes/p6_step1_logged_bridge_2026-09-13.lean` — **step 1's verdict and every number behind it**, literal transcript in the header (rc=0, 244 lines). The GO: bridged leg `14 → 2` of 546, ceiling `0`. Everything it listed as owed to step 2 is DONE as of 2026-09-13c (presence guard; `ensureInBridgesLogged`, TGT chosen and SAID to be unpinned; `releaseInBridges`; both `formal/CORRESPONDENCE.md` §7 entries) — read it now for the NUMBERS step 3 relies on, not for a to-do list. Companion: `formal/probes/p6_phantom_subject_2026-09-13.py` (the residual 2 is a Lean-model gap — the shipped backends are unanimous), whose property is now the pin `tests/test_p6_phantom_subject.py`.
 - `formal/lean/ZanzibarProofs/GraphIndex/TtuStarWide.lean` — what step 0 put there: `::ttuStarFreeW_through_untainted` (the consumer-side Wall-1 lemma), `::Zanzibar.RoutingArmWitness` (which stores are OUT of scope, and why — `no_rewrite_arms` is the load-bearing pin), `::Zanzibar.TermNonvacuityWitness` (that `term` excludes anything at all), and the mutation-sweep table. ⚠ **Every arm must assert per-arm non-vacuity**: an arm measured where `schemaRewrites = []` is measuring nothing, which is exactly how the 2026-09-12 ROUTING arm produced a number that meant nothing. Step 1 honoured this (its `Vac` carries `rewrites`, `bridges`, `narrowRej && wideAdm`, `unmapped`); step 2 and after must keep doing so.
 - Python's side of the bridge, read before modelling it: `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` (write), `::_maybe_remove_bridges` (retract), `index_v4/core.py::ReachabilityIndex.add_edge_by_id` (why the bridge is logged), `index_v4/processor.py::DeltaProcessor._write_derived` (the out-of-fragment derived case).
@@ -979,3 +1017,129 @@ stability theorems keep their statements and need a "routed-or-bridged" case (st
 direction; and the stratum-2 `checkFn` bound above is new. `FoldAdmits` 21 move / 3 stay
 (`RulesComplete.lean:115`, `RestrictBase.lean:470`, `:531`) and the `two_stratum_cascade`
 multiplicity re-measure are still owed at step 3, not here.
+
+### 2026-09-13d
+
+STEP 3a LANDED, and step 3 is now SPLIT: 3a (additive, zero cone -- this) and 3b (the
+composition + the cone payment). The split was not in the 2026-09-12b plan; it was taken
+here after the composition was written, built, and MEASURED, and the measurement is the
+main deliverable below. Whole-tree build green (1089 jobs, 0 errors, job count UNCHANGED);
+gate `lean` PASSED (holes=0, audits=587, pinned=587 -- no audited name re-opened).
+
+**WHY SPLIT.** The composition itself is small and it is now known exactly: re-point
+`writeLoggedOne` onto `bridgePreLogged`, `writeRulesRaw` onto `writeBridgedOne`, wrap
+`removeLoggedOne`'s then-branch in `releasePostLogged`. Everything else is fallout. I wrote
+that composition, built it, paid the first two modules, and stubbed the one substantive
+obligation to see how far the damage runs. It runs far enough that finishing it in one
+session was not on the table, and the rule is that each step ends on a green committable
+tree -- so the twins land now with their own evidence, and 3b starts from a measured map
+instead of a forecast.
+
+**THE MEASURED FALLOUT (this is the number the row did not have).** With the full
+composition in place:
+* `LeafRules.lean` -- **6 errors, all mechanical**: the five `*_foldl_writeDirect`
+  corollaries (`structInv_` / `residueEmpty_` / `inv_` / `quiescent_` / `schema_
+  writeRulesRaw`) need bridged twins, which now EXIST (`UsStarWrite.lean::
+  *_foldl_writeBridgedOne`), plus `writeRulesRaw_untaintedSchema`.
+* `Cascade.lean` -- **7 errors, six mechanical and one real**. Mechanical:
+  `writeLoggedOne_evalEq`, `foldl_writeLoggedOne_evalEq`, `writeLoggedRules_evalEq`,
+  `writeLoggedRules_watermark`, and the `removeLoggedOne_schema/nodes/watermark` trio. All
+  six are discharged by lemmas that landed today.
+* `CascadeStable.lean` -- **27 errors across 17 declarations**, listed here because this is
+  the map 3b needs: `writeLoggedOne_watermark` (a NAME COLLISION -- that name already
+  exists in this file, so do not add it in `Cascade.lean`), `writeLoggedOne_outbox_mono`,
+  `writeLoggedRules_edges_mono`, `writeLoggedRules_edge_delta` (x2),
+  `reachedByW3d_edgesClosed`, `reachedByW3d_edges_target_plain`, `writeLeg_reach_stable`,
+  `affectedObjects_writeLeg_mono`, `cascadeKeys_writeLeg_mono`,
+  `untaintedShadow_writeLoggedOne` (x2), `untaintedShadow_foldAdmits`,
+  `untaintedShadow_writeLegL` (x8), `writeLoggedRules_residue`,
+  `writeLeg_derived_inedges_eq`, `removeLoggedOne_edges_subset`,
+  `removeLoggedOne_outbox_mono`, `removeLoggedRules_edge_delta`,
+  `mem_removeLoggedOne_edges_iff_of_ne`.
+* Nothing past `CascadeStable` was measured -- the build stops there. **Read the counts as
+  "at least", never as "only".**
+Step 1's forecast is CONFIRMED on the three names it called (`writeLoggedRules_edge_delta`,
+the tier-0 `reachedByW3d_edges_target_plain`, `writeLeg_reach_stable`) and INCOMPLETE: the
+`untaintedShadow_*` family is 4 declarations and 11 of the 27 error sites, and step 1 did
+not name it. That family is the shadow transport, and it is the largest single block in
+`CascadeStable`.
+
+**THE ONE SUBSTANTIVE OBLIGATION, and it is now its own row (`TK68`).**
+`reachedByW3d_edge_source_ne_R` (audited) is FALSE once the write leg bridges: a bridge
+edge is sourced at its CONCRETE endpoint, and that node's predicate can be `R`. Its one
+Lean consumer needs `isSubjectWildcardUserset S dt R = false` at the same key it already
+knows is derived -- which is Python's SECOND `UnsupportedByGraphIndex` scope rejection
+(wildcard usersets over derived relations), and `FullScope.lean::GraphAdmission` has
+`objWild` for the first and NO field for the second. Filed as `TK68` with the type-index
+trap that makes the general statement unsaveable by a premise. This is a fidelity gap in
+its own right, not a proof convenience.
+
+**WHAT IS IN THE TREE NOW -- all additive, all inert, all pinned.**
+* `UsStarWrite.lean::GraphState.bridgePre` + `::GraphState.writeBridgedOne` -- the unlogged
+  bridged step, `writeDirect` plus Python's bridge-before-grant prologue on BOTH endpoints,
+  with the `addNode` pair first (`structInv_ensureInBridges` needs `c` live, and Python
+  resolves with `create=True` before `_ensure_bridges`). Preservation family:
+  `structInv_` / `residueEmpty_` / `inv_` / `quiescent_writeBridgedOne`, the
+  schema/outbox/watermark/residue projections, and all five `*_foldl_writeBridgedOne`.
+* `Cascade.lean::GraphState.bridgePreLogged` (the logged twin) and
+  `::GraphState.releasePostLogged` (the retract epilogue: `_maybe_remove_bridges(subject)`
+  then `(obj)`), with their projections.
+* **The hinge**: `Cascade.lean::ensureInBridges_evalEq` (the congruence -- `ensureInBridges`
+  reads only schema/edges/nodes and writes only nodes/edges), `::ensureInBridgesLogged_evalEq_congr`,
+  `::bridgePreLogged_evalEq`, and `::writeBridgedOne_logged_evalEq`, which is
+  literally the theorem step 3b re-points `writeLoggedOne_evalEq` onto. Stated NOW, while
+  additive, so the flip is a re-point and `writeLoggedRules_evalEq` keeps its statement.
+* `LeafRules.lean::rewriteClosureL_rawWriteTuples_untaintedSchema` -- the LIST half of
+  `writeRulesRaw_untaintedSchema`, extracted because it is the half that survives 3b.
+
+**THREE DECISIONS TAKEN HERE** (`CLAUDE.md` "Who decides"), each recorded in the docstring
+at the site as well as here:
+1. **Not `writeUsStar`.** Re-pointing the leaf-routed fold at the existing
+   `writeUsStar` would have been free -- it already bridges and has a theory. REJECTED: it
+   also runs `ensureBridges` (the W1b OUT-bridges), and widening the live write leg by a
+   second mechanism in the same edit makes any divergence unattributable. A deliberate
+   narrowing vs Python, recorded as one.
+2. **`writeRules` is NOT bridged; `writeRulesRaw_untaintedSchema` gets restated at 3b.**
+   `RulesWrite.lean::writeRules` is the PLAIN shadow rebuild `ReachedByRulesAdmitted` folds;
+   its reverse cone is **40** modules against `UsStarWrite`'s **24** (unit: transitive
+   importers excl. self and the root aggregator, measured 2026-09-13d). Cost of restating
+   is MEASURED at zero consumers: `writeRulesRaw_untaintedSchema` is applied nowhere in the
+   Lean development -- only `Audit.lean`'s `#print axioms` row and two prose citations
+   (delegated grep, then verified first-hand).
+3. **The prologue is a NAMED definition, not a `let`.** `writeUsStar`'s `let` chain
+   elaborates to `have` in a goal and BLOCKS `split`; `writeLoggedOne`'s cone is 20 modules
+   and every one of them would have had to `dsimp only` first. This cost one wasted build
+   cycle before it was noticed.
+
+**THE SWEEP: 11 mutations, table in `UsStarWrite.lean` sec "CONTROLLED -- MUTATION SWEEP over
+everything `P6` step 3a added".** `M0` (flip a pin's own claim) attributed correctly, so the
+step-0 regex defect has not returned; anchors are read with a no-translation newline mode
+and asserted to occur exactly once, so the step-2 CRLF defect has not returned either. Ten
+of eleven red a pin; `M10` is INERT and says so (it is step 2's `M6` again --
+`inBridgeOnly`'s `bridgedInConcrete` conjunct is defensive).
+* (!) **THE SWEEP CHANGED THE DELIVERABLE, which is the argument for sweeping.** On the
+  first run `M2` (*bridge the subject only, dropping Python's `_ensure_bridges(obj)`*) and
+  `M5` (*probe admission on the UNBRIDGED state*) reddened `structInv_writeBridgedOne` and
+  **nothing else** -- a broken PROOF, not a broken claim. Rewriting that proof would have
+  retired the only evidence for two of the three things the definition asserts. Added in
+  response: `BridgedWriteWitness.tObj` (a member whose OBJECT endpoint is the bridged-in
+  shape) and `::tCycle` (a wildcard-userset grant that its own bridge turns into a cycle).
+  Both now red. And `tCycle`'s first two pins were NOT enough -- they sit on
+  `bridgePre`/`admitEdge` directly while `M5` mutates `writeBridgedOne`, so
+  `cycle_write_materialises_nothing`, which reads the write, is the arm that observes the
+  order. Three pins were needed to catch one one-word mutation.
+* (!) **A harness limitation, recorded because it looks like coverage.** `Cascade` imports
+  `UsStarWrite`, so a mutation of `UsStarWrite` stops the build before any `Cascade::` pin
+  is evaluated. `M1`-`M6`'s attribution lists are therefore TRUNCATED -- "reds at least
+  these". `M6` very likely also reds `Cascade::prologue_second_member_silent`; this sweep
+  did not observe it and the table says so.
+
+**NEXT: step 3b.** The composition is three re-points (named above); the map is the
+`CascadeStable` list; `TK68` is the one blocking obligation and it is scoped. The bounds
+from steps 1 and 2 are unchanged and still apply: do NOT route a stratum-2 userset-subject
+obligation through `checkFn`; do NOT narrow `TtuStarFreeW`; do NOT touch
+`W4Fragment.ttuStarFree` before step 4. Still owed at 3b, unchanged: the `FoldAdmits`
+21-move/3-stay, the `two_stratum_cascade` multiplicity re-measure, the def-pin diff
+adjudication, and the honest-direction restatements (`writeLoggedRules_edge_delta`, the two
+tier-0 `..._edges_target_plain`, `count_removeLoggedRules`) -- to which today adds
+`writeRulesRaw_untaintedSchema` and `reachedByW3d_edge_source_ne_R`.

@@ -35,7 +35,7 @@ number INTO it over restating it.
 | audited theorems (`#print axioms` in `Audit.lean`) | **587** |
 | audit identity pin (`audited_theorems.txt`) | **587** |
 | headline definition pin | **251** rows (**242** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **619** (**363** Python + **256** Lean) |
+| `CORRESPONDENCE.md` anchors | **633** (**366** Python + **267** Lean) |
 | `corpus.SCHEMAS` | **26** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 26 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |

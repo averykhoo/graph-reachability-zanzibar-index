@@ -485,9 +485,36 @@ theorem releaseInBridges_edges_subset (σ : GraphState) (c : NodeKey) :
 
 /-! ## Logged writes (decision 1) -/
 
+/-- ★ **The bridge-before-grant PROLOGUE of a logged leaf-routed write** — `P6` increment
+    B, **step 3a** (2026-09-13d), ADDITIVE: nothing calls it yet. Step 3b re-points
+    `GraphState.writeLoggedOne` below onto it, which is the composition the whole item
+    exists for; that is the cone payment and it is deliberately NOT taken here.
+
+    Mirrors `index_v4/wildcard.py::WildcardIndex._add_tuple_trusted`: resolve both
+    endpoints with `create=True` (the `addNode` pair), then `_ensure_bridges(subject)` and
+    `_ensure_bridges(obj)`, and only then `add_edge_by_id`. The unlogged twin is
+    `UsStarWrite.lean::GraphState.bridgePre` — same prologue, no delta rows — and
+    `bridgePreLogged_evalEq` below is the pair's hinge: it is what will let step 3b bridge
+    the logged leg AND its unlogged `writeRulesRaw` twin and still carry
+    `writeLoggedRules_evalEq` with its statement unchanged.
+
+    ⚠ **The prologue is a NAMED definition, not a `let`** — see
+    `UsStarWrite.lean::GraphState.bridgePre`, whose note explains why (a `let` elaborates
+    to `have` in the goal and blocks `split` at every one of `writeLoggedOne`'s downstream
+    sites, and that cone is 20 modules). -/
+def GraphState.bridgePreLogged (σ : GraphState) (t : Tuple) : GraphState :=
+  (((σ.addNode (subjNode t.subject)).addNode
+    (objNode t.object t.relation)).ensureInBridgesLogged
+    (subjNode t.subject)).ensureInBridgesLogged (objNode t.object t.relation)
+
 /-- One logged routed-edge write: materialize the guarded edge and, iff it was
     admitted, emit its delta row (`_emit` fires on actual flips; a rejected write
-    inserts nothing). -/
+    inserts nothing).
+
+    ⚠ **`P6` step 3b re-points this at `GraphState.bridgePreLogged` above** (measured
+    2026-09-13d: the whole edit is `σ → σ.bridgePreLogged t` in the two probe positions
+    plus `writeDirect → addEdge`). Do not do it without the cone — the first two modules'
+    measured fallout is on the `P6` row's `2026-09-13d` Log entry. -/
 def GraphState.writeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
   if σ.admitEdge (subjNode t.subject) (objNode t.object t.relation)
   then (σ.writeDirect t).pushDelta (objNode t.object t.relation) t.relation true
@@ -562,6 +589,67 @@ theorem writeDirect_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (t : Tuple)
   · rw [if_neg hb, if_neg hb]
     exact h
 
+/-- **`ensureInBridges` is `EvalEq`-congruent** (`P6` step 3): its branch conditions read
+    only the schema, the edges and the reachability probe, and its effects are an `addNode`
+    and an `addEdge` — so two `EvalEq` states bridge to two `EvalEq` states. This is what
+    lets the logged write leg and its unlogged twin carry a bridge prologue each and stay
+    `EvalEq`. -/
+theorem ensureInBridges_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (c : NodeKey) :
+    EvalEq (σ'.ensureInBridges c) (σ.ensureInBridges c) := by
+  have hbr : σ'.bridgedInConcrete c = σ.bridgedInConcrete c := by
+    unfold GraphState.bridgedInConcrete; rw [h.schema]
+  have hnode : EvalEq (σ'.addNode (wAnyNode (c.type, c.pred)))
+      (σ.addNode (wAnyNode (c.type, c.pred))) :=
+    ⟨by simp [h.schema], by simp [h.edges], by simp [h.nodes], by simp [h.residue]⟩
+  have hadm := admitEdge_evalEq hnode c (wAnyNode (c.type, c.pred))
+  unfold GraphState.ensureInBridges
+  rw [hbr, h.edges, hadm]
+  split
+  · split
+    · exact hnode
+    · split
+      · exact ⟨by simp [h.schema], by simp [h.edges], by simp [h.nodes], by simp [h.residue]⟩
+      · exact hnode
+  · exact h
+
+/-- The logged bridge of one state is `EvalEq` to the unlogged bridge of any `EvalEq`
+    state — `ensureInBridgesLogged_evalEq` composed with the congruence above. -/
+theorem ensureInBridgesLogged_evalEq_congr {σ' σ : GraphState} (h : EvalEq σ' σ)
+    (c : NodeKey) : EvalEq (σ'.ensureInBridgesLogged c) (σ.ensureInBridges c) :=
+  EvalEq.trans (ensureInBridgesLogged_evalEq σ' c) (ensureInBridges_evalEq h c)
+
+/-- **The logged bridge prologue is `EvalEq` to the unlogged one** — the step-3 hinge.
+    `UsStarWrite.lean::GraphState.bridgePre` and `GraphState.bridgePreLogged` differ only
+    in the outbox rows the latter emits. -/
+theorem bridgePreLogged_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (t : Tuple) :
+    EvalEq (σ'.bridgePreLogged t) (σ.bridgePre t) := by
+  unfold GraphState.bridgePreLogged GraphState.bridgePre
+  have h0 : EvalEq ((σ'.addNode (subjNode t.subject)).addNode (objNode t.object t.relation))
+      ((σ.addNode (subjNode t.subject)).addNode (objNode t.object t.relation)) :=
+    ⟨by simp [h.schema], by simp [h.edges], by simp [h.nodes], by simp [h.residue]⟩
+  exact ensureInBridgesLogged_evalEq_congr
+    (ensureInBridgesLogged_evalEq_congr h0 (subjNode t.subject)) (objNode t.object t.relation)
+
+/-- ★ **The BRIDGED logged step is `EvalEq` to the bridged unlogged step** — `P6` step 3a,
+    and the theorem step 3b re-points `writeLoggedOne_evalEq` onto. Stated on the bridged
+    pair now, while it is additive, so that the flip is a re-point and not a new proof:
+    once `writeLoggedOne` is `bridgePreLogged` + grant + delta and `writeRulesRaw` folds
+    `writeBridgedOne`, this IS `writeLoggedOne_evalEq`, and `writeLoggedRules_evalEq` keeps
+    its statement. -/
+theorem writeBridgedOne_logged_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (t : Tuple) :
+    EvalEq
+      (if (σ'.bridgePreLogged t).admitEdge (subjNode t.subject) (objNode t.object t.relation)
+        then ((σ'.bridgePreLogged t).addEdge (subjNode t.subject)
+          (objNode t.object t.relation)).pushDelta (objNode t.object t.relation) t.relation true
+        else σ')
+      (σ.writeBridgedOne t) := by
+  have hp := bridgePreLogged_evalEq h t
+  unfold GraphState.writeBridgedOne
+  rw [admitEdge_evalEq hp]
+  split
+  · exact ⟨by simp [hp.schema], by simp [hp.edges], by simp [hp.nodes], by simp [hp.residue]⟩
+  · exact h
+
 /-- One logged write step is `EvalEq` to the unlogged step. -/
 theorem writeLoggedOne_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (t : Tuple) :
     EvalEq (σ'.writeLoggedOne t) (σ.writeDirect t) := by
@@ -601,6 +689,19 @@ theorem foldl_writeLoggedOne_evalEq : ∀ (us : List Tuple) {σ' σ : GraphState
 theorem writeLoggedRules_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (S : Schema)
     (t : Tuple) : EvalEq (σ'.writeLoggedRules S t) (σ.writeRulesRaw S t) :=
   foldl_writeLoggedOne_evalEq (rewriteClosureL S (rawWriteTuples S t)) h
+
+/-- The logged in-bridge leaves the watermark untouched (`P6` step 3 — the bridge
+    prologue must not move the drain cursor). -/
+@[simp] theorem ensureInBridgesLogged_watermark (σ : GraphState) (c : NodeKey) :
+    (σ.ensureInBridgesLogged c).watermark = σ.watermark := by
+  unfold GraphState.ensureInBridgesLogged
+  split <;> simp
+
+/-- …and so does the whole logged bridge prologue. -/
+@[simp] theorem bridgePreLogged_watermark (σ : GraphState) (t : Tuple) :
+    (σ.bridgePreLogged t).watermark = σ.watermark := by
+  unfold GraphState.bridgePreLogged
+  simp [GraphState.addNode]
 
 /-- The logged write leaves the watermark untouched. -/
 theorem writeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
@@ -656,6 +757,16 @@ def GraphState.removeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
     (objNode t.object t.relation) t.relation true
   else σ
 
+/-- ★ **The retract mirror of `bridgePreLogged` — the EPILOGUE of a logged retraction**
+    (`P6` step 3a, ADDITIVE: nothing calls it yet). Python's
+    `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted` runs
+    `remove_edge_by_id`, then `_maybe_remove_bridges(subject)` and
+    `_maybe_remove_bridges(obj)` — so the release is an epilogue on BOTH endpoints, in that
+    order, and step 3b wraps exactly this around `removeLoggedOne`'s then-branch. -/
+def GraphState.releasePostLogged (σ : GraphState) (t : Tuple) : GraphState :=
+  (σ.releaseInBridgesLogged (subjNode t.subject)).releaseInBridgesLogged
+    (objNode t.object t.relation)
+
 /-- **The logged rule-routed retraction**: the retract mirror of `writeLoggedRules` — fold
     `removeLoggedOne` over the SAME `rewriteClosureL S (rawWriteTuples S t)` the write path
     folds `writeLoggedOne` over (`zanzibar_utils_v1.py::RuleSet.apply` as a list, stage 1 =
@@ -685,6 +796,18 @@ def GraphState.removeLoggedRules (σ : GraphState) (S : Schema) (t : Tuple) : Gr
     symmetry with the write leg's `hadm : FoldAdmits σ …` (the guard itself is store-only). -/
 def RemoveAdmits (_σ : GraphState) (T : Store) (t : Tuple) : Prop := t ∈ T
 
+/-- The bridge release leaves the watermark untouched (`P6` step 3). -/
+@[simp] theorem releaseInBridges_watermark (σ : GraphState) (c : NodeKey) :
+    (σ.releaseInBridges c).watermark = σ.watermark := by
+  unfold GraphState.releaseInBridges
+  split <;> simp
+
+/-- …and so does its logged twin. -/
+@[simp] theorem releaseInBridgesLogged_watermark (σ : GraphState) (c : NodeKey) :
+    (σ.releaseInBridgesLogged c).watermark = σ.watermark := by
+  unfold GraphState.releaseInBridgesLogged
+  split <;> simp
+
 /-- One logged retraction leaves the schema fixed. -/
 @[simp] theorem removeLoggedOne_schema (σ : GraphState) (t : Tuple) :
     (σ.removeLoggedOne t).schema = σ.schema := by
@@ -710,6 +833,95 @@ def RemoveAdmits (_σ : GraphState) (T : Store) (t : Tuple) : Prop := t ∈ T
   split
   · rw [pushDelta_watermark, removeEdgeOne_watermark]
   · rfl
+
+/-- The release epilogue leaves the schema, the nodes and the watermark fixed — the three
+    projections `removeLoggedOne`'s own trio needs when step 3b wraps it (`P6` step 3a). -/
+@[simp] theorem releasePostLogged_schema (σ : GraphState) (t : Tuple) :
+    (σ.releasePostLogged t).schema = σ.schema := by
+  unfold GraphState.releasePostLogged; simp
+
+@[simp] theorem releasePostLogged_nodes (σ : GraphState) (t : Tuple) :
+    (σ.releasePostLogged t).nodes = σ.nodes := by
+  unfold GraphState.releasePostLogged; simp
+
+@[simp] theorem releasePostLogged_watermark (σ : GraphState) (t : Tuple) :
+    (σ.releasePostLogged t).watermark = σ.watermark := by
+  unfold GraphState.releasePostLogged; simp
+
+/-! ### ★ Red-to-green witnesses for the LOGGED step-3a legs (2026-09-13d)
+
+`bridgePreLogged`, `releasePostLogged` and `writeBridgedOne_logged_evalEq` are additive and
+INERT — nothing calls them until step 3b — so, exactly as for step 2's four definitions,
+`decide` pins are the only evidence they are right. The store and the concrete are
+`UsStarWrite.lean::BridgedWriteWitness`'s, so the unlogged pins there and the logged pins
+here read as ONE scenario.
+
+⚠ The load-bearing one is `prologue_second_member_silent`. It couples the composition to
+the step-2 presence guard: without the guard, a leaf-routed fold that touches the same
+subject twice emits a SECOND delta row — one dirty key per redundant routed member, which
+is worse than the duplicate edge, and which `UsStarWrite.lean::BridgedWriteWitness.
+fold_keeps_one_bridge_copy` cannot see because it reads the edges, not the outbox. -/
+namespace BridgedLegWitness
+
+/-- The step-3a write scenario, logged: the through-shape member over `Sthru`. -/
+def base : GraphState := BridgedWriteWitness.base
+
+/-- The prologue run once, on the member the whole item exists for. -/
+def pre1 : GraphState := base.bridgePreLogged BridgedWriteWitness.tThru
+
+/-- The prologue run again on the SAME subject — the second routed member of a fold. -/
+def pre2 : GraphState := pre1.bridgePreLogged BridgedWriteWitness.tThru2
+
+/-- **NON-VACUITY**: the prologue FIRES — one row, at the bridge target, carrying the
+    concrete's predicate and the leaf flag `writeLoggedOne` uses. The whole row is pinned,
+    not its length: a row at the wrong key would keep a length pin green. -/
+theorem prologue_emits : pre1.outbox = [⟨1, BridgedWriteWitness.w0, "viewer", true⟩] := by
+  decide
+
+/-- ★ **The presence guard, through the COMPOSED prologue**: a second member sharing the
+    subject is not a flip, so it emits nothing more. -/
+theorem prologue_second_member_silent : pre2.outbox = pre1.outbox := by decide
+
+/-- **ATTRIBUTION**: at a member with no bridged-in endpoint the prologue is silent from
+    the start, so `prologue_emits` is the bridge firing and not "this leg always emits". -/
+theorem prologue_unbridged_silent :
+    (base.bridgePreLogged BridgedWriteWitness.tCtrl).outbox = [] := by decide
+
+/-- ★ **THE HINGE, executably**: the logged prologue and the unlogged one agree on
+    everything a READ consults. `bridgePreLogged_evalEq` is the theorem; this is its
+    red-to-green arm, and it is what will let step 3b bridge the logged leg AND its
+    unlogged `writeRulesRaw` twin without restating `writeLoggedRules_evalEq`. -/
+theorem prologue_evalEq_edges :
+    pre1.edges = (base.bridgePre BridgedWriteWitness.tThru).edges := by decide
+
+theorem prologue_evalEq_nodes :
+    pre1.nodes = (base.bridgePre BridgedWriteWitness.tThru).nodes := by decide
+
+/-- **ATTRIBUTION for the hinge**: the two states are NOT equal — the outbox is exactly
+    where they differ — so the pair above is a real agreement, not two names for one
+    state. -/
+theorem prologue_outboxes_differ :
+    pre1.outbox ≠ (base.bridgePre BridgedWriteWitness.tThru).outbox := by decide
+
+/-- The bridged-only state the release epilogue is meant to collect. -/
+def bridgedOnly : GraphState := base.bridgePre BridgedWriteWitness.tThru
+
+/-- **NON-VACUITY**: the epilogue FIRES on a dead bridge — the edge multiset returns to
+    its pre-write value, which is the `releaseFixes := true` the step-1 probe measured. -/
+theorem epilogue_fires :
+    (bridgedOnly.releasePostLogged BridgedWriteWitness.tThru).edges = base.edges := by
+  decide
+
+/-- ★ **THE CONTROL that makes the epilogue safe**: with the grant still in place the
+    release DECLINES and the bridge stays. An epilogue that fired here would silently
+    revoke a live grant's bridge — `_maybe_remove_bridges`'s `reference_count == degree`
+    guard is what forbids it. -/
+theorem epilogue_declines_on_a_live_node :
+    ((base.writeBridgedOne BridgedWriteWitness.tThru).releasePostLogged
+      BridgedWriteWitness.tThru).edges
+      = (base.writeBridgedOne BridgedWriteWitness.tThru).edges := by decide
+
+end BridgedLegWitness
 
 /-- The logged retraction keeps the schema fixed (a fold of `removeLoggedOne_schema`). -/
 theorem removeLoggedRules_schema (σ : GraphState) (S : Schema) (t : Tuple) :

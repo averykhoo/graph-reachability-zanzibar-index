@@ -1174,6 +1174,35 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   consumes `checkFn` at exactly these keys, so a step-3 proof must not route a stratum-2
   userset-subject obligation through `checkFn` and call it settled.
 
+* **★ THE LIVE WRITE LEG STILL DOES NOT BRIDGE — the bridged twins exist and nothing calls
+  them (added 2026-09-13d, `P6` step 3a).** This is the largest standing model≠code gap on
+  the write path, and it is stated here so that the existence of the twins cannot be
+  mistaken for their being live. `index_v4/wildcard.py::WildcardIndex._add_tuple_trusted`
+  resolves both endpoints, then runs `_ensure_bridges(subject)` and `_ensure_bridges(obj)`,
+  and only then `add_edge_by_id`; on the retract side `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted` runs
+  `remove_edge_by_id` then `_maybe_remove_bridges` on both endpoints. The Lean live legs —
+  `GraphIndex/Cascade.lean::GraphState.writeLoggedOne` and `::GraphState.removeLoggedOne`,
+  and the unlogged `GraphIndex/LeafRules.lean::GraphState.writeRulesRaw` — do **none** of
+  that; they are bridge-free folds, which is exactly why `FullScope.lean::W4Fragment` still
+  carries the un-widened `ttuStarFree` field.
+
+  What step 3a added is the faithful twin of each, **additive and inert**:
+  `GraphIndex/UsStarWrite.lean::GraphState.bridgePre` / `::GraphState.writeBridgedOne`
+  (unlogged), `GraphIndex/Cascade.lean::GraphState.bridgePreLogged` /
+  `::GraphState.releasePostLogged` (logged), plus the hinge
+  `GraphIndex/Cascade.lean::bridgePreLogged_evalEq` that keeps the logged and unlogged legs
+  `EvalEq` once both bridge. Their only evidence is `decide` pins
+  (`GraphIndex/UsStarWrite.lean::BridgedWriteWitness.bridged_creates_the_bridge`,
+  `GraphIndex/Cascade.lean::BridgedLegWitness.prologue_emits`) and a recorded 11-mutation sweep — **the
+  ten-phase gate is blind to all of it** until `P6` step 3b re-points the live legs.
+
+  One deliberate NARROWING inside the twin, recorded rather than left to be discovered:
+  `writeBridgedOne` runs only `ensureInBridges` (the subject-wildcard IN-bridges), where
+  Python's `_ensure_bridges` also does `_ensure_own_bridges`' out-bridge arm and
+  `index_v4/wildcard.py::WildcardIndex._ensure_entity_middles`. On this fragment both are inert (no object wildcards, nothing
+  crossable — see the entity-middle entry above), and keeping them out means a step-3b
+  divergence is attributable to one mechanism.
+
 ### 7.4 Pre-existing entries (carried forward)
 
 * **~~`affectedKeys` omits the LeafFamily own-key branch~~ — RESOLVED 2026-07-20c.**
