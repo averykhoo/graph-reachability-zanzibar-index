@@ -44,54 +44,18 @@ incoming R-node concretes — `index_v4/processor.py::DeltaProcessor._reconcile`
 
 namespace Zanzibar
 
-/-! ## Chain-level structure — schema fixity, edge-target discipline -/
+/-! ## Chain-level structure — schema fixity, edge-target discipline
 
-/-- The `writeDirect` fold keeps the baked-in schema. -/
-theorem foldl_writeDirect_schema (us : List Tuple) :
-    ∀ (σ : GraphState), (us.foldl (fun acc u => acc.writeDirect u) σ).schema = σ.schema := by
-  induction us with
-  | nil => intro σ; rfl
-  | cons u rest ih =>
-    intro σ
-    simp only [List.foldl_cons]
-    rw [ih, writeDirect_schema]
+★ **MOVED OUT, `P6` step 3b (2026-09-13g): `foldl_writeDirect_schema`,
+`reconcileJobsD_schema` and `reachedByW3d_schema` now live in `Cascade.lean`**, beside
+`runCascade` and the `ReachedByW3d` inductive they are about. Names, statements and proofs
+are unchanged, so every call site in this file and downstream still resolves.
 
-/-- The diffing batch keeps the baked-in schema. -/
-theorem reconcileJobsD_schema {S : Schema} {T : Store} :
-    ∀ (jobs : List W3cJob) (σ : GraphState), (reconcileJobsD S T σ jobs).schema = σ.schema := by
-  intro jobs
-  induction jobs with
-  | nil => intro σ; rfl
-  | cons j rest ih =>
-    intro σ
-    have hfold : reconcileJobsD S T σ (j :: rest)
-        = reconcileJobsD S T (j.applyD S T σ) rest := by
-      unfold reconcileJobsD
-      rw [List.foldl_cons]
-    rw [hfold, ih]
-    unfold W3cJob.applyD GraphState.reconcileStarsKeyD
-    rw [reconcileKeyD_schema, reconcileResidueKey_schema]
-
-/-- **Every W3d state carries its own schema** — the read's `isDerived` routing reads
-    the right `S`. -/
-theorem reachedByW3d_schema {σ : GraphState} {S : Schema} {T : Store}
-    (h : ReachedByW3d σ S T) : σ.schema = S := by
-  induction h with
-  | empty S => rfl
-  | @write σp S T t hadm hprev ih =>
-    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).schema]
-    show ((rewriteClosureL S (rawWriteTuples S t)).foldl
-      (fun acc u => acc.writeDirect u) σp).schema = S
-    rw [foldl_writeDirect_schema]
-    exact ih
-  | @cascade σp S T jobs hjv hcover hscope hprev ih =>
-    rcases runCascade_cases S T σp jobs with hrc | hrc
-    · rw [hrc]
-      show (reconcileJobsL S T σp jobs).schema = S
-      rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).schema, reconcileJobsD_schema]
-      exact ih
-    · rw [hrc]
-      exact ih
+WHY UP AND NOT DOWN: `Cascade.lean` needs `σ.schema = S` itself — the `P6` R-node
+restatement there has to turn a claim about `σ.schema` (which is what
+`GraphState.bridgedInConcrete` reads) into one about `S` — and `Cascade.lean` imports this
+file's consumers, not the other way round. A schema-preservation fact stranded downstream
+of `Cascade` is invisible to it. -/
 
 /-- **Every W3d edge target has a non-`BARE` predicate** (the W3d analog of
     `reachedByW3a_edge_target_ne_bare`): routed targets carry declared relations,

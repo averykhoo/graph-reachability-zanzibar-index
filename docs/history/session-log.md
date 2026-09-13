@@ -30,6 +30,60 @@ from here.
 
 ---
 
+## 2026-09-13g — `P6` step 3b: the ADDITIVE half lands GREEN; two standing claims on the row are REFUTED
+
+rows: `P6` (three Log entries under `2026-09-13g`, the false `## Traps` paragraph struck and
+replaced in place, one new `## Read first` entry; stays `NOW`). Nothing re-ranked.
+
+task lint: clean (13 checks, 183 task file(s) parsed), 26 warning(s)
+read: board + note
+
+**The session opened by finding step 3b already half-done and ungated.** The previous session's
+background workflow was *still running* when this one started, and had landed plan steps 1-2
+uncommitted. The first `verify.sh lean` came back `EXIT=1 / build failed` — with zero errors against
+the file it named, only `failed to open file …UsStarWrite.olean: 2` at two downstream modules. Cause
+established by process inspection rather than guessed: that workflow's bare `lake build`, mid-write of
+the `.olean`. **`verify.sh`'s run lock excludes another `verify.sh`, not a bare `lake build`, and not a
+job outliving the session that spawned it.** Re-run alone, unchanged: PASSED. This is a third variant
+of the exit-code footgun and the first where the *guard* was never involved.
+
+**Committed `30ad44a`: plan steps 1-2, ten-phase gate COVERED.** End of step 2 is one of only two
+commit-safe points the plan names, so it was gated and committed before anything else was attempted.
+
+**Then the executive re-plan, which is the reusable part.** The plan's verdict is that steps 3-15 are
+one red run with no commit point until the end — roughly three sessions with nothing bankable in
+between. That is false. A large slice of the owed work mentions only definitions that ALREADY EXIST,
+so it lands green and committable *before* any re-point. Executed: **18 declarations** (14 new, 4
+relocated), whole-tree build green, audited CLEAN-ADDITIVE by an independent agent that md5-matched
+the four moved blocks against `30ad44a` and diffed sixteen definition bodies to confirm none moved.
+Nothing is re-pointed; the write leg still does not bridge. **Ask of every owed lemma "does this
+mention a definition that already exists?" before assuming it must wait for the re-point.**
+
+**Two of the row's standing claims are REFUTED, each verified first-hand by a dedicated agent whose
+verdict was ranked above the recon that raised it.** (1) The carry does NOT terminate in
+`GraphAdmission`: `CascadeStrata.lean::runCascade2_no_abort` and `::cascade2_drains` consume it, bind
+six explicit hypotheses and no bundle, and are both statement-pinned and in `verify.sh`'s
+`HEADLINE_AUDITS` — so two pinned headlines gain `(hNBD : NoBridgedDerived S)`. The decisive check was
+structural: `isSubjectWildcardUserset` does not occur in `CascadeStrata.lean` at all. (2) The shadow's
+T3 is not discharged by `BareStarStore`, which constrains STORED tuples while the obligation is about
+closure members — and `applyRRule`'s ttu arm manufactures a non-BARE star subject, which is the
+designed case, not a corner. A three-line alternative route existed and was deliberately REFUSED: its
+provider narrows the Lean fragment below what the Python compiler accepts, the wrong direction under
+`CLAUDE.md` §"Who decides".
+
+**The scouting itself is the other deliverable, at the user's instruction.** Two nine-agent sweeps
+(~2M subagent tokens) are reconciled into `docs/p6-step3b-plan-2026-09-13.md` §"Corrections appended
+2026-09-13g" — C1-C9 plus a post-step-2 symbol table, every claim tagged READ / VERIFIED / REASONED /
+UNVERIFIED, contradictions between agents recorded rather than averaged, and a warning that its own
+line numbers were already drifting when it was written. `CLAUDE.md` gains the durable rule that
+produced it: **SCOUTING IS A DELIVERABLE, NOT A BYPRODUCT**.
+
+Still owed: step 3 (the `LeafRules` re-point) is the first RED step and was not started. The fuzz
+sweep is not owed — no algorithm changed. Before step 3, re-read plan §C9: there may be more additive
+work worth landing green first.
+
+---
+
 ## 2026-09-13e — `TK68` CLOSED: the admission bundle gains `usWild`; the R-node cone is 47 decls, not one theorem
 
 rows: `P6` (Log `2026-09-13e`, brief set, lead `## Traps` paragraph rewritten + two new

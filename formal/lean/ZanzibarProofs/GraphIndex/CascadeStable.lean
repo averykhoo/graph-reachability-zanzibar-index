@@ -160,18 +160,14 @@ theorem writeLoggedRules_edge_delta (σ : GraphState) (S : Schema) (t : Tuple) :
     · rw [if_neg hadm] at hab' ⊢
       exact h ab' hab'
 
-/-! ## Endpoint closure over the interleaved closure -/
+/-! ## Endpoint closure over the interleaved closure
 
-/-- A cascade run either accepts (the drained logged batch) or rejects (identity). -/
-theorem runCascade_cases (S : Schema) (T : Store) (σ : GraphState) (jobs : List W3cJob) :
-    runCascade S T σ jobs
-        = { reconcileJobsL S T σ jobs with
-            watermark := (reconcileJobsL S T σ jobs).maxOutboxId }
-      ∨ runCascade S T σ jobs = σ := by
-  unfold runCascade
-  split
-  · exact Or.inl rfl
-  · exact Or.inr rfl
+★ **MOVED OUT, `P6` step 3b (2026-09-13g): `runCascade_cases` now lives in `Cascade.lean`**,
+immediately after the `runCascade` definition it case-splits. Name, statement and proof are
+unchanged, so all six call sites in this file and downstream still resolve. It travelled
+with the schema-preservation trio out of `CascadeSettle.lean` because
+`reachedByW3d_schema`'s cascade case needs it: `Cascade.lean` needs that theorem and imports
+this file's consumers, not the other way round. -/
 
 /-- The `writeDirect` fold only adds nodes. -/
 theorem foldl_writeDirect_nodes_mono (us : List Tuple) :

@@ -91,8 +91,17 @@ Measured union: **12 application sites, 47 declarations across 12 files** (`.scr
 tk68_declcone.py`, 2026-09-13e; 51 counting the four seeds -- state the unit).
 
 The carry to thread is `GraphIndex/UsStarWrite.lean::NoBridgedDerived`, supplied by
-`FullScope.lean::GraphAdmission.noBridgedDerived`. It terminates in `GraphAdmission`, so NO
-HEADLINE GAINS A HYPOTHESIS.
+`FullScope.lean::GraphAdmission.noBridgedDerived`. ~~It terminates in `GraphAdmission`, so NO
+HEADLINE GAINS A HYPOTHESIS.~~ **RETRACTED 2026-09-13g -- VERIFIED FALSE, and it was the most
+load-bearing wrong thing on this row.** `GraphIndex/CascadeStrata.lean::runCascade2_no_abort` and
+`::cascade2_drains` consume the carry, bind six explicit hypotheses and NO bundle of any kind, and
+are BOTH in `formal/headline_statements.txt` and in `formal/verify.sh`'s `HEADLINE_AUDITS`. The
+decisive structural check: `isSubjectWildcardUserset` does not occur in `CascadeStrata.lean` at all,
+so no predicate in those binders can even mention it, and the sole producer of `NoBridgedDerived`
+needs a `GraphAdmission`. **TWO STATEMENT-PINNED HEADLINES GAIN `(hNBD : NoBridgedDerived S)`** and
+the statement pin moves by two rows -- legal and honest, but a deliberate reviewed change owing the
+RED-first / `--generate` / dated `formal/history/` note sequence in the `TK68` shape. Decide it at
+the START of step 10. Detail: `docs/p6-step3b-plan-2026-09-13.md` sec "C3".
 
 ⚠ **Do NOT extend `W4Fragment.term` to carry it -- that is a 134-SITE EDIT.** Every one of
 the 47 already holds `hterm`, so adding a conjunct there looks like the cheap fix. `hterm` is
@@ -198,6 +207,15 @@ materialises the edge, and the rest of the leg is inert until it lands.
 
 ## Read first
 
+- **READ [`docs/p6-step3b-plan-2026-09-13.md`](../docs/p6-step3b-plan-2026-09-13.md) sec
+  "Corrections appended 2026-09-13g -- what the recon sweep changed" BEFORE the plan body, because
+  it SUPERSEDES that body wherever the two disagree** -- and its headline item is that step 8's
+  third `term` obligation (T3) is REFUTED: `W4Fragment.bareStar` constrains STORED tuples only and
+  does NOT make a bridge node terminal, so step 8 must additionally thread
+  `formal/lean/ZanzibarProofs/GraphIndex/RulesCorrect.lean::TtuTuplesetsDirect` and
+  `formal/lean/ZanzibarProofs/GraphIndex/RulesBareStar.lean::TtuStarFree` onto
+  `formal/lean/ZanzibarProofs/GraphIndex/CascadeStable.lean::reachedByW3d_shadow` (both providers
+  already exist, so no new admission field) and owes a new L-closure star-bare lemma family.
 - **[`docs/p6-step3b-plan-2026-09-13.md`](../docs/p6-step3b-plan-2026-09-13.md) IS THE STEP-3b
   EXECUTION MAP AND IT REPLACES THE SCOUTING, NOT THE ROW** (ACTIVE-PLAN, opened 2026-09-13f;
   corrections append dated at the top; freeze it when `P6` closes). Fifteen ordered steps, the
@@ -1324,3 +1342,70 @@ NEXT ACTION when this session resumes or the next one starts: re-run `verify.sh 
 untouched tree to get the real step-1+2 verdict. End of step 2 is one of only TWO commit-safe points
 in the whole of 3b (the other is the end of step 15), so if it is green it should be committed
 before any re-point is made.
+
+STEP 3b: THE ADDITIVE HALF IS DONE AND GREEN. Two decisions taken, and the row's central standing
+claim is now REFUTED by first-hand verification. Full map: `docs/p6-step3b-plan-2026-09-13.md`
+sec "Corrections appended 2026-09-13g" (C1-C9 + a post-step-2 symbol table). Read that, not this entry,
+before executing -- this entry is the index.
+
+WHAT LANDED (whole-tree `lake build` rc=0, `Build completed successfully (1089 jobs).`; audited
+CLEAN-ADDITIVE by an independent agent that md5-matched the four moved blocks and diffed sixteen
+definition bodies to confirm none moved):
+* Steps 1-2 of the plan, committed green at `30ad44a` with the TEN-PHASE GATE COVERED.
+* 18 further declarations, ALL ADDITIVE: the `nodesFromEdges` family in `UsStarWrite.lean`, eleven
+  bridge-leg lemmas in `Cascade.lean` (outbox_mono / edges_subset / edge_delta at BOTH the per-leg
+  and epilogue levels), and the step-4 schema quartet relocated up into `Cascade.lean`.
+* NOTHING IS RE-POINTED. The write leg still does not bridge.
+
+(!) DECISION 1 -- THE RE-PLAN, AND IT IS THE REUSABLE ONE. The plan says steps 3-15 are one red run
+with no commit point until the end. That is false, and believing it costs a session's work every time
+it is believed: a large slice of the owed work mentions only definitions that ALREADY EXIST, so it
+lands green and committable BEFORE any re-point. That is where all 18 came from. **Ask of every owed
+lemma "does this mention a definition that already exists?" before assuming it must wait.** There is
+now a THIRD commit-safe point and there are probably more.
+
+(!) DECISION 2 -- TAKE THE `rewriteClosureL_star_bare` ROUTE FOR THE SHADOW'S T3; REFUSE THE THREE-LINE
+ONE. The plan's T3 justification is REFUTED (verified first-hand, twice): `BareStarStore T` quantifies
+over STORED tuples, while the obligation is about members of `rewriteClosureL S (rawWriteTuples S t)`
+-- and `applyRRule`'s ttu arm MANUFACTURES a non-BARE star subject (it preserves the subject NAME, so
+`STAR` survives, and overwrites the predicate with the TTU target), which is exactly the through-shape
+that makes `isSubjectWildcardUserset` true. A cheap alternative exists and MUST NOT be taken:
+`rewriteClosureL_subject_pred_gen` + `TtuTargetsSatL` gives T3 in ~3 lines, but its provider is a
+SCHEMA-LEVEL ban on a bare wildcard restriction over a TTU tupleset relation, which REJECTS
+through-shape schemas the store-level `TtuStarFree` admits. That narrows the Lean fragment below what
+the Python compiler accepts -- the wrong direction under `CLAUDE.md` sec "Who decides", where the
+fragment catches up to the code and never the reverse. Cost accepted instead: thread
+`TtuTuplesetsDirect S` + `TtuStarFree S T` into `reachedByW3d_shadow` and its two W3d2 twins (call-site
+cost ZERO -- all five sites already bind both), mint an L-analogue of `rewriteClosure_star_bare`, and
+kill the leaf-ttu arms with the already-bound `hCO`. NO new `GraphAdmission` field. ⚠ A THIRD gap the
+first sweep missed and the verification found: `TtuStarFree` quantifies over `schemaRewrites S` while
+`rewriteStepL` steps over `schemaRewritesL S = schemaRewrites S ++ leafRewrites S`, so leaf ttu arms
+sit OUTSIDE its quantifier entirely.
+
+(!) DECISION 3 -- AT STEP 10, BIND THE BARE `NoBridgedDerived S` ON THE TWO HEADLINES, NEVER
+`LeafScope S`, even if step 8 folds the carry into `LeafScope`. Binding `LeafScope` there would drag
+its other fields into two statement-pinned headlines that do not use them, enlarging the pin diff and
+claiming scope restrictions the cascade theorems do not need.
+
+(!) THE ROW'S STANDING CLAIM IS FALSE, AND THIS ENTRY RETRACTS IT. The `## Traps` section still says
+the carry "terminates in `GraphAdmission`, so NO HEADLINE GAINS A HYPOTHESIS". VERIFIED FALSE:
+`CascadeStrata.lean::runCascade2_no_abort` and `::cascade2_drains` bind six explicit hypotheses and no
+bundle of any kind; `isSubjectWildcardUserset` does not occur in `CascadeStrata.lean` at all, so no
+predicate in those binders can even mention it; and the sole producer of `NoBridgedDerived` needs a
+`GraphAdmission`. Both are in `formal/headline_statements.txt` and in `verify.sh`'s `HEADLINE_AUDITS`.
+So TWO statement-pinned headlines gain `(hNBD : NoBridgedDerived S)` and the statement pin moves by two
+rows -- legal and honest, but a deliberate reviewed change owing the RED-first / `--generate` / dated
+`formal/history/` note sequence, in the `TK68` shape. DECIDE IT AT THE START OF STEP 10, NOT AT STEP 15.
+
+(!) A NEW EXIT-CODE FOOTGUN VARIANT, and the earlier entry this session wrote MIS-ATTRIBUTED IT.
+A `lean` run returned `EXIT=1 / build failed` whose ONLY errors were `failed to open file
+...UsStarWrite.olean: 2`, with zero errors against `UsStarWrite.lean` itself. Cause, established by
+process inspection: a bare `lake build` was mid-write of that `.olean`. The earlier entry guessed a
+subagent had disobeyed a read-only instruction; it had not -- the build belonged to the PREVIOUS
+session's background workflow, still running when this session started. `verify.sh`'s run lock excludes
+another `verify.sh`, NOT a bare `lake build`, and not a job outliving the session that spawned it.
+Check `Get-CimInstance Win32_Process -Filter "Name='lake.exe' OR Name='lean.exe'"` and re-run alone;
+the re-run PASSED unchanged.
+
+NEXT ACTION: step 3 (the LeafRules re-point) is the first RED step. Before it, re-read plan sec C9 --
+it may contain further additive work worth landing green first.

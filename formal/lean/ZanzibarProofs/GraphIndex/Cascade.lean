@@ -703,6 +703,101 @@ theorem writeLoggedRules_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (S : S
   unfold GraphState.bridgePreLogged
   simp [GraphState.addNode]
 
+/-! ### ★ The write-side bridge legs' OUTBOX facts (`P6` step 3b, 2026-09-13g)
+
+ADDITIVE: new statements about the step-2/3a definitions above, nothing re-pointed. Step 7
+of the `P6` plan needs them so `CascadeStable.lean:78::writeLoggedOne_outbox_mono` and
+`:118::writeLoggedRules_edge_delta` keep their statements once `writeLoggedOne` gains the
+prologue — the first because a bridge leg must never DROP a frontier row, the second
+because a bridge EDGE must come with one.
+
+⚠ **Why `d.node = ab.2` survives on the bridge arm.** `ensureInBridgesLogged` (`:214`)
+pushes its row at `wAnyNode (c.type, c.pred)` while the edge `ensureInBridges` adds is
+exactly `(c, wAnyNode (c.type, c.pred))` (`UsStarWrite.lean:282`) — so the row sits at the
+new edge's TARGET, which is the same denormalisation the routed arm uses
+(`writeLoggedOne` emits at `objNode t.object t.relation`, the object end of the edge it
+adds). That is what lets the consumer keep the `ab.2` form rather than weakening to a
+disjunction over the two endpoints. -/
+
+/-- The logged in-bridge only ever PUSHES outbox rows: the unlogged core leaves the outbox
+    alone (`ensureInBridges_outbox`) and the logged wrapper conses at most one row. -/
+theorem ensureInBridgesLogged_outbox_mono (σ : GraphState) (c : NodeKey) :
+    ∀ d ∈ σ.outbox, d ∈ (σ.ensureInBridgesLogged c).outbox := by
+  intro d hd
+  unfold GraphState.ensureInBridgesLogged
+  split
+  · rw [ensureInBridges_outbox]; exact hd
+  · rw [pushDelta_outbox]
+    exact List.mem_cons_of_mem _ (by rw [ensureInBridges_outbox]; exact hd)
+
+/-- …and so does the whole logged prologue (both legs, over the two `addNode`s that touch
+    neither the outbox nor the watermark). -/
+theorem bridgePreLogged_outbox_mono (σ : GraphState) (t : Tuple) :
+    ∀ d ∈ σ.outbox, d ∈ (σ.bridgePreLogged t).outbox := by
+  intro d hd
+  unfold GraphState.bridgePreLogged
+  refine ensureInBridgesLogged_outbox_mono _ _ d
+    (ensureInBridgesLogged_outbox_mono _ _ d ?_)
+  simpa [GraphState.addNode] using hd
+
+/-- ★ **A bridge edge carries its frontier row.** Every edge of the logged in-bridge is an
+    old edge, or else the leg emitted a row with an id strictly above the (unchanged)
+    watermark, denormalized at that edge's own head. The per-leg core of
+    `CascadeStable.lean:118::writeLoggedRules_edge_delta`'s bridge arm; the id bound is
+    `ensureInBridges_watermark` (`UsStarWrite.lean:670`) exactly where the routed arm uses
+    `writeDirect_watermark`.
+
+    ⚠ **Read the second disjunct as written.** It supplies the ROW, not the edge's identity:
+    it does NOT assert `ab = (c, wAnyNode (c.type, c.pred))`. That identity is true and is
+    available separately from `UsStarWrite.lean::ensureInBridges_edges_mem` (this proof
+    consumes it), but no consumer needs it — `:118`'s shape carries only the row — so
+    claiming it here would make the docstring stronger than the theorem. -/
+theorem ensureInBridgesLogged_edge_delta (σ : GraphState) (c : NodeKey) :
+    ∀ ab ∈ (σ.ensureInBridgesLogged c).edges,
+      ab ∈ σ.edges ∨ ∃ d ∈ (σ.ensureInBridgesLogged c).outbox,
+        σ.watermark < d.id ∧ d.node = ab.2 := by
+  intro ab hab
+  rw [ensureInBridgesLogged_edges] at hab
+  by_cases hEq : (σ.ensureInBridges c).edges = σ.edges
+  · rw [hEq] at hab; exact Or.inl hab
+  · rcases ensureInBridges_edges_mem hab with hold | ⟨heq, _⟩
+    · exact Or.inl hold
+    · have hob : (σ.ensureInBridgesLogged c).outbox
+          = ⟨(σ.ensureInBridges c).nextDeltaId, wAnyNode (c.type, c.pred), c.pred, true⟩
+            :: (σ.ensureInBridges c).outbox := by
+        unfold GraphState.ensureInBridgesLogged
+        rw [if_neg hEq, pushDelta_outbox]
+      refine Or.inr ⟨⟨(σ.ensureInBridges c).nextDeltaId, wAnyNode (c.type, c.pred),
+        c.pred, true⟩, ?_, ?_, ?_⟩
+      · rw [hob]; exact List.mem_cons_self
+      · show σ.watermark < (σ.ensureInBridges c).nextDeltaId
+        have h1 : (σ.ensureInBridges c).nextDeltaId
+            = max (σ.ensureInBridges c).maxOutboxId (σ.ensureInBridges c).watermark + 1 := rfl
+        have h2 : (σ.ensureInBridges c).watermark = σ.watermark := ensureInBridges_watermark σ c
+        omega
+      · show (⟨(σ.ensureInBridges c).nextDeltaId, wAnyNode (c.type, c.pred),
+          c.pred, true⟩ : Delta).node = ab.2
+        rw [heq]
+
+/-- …and the same fact for the whole prologue: an edge of `bridgePreLogged` is old, or one
+    of the two legs' bridge edges, which carries its row. (Not on the plan's step-7 list,
+    which names only the per-leg form; landed because the re-pointed `writeLoggedOne`
+    presents the prologue, not a single leg, and the composition is three lines.) -/
+theorem bridgePreLogged_edge_delta (σ : GraphState) (t : Tuple) :
+    ∀ ab ∈ (σ.bridgePreLogged t).edges,
+      ab ∈ σ.edges ∨ ∃ d ∈ (σ.bridgePreLogged t).outbox,
+        σ.watermark < d.id ∧ d.node = ab.2 := by
+  intro ab hab
+  unfold GraphState.bridgePreLogged at hab ⊢
+  rcases ensureInBridgesLogged_edge_delta _ (objNode t.object t.relation) ab hab with
+    h1 | ⟨d, hd, hgt, hnode⟩
+  · rcases ensureInBridgesLogged_edge_delta _ (subjNode t.subject) ab h1 with
+      h2 | ⟨d, hd, hgt, hnode⟩
+    · exact Or.inl (by simpa [GraphState.addNode] using h2)
+    · exact Or.inr ⟨d, ensureInBridgesLogged_outbox_mono _ _ d hd,
+        by simpa [GraphState.addNode] using hgt, hnode⟩
+  · exact Or.inr ⟨d, hd, by simpa [GraphState.addNode] using hgt, hnode⟩
+
 /-- The logged write leaves the watermark untouched. -/
 theorem writeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
     (σ.writeLoggedRules S t).watermark = σ.watermark := by
@@ -847,6 +942,124 @@ def RemoveAdmits (_σ : GraphState) (T : Store) (t : Tuple) : Prop := t ∈ T
 @[simp] theorem releasePostLogged_watermark (σ : GraphState) (t : Tuple) :
     (σ.releasePostLogged t).watermark = σ.watermark := by
   unfold GraphState.releasePostLogged; simp
+
+/-! ### ★ The release epilogue's EDGE and OUTBOX facts (`P6` step 3b, 2026-09-13g)
+
+The retract mirror of the write-side block above, and ADDITIVE in the same way. Step 7 of
+the `P6` plan needs them so `CascadeStable.lean:2305::removeLoggedOne_edges_subset`,
+`:2333::removeLoggedOne_outbox_mono` and `:2359::removeLoggedRules_edge_delta` keep their
+statements once `removeLoggedOne` gains the epilogue. The `d.node = ab.2` form survives
+here for the same reason it survives on the write side: `releaseInBridges` erases exactly
+`(c, wAnyNode (c.type, c.pred))` (`:247`) while `releaseInBridgesLogged` (`:253`) pushes
+its row at `wAnyNode (c.type, c.pred)` — the erased edge's TARGET. -/
+
+/-- The bridge release never touches the outbox (it only erases one edge) — the fourth
+    member of the `releaseInBridges_schema/nodes/residue` projection family above, needed
+    by the logged twin's monotonicity below. -/
+@[simp] theorem releaseInBridges_outbox (σ : GraphState) (c : NodeKey) :
+    (σ.releaseInBridges c).outbox = σ.outbox := by
+  unfold GraphState.releaseInBridges
+  split <;> simp
+
+/-- The logged release only ever PUSHES outbox rows (retract mirror of
+    `ensureInBridgesLogged_outbox_mono`). -/
+theorem releaseInBridgesLogged_outbox_mono (σ : GraphState) (c : NodeKey) :
+    ∀ d ∈ σ.outbox, d ∈ (σ.releaseInBridgesLogged c).outbox := by
+  intro d hd
+  unfold GraphState.releaseInBridgesLogged
+  split
+  · rw [releaseInBridges_outbox]; exact hd
+  · rw [pushDelta_outbox]
+    exact List.mem_cons_of_mem _ (by rw [releaseInBridges_outbox]; exact hd)
+
+/-- …and so does the whole release epilogue (both endpoints). -/
+theorem releasePostLogged_outbox_mono (σ : GraphState) (t : Tuple) :
+    ∀ d ∈ σ.outbox, d ∈ (σ.releasePostLogged t).outbox := by
+  intro d hd
+  unfold GraphState.releasePostLogged
+  exact releaseInBridgesLogged_outbox_mono _ _ d
+    (releaseInBridgesLogged_outbox_mono σ _ d hd)
+
+/-- The logged release only shrinks the edge multiset — `releaseInBridges_edges_subset`
+    (`:464`) carried through the outbox wrapper. -/
+theorem releaseInBridgesLogged_edges_subset (σ : GraphState) (c : NodeKey) :
+    ∀ e ∈ (σ.releaseInBridgesLogged c).edges, e ∈ σ.edges := by
+  intro e he
+  rw [releaseInBridgesLogged_edges] at he
+  exact releaseInBridges_edges_subset σ c e he
+
+/-- …and so does the whole release epilogue — what
+    `CascadeStable.lean:2305::removeLoggedOne_edges_subset` needs on top of its own
+    `removeEdgeOne` + `List.mem_of_mem_erase` step once the epilogue wraps it. -/
+theorem releasePostLogged_edges_subset (σ : GraphState) (t : Tuple) :
+    ∀ e ∈ (σ.releasePostLogged t).edges, e ∈ σ.edges := by
+  intro e he
+  unfold GraphState.releasePostLogged at he
+  exact releaseInBridgesLogged_edges_subset σ _ e
+    (releaseInBridgesLogged_edges_subset _ _ e he)
+
+/-- ★ **A released bridge edge carries its frontier row** (per-leg retract mirror of
+    `ensureInBridgesLogged_edge_delta`): an edge present before the logged release and
+    absent after was the bridge edge, and the release emitted a row with an id strictly
+    above the unchanged watermark at that edge's own head. The id bound is
+    `releaseInBridges_watermark` (`:889`) exactly where the routed arm uses
+    `removeEdgeOne_watermark`. -/
+theorem releaseInBridgesLogged_edge_delta (σ : GraphState) (c : NodeKey) :
+    ∀ ab, ab ∈ σ.edges → ab ∉ (σ.releaseInBridgesLogged c).edges →
+      ∃ d ∈ (σ.releaseInBridgesLogged c).outbox, σ.watermark < d.id ∧ d.node = ab.2 := by
+  intro ab hin hout
+  rw [releaseInBridgesLogged_edges] at hout
+  by_cases hOnly : σ.inBridgeOnly c = true
+  · have hrel : (σ.releaseInBridges c).edges
+        = σ.edges.erase (c, wAnyNode (c.type, c.pred)) := by
+      unfold GraphState.releaseInBridges
+      rw [if_pos hOnly, removeEdgeOne_edges]
+    have habeq : ab = (c, wAnyNode (c.type, c.pred)) := by
+      by_contra hne
+      exact hout (by rw [hrel]; exact (List.mem_erase_of_ne hne).mpr hin)
+    have hEq : ¬ ((σ.releaseInBridges c).edges = σ.edges) := by
+      intro h
+      exact hout (by rw [h]; exact hin)
+    have hob : (σ.releaseInBridgesLogged c).outbox
+        = ⟨(σ.releaseInBridges c).nextDeltaId, wAnyNode (c.type, c.pred), c.pred, true⟩
+          :: (σ.releaseInBridges c).outbox := by
+      unfold GraphState.releaseInBridgesLogged
+      rw [if_neg hEq, pushDelta_outbox]
+    refine ⟨⟨(σ.releaseInBridges c).nextDeltaId, wAnyNode (c.type, c.pred),
+      c.pred, true⟩, ?_, ?_, ?_⟩
+    · rw [hob]; exact List.mem_cons_self
+    · show σ.watermark < (σ.releaseInBridges c).nextDeltaId
+      have h1 : (σ.releaseInBridges c).nextDeltaId
+          = max (σ.releaseInBridges c).maxOutboxId (σ.releaseInBridges c).watermark + 1 := rfl
+      have h2 : (σ.releaseInBridges c).watermark = σ.watermark := releaseInBridges_watermark σ c
+      omega
+    · show (⟨(σ.releaseInBridges c).nextDeltaId, wAnyNode (c.type, c.pred),
+        c.pred, true⟩ : Delta).node = ab.2
+      rw [habeq]
+  · exact absurd (by
+      show ab ∈ (σ.releaseInBridges c).edges
+      unfold GraphState.releaseInBridges
+      rw [if_neg (by simpa using hOnly)]
+      exact hin) hout
+
+/-- …and the epilogue-level form, which is what
+    `CascadeStable.lean:2359::removeLoggedRules_edge_delta` consumes: the lost edge was
+    released by one of the two legs, and either leg's row survives to the end (the second
+    leg only pushes, `releaseInBridgesLogged_outbox_mono`) with the watermark unmoved. -/
+theorem releasePostLogged_edge_delta (σ : GraphState) (t : Tuple) :
+    ∀ ab, ab ∈ σ.edges → ab ∉ (σ.releasePostLogged t).edges →
+      ∃ d ∈ (σ.releasePostLogged t).outbox, σ.watermark < d.id ∧ d.node = ab.2 := by
+  intro ab hin hout
+  unfold GraphState.releasePostLogged at hout ⊢
+  by_cases h1 : ab ∈ (σ.releaseInBridgesLogged (subjNode t.subject)).edges
+  · obtain ⟨d, hd, hgt, hnode⟩ :=
+      releaseInBridgesLogged_edge_delta (σ.releaseInBridgesLogged (subjNode t.subject))
+        (objNode t.object t.relation) ab h1 hout
+    exact ⟨d, hd, by rwa [releaseInBridgesLogged_watermark] at hgt, hnode⟩
+  · obtain ⟨d, hd, hgt, hnode⟩ :=
+      releaseInBridgesLogged_edge_delta σ (subjNode t.subject) ab hin h1
+    exact ⟨d, releaseInBridgesLogged_outbox_mono _ (objNode t.object t.relation) d hd,
+      hgt, hnode⟩
 
 /-! ### ★ Red-to-green witnesses for the LOGGED step-3a legs (2026-09-13d)
 
@@ -1259,6 +1472,56 @@ def runCascade (S : Schema) (T : Store) (σ : GraphState) (jobs : List W3cJob) :
   then { reconcileJobsL S T σ jobs with watermark := (reconcileJobsL S T σ jobs).maxOutboxId }
   else σ
 
+/-- A cascade run either accepts (the drained logged batch) or rejects (identity).
+
+    (Lives here since `P6` step 3b, 2026-09-13g; it was `CascadeStable.lean`'s. Pure
+    relocation — name, statement and proof unchanged. `Cascade.lean` needs it and imports
+    that file's consumers, not the other way round: `reachedByW3d_schema` below is the
+    theorem `Cascade` needs and its cascade case case-splits on this.) -/
+theorem runCascade_cases (S : Schema) (T : Store) (σ : GraphState) (jobs : List W3cJob) :
+    runCascade S T σ jobs
+        = { reconcileJobsL S T σ jobs with
+            watermark := (reconcileJobsL S T σ jobs).maxOutboxId }
+      ∨ runCascade S T σ jobs = σ := by
+  unfold runCascade
+  split
+  · exact Or.inl rfl
+  · exact Or.inr rfl
+
+/-! ## Schema preservation along a chain
+
+Relocated here by `P6` step 3b (2026-09-13g) from `CascadeSettle.lean`, unchanged in
+statement and proof. `Cascade.lean` needs `σ.schema = S` itself — the `P6` R-node
+restatement has to turn a claim about `σ.schema`, which is what
+`UsStarWrite.lean::GraphState.bridgedInConcrete` reads, into one about `S` — and
+`Cascade.lean` imports `CascadeSettle`'s consumers, not the other way round. -/
+
+/-- The `writeDirect` fold keeps the baked-in schema. -/
+theorem foldl_writeDirect_schema (us : List Tuple) :
+    ∀ (σ : GraphState), (us.foldl (fun acc u => acc.writeDirect u) σ).schema = σ.schema := by
+  induction us with
+  | nil => intro σ; rfl
+  | cons u rest ih =>
+    intro σ
+    simp only [List.foldl_cons]
+    rw [ih, writeDirect_schema]
+
+/-- The diffing batch keeps the baked-in schema. -/
+theorem reconcileJobsD_schema {S : Schema} {T : Store} :
+    ∀ (jobs : List W3cJob) (σ : GraphState), (reconcileJobsD S T σ jobs).schema = σ.schema := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ; rfl
+  | cons j rest ih =>
+    intro σ
+    have hfold : reconcileJobsD S T σ (j :: rest)
+        = reconcileJobsD S T (j.applyD S T σ) rest := by
+      unfold reconcileJobsD
+      rw [List.foldl_cons]
+    rw [hfold, ih]
+    unfold W3cJob.applyD GraphState.reconcileStarsKeyD
+    rw [reconcileKeyD_schema, reconcileResidueKey_schema]
+
 /-! ## The W3d closure — interleaved logged writes and cascades -/
 
 /-- **`ReachedByW3d σ S T`** — the interleaved scheduler closure: admitted logged
@@ -1279,6 +1542,34 @@ inductive ReachedByW3d : GraphState → Schema → Store → Prop where
       (hscope : ∀ j ∈ jobs, j.key ∈ cascadeKeys S σ)
       (hprev : ReachedByW3d σ S T) :
       ReachedByW3d (runCascade S T σ jobs) S T
+
+/-- **Every W3d state carries its own schema** — the read's `isDerived` routing reads
+    the right `S`.
+
+    (Lives here since `P6` step 3b, 2026-09-13g; it was `CascadeSettle.lean`'s — pure
+    relocation, name/statement/proof unchanged, and the name is audited
+    (`formal/audited_theorems.txt`) so it had to stay exactly that. `Cascade.lean` needs it
+    and imports that file's consumers, not the other way round: the `P6` R-node
+    restatement must convert `σ.schema.isSubjectWildcardUserset …` into a claim about `S`,
+    because bridging is keyed on the STATE's schema.) -/
+theorem reachedByW3d_schema {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d σ S T) : σ.schema = S := by
+  induction h with
+  | empty S => rfl
+  | @write σp S T t hadm hprev ih =>
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).schema]
+    show ((rewriteClosureL S (rawWriteTuples S t)).foldl
+      (fun acc u => acc.writeDirect u) σp).schema = S
+    rw [foldl_writeDirect_schema]
+    exact ih
+  | @cascade σp S T jobs hjv hcover hscope hprev ih =>
+    rcases runCascade_cases S T σp jobs with hrc | hrc
+    · rw [hrc]
+      show (reconcileJobsL S T σp jobs).schema = S
+      rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).schema, reconcileJobsD_schema]
+      exact ih
+    · rw [hrc]
+      exact ih
 
 /-! ## Edge soundness and R-node terminality over the interleaved closure -/
 
