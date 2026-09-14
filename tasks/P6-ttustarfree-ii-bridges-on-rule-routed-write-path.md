@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: part (iv) SCOUTED 2026-09-14f -- the flip is a PROOF LEG (two theorems refuted); STEP 0 blocks it
+brief: step 0 ANSWERED 2026-09-14g -- residual is the KNOWN phantom-subject MODEL gap, not a fragment hole
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-14f
-updated: 2026-09-14f
+moved: 2026-09-14g
+updated: 2026-09-14g
 closed:
 ---
 
@@ -1693,3 +1693,69 @@ NEXT ACTION, single: answer step 0 -- which of (1) another `W4Fragment`/`GraphAd
 excludes the unmaterialised-subject store, (2) a query-subject scoping hypothesis on the
 headlines excludes it, or (3) neither, in which case `TtuStarFreeW` needs a conjunct and the
 four audited names DO move.
+
+### 2026-09-14g
+
+STEP 0 IS ANSWERED, and the answer is NONE OF ITS THREE OPTIONS. No Lean source changed;
+one doc correction and one re-run probe. Map: `docs/p6-part-iv-plan-2026-09-14.md`
+section `## Corrections appended 2026-09-14g` -- read it BEFORE the 2026-09-14f section,
+which it supersedes on the "unexplained" residue and on the (1)/(2)/(3) enumeration.
+
+(!) THE RESIDUAL `2` IS NOT NEW. It is the already-adjudicated PHANTOM USERSET SUBJECT
+model gap at `formal/CORRESPONDENCE.md:1162` section 7, added 2026-09-13b by P6 step 2 --
+same subject `folder:f9#viewer`, same derived relations `admin`/`gate`, same asymmetry
+(plain agrees, derived diverges), already measured NOT a Python bug and already pinned by
+`tests/test_p6_phantom_subject.py` (3 tests, sabotage `S1` recorded). The 2026-09-14f
+session re-discovered it as a new blocker without connecting it to the boundary its own
+step 2 had written down.
+
+(2) REFUTED, first-hand and cheap: `formal/headline_statements.txt:30-36` -- all six
+headline theorems carry EXACTLY two query hypotheses, `hqs` (star subject => BARE
+predicate) and `hqo` (object name != STAR). The divergent queries have subject name "f9"
+and object name "d1", so hqs is vacuous and hqo holds. Nothing scopes a query to a
+materialised subject.
+
+(1) REFUTED without paying for deciders. Only 3 of `W4Fragment`'s 10 fields are
+store-dependent and `(8)` already measured two of them true; a schema-side field cannot
+separate this store from one that agrees, because `(10)` materialises `folder:f9` and the
+SAME schema goes to 0. (!) The one live candidate, `wsBare`, was CHECKED AND IS FALSE
+before being written down: `ReconcileStars.lean:97::wildcardShapes` collects only
+restrictions whose wildcard flag is set, so `wildcardShapes Sp = [("folder", BARE)]` and
+`wsBare` HOLDS. A decider census (AGENT) found NO Bool decider for any of the seven
+schema-side fields nor for GraphAdmission `wf`/`ranked`/`storeValid`/`ttuNotLeaf` -- it is
+recorded in the doc so the next session does not re-commission it.
+
+VERIFIED the two situations are the same rather than assuming it: `Sp` and the Python
+probe's DSL schema agree relation-for-relation on all six definitions, and the Lean
+measurement's store is `To = tObj :: T0` -- `tDom` feeds only the query GRID, never the
+store (`:194-201`) -- so `folder:f9` is named by no stored tuple on either side. Re-ran
+`formal/probes/p6_phantom_subject_2026-09-13.py` on today's tree: UNANIMOUS True on all
+seven queries, phantom and control alike.
+
+EXPLAINS the asymmetry 2026-09-14f left open: CONTROL 2 `(15)` is not a counterexample --
+there the derived grant arrives through a bridge that MATERIALISES, so the Lean edge read
+finds a node. The gap needs star-TUPLESET + derived-above + phantom subject together,
+which is why the currently proved fragment is not already false.
+
+THE FOURTH OUTCOME: `TtuStarFreeW` does NOT need a conjunct, because the store is not bad
+-- it is a legitimate store the shipped system answers correctly, and a store-side
+conjunct would reject stores the Python handles fine. What is wrong is the Lean model's
+derived read. (!) THE FLIP IS STILL BLOCKED ANYWAY: widened, the fragment admits `Sp`/`To`
+and at it `checkPublic != sem` for two in-scope queries, so `graphRun_check_eq_sem` would
+be FALSE, not merely unproven. A correct Python does not rescue a theorem about the model.
+
+NEXT ACTION, single: choose between A (give `State.lean::GraphModel.check` the symbolic
+residue read -- `CORRESPONDENCE.md:1184` calls it "a project, not a step"), A-prime (the
+residue read on the star-bridge path only -- cost UNMEASURED), B (conjunct on
+`TtuStarFreeW`; moves the four audited names at `audited_theorems.txt:537-540`), or C (a
+query-scoping hypothesis on the headlines; weakens all six). This is an executive
+decision, not a measurement -- it is the `CLAUDE.md` section "Who decides" case for a
+`claude-fable-5` subagent. Do not pay the part (iv) cone until it is chosen.
+
+NAMING FIX, same session: the four routes are `A` / `A2` / `B` / `C` everywhere. The
+entry above called the narrow variant "A-prime" and the first banner draft used a prime
+glyph; `verify.sh lean` REDDENED on it -- `task.py::ASCII_FOLD` cannot render U+2032 or
+U+2260, so a banner carrying either prints `\uXXXX` escapes at the top of the
+session-start view. Renamed to `A2` in `HANDOFF.md`, `docs/p6-part-iv-plan-2026-09-14.md`
+and `docs/history/session-log.md` so the citation key is one string in all four homes.
+(!) Worth carrying: the banner is free prose but NOT free of charset -- the gate checks it.

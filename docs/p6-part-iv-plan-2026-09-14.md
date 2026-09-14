@@ -15,6 +15,119 @@ in a tracked file), **AGENT** (a subagent's report, reconciled but not re-derive
 
 ---
 
+## Corrections appended 2026-09-14g — STEP 0 IS ANSWERED, and the answer is none of its three options
+
+*supersedes:* the `2026-09-14f` correction's *"the residue … is unexplained"* and its
+enumeration of step 0 as `(1) / (2) / (3)`. The step-0 question is settled; what it settles
+to is a **fourth** outcome the enumeration did not contain.
+
+**The residual `2` is not new, and it is not about the fragment. It is the already-adjudicated
+PHANTOM USERSET SUBJECT model gap** — `formal/CORRESPONDENCE.md:1162` §7, added `2026-09-13b`
+by `P6` step 2 (READ). Same subject `folder:f9#viewer`, same derived relations `admin`/`gate`,
+same asymmetry (the plain/TTU relation answers correctly and only the derived one diverges),
+already measured **not a Python bug** and already carrying a gated pin.
+
+### (2) is REFUTED — first-hand, and cheaply
+
+READ, `formal/headline_statements.txt:30-36`. Every headline theorem
+(`backend_equivalence`, `exclusion_effective`, `no_ghost_grant`, `graphRun_check_eq_sem`,
+`graphModeAnswers_eq_sem`, `graphRunOps_check_eq_sem`) carries **exactly two** query
+hypotheses:
+
+```text
+(hqs : q.subject.name = STAR → q.subject.predicate = BARE)
+(hqo : q.object.name ≠ STAR)
+```
+
+The two divergent queries have `subject.name = "f9"` and `object.name = "d1"`, so `hqs` is
+vacuous and `hqo` holds. **No headline hypothesis scopes a query to a materialised subject**,
+and there is no third hypothesis to appeal to. Option (2) is dead as stated.
+
+### (1) is REFUTED for the one field that could have carried it
+
+REASONED then READ. Of `W4Fragment`'s 10 fields (`FullScope.lean:322`) only three are
+store-dependent — `bareStar`, `ttuStarFree`, `term` — and the probe's `(8)` already measured
+`bareStar` and `hterm` TRUE. A schema-side field cannot distinguish this store from one that
+agrees, because **the divergence is not a property of the schema**: `(10)` materialises
+`folder:f9` and the same schema goes to `0`.
+
+⚠ The one candidate that looked live was `wsBare` (`∀ sh ∈ wildcardShapes S, sh.2 = BARE`) —
+the hope being that the star through-shape registers as a non-`BARE` wildcard shape and
+already excludes the store. **Checked and FALSE, before it was written down.** READ
+`ReconcileStars.lean:97::wildcardShapes` collects `(r.1, r.2.1)` from restrictions whose
+wildcard flag `r.2.2` is set; in `Sp` the only such restriction is
+`("doc","parent") = .direct [("folder", BARE, true)]`, so `wildcardShapes Sp = [("folder", BARE)]`
+and `wsBare` **holds**. The `[folder:*#viewer]`-shaped hope is not what this schema declares —
+`isSubjectWildcardUserset "folder" "viewer"` is true at `(2)` for the star-TUPLESET reason,
+not because a wildcard *restriction* was declared.
+
+A census of Bool deciders (AGENT, `Explore`) reports **no decider at all** for any of the
+seven schema-side fields, and none for `GraphAdmission.wf` / `ranked` / `storeValid` /
+`ttuNotLeaf`. Measuring (1) exhaustively therefore means *writing* deciders. **That cost is
+now unnecessary** — the argument above kills it without them, and the census is recorded here
+so the next session does not re-commission it.
+
+### What it actually is — MEASURED, not argued
+
+`formal/probes/p6_phantom_subject_2026-09-13.py`, **re-run 2026-09-14g on today's tree**
+(PROBE, literal stdout in the file's docstring and unchanged by this run): the same schema,
+the same store and the same seven queries through `tests/parity.py::ParityEngine` (graph
+index + both `SetOps` + the independent oracle, unanimity asserted internally) come back
+**UNANIMOUS `True` on every one**, phantom and control alike.
+
+⚠ The two situations really are the same, and that was checked rather than assumed (READ):
+`Sp` and the Python probe's DSL schema agree relation-for-relation on all six definitions;
+and the Lean measurement's store is `To = tObj :: T0 = [tObj, tPar, tView]` — **`tDom` feeds
+only the query GRID, never the store** (`:194-201`) — so `folder:f9` is named by no stored
+tuple on either side, exactly as the Python probe's comment claims for itself. The Python
+store carries one extra tuple (`tSub`, on `doc:d2`) irrelevant to every `d1` query.
+
+The mechanism is already written down at `CORRESPONDENCE.md:1170-1174`: `State.lean::
+GraphModel.check` resolves a derived key **through materialised edges**, so it needs a node
+where `index_v4/wildcard.py::WildcardIndex._check_derived` needs none — Python's userset arm
+answers from the residue's `stars`/`neg`/`upos` symbolically. The plain relation agrees
+because the star bridge serves it directly; the derived relation above it does not.
+
+**This also explains the asymmetry `2026-09-14f` left open.** CONTROL 2 `(15)` — star USERSET
+grant, derived above, same phantom subject, `mismatch := 0` — is not a counterexample to the
+model gap: there the derived relation's grant arrives through a bridge that **materialises**,
+so the Lean edge read finds a node. The gap needs star-TUPLESET *plus* derived-above *plus*
+phantom subject. The phantom subject alone is not sufficient, which is why the currently
+proved fragment is not already false.
+
+### The fourth outcome, and what part (iv) now owes
+
+Not (1), not (2), and not (3) either — **`TtuStarFreeW` does not need a conjunct, because the
+store is not bad.** `Sp`/`To` is a legitimate store that the shipped system answers correctly.
+What is wrong is the *Lean model's derived read*. So a store-side conjunct would exclude
+stores the Python handles fine, which is the `CLAUDE.md` §"Who decides" failure mode pointed
+the other way: narrowing the fragment to fit a model weakness rather than fixing the thing
+that is wrong.
+
+⚠ **But the flip is still BLOCKED, and for the original reason.** `GraphAdmission` +
+widened `W4Fragment` would admit `Sp`/`To`, and at it `GraphModel.checkPublic σ q ≠ sem S T q`
+for two in-scope queries — so `graphRun_check_eq_sem` would be **false**, not merely
+unproven. That the shipped Python is correct does not rescue a Lean theorem about a Lean
+model. `CORRESPONDENCE.md:1184` already forecast the cost of the other direction: closing it
+*"would mean giving the Lean model a symbolic derived read, which is a project, not a step."*
+
+**This is an executive decision — which of three sound designs, and whether the cone is worth
+paying — and it is the case `CLAUDE.md` §"Who decides" reserves for a `claude-fable-5`
+subagent.** The candidates, with what each costs and what each gives up:
+
+| route | what it does | cost | what it gives up |
+|---|---|---|---|
+| **A** | Give `GraphModel`'s derived read the symbolic residue read Python has | **project** — `State.lean::GraphModel.check` is the subject of every headline theorem | nothing semantically; re-proves the world |
+| **A2** | Narrow A: consult the residue **only** on the star-bridge path | ? — unmeasured, possibly M/L | less model↔code drift than B/C, but a special case in the model |
+| **B** | Conjunct on `TtuStarFreeW` excluding phantom-subject stores | M, **moves the four audited names** at `audited_theorems.txt:537-540` | rejects stores the shipped system answers correctly |
+| **C** | New query-scoping hypothesis on the headlines (subject's object is stored) | M, touches `headline_statements.txt` pins | weakens all six headline theorems, including where they are currently strong |
+
+**Do not pay the part (iv) cone until this is chosen.** Steps 1-8 of `§ Ordered steps` are
+unaffected in content and still correctly ordered *after* it; step 0 is no longer a
+measurement, it is this choice.
+
+---
+
 ## Corrections appended 2026-09-14f — the PAYOFF is measured, and it re-orders the plan
 
 *supersedes:* `§ Blockers` item 3 ("UNMEASURED — the payoff") and `§ Ordered steps`' claim
