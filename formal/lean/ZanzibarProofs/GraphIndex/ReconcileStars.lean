@@ -144,11 +144,25 @@ def throughShapes (S : Schema) : List Shape :=
 
     ⚠ **Two representation divergences from Python remain, both deliberate and bounded**
     (`CORRESPONDENCE.md` §7): Python's is a `frozenset` rendered `sorted(...)` at
-    `index_v4/processor.py::DeltaProcessor.__init__`, so (a) a shape produced twice by
-    pass 2 appears twice here and once there, and (b) the orders differ. Both are inert
-    for every consumer in this development — the list is read only through `∈` / `filter`
-    / `any` — but a consumer that becomes order- or multiplicity-sensitive must fix this
-    first rather than reason around it. -/
+    `index_v4/processor.py::DeltaProcessor.__init__:237`, so (a) a shape produced twice
+    appears twice here and once there, and (b) the orders differ. Both are REACHABLE on a
+    schema the compiler admits — `ShapeRepresentationWitness` below pins one where this
+    list has five entries to Python's three, and pass 1 duplicates on its own, so the
+    `filter` above removes only CROSS-pass repeats.
+
+    ⚠ **The reason they are affordable is narrower than this docstring used to claim.** It
+    read "the list is read only through `∈` / `filter` / `any`", and a census on
+    2026-09-14i found one site that is not: `FullScope.lean::
+    sxThruPlain_gains_same_through_shape` compares two `throughShapes` lists by structural
+    `=`. That is safe for a different reason — both sides are CLOSED terms discharged by
+    `decide`, so a representation change makes it go RED, never silently wrong. The honest
+    statement is: every read of this list and of the `stars` field it feeds is
+    membership-shaped (`List.contains`, `∈`, `= []`, or a self-coherent
+    `= (wildcardShapes S).filter …` pin), the one serializer canonicalises
+    (`Cli.lean::canonJsonArr` mergeSorts and dedups), and the Lean model has no twin of
+    Python's `residue_changed` gate (`index_v4/processor.py::DeltaProcessor._reconcile`),
+    so a duplicate cannot reach a convergence test. A consumer that breaks any of those
+    four must canonicalise here rather than reason around it. -/
 def wildcardShapes (S : Schema) : List Shape :=
   declaredWildcardShapes S ++
     (throughShapes S).filter (fun sh => !(declaredWildcardShapes S).contains sh)
@@ -178,6 +192,88 @@ theorem mem_wildcardShapes_iff {S : Schema} {sh : Shape} :
   · rintro (h | h)
     · exact mem_wildcardShapes_of_mem_declared h
     · exact mem_wildcardShapes_of_mem_through h
+
+/-! ### ★ The two representation divergences from Python, MEASURED (2026-09-14i)
+
+`wildcardShapes`' docstring above records that this list may hold a shape twice and in a
+different order than Python's `sorted(frozenset(...))`. Until now that was a claim in prose,
+and prose is what rots. The witness below makes both divergences DECIDABLE FACTS at one
+schema, so a future reader cannot assume the list is a set.
+
+⚠ **The reachability half is the point.** "A duplicate can arise" would be worthless if no
+parser-admissible schema produced one: the docstring would be technically true and
+operationally empty, which is this project's house failure mode (a check that passes by the
+situation being absent). `formal/probes/p6_shape_representation_2026-09-14.py` runs the SAME
+schema through the shipped `parse_openfga_schema` / `derive_schema_info` and records what
+Python returns, so the divergence is pinned on both sides of the correspondence rather than
+asserted from this one. -/
+
+namespace ShapeRepresentationWitness
+
+/-- One schema exhibiting BOTH divergences, and the Lean form of the DSL in
+    `formal/probes/p6_shape_representation_2026-09-14.py`:
+
+    * `folder#viewer: [user, user:*]` — a declared wildcard restriction, pass 1;
+    * `doc#parent` and `doc#owner` BOTH `[folder, folder:*]` — the same declared shape
+      `(folder, BARE)` twice, so pass 1 duplicates on its own;
+    * `doc#access: viewer from parent or viewer from owner` — two TTU arms with the same
+      target over two star-carrying tuplesets, so pass 2 emits `(folder, "viewer")` twice.
+
+    Nothing here is exotic: two relations restricted to the same type, and one permission
+    reached through two parents. -/
+def Sdup : Schema :=
+  ⟨[(("folder", "viewer"), .direct [("user", BARE, false), ("user", BARE, true)]),
+    (("doc", "parent"), .direct [("folder", BARE, false), ("folder", BARE, true)]),
+    (("doc", "owner"), .direct [("folder", BARE, false), ("folder", BARE, true)]),
+    (("doc", "access"), .union (.ttu "viewer" "parent") (.ttu "viewer" "owner"))], []⟩
+
+/-- **Pass 1 duplicates.** Two relations carrying the same wildcard restriction type. -/
+theorem pass1_duplicates :
+    declaredWildcardShapes Sdup = [("user", BARE), ("folder", BARE), ("folder", BARE)] := by
+  decide
+
+/-- **Pass 2 duplicates**, and the cross-pass `filter` at `wildcardShapes` does NOT remove
+    them — it removes only shapes pass 1 already holds, preserving multiplicity within
+    pass 2. -/
+theorem pass2_duplicates :
+    throughShapes Sdup = [("folder", "viewer"), ("folder", "viewer")] := by decide
+
+/-- ★ **The whole enumeration: FIVE entries where Python returns THREE, and the first entry
+    is not the one Python sorts first.** Python's `sorted(frozenset(...))` at this schema is
+    `[('folder','...'), ('folder','viewer'), ('user','...')]` — measured, not assumed:
+    `formal/probes/p6_shape_representation_2026-09-14.py`. So the multiplicity divergence and
+    the order divergence are both live here, at a schema the compiler ADMITS. -/
+theorem wildcardShapes_diverges :
+    wildcardShapes Sdup =
+      [("user", BARE), ("folder", BARE), ("folder", BARE),
+       ("folder", "viewer"), ("folder", "viewer")] := by
+  decide
+
+/-- **CONTROL — one parent, no wildcard on `folder#viewer`.** Neither pass can emit a shape
+    twice here, and the through-shape sorts after the declared one, so the two
+    representations agree ENTRY FOR ENTRY. Without this the divergence above could be an
+    artefact of comparing a list against a set rather than of the duplication. -/
+def Sctl : Schema :=
+  ⟨[(("folder", "viewer"), .direct [("user", BARE, false)]),
+    (("doc", "parent"), .direct [("folder", BARE, false), ("folder", BARE, true)]),
+    (("doc", "access"), .ttu "viewer" "parent")], []⟩
+
+/-- The control's enumeration, pinned so the probe's CONTROL row is a kernel fact on both
+    sides rather than a hand computation on one. -/
+theorem wildcardShapes_agrees :
+    wildcardShapes Sctl = [("folder", BARE), ("folder", "viewer")] := by decide
+
+/-- **…and the divergence is INERT, because the only thing anyone asks of this list is
+    membership.** Deduplicating and sorting it changes no membership question — which is the
+    property every consumer in this development actually uses, and the reason the two
+    divergences are affordable. ⚠ The moment a consumer compares two shape lists by
+    structural equality across different schemas, or counts them, this stops being enough
+    and `wildcardShapes` must canonicalise at the source. -/
+theorem dedup_preserves_membership (sh : Shape) :
+    sh ∈ wildcardShapes Sdup ↔ sh ∈ (wildcardShapes Sdup).dedup :=
+  (List.mem_dedup).symm
+
+end ShapeRepresentationWitness
 
 /-- The star subject of a shape — the intensional `(type, '*', pred)` probe subject
     (`index_v4/processor.py::_EvalContext.leaf_stars` passes `'*'` as the subject

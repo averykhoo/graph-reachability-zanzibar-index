@@ -15,6 +15,130 @@ in a tracked file), **AGENT** (a subagent's report, reconciled but not re-derive
 
 ---
 
+## Corrections appended 2026-09-14i (seventh) — STEPS 1 AND 2 ARE DONE; `§ Blockers` 2 is answered NO; the two representation divergences are MEASURED and INERT
+
+*supersedes:* `§ The layering blocker`'s **decision line only in that it is now EXECUTED, not
+pending**; `§ Ordered steps` rows 1–2; `§ Blockers` item 2 ("OPEN, cheap, unmeasured"); and
+the (sixth) correction's *"Still not established at this line"* bullet on the dedup/order
+divergences. `§ Verdict`, `§ The repair` and steps 3–8 are UNAFFECTED.
+
+### ★ Step 1 LANDED — `TtuStarFreeW` now lives upstream, and the layering claim was re-measured first
+
+The (original) plan's layering measurement was taken before stage 1 moved four lemmas between
+modules, so it was re-taken rather than trusted. **READ, mechanical walk of the `import`
+graph this session:** `GraphIndex.UsStarWrite`'s transitive `ZanzibarProofs` cone is still
+exactly `9` modules — `Core.{Ident,Refs,Schema,Store}`, `GraphIndex.{Closure,ObjStarWrite,
+State,Write}`, `Spec.Stratify` — and contains neither `RulesBareStar` nor `RulesComplete` nor
+`BareStarCorrect`. The import is acyclic.
+
+What landed, `lake build` `RC=0`, `1089/1089`:
+
+| file | change |
+|---|---|
+| `GraphIndex/RulesBareStar.lean` | `import ZanzibarProofs.GraphIndex.UsStarWrite`; `::TtuStarFreeW` defined beside `::TtuStarFree`, **body byte-unchanged** |
+| `GraphIndex/TtuStarWide.lean` | the `def` removed, its docstring kept as a `/-! … -/` block pointing upstream |
+
+⚠ The four audited names (`ttuStarFreeWB`, `ttuStarFreeWB_iff`, `ttuStarFreeW_of_ttuStarFree`,
+`ttuStarFreeWB_of_ttuStarFreeB`) did **not** move — they stay in `TtuStarWide.lean`, so
+`audited_theorems.txt` is undisturbed, exactly as `§ The layering blocker` predicted.
+
+### ★ Step 2 ANSWERED — and it is the ONE forecast the kernel confirms
+
+`formal/probes/p6_partiv_step2_ttuleaf_2026-09-14.lean` (PROBE, `rc=0`, 17 lines, literal
+transcript in its header).
+
+**(A) `ttuLeaf_elim_nss`'s conclusion does NOT survive a premise-only widening.** At the
+in-scope widened store the leaf FIRES (line 7) and the witness list for today's conclusion is
+`0, []` (line 8) — with `ttuLeaf`'s star branch alive, every witness the leaf offers has
+`subject.name = STAR`. So **step 3 changes the statement on BOTH sides**, premise *and*
+conclusion, which is what the ⚠ under `§ The census`' Shape B forecast. Four consecutive P6
+increments had the kernel contradict a read-only forecast; this one it confirms.
+
+**(B) The repair is `ttuLeaf`'s own star branch, made explicit, and it is a scope result.**
+Disjoin today's non-star witness with a STAR witness carrying
+`(s'.type = tup.subject.type ∧ s'.predicate = tr) ∨ (instances T q …).any …`, guarded by
+`S.isSubjectWildcardUserset tup.subject.type tr`. Inhabited (line 10: `1`), falsifiable
+(line 11: `0` at CONTROL a), back-compatible (line 12: `1` at CONTROL b).
+
+⚠ **Write the guard over the RULE's target `tr`, not over `tup.subject.predicate`.** The
+witness line (10) returns is `⟨folder, *, BARE⟩` — its own predicate is `BARE`, not
+`"viewer"`. A repair phrased over the stored subject's predicate would be reading the wrong
+string and would pass here by accident.
+
+### ★ `§ Blockers` item 2 — ANSWERED, and the answer is NO
+
+`RewriteMatchDeclared` does **not** imply `term`'s `NoTtuTarget` half, so
+`ttuStarFreeW_through_untainted` KEEPS its `hterm` premise and **step 6 has no premise to
+drop**. New witness `Sdt` in the probe's §7 (line 15): `RewriteMatchDeclared` `true`,
+`noTtuTargetB Sdt "approver"` `false`, `htermB Sdt []` `false`.
+
+**The route, and why `TermNonvacuityWitness.Sund` could not settle it:** `Sund` reaches a
+`NoTtuTarget` failure by leaving the tupleset UNDECLARED, which is exactly what
+`RewriteMatchDeclared` forbids (line 16 confirms `Sund` fails it) — the hole
+`TtuStarWide.lean` flagged on 2026-09-13. `Sdt` closes it differently: `exprRefs`' `.ttu` case
+adds the target ref `(pt, tr)` only for parent types the tupleset **declares**, while `hterm`
+quantifies over **all** `dt`. So `("folder","approver")` stays untainted (the owner survives
+the taint filter, line 14) while `("group","approver")` — same relation NAME, a type the
+tupleset never mentions — is derived. ★ **The gap is the cross-TYPE quantification in
+`hterm`, and no match-key condition can close it.**
+
+⚠ SCOPE: this refutes the IMPLICATION. It does not show `Sdt` survives the rest of
+`W4Fragment` / `GraphAdmission` — seven of those fields have no `Bool` decider (AGENT census,
+2026-09-14g), so that question is not answerable at this price and is not claimed.
+
+### ★ The two representation divergences — CHECKED, and the check is mechanical
+
+This is the other item the `2026-09-14h` close left owed: *"documented but unchecked against
+any order-sensitive consumer"*.
+
+**First, a correction to the premise everyone (including this session) started from.**
+`ReconcileStars.lean::wildcardShapes` is **not** a plain append — it is
+`declaredWildcardShapes S ++ (throughShapes S).filter (not already declared)` (READ,
+`:152-154`). Cross-pass duplicates were already removed. Intra-pass ones were not.
+
+| question | answer | evidence |
+|---|---|---|
+| can a duplicate arise on an ADMISSIBLE schema? | **YES, in both passes** | `ReconcileStars.lean::ShapeRepresentationWitness.Sdup` — 5 Lean entries to Python's 3, `by decide`; `parse_openfga_schema` ADMITS it (Python probe, rc=0) |
+| do the orders differ there? | **YES**, at entry 0 | same pair of artifacts |
+| does the CONTENT differ? | **NO** — `set(lean) == set(shipped)` at both witnesses | Python probe |
+| is any consumer multiplicity-sensitive? | **NO** | SABOTAGE `S-A2`: `wildcardShapes := (declared ++ through).dedup` → full build **GREEN, 1089/1089** |
+| is any consumer order-sensitive? | **NO** | SABOTAGE `S-B2`: `wildcardShapes := (…).reverse` → full build **GREEN, 1089/1089** |
+
+Both scope arms needed the three membership lemmas re-proved (their scripts name
+`List.mem_append` directly) and the new witness pins removed; with the pins IN, `S-A` and
+`S-B` each give `decide`-level CLAIM reds naming their own propositions —
+`::wildcardShapes_diverges` on both arms, plus its control `::wildcardShapes_agrees` on the
+reverse arm. So the pins see a change nothing else in the tree can.
+
+⚠ **The docstring's stated REASON was wrong in letter, and is corrected in place.** It read
+*"the list is read only through `∈` / `filter` / `any`"*. One site is not:
+`FullScope.lean::sxThruPlain_gains_same_through_shape` compares two `throughShapes` lists by
+structural `=` — a site the 2026-09-14h session added itself. It is safe for a **different**
+reason (closed terms, `decide`, so it fails loudly, never silently), and the corrected
+docstring now names the four conditions that actually carry the inertness: membership-shaped
+reads, the canonicalising serializer `Cli.lean::canonJsonArr`, and the absence of any Lean
+twin of Python's `residue_changed` gate.
+
+⚠ **`S-A` alone could not have answered the scope question, and nearly read as if it had.**
+Its build stops *at* `ReconcileStars`, so the 1080 downstream modules are never elaborated —
+`P6` step 3a's "an attribution list means *at least* these, never *only* these". The scope
+arms exist because of that, not as belt-and-braces.
+
+⚠ A census (AGENT, 2026-09-14i) produced this table first and got the premise correction
+right; every load-bearing row was then re-verified first-hand (`ReconcileStars.lean:152-154`,
+`FullScope.lean:1173`, `CascadeStrata.lean:185-190`'s unconditional `putResidue`,
+`Cli.lean::canonJsonArr:235-243`, `processor.py:1021`'s frozenset comparison) and the two
+inertness verdicts were re-derived by the kernel rather than accepted.
+
+### Where step 3 starts
+
+`RulesBareStar.lean::ttuLeaf_elim_nss`, restated per (A)+(B) above, then its **3** Shape-B
+call sites (`::evalE_lift_bs`, the second `RulesBareStar` site, `RestrictBase.lean`). The
+tree is GREEN and COMMITTED at this line — steps 3–6 leave it red by construction, so start
+them with a clean tree.
+
+---
+
 ## Corrections appended 2026-09-14h (sixth) — stage 1 is GREEN: `lake build` completes, 1089/1089
 
 *supersedes:* the (fifth) correction's *"Steps 1–3 are REASONED"* and its *"nothing after

@@ -138,7 +138,9 @@ theorem mem_throughShapes_iff_isStarTuplesetThrough (S : Schema) (t p : String) 
       rw [List.mem_filterMap]
       exact ⟨(t, BARE, true), hc', by simp⟩
 
-/-- **`TtuStarFreeW S T`** — the widened fragment condition. A stored star-subject tuple
+/-! ### `TtuStarFreeW` — the widened fragment condition, defined UPSTREAM
+
+    **`TtuStarFreeW S T`** — the widened fragment condition. A stored star-subject tuple
     matching a TTU rewrite arm is no longer forbidden outright; it is admitted **provided
     the through-shape it produces is bridged in**, i.e. the subject shape the TTU rule
     rewrites it to — `(t.subject.type, tr)` — is a declared subject-wildcard userset
@@ -150,12 +152,15 @@ theorem mem_throughShapes_iff_isStarTuplesetThrough (S : Schema) (t p : String) 
     (`zanzibar_utils_v1.py::derive_schema_info`'s second loop). So the widened condition
     says "Python declares this shape and would build the bridge", which is the honest
     statement of what the graph covers once part (ii) composes `ensureInBridges` into the
-    rule-routed write path. -/
-def TtuStarFreeW (S : Schema) (T : Store) : Prop :=
-  ∀ t ∈ T, t.subject.name = STAR →
-    ∀ a ∈ schemaRewrites S, ∀ tr, a.kind = RuleKind.ttu tr →
-      (t.relation = a.matchRel ∧ t.object.type = a.objectType) →
-        S.isSubjectWildcardUserset t.subject.type tr = true
+    rule-routed write path.
+
+    ⚠ **THE DEFINITION MOVED UPSTREAM on 2026-09-14i** and now lives at
+    `RulesBareStar.lean::TtuStarFreeW`, beside the narrow `TtuStarFree`, body
+    byte-unchanged. Part (iv) flips `FullScope.lean::W4Fragment.ttuStarFree` to it, and
+    every elimination site is upstream of THIS module (`TtuStarWide` imports `Exec`, which
+    imports `FullScope`), so the predicate was not expressible where part (iv) needs it.
+    The docstring above is kept here because this file is where the widening is explained;
+    the decision procedure and the audited transport lemmas below are unmoved. -/
 
 /-- **THE ANSWER TO PART (iv)'s BLOCKING QUESTION.** The widened predicate is decided by
     a `Bool` function — the same shape as `Exec.lean::ttuStarFreeB`, with the outright

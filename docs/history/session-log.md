@@ -30,6 +30,78 @@ from here.
 
 ---
 
+## 2026-09-14i — `P6` stage 2: steps 1–2 done, blocker 2 answered NO, dedup/order measured inert
+
+rows: `P6` (Log `2026-09-14i`; brief updated). Nothing re-ranked — `P6` stays `NOW`.
+
+task lint: clean (13 checks, 183 task file(s) parsed), 26 warning(s)
+read: board only
+
+Execution map and every figure:
+[`docs/p6-part-iv-plan-2026-09-14.md`](../p6-part-iv-plan-2026-09-14.md) § "Corrections
+appended 2026-09-14i (seventh)". Three things landed, and the third was the item the
+`2026-09-14h` close left explicitly unchecked.
+
+**Step 1 — `TtuStarFreeW` moved UPSTREAM** to
+`GraphIndex/RulesBareStar.lean::TtuStarFreeW`, body byte-unchanged, beside the narrow
+`::TtuStarFree`; `GraphIndex/TtuStarWide.lean` keeps `ttuStarFreeWB`, its `_iff` and both
+audited transport lemmas, so `formal/audited_theorems.txt` (which pins by NAME) is
+undisturbed. The layering claim was **re-measured before being trusted** — stage 1 had
+relocated four lemmas — by walking the import graph mechanically: `GraphIndex.UsStarWrite`'s
+transitive cone is `9` modules and contains none of `RulesBareStar` / `RulesComplete` /
+`BareStarCorrect`, so the new import cannot cycle.
+
+**Step 2 — the attack ran before the work, and for once the kernel CONFIRMED the forecast.**
+`formal/probes/p6_partiv_step2_ttuleaf_2026-09-14.lean` (rc=0, 17 lines, literal transcript in
+its header): at the in-scope widened store `ttuLeaf` fires and the witness list for
+`::ttuLeaf_elim_nss`'s conclusion is `0`, so widening `hnostar` alone does not work — step 3
+restates the lemma on both sides. The repair is `Spec/Semantics.lean::ttuLeaf`'s own star
+branch made explicit, guarded by `isSubjectWildcardUserset`: inhabited, falsifiable at
+CONTROL a, back-compatible at CONTROL b. ⚠ Guard it on the RULE's target `tr`, never on
+`tup.subject.predicate` — the witness's own predicate is `BARE`, so the wrong phrasing passes
+by accident.
+
+**`§ Blockers` item 2, open since 2026-09-13, is answered NO.** `RewriteMatchDeclared` does
+not imply `term`'s `NoTtuTarget` half, so `::ttuStarFreeW_through_untainted` keeps `hterm`.
+The new witness `Sdt` has `RewriteMatchDeclared` true and `htermB` false; the gap is the
+cross-TYPE quantification in `hterm`, since `exprRefs` taints only the parent types a tupleset
+DECLARES. `TtuStarWide.lean::TermNonvacuityWitness.Sund` could never have settled it — it
+fails `RewriteMatchDeclared` itself, which that file's own ⚠ had flagged as the hole.
+
+**The two representation divergences are no longer unchecked, and the check is mechanical.**
+A census (AGENT) corrected the premise everyone had been working from — `wildcardShapes` is
+not a plain append, it already filters CROSS-pass repeats — and every load-bearing row was
+then re-verified first-hand. Intra-pass duplicates are REACHABLE in both passes on a schema
+`parse_openfga_schema` ADMITS: `GraphIndex/ReconcileStars.lean::ShapeRepresentationWitness`
+pins five Lean entries against Python's three by `decide`, and
+`formal/probes/p6_shape_representation_2026-09-14.py` (rc=0) measures the Python side of the
+same witness. **Both divergences are INERT, by kernel rather than by census**: sabotage scope
+arms `S-A2` (`dedup`) and `S-B2` (`reverse`) each rebuild all `1089` modules GREEN once the
+three membership lemmas are re-proved, so no consumer in the development is multiplicity- or
+order-sensitive. With the pins in, `S-A`/`S-B` give `decide`-level CLAIM reds.
+
+⚠ **Two instrument lessons, both recorded on the plan doc.** `S-A` alone could not have
+answered the scope question and read as though it had: its build stops *at* `ReconcileStars`,
+so the 1080 downstream modules are never elaborated — step 3a's "at least these, never only
+these", recurring. And the `wildcardShapes` docstring's stated REASON was wrong in letter —
+"read only through `∈` / `filter` / `any`" is false at
+`FullScope.lean::sxThruPlain_gains_same_through_shape`, a structural list equality the
+`2026-09-14h` session added itself. It is safe for a different reason (closed terms under
+`decide`, so it fails loudly); the docstring and `formal/CORRESPONDENCE.md` §7 now name the
+four conditions that actually carry the inertness.
+
+Also closed off the still-owed list without being re-owed: the carried worry that the `Inv`
+clauses might pin bareness of persisted `stars` rows. `State.lean::Inv.negStarCovered` is
+`res.stars.contains n.shape` — membership-shaped, read first-hand, and both scope arms confirm
+it mechanically.
+
+Still owed: **step 3 onward** (`§ Ordered steps` rows 3–8) — restate `::ttuLeaf_elim_nss` and
+repair its `3` Shape-B call sites, then the Shape-A closure-disjunct leg, the THREAD/RESTRICT
+sweep, the flip, pin regeneration and the mutation sweep. Steps 3–6 leave the tree red by
+construction, so they want a clean starting line; this entry is one.
+
+---
+
 ## 2026-09-14h — `P6`: stage 1 of `D1-split` LANDS, is GATED, and both sabotages attribute
 
 rows: `P6` (Log `2026-09-14h`; brief updated). Nothing re-ranked — `P6` stays `NOW`.
