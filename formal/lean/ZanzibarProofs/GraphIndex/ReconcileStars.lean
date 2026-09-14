@@ -87,16 +87,97 @@ wildcard probes 2–4 go live on the base). See `formal/history/PROOF_STATUS.md`
 
 namespace Zanzibar
 
-/-! ## Declared subject-wildcard shapes
+/-! ## Subject-wildcard shapes — `derive_schema_info`'s TWO passes
 
-`zanzibar_utils_v1.py::SchemaInfo.subject_wildcard_shapes`: the shapes `(type, pred)`
-declared with a wildcard restriction anywhere in the schema. The processor enumerates
+`zanzibar_utils_v1.py::derive_schema_info` builds `SchemaInfo.subject_wildcard_shapes`
+in **two** passes, and until 2026-09-14h this file modelled only the first while its
+docstring named that two-pass function as its correspondent. The processor enumerates
 its star fold over exactly this (schema-fixed) list — `self.subject_shapes`, set in
 `index_v4/processor.py::DeltaProcessor.__init__` and consumed by
-`::_EvalContext.leaf_stars`. -/
-def wildcardShapes (S : Schema) : List Shape :=
+`::_EvalContext.leaf_stars` — so the missing pass made the fold's candidate list too
+small, and `CascadeStrata.lean::GraphState.reconcileResidueKeyR`'s
+`stars := shapes.filter …` cannot mint a shape its input never held. Measured:
+at `P6`'s divergence store the shipped residue carried `stars := [("folder","viewer")]`
+and the model's carried `[]`, and a phantom userset subject answered wrongly
+(`docs/p6-part-iv-plan-2026-09-14.md`, correction "2026-09-14g (third)"). -/
+
+/-- **Pass 1 — DECLARED wildcard restrictions** (`zanzibar_utils_v1.py:990-995`):
+    the shapes `(type, pred)` carried by a `[T:*]` / `[T:*#p]` restriction anywhere in
+    the schema.
+
+    ⚠ **This is the OLD body of `wildcardShapes`, renamed, byte-for-byte.** It is kept
+    as a named definition because `FullScope.lean::W4Fragment.wsBare` is stated over it
+    and must stay extensionally identical to what it was before the second pass landed
+    — see that field's docstring. Do not inline it back into `wildcardShapes`. -/
+def declaredWildcardShapes (S : Schema) : List Shape :=
   S.defs.flatMap (fun d => (exprRestrictions d.2).filterMap
     (fun r => if r.2.2 then some (r.1, r.2.1) else none))
+
+/-- **Pass 2 — star-tupleset TTU THROUGH-shapes** (`zanzibar_utils_v1.py:1001-1009`):
+    for every TTU `p from ts` in every def of object type `dt`, if the SAME object
+    type's tupleset relation `(dt, ts)` carries a **bare** wildcard restriction `[t:*]`,
+    contribute `(t, p)`. Python's own rationale, verbatim: *"a wildcard restriction
+    [S:*] on a relation used as a TTU tupleset means the TTU rule will rewrite `S:* ts
+    o` into a tuple whose subject shape is (S, target_rel) -- that through-shape must be
+    declared or the graph rejects a schema-legal write the set engine accepts."*
+
+    This is the **list** twin of the already-modelled decision procedure
+    `UsStarWrite.lean::Schema.isStarTuplesetThrough`; the two are pinned equivalent by
+    `TtuStarWide.lean::mem_throughShapes_iff_isStarTuplesetThrough`. Like it, this is
+    deliberately **one pass, no fixpoint** — Python does not feed derived through-shapes
+    back into its loop, and a fixpoint here would be model drift, not fidelity. -/
+def throughShapes (S : Schema) : List Shape :=
+  S.defs.flatMap (fun d =>
+    (exprTtus d.2).flatMap (fun tt =>
+      match S.lookup (d.1.1, tt.2) with
+      | none => []
+      | some tse =>
+        (exprRestrictions tse).filterMap (fun r =>
+          if r.2.2 && r.2.1 == BARE then some ((r.1, tt.1) : Shape) else none)))
+
+/-- **Both passes — the fold's candidate list, and the correspondent of
+    `zanzibar_utils_v1.py::SchemaInfo.subject_wildcard_shapes`.**
+
+    The declared pass is kept as a verbatim PREFIX and the through pass contributes only
+    shapes it does not already hold, which is what makes every pre-2026-09-14h `decide`
+    over a through-shape-free schema still reduce identically.
+
+    ⚠ **Two representation divergences from Python remain, both deliberate and bounded**
+    (`CORRESPONDENCE.md` §7): Python's is a `frozenset` rendered `sorted(...)` at
+    `index_v4/processor.py::DeltaProcessor.__init__`, so (a) a shape produced twice by
+    pass 2 appears twice here and once there, and (b) the orders differ. Both are inert
+    for every consumer in this development — the list is read only through `∈` / `filter`
+    / `any` — but a consumer that becomes order- or multiplicity-sensitive must fix this
+    first rather than reason around it. -/
+def wildcardShapes (S : Schema) : List Shape :=
+  declaredWildcardShapes S ++
+    (throughShapes S).filter (fun sh => !(declaredWildcardShapes S).contains sh)
+
+/-- Pass 1 is a sub-list of the whole enumeration — the direction every pre-split
+    consumer of `wildcardShapes` needs when it is restated over `declaredWildcardShapes`. -/
+theorem mem_wildcardShapes_of_mem_declared {S : Schema} {sh : Shape}
+    (h : sh ∈ declaredWildcardShapes S) : sh ∈ wildcardShapes S :=
+  List.mem_append.mpr (Or.inl h)
+
+/-- …and so is pass 2. -/
+theorem mem_wildcardShapes_of_mem_through {S : Schema} {sh : Shape}
+    (h : sh ∈ throughShapes S) : sh ∈ wildcardShapes S := by
+  by_cases hd : sh ∈ declaredWildcardShapes S
+  · exact mem_wildcardShapes_of_mem_declared hd
+  · refine List.mem_append.mpr (Or.inr ?_)
+    exact List.mem_filter.mpr ⟨h, by simpa using fun hc => hd (by simpa using hc)⟩
+
+/-- The converse split: every candidate comes from one pass or the other. -/
+theorem mem_wildcardShapes_iff {S : Schema} {sh : Shape} :
+    sh ∈ wildcardShapes S ↔ sh ∈ declaredWildcardShapes S ∨ sh ∈ throughShapes S := by
+  constructor
+  · intro h
+    rcases List.mem_append.mp h with h | h
+    · exact Or.inl h
+    · exact Or.inr (List.mem_filter.mp h).1
+  · rintro (h | h)
+    · exact mem_wildcardShapes_of_mem_declared h
+    · exact mem_wildcardShapes_of_mem_through h
 
 /-- The star subject of a shape — the intensional `(type, '*', pred)` probe subject
     (`index_v4/processor.py::_EvalContext.leaf_stars` passes `'*'` as the subject

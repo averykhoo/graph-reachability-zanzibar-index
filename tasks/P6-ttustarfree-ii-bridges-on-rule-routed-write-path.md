@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: D1-split DECIDED + stage-0 kill-check PASSES 2026-09-14g; next is stage 1 (the split itself)
+brief: stage 1 of D1-split LANDED + gated + sabotage-verified 2026-09-14h; next is stage 2 (widen ttuStarFree)
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-14g
-updated: 2026-09-14g
+moved: 2026-09-14h
+updated: 2026-09-14h
 closed:
 ---
 
@@ -1984,3 +1984,23 @@ NEXT ACTION, single: STAGE 1 -- the split (`declaredWildcardShapes` + `throughSh
 Tier-1 coverage-false lemma, the bridge-site through-shape cases, restate
 `sxThruDerived_wsBare_holds_but_usWild_fails` over `declaredWildcardShapes`, RED-first pin
 regeneration. It is a commit point and lands the accuracy fix unconditionally.
+
+### 2026-09-14h
+
+STAGE 1 OF `D1-split` IS LANDED, GATED AND SABOTAGE-VERIFIED. Read `docs/p6-part-iv-plan-2026-09-14.md` sec "Corrections appended 2026-09-14h (sixth)" FIRST -- it supersedes the (fifth) on two points and the (fourth) on which part of stage 1 is the work. All ten gate phases PASSED on this tree (`lean` holes=0 audits=617 pinned=617; conf 5/5; tests 4/4); `gate_status.py` says COVERED.
+
+**WHAT LANDED.** `ReconcileStars.lean::declaredWildcardShapes` (pass 1, the old `wildcardShapes` body verbatim) + `::throughShapes` (Python's pass 2) + `::wildcardShapes = declared ++ new-through`, so the model finally enumerates what `zanzibar_utils_v1.py::derive_schema_info` enumerates. `FullScope.lean::W4Fragment.wsBare` re-pointed at pass 1, keeping the fragment extensionally identical.
+
+**THE (fourth) CORRECTION WAS WRONG ABOUT THE COST, AND THE BUILD SAID SO.** The 235-reference cone was almost entirely inert -- the whole tree reached `FullScope` with FOUR structural breaks, every one a proof that stepped through the old body with `List.mem_flatMap`. The real work was that **74 bareness carries and ~19 membership conclusions were stated over the FULL list**, so re-pointing `wsBare` stranded all of them.
+
+**THE ROUTE, AND WHY IT COST NOTHING.** Every "no ghost star coverage" linchpin already ENDED at a literal wildcard restriction, i.e. already proved pass-1 membership; the old conclusion was throwing that away. Tightening the 19 conclusions to `declaredWildcardShapes` was free at every site and let the 74 carries move with it. ★ It also hands back, as a COROLLARY, the "Tier-1 coverage-false" lemma the (fourth) correction listed as a separate REASONED obligation: contrapose `coveredFn_declared` and a through-shape that is not separately declared is never covered on this fragment.
+
+**FOUR LEMMAS RELOCATED UP THE IMPORT CHAIN** (statements/proofs unchanged): `graphRec_star_declared` CascadeStrataResettle -> CascadeStable; `checkFnR_star_declared{,_d,_d_filt}` CascadeStrataEnum -> CascadeStrataSettle. `audited_theorems.txt` pins by NAME not path, so that pin is undisturbed. (!) `docs/history/session-log.md:2810` now cites a stale path and is deliberately NOT edited -- frozen history.
+
+**SABOTAGE, BOTH ARMS RUN, VERBATIM OUTPUT ON THE PLAN DOC.** `S1` (`throughShapes := []`, i.e. the exact pre-fix state) -> FOUR `decide`-level CLAIM reds naming their own propositions, and ★ NOTHING ELSE in the 1080-module closure moved. That is the finding twice over: the new pins are the SOLE guard against silent regression, AND it independently confirms mechanically that stage 1 is inert on today's fragment. `S1` also caught an INERT arm in my own control -- `throughShapes SxThruPlain = throughShapes SxThruDerived` survives, `[] = []` -- recorded so it is not counted as evidence. `S2` (drop the `BARE` gate) left `FullScope` GREEN (the control) and reddened only the correspondence lemma, but as a PROOF-SCRIPT red, which by step 3a is not a pin; `WideWitness.SwNB` + `::nonBareTupleset_declines_through_shape` were added and `S2b` now gives a CLAIM red.
+
+**THE DURABLE HALF IS NOT THE ENUMERATION.** It was one line, and it stayed wrong for a month because Python's second loop had TWO independent Lean transcriptions in modules that cannot import each other. `TtuStarWide.lean::mem_throughShapes_iff_isStarTuplesetThrough` now pins them equal.
+
+**MEASURED AGAINST THE SHIPPED PYTHON, not argued in Lean** -- `formal/probes/p6_stage1_python_shapes_2026-09-14.py` (rc=0): `derive_schema_info` returns `[('folder','...'), ('folder','viewer')]` at BOTH witness schemas, and `parse_openfga_schema` ADMITS `SxThruPlain`. So a schema the index compiles and RUNS carries a non-BARE wildcard shape -- that is what makes re-pointing `wsBare` mandatory rather than tidy.
+
+-> NEXT: **stage 2, part (iv) proper** -- widen `W4Fragment.ttuStarFree` to `TtuStarFreeW`, now unblocked. NOT ESTABLISHED: the dedup/order divergences from Python's `sorted(frozenset(...))` remain, deliberately, recorded on `::wildcardShapes` and `CORRESPONDENCE.md` sec 7; no order- or multiplicity-sensitive consumer has been checked against them.

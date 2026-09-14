@@ -42,10 +42,21 @@ a tuple of subject shape `(T,P)`. See `Schema.isStarTuplesetThrough` below.
 this header said "the first loop" and meant it: the through-shape was declared out of
 scope, and that declaration WAS the hole that made `graph_correct` machine-checked FALSE
 without `W4Fragment.ttuStarFree`. Note the consequence for the W4 fragment specifically —
-`W4Fragment.wsBare` forces every shape in `wildcardShapes S` to be `BARE`, and
-`wildcardShapes` sweeps only LITERAL restrictions, so on W4 the first disjunct is
-identically `false` and the in-bridge machinery was dead code. The through-shape disjunct
-is *not* filtered by `wsBare`, and that asymmetry is the whole content of part (i).
+`W4Fragment.wsBare` forces every shape in `ReconcileStars.lean::declaredWildcardShapes S`
+to be `BARE`, and that enumeration sweeps only LITERAL restrictions, so on W4 the first
+disjunct is identically `false` and the in-bridge machinery was dead code. The through-shape
+disjunct is *not* filtered by `wsBare`, and that asymmetry is the whole content of part (i).
+
+⚠ **CORRECTED 2026-09-14h — this paragraph used to say `wildcardShapes` where it now says
+`declaredWildcardShapes`, and that was not a naming quibble.** `::wildcardShapes` was the
+list the cascade's star fold enumerates AND was claimed to model the two-pass
+`zanzibar_utils_v1.py::derive_schema_info`, while implementing only its first pass — the
+very loop this file's `Schema.isStarTuplesetThrough` models. Two transcriptions of one
+Python loop, disagreeing. `::wildcardShapes` now covers both passes and `wsBare` was
+re-pointed at pass 1, so the sentence above is true again as written; the pair is pinned
+equal by `TtuStarWide.lean::mem_throughShapes_iff_isStarTuplesetThrough`. Do not restore
+the old wording — under the corrected enumeration it is FALSE
+(`FullScope.lean::sxThruDerived_wsBare_over_full_list_fails`).
 
 ## The model (`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted` and
 `::WildcardIndex._ensure_bridges`)

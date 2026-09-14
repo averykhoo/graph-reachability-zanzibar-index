@@ -56,6 +56,88 @@ namespace Zanzibar
 
 /-! ## The widened predicate -/
 
+/-! ## The two models of `derive_schema_info`'s second pass, pinned equal
+
+Python's second pass exists once; this development grew **two** models of it, four weeks
+apart and in modules that cannot see each other:
+
+* `UsStarWrite.lean::Schema.isStarTuplesetThrough` (2026-08-14, part (i)) — a `Bool`
+  DECISION PROCEDURE on one shape, used by `::Schema.isSubjectWildcardUserset` and hence
+  by `TtuStarFreeW` above;
+* `ReconcileStars.lean::throughShapes` (2026-09-14h) — the ENUMERATION, needed because the
+  cascade's star fold is `shapes.filter …` and a filter cannot mint a shape its input
+  never held.
+
+Two independent transcriptions of one Python loop is exactly how a model drifts from the
+code it claims to describe — which is the defect this whole correction repairs. The
+theorem below makes the redundancy **mechanical instead of hopeful**: break either
+transcription and it goes red, so the pair cannot silently disagree. -/
+
+/-- **The enumeration and the decision procedure agree, pointwise, at every schema.**
+
+    ⚠ The `p ≠ BARE` side condition is NOT a weakening — it is where the two models
+    legitimately differ, and the difference is Python's. `throughShapes` mirrors
+    `derive_schema_info`'s loop, which adds `(r.type, ttu.target_rel)` to
+    `subject_wildcard_shapes` with no predicate filter; `isStarTuplesetThrough` is consumed
+    only under `isSubjectWildcardUserset`'s outer `p != BARE`
+    (`::SchemaInfo.bridged_in_shapes`'s final `s[1] != '...'`). So the shape sets coincide
+    off `BARE`, and on `BARE` only `throughShapes` speaks — faithfully. -/
+theorem mem_throughShapes_iff_isStarTuplesetThrough (S : Schema) (t p : String) :
+    (t, p) ∈ throughShapes S ↔ S.isStarTuplesetThrough t p = true := by
+  constructor
+  · intro h
+    rw [throughShapes, List.mem_flatMap] at h
+    obtain ⟨d, hd, h⟩ := h
+    rw [List.mem_flatMap] at h
+    obtain ⟨tt, htt, h⟩ := h
+    rw [Schema.isStarTuplesetThrough, List.any_eq_true]
+    refine ⟨d, hd, ?_⟩
+    rw [List.any_eq_true]
+    refine ⟨tt, htt, ?_⟩
+    cases hlk : S.lookup (d.1.1, tt.2) with
+    | none => rw [hlk] at h; simp at h
+    | some tse =>
+      rw [hlk] at h
+      rw [List.mem_filterMap] at h
+      obtain ⟨r, hr, hs⟩ := h
+      split at hs
+      · rename_i hc
+        rw [Bool.and_eq_true, beq_iff_eq] at hc
+        have heq : (r.1, tt.1) = (t, p) := Option.some.inj hs
+        have hrt : r.1 = t := congrArg Prod.fst heq
+        have hpt : tt.1 = p := congrArg Prod.snd heq
+        subst hrt
+        subst hpt
+        have hrshape : r = (r.1, BARE, true) := by
+          obtain ⟨a, b, c⟩ := r
+          simp only at hc ⊢
+          rw [hc.1, hc.2]
+        simp only [Bool.and_eq_true, beq_iff_eq, beq_self_eq_true, true_and]
+        rw [List.contains_eq_mem, decide_eq_true_eq]
+        exact hrshape ▸ hr
+      · exact absurd hs (by simp)
+  · intro h
+    rw [Schema.isStarTuplesetThrough, List.any_eq_true] at h
+    obtain ⟨d, hd, h⟩ := h
+    rw [List.any_eq_true] at h
+    obtain ⟨tt, htt, h⟩ := h
+    rw [Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨hp, hc⟩ := h
+    subst hp
+    rw [throughShapes, List.mem_flatMap]
+    refine ⟨d, hd, ?_⟩
+    rw [List.mem_flatMap]
+    refine ⟨tt, htt, ?_⟩
+    revert hc
+    cases hlk : S.lookup (d.1.1, tt.2) with
+    | none => intro hc; simp at hc
+    | some tse =>
+      intro hc
+      have hc' : (exprRestrictions tse).contains (t, BARE, true) = true := hc
+      rw [List.contains_eq_mem, decide_eq_true_eq] at hc'
+      rw [List.mem_filterMap]
+      exact ⟨(t, BARE, true), hc', by simp⟩
+
 /-- **`TtuStarFreeW S T`** — the widened fragment condition. A stored star-subject tuple
     matching a TTU rewrite arm is no longer forbidden outright; it is admitted **provided
     the through-shape it produces is bridged in**, i.e. the subject shape the TTU rule
@@ -265,6 +347,44 @@ theorem control_no_through_shape : SwTn.isStarTuplesetThrough "folder" "viewer" 
     star tupleset tuple is STILL rejected — the exemption is conditional on Python having
     declared the bridge, which is what makes the widened fragment honest. -/
 theorem unbridged_still_rejected : ttuStarFreeWB SwTn TwT = false := by decide
+
+/-! ### The witness that makes the correspondence above a PIN rather than a coupling
+
+`mem_throughShapes_iff_isStarTuplesetThrough` is a `Prop`, so a mutation to `throughShapes`
+reddens it as a *proof-script* failure — and `P6` step 3a's rule is that a red on a proof is
+not a pin; you have to ask which CLAIM went red. The schema below makes the claim decidable
+at the one place the two transcriptions could plausibly be made to disagree: the `BARE`
+filter on the tupleset's restriction.
+
+Sabotage record (2026-09-14h, `S2`): dropping `r.2.1 == BARE` from `throughShapes`' filter
+leaves every other schema in the tree unchanged — `FullScope` builds GREEN — and was
+therefore visible ONLY as a tactic failure until this witness existed. -/
+
+/-- Tupleset `doc#parent` carries a wildcard **USERSET** restriction `[folder:*#viewer]`,
+    not a bare `[folder:*]`. Python's second loop is gated on `r.predicate == '...'`
+    (`zanzibar_utils_v1.py:1008`), so it contributes NOTHING here — and neither transcription
+    may. -/
+def SwNB : Schema :=
+  ⟨[(("folder", "viewer"), .direct [("user", BARE, false)]),
+    (("doc", "parent"), .direct [("folder", "viewer", true)]),
+    (("doc", "access"), .ttu "viewer" "parent")], []⟩
+
+/-- **Both transcriptions decline the non-bare tupleset restriction, decidably.** `(1)` is
+    the enumeration and `(2)` the decision procedure; they agree because Python agrees with
+    both. Weaken either one's `BARE` gate and `(1)` or `(2)` goes red *as a claim*.
+
+    `(3)` is the NON-VACUITY control, and it is doing real work: without it the pin would
+    also pass on a schema with no TTU, no wildcard, or no tupleset at all — i.e. it would be
+    satisfied by the absence of the situation rather than by the correct handling of it. -/
+theorem nonBareTupleset_declines_through_shape :
+    throughShapes SwNB = [] ∧
+    SwNB.isStarTuplesetThrough "folder" "viewer" = false ∧
+    -- (3) NON-VACUITY: the TTU, the tupleset lookup and the WILDCARD flag are all present;
+    --     only the restriction's predicate is non-bare.
+    (exprTtus (.ttu "viewer" "parent")) = [("viewer", "parent")] ∧
+    SwNB.lookup ("doc", "parent") = some (.direct [("folder", "viewer", true)]) := by
+  refine ⟨by decide, by decide, by decide, by decide⟩
+
 
 /-- The remove gate inherits the strictness: the widened gate's `ttuStarFree` conjunct
     passes at this store where today's fails. Stated on the deciders rather than on the

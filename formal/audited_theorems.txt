@@ -89,7 +89,9 @@ W4Witness.fragment
 W4Witness.sxThruDerived_not_admitted
 W4Witness.sxThruDerived_other_admission_fields_hold
 W4Witness.sxThruDerived_wsBare_holds_but_usWild_fails
+W4Witness.sxThruDerived_wsBare_over_full_list_fails
 W4Witness.sxThruPlain_admitted
+W4Witness.sxThruPlain_gains_same_through_shape
 W4Witness.sxThruPlain_usWild
 W4Witness.sxThru_literal_disjunct_is_false
 W4Witness.sxThru_shape_present_in_both
@@ -123,9 +125,11 @@ W4WitnessDirect.within_scope
 W4WitnessUnion.accepts
 W4WitnessUnion.fragment
 W4WitnessUnion.within_scope
+WideWitness.SwNB
 WideWitness.control_no_through_shape
 WideWitness.gate_conjunct_widens
 WideWitness.narrow_rejects
+WideWitness.nonBareTupleset_declines_through_shape
 WideWitness.through_shape_declared
 WideWitness.ttu_arm_present
 WideWitness.unbridged_still_rejected
@@ -186,8 +190,13 @@ completeKey_cascade_untargeted
 completeKey_jobsLR_untargeted
 completeKey_writeLeg
 computedRefs_ne_self
+coveredFn_bare_shadow
+coveredFn_bare_w3c
 coveredFn_declared
 coveredFn_declared_d
+coveredFn_declared_shadow
+coveredFn_declared_w3c
+declaredWildcardShapes
 directLeaf_elim_bs
 directLeaf_elim_us
 directLeaf_grant_usStar
@@ -293,6 +302,10 @@ lookup_of_mem
 mem_affectedKeys
 mem_enumJob2D_cands
 mem_rawWriteRels_derived
+mem_throughShapes_iff_isStarTuplesetThrough
+mem_wildcardShapes_iff
+mem_wildcardShapes_of_mem_declared
+mem_wildcardShapes_of_mem_through
 mog_elim_us
 mog_intro_star
 noRuleOutputs_of_derived
@@ -546,6 +559,7 @@ structInv_writeRules
 structInv_writeUsStar
 structInv_writeWild
 taintedKeys_untainted
+throughShapes
 trail_compress
 ttuLeaf_elim
 ttuStarFreeB_iff
@@ -599,6 +613,7 @@ wildReachedAdmitted_plainNodes
 wildReached_edge_source_ne_wAny
 wildReached_grant_or_bridge
 wildReached_structInv
+wildcardShapes
 wildcard_scoping
 writeDirectRaw_untainted
 writeDirect_edges

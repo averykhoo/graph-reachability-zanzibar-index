@@ -527,7 +527,7 @@ theorem reachedByW3d2E_toC_d {σ : GraphState} {S : Schema} {T : Store}
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false) →
-    (∀ sh ∈ wildcardShapes S, sh.2 = BARE) →
+    (∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE) →
     StoreValidRulesD S T → BareStarStore T → TtuStarFree S T →
     (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
     ReachedByW3d2C σ S T := by
@@ -693,7 +693,7 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false) →
-    (∀ sh ∈ wildcardShapes S, sh.2 = BARE) →
+    (∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE) →
     StoreValidRules S T → BareStarStore T → TtuStarFree S T →
     (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
     ReachedByW3d2C σ S T := by
@@ -743,7 +743,7 @@ theorem graph_correct_w3d2E_d {S : Schema} {T : Store} {σ : GraphState} (q : Qu
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (hNoUD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       exprDirects e = [])
     (h : ReachedByW3d2E σ S T) (hq : cascadeKeys S σ = [])
@@ -783,7 +783,7 @@ theorem graph_correct_w3d2E {S : Schema} {T : Store} {σ : GraphState} (q : Quer
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3d2E σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)

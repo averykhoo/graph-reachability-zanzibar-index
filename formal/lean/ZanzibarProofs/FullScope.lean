@@ -303,6 +303,18 @@ theorem GraphAdmission.noBridgedDerived {S : Schema} {T : Store} (hA : GraphAdmi
       `Direct` arm, plus the derived-through-shape form in
       `::_reject_object_wildcard_scope`); over untainted ones they are admitted
       (W1c covered their tuples on the pure-direct fragment only).
+      ⚠ **2026-09-14h — this field is stated over `declaredWildcardShapes`, which is
+      PASS 1 ONLY, and that is deliberate.** When
+      `GraphIndex/ReconcileStars.lean::wildcardShapes` was corrected to model both of
+      `zanzibar_utils_v1.py::derive_schema_info`'s passes, stating `wsBare` over the
+      combined list would have SHRUNK the fragment: a star-tupleset TTU through-shape
+      has a non-`BARE` predicate, so `wsBare` over the full list is FALSE at every
+      schema part (iv) exists to admit — machine-checked at `W4Witness.SxThruDerived`
+      by `::sxThruDerived_wsBare_over_full_list_fails`, which is that shrinkage made
+      into a red-on-regression pin. Pointing the field at pass 1 keeps it
+      **extensionally identical to its pre-correction self at every schema**. The
+      obligations the full list would have carried are discharged where they arise,
+      not by narrowing the fragment. Do not "tidy" this back to `wildcardShapes`.
     * `bareStar` — stored star subjects are bare and objects concrete: no
       object-wildcard (`w_all`) tuples beyond W1b, no userset-star tuples beyond
       W1c, on this chain.
@@ -335,7 +347,7 @@ structure W4Fragment (S : Schema) (T : Store) : Prop where
     ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       ∀ e', S.lookup (dt, r') = some e' →
         ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false
-  wsBare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE
+  wsBare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE
   bareStar : BareStarStore T
   ttuStarFree : TtuStarFree S T
   term : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R
@@ -841,7 +853,7 @@ theorem w4Fragment_of_computedOnly {S : Schema} {T : Store}
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
-    (hWS : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWS : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR T R) : W4Fragment S T where
@@ -865,7 +877,7 @@ theorem w4Fragment_of_computedOnly {S : Schema} {T : Store}
     fields — every derived-scoped carry is vacuous (`isDerived` is constantly
     `false`). -/
 theorem w4Fragment_of_untainted {S : Schema} {T : Store} (hUT : UntaintedSchema S)
-    (hWS : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWS : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (hBS : BareStarStore T) (hTS : TtuStarFree S T) : W4Fragment S T :=
   w4Fragment_of_computedOnly
     (fun dt R _ _ hder => absurd hder (by simp [isDerived_untainted hUT]))
@@ -1070,10 +1082,12 @@ theorem sxUsWild_other_admission_fields_hold :
 ★ **The block above is not enough, and saying why is the point of this one.** It shows
 `usWild` is independent of the other *admission* fields. But the headline theorems take
 `GraphAdmission ∧ W4Fragment`, and `W4Fragment.wsBare` forces every shape in
-`wildcardShapes S` to be `BARE` — which makes disjunct (a) of
+`declaredWildcardShapes S` to be `BARE` — which makes disjunct (a) of
 `Schema.isSubjectWildcardUserset` **identically false on the whole W4 fragment**
-(`UsStarWrite.lean`'s header records this: `wildcardShapes` sweeps only LITERAL
-restrictions, so the in-bridge machinery was dead code there). `SxUsWild` carries a
+(`UsStarWrite.lean`'s header records this: that enumeration sweeps only LITERAL
+restrictions, so the in-bridge machinery was dead code there). ⚠ Since 2026-09-14h the
+citation must be to `declaredWildcardShapes`, not to `wildcardShapes` — the latter now
+covers BOTH of `derive_schema_info`'s passes and the claim is false of it. `SxUsWild` carries a
 non-bare wildcard restriction, so `wsBare` is FALSE at it. On the fragment alone, the
 pin above therefore leaves `usWild` open to being dismissed as already-implied — and a
 field that claims nothing where the headlines stand would be exactly the tautology the
@@ -1109,11 +1123,55 @@ def SxThruPlain : Schema :=
 /-- **THE SHARP CLAIM.** `wsBare` HOLDS at `SxThruDerived` — every wildcard restriction
     there is bare — and `usWild` FAILS anyway. So `usWild` is not a consequence of
     `W4Fragment.wsBare`, and the field carries content exactly where the headline
-    theorems stand. -/
+    theorems stand.
+
+    ⚠ **RESTATED 2026-09-14h, same name, same claim, over `declaredWildcardShapes`.**
+    The first conjunct is `W4Fragment.wsBare` spelled out, and that field now reads pass 1
+    (`GraphIndex/ReconcileStars.lean::declaredWildcardShapes`) rather than the corrected
+    two-pass `::wildcardShapes` — see the field's own docstring for why. The claim is
+    UNCHANGED: `declaredWildcardShapes` is the old `wildcardShapes` body verbatim, so this
+    theorem states today exactly what it stated before the correction. What would have
+    happened WITHOUT the re-point is pinned separately and adversarially by
+    `sxThruDerived_wsBare_over_full_list_fails` below. -/
 theorem sxThruDerived_wsBare_holds_but_usWild_fails :
-    (∀ sh ∈ wildcardShapes SxThruDerived, sh.2 = BARE) ∧
+    (∀ sh ∈ declaredWildcardShapes SxThruDerived, sh.2 = BARE) ∧
       ¬ (∀ k ∈ taintedKeys SxThruDerived,
           SxThruDerived.isSubjectWildcardUserset k.1 k.2 = false) := by
+  refine ⟨by decide, by decide⟩
+
+/-- **★ THE SPLIT'S OWN PIN — why `W4Fragment.wsBare` may not be restated over the
+    corrected `wildcardShapes`.** The correction of 2026-09-14h taught `wildcardShapes`
+    `derive_schema_info`'s SECOND pass, and at this schema that pass contributes
+    `("folder", "viewer")` — predicate `"viewer"`, not `BARE`. So over the FULL list the
+    `wsBare` conjunct above is **FALSE**, and stating the field that way would have made
+    `W4Fragment` reject `SxThruDerived` — i.e. silently shrunk the scope of every headline
+    theorem, at exactly the schemas `P6` part (iv) exists to admit.
+
+    Both halves are asserted positively rather than left as a comment, so this is
+    **red-on-regression in two independent directions**: collapse `wildcardShapes` back to
+    one pass and `(1)` goes red; restate `wsBare` over `wildcardShapes` and `(2)` is the
+    standing proof that it cannot be discharged here.
+
+    `(3)` is the ATTRIBUTION control — it is the through-shape, not some other newly
+    enumerated shape, that carries the flip. -/
+theorem sxThruDerived_wsBare_over_full_list_fails :
+    -- (1) the corrected enumeration really does mint the through-shape here
+    ("folder", "viewer") ∈ wildcardShapes SxThruDerived ∧
+    -- (2) …and therefore `wsBare` over the FULL list is false at this schema
+    ¬ (∀ sh ∈ wildcardShapes SxThruDerived, sh.2 = BARE) ∧
+    -- (3) ATTRIBUTION: pass 1 alone does NOT hold it; pass 2 is what added it
+    ("folder", "viewer") ∉ declaredWildcardShapes SxThruDerived ∧
+      ("folder", "viewer") ∈ throughShapes SxThruDerived := by
+  refine ⟨by decide, by decide, by decide, by decide⟩
+
+/-- **THE ONE-AXIS CONTROL for the pin above.** `SxThruPlain` differs from `SxThruDerived`
+    on a single axis — the boolean operator on `folder#viewer` — and pass 2 gains the SAME
+    shape there. So the flip in `sxThruDerived_wsBare_over_full_list_fails` is attributable
+    to the star-tupleset TTU through-shape, which both schemas have, and not to the taint.
+    Without this the pin could be read as a fact about derived relations. -/
+theorem sxThruPlain_gains_same_through_shape :
+    throughShapes SxThruPlain = throughShapes SxThruDerived ∧
+      ("folder", "viewer") ∈ throughShapes SxThruPlain := by
   refine ⟨by decide, by decide⟩
 
 /-- **ATTRIBUTION.** Dropping `but not banned` re-admits the schema, so the failure above
@@ -1794,7 +1852,7 @@ theorem fragment :
       ∀ r' ∈ computedRefs e, isDerived Sd (dt, r') = true →
         ∀ e', Sd.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived Sd (dt, r'') = false) ∧
-    (∀ sh ∈ wildcardShapes Sd, sh.2 = BARE) ∧
+    (∀ sh ∈ declaredWildcardShapes Sd, sh.2 = BARE) ∧
     (∀ dt R e, Sd.lookup (dt, R) = some e → isDerived Sd (dt, R) = true →
       exprDirects e = []) ∧
     BareStarStore Td ∧ TtuStarFree Sd Td ∧

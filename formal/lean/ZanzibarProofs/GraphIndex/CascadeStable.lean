@@ -3856,6 +3856,128 @@ theorem checkFn_eq_sem_w3d {S : Schema} {T : Store} {σ σ0 : GraphState}
   exact checkFn_eq_sem_bs hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat hterm
     (ReachedByW3aAdmitted.base h0) hlk hco hleafUnt hs hon
 
+/-- **The linchpin through an untainted SHADOW (2026-09-14h)** — the W3d/W3d-2 counterpart
+    of `ReconcileStarsComplete.lean::coveredFn_declared_w3c`, and needed for the same
+    reason: since the split, membership in a residue row's candidate list no longer implies
+    the shape is BARE (the list is Python's two-pass one), so every consumer that used to
+    read bareness off row membership must go via COVERAGE instead — and on these legs the
+    coverage is held at a shadowed state, not at the admitted base.
+
+    ⚠ **Subject-generic on purpose, and that is what makes it usable.** It takes no
+    bareness hypothesis about `sh`, so it applies to a candidate whose predicate is not
+    `BARE` — exactly the case the correction introduced. Its conclusion then supplies the
+    bareness (through `W4Fragment.wsBare`) rather than presupposing it, which is why it
+    breaks the circularity the read bridge alone cannot: `checkFn_eq_sem_w3d` needs
+    `s.name = STAR → s.predicate = BARE` before it will speak.
+
+    The transport is the same first step as `checkFn_eq_sem_w3d`'s
+    (`checkFn_agree_of_graphRec_notLeafNode` + `shadow_graphRec_agree`), stopping at `σ0`
+    instead of continuing to `sem`. -/
+theorem coveredFn_declared_shadow {S : Schema} {T : Store} {σ σ0 : GraphState}
+    (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRules S T) (hTS : TtuStarFree S T)
+    (hcr : ComputedRefsNotLeaf S)
+    (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    {sh : Shape} (hcov : σ.coveredFn T dt on R e sh = true) :
+    sh ∈ declaredWildcardShapes S := by
+  have hstep : σ.checkFn T (starSubj sh) dt on R e
+      = σ0.checkFn T (starSubj sh) dt on R e :=
+    checkFn_agree_of_graphRec_notLeafNode T (starSubj sh) dt on R e hco hcr hlk hleafUnt
+      (fun s' r' hnl hr' => shadow_graphRec_agree hsh s' on hnl hr')
+  refine coveredFn_declared hTT hSV hTS h0 hco (dt := dt) (on := on) (R := R) ?_
+  show σ0.checkFn T (starSubj sh) dt on R e = true
+  rw [← hstep]
+  exact hcov
+
+/-- Bareness of a covered shape through a shadow — the composition consumers want, mirroring
+    `ReconcileStarsComplete.lean::coveredFn_bare_w3c`. -/
+theorem coveredFn_bare_shadow {S : Schema} {T : Store} {σ σ0 : GraphState}
+    (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRules S T) (hTS : TtuStarFree S T)
+    (hcr : ComputedRefsNotLeaf S)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
+    (h0 : ReachedByRulesAdmitted σ0 S T) (hsh : UntaintedShadow S σ σ0)
+    {dt on R : String} {e : Expr}
+    (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    {sh : Shape} (hcov : σ.coveredFn T dt on R e sh = true) : sh.2 = BARE :=
+  hWSbare sh (coveredFn_declared_shadow hTT hSV hTS hcr h0 hsh hlk hco hleafUnt hcov)
+
+/-! ## No ghost star coverage at any stratum
+
+`coveredFn_declared` (the W3c linchpin) converts a TRUE guard at the admitted base
+into declaredness, but the UNROUTED guard at the base reads a stratum-2 def's
+derived leaves as dead probes — so it cannot carry the stratum-2 claim. The
+replacement: the drained-state ROUTED guard equals `sem`, and a true routed guard
+has a true leaf; an UNTAINTED leaf transfers to the shadow base, where the star
+subject's first out-edge is a materialised closure tuple whose seed matched a
+wildcard-flagged restriction (the factored `graphRec_star_declared`, steps 2–7 of
+`coveredFn_declared`); a DERIVED leaf is the settled operand's `stars` row read,
+whose members are declared by `SettledKey`. -/
+
+/-- A star subject with a TRUE untainted probe at an admitted rule-routed base has a
+    declared subject-wildcard shape (steps 2–7 of `coveredFn_declared`, factored so
+    the leaf can come from the ROUTED guard). -/
+theorem graphRec_star_declared {S : Schema} {T : Store} {σ0 : GraphState}
+    (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRules S T) (hTS : TtuStarFree S T)
+    (h0 : ReachedByRulesAdmitted σ0 S T)
+    {sh : Shape} {dt' on' r' : String}
+    (hleaf : GraphModel.graphRec σ0 (starSubj sh) dt' on' r' = true) :
+    sh ∈ declaredWildcardShapes S := by
+  -- the star subject's probes leave from its own node (probes 2/4 dead: name = STAR)
+  have hstar : (starSubj sh).name = STAR := rfl
+  have hreach : ∃ v, σ0.reach (subjNode (starSubj sh)) v = true := by
+    unfold GraphModel.graphRec GraphModel.probeNonDerived at hleaf
+    simp only [starSubj, bne_self_eq_false, Bool.false_and, Bool.or_false,
+      Bool.or_eq_true, Bool.and_eq_true] at hleaf
+    rcases hleaf with h | ⟨_, h⟩
+    · exact ⟨_, h⟩
+    · exact ⟨_, h⟩
+  obtain ⟨v, hv⟩ := hreach
+  -- the first edge out is a materialised closure tuple sourced at the wAny node
+  obtain ⟨y, hy⟩ := nreaches_first_edge (reach_sound hv)
+  obtain ⟨t, ht, u, hu, hsubj, _hobj⟩ :=
+    reachedByRules_edge_sound (reachedByRules_of_admitted h0) _ y hy
+  -- the closure tuple's subject IS the star subject
+  have hustar : u.subject.name = STAR := by
+    by_contra hne
+    have hvar := congrArg NodeKey.variant hsubj
+    rw [subjNode, if_pos hstar, subjNode, if_neg hne] at hvar
+    have hvar' : Variant.wAny = Variant.plain := hvar
+    cases hvar'
+  have husubj : u.subject = starSubj sh := by
+    have h1 : sh.1 = u.subject.type := by
+      have := congrArg NodeKey.type hsubj
+      rw [subjNode, if_pos hstar, subjNode, if_pos hustar] at this
+      exact this
+    have h2 : sh.2 = u.subject.predicate := by
+      have := congrArg NodeKey.pred hsubj
+      rw [subjNode, if_pos hstar, subjNode, if_pos hustar] at this
+      exact this
+    show u.subject = (⟨sh.1, STAR, sh.2⟩ : SubjectRef)
+    have heta : u.subject = ⟨u.subject.type, u.subject.name, u.subject.predicate⟩ := rfl
+    rw [heta, ← h1, ← h2, hustar]
+  -- a star closure member carries the stored seed's subject
+  have hts : t.subject = starSubj sh :=
+    (rewriteClosure_star_subject hTT hTS ht hu hustar).symm.trans husubj
+  -- the seed matched a wildcard-flagged restriction of its declared def
+  obtain ⟨e', rs, hlk', hdirs, hrm⟩ := hSV t ht
+  unfold restrictionMatches at hrm
+  obtain ⟨r, hrmem, hrb⟩ := List.any_eq_true.mp hrm
+  simp only [Bool.and_eq_true, beq_iff_eq] at hrb
+  obtain ⟨⟨hty, hpred⟩, hwc⟩ := hrb
+  have htstar : t.subject.name = STAR := by rw [hts]; rfl
+  have hr22 : r.2.2 = true := by
+    rw [htstar] at hwc
+    simpa using hwc
+  have hsh1 : sh.1 = r.1 := by rw [← hty, hts]; rfl
+  have hsh2 : sh.2 = r.2.1 := by rw [← hpred, hts]; rfl
+  unfold declaredWildcardShapes
+  refine List.mem_flatMap.mpr ⟨((t.object.type, t.relation), e'), mem_defs_of_lookup hlk', ?_⟩
+  refine List.mem_filterMap.mpr ⟨r, mem_exprRestrictions_of_directs hdirs hrmem, ?_⟩
+  rw [if_pos hr22, ← hsh1, ← hsh2]
+
 /-! ## Write-leg settledness transport — unmapped keys keep representation AND meaning
 
 A logged write leg cannot touch any derived key's materialised representation (rows
@@ -4029,11 +4151,19 @@ completeness clauses (row existence, `neg`/`upos`/edge completeness) live with t
 audit-enumeration coverage layer (W3d-1c), mirroring the W3c split. -/
 
 /-- The row's members carry their `sem` verdicts; every derived edge witnesses a
-    `sem`-true bare star-free subject. -/
+    `sem`-true bare star-free subject.
+
+    ⚠ The `stars` clause is over `declaredWildcardShapes` — pass 1 — while the row is built
+    by filtering the corrected two-pass `wildcardShapes`. That is not a mismatch: a row
+    member is `coveredFn`-true, and the linchpin
+    (`ReconcileStarsComplete.lean::coveredFn_declared`) says a covered shape is declared, so
+    the two agree on everything a row can hold. Stating it over pass 1 is what keeps
+    `W4Fragment.wsBare` — also a pass-1 statement since the 2026-09-14h split — able to
+    reach every row member. -/
 def SettledKey (S : Schema) (T : Store) (σ : GraphState) (dt on R : String) : Prop :=
   (∀ res, σ.residue (objNode ⟨dt, on⟩ R) R = some res →
     (∀ sh, res.stars.contains sh = true ↔
-      (sh ∈ wildcardShapes S ∧ sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true)) ∧
+      (sh ∈ declaredWildcardShapes S ∧ sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true)) ∧
     (∀ n ∈ res.neg, n.name ≠ STAR ∧ sem S T ⟨n, R, ⟨dt, on⟩⟩ = false) ∧
     (∀ n ∈ res.upos, n.predicate ≠ BARE ∧ n.name ≠ STAR ∧
       sem S T ⟨n, R, ⟨dt, on⟩⟩ = true)) ∧
@@ -4057,7 +4187,7 @@ theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
     (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3d σ S T) (hadm : FoldAdmitsBridged σ (rewriteClosureL S (rawWriteTuples S t)))
     {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)

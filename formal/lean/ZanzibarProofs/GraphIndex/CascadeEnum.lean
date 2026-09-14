@@ -225,12 +225,12 @@ theorem cands_complete_uncovered {S : Schema} {T : Store} {σ : GraphState}
     (hbridge : ∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
       σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩)
     (hcovDecl : ∀ sh : Shape, σ.checkFn T (starSubj sh) dt on R e = true →
-      sh ∈ wildcardShapes S)
+      sh ∈ declaredWildcardShapes S)
     {cands : List SubjectRef}
     (hsub : ∀ u ∈ leafConcretes σ dt on e, u.predicate = BARE → u ∈ cands)
     {s : SubjectRef} (hsb : s.predicate = BARE) (hsn : s.name ≠ STAR)
     (hsem : sem S T ⟨s, R, ⟨dt, on⟩⟩ = true)
-    (hunc : ¬(s.shape ∈ wildcardShapes S ∧
+    (hunc : ¬(s.shape ∈ declaredWildcardShapes S ∧
       sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true)) :
     s ∈ cands := by
   by_contra hnm
@@ -259,10 +259,10 @@ theorem negCands_complete {S : Schema} {T : Store} {σ : GraphState}
     (hcl : ∀ ed ∈ σ.edges, ed.1 ∈ σ.nodes ∧ ed.2 ∈ σ.nodes) (hon : on ≠ STAR)
     (hbridge : ∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
       σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩)
-    (hWSb : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSb : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     {negCands : List SubjectRef}
     (hsub : ∀ u ∈ leafConcretes σ dt on e, u.predicate = BARE → u ∈ negCands)
-    {s : SubjectRef} (hsn : s.name ≠ STAR) (hcov : s.shape ∈ wildcardShapes S)
+    {s : SubjectRef} (hsn : s.name ≠ STAR) (hcov : s.shape ∈ declaredWildcardShapes S)
     (hstar : sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true)
     (hsemF : sem S T ⟨s, R, ⟨dt, on⟩⟩ = false) :
     s ∈ negCands := by
@@ -291,8 +291,8 @@ theorem uposCands_complete {S : Schema} {T : Store} {σ : GraphState}
     (hbridge : ∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
       σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩)
     (hcovDecl : ∀ sh : Shape, σ.checkFn T (starSubj sh) dt on R e = true →
-      sh ∈ wildcardShapes S)
-    (hWSb : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+      sh ∈ declaredWildcardShapes S)
+    (hWSb : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     {uposCands : List SubjectRef}
     (hsub : ∀ u ∈ leafConcretes σ dt on e, u.predicate ≠ BARE → u ∈ uposCands)
     {s : SubjectRef} (hsu : s.predicate ≠ BARE) (hsn : s.name ≠ STAR)
@@ -360,7 +360,7 @@ theorem w3d_leg_context {S : Schema} {T : Store} {σ : GraphState}
     (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) (hon : on ≠ STAR) :
     (∀ s' : SubjectRef, (s'.name = STAR → s'.predicate = BARE) →
       σ.checkFn T s' dt on R e = sem S T ⟨s', R, ⟨dt, on⟩⟩) ∧
-    (∀ sh : Shape, σ.checkFn T (starSubj sh) dt on R e = true → sh ∈ wildcardShapes S) := by
+    (∀ sh : Shape, σ.checkFn T (starSubj sh) dt on R e = true → sh ∈ declaredWildcardShapes S) := by
   obtain ⟨σ0, h0, hsh⟩ :=
     reachedByW3d_shadow h hNK hCO hSV hterm hQ hDR hLS hBS hNBD hTT hTS
   refine ⟨fun s' hs' => ?_, fun sh hcov => ?_⟩
@@ -407,7 +407,7 @@ theorem w3dJobCoverage_enumJob {S : Schema} {T : Store} {σ : GraphState}
     (h : ReachedByW3d σ S T) {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hco : ComputedOnly e)
     (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) (hon : on ≠ STAR)
-    (hWSb : ∀ sh ∈ wildcardShapes S, sh.2 = BARE) :
+    (hWSb : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE) :
     W3dJobCoverage S T σ (enumJob σ dt on R e) := by
   obtain ⟨hbridge, hcovDecl⟩ := w3d_leg_context hWF hTT hNK hR hSV hBS hTS hCO hMatch
     hStrat hQ hDR hLS hcr hNBD hterm h hlk hco hleafUnt hon
@@ -653,7 +653,7 @@ theorem enumJobs_covg {S : Schema} {T : Store} {σ : GraphState}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3d σ S T) :
     ∀ j ∈ enumJobs S σ, W3dJobCoverage S T σ j := by
   intro j hj
@@ -696,7 +696,7 @@ theorem reachedByW3dE_toC {σ : GraphState} {S : Schema} {T : Store}
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) →
-    (∀ sh ∈ wildcardShapes S, sh.2 = BARE) →
+    (∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE) →
     StoreValidRules S T → BareStarStore T → TtuStarFree S T →
     (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
     ReachedByW3dC σ S T := by
@@ -744,7 +744,7 @@ theorem graph_correct_w3dE {S : Schema} {T : Store} {σ : GraphState} (q : Query
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3dE σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
@@ -770,7 +770,7 @@ theorem reachedByW3dE_inv {σ : GraphState} {S : Schema} {T : Store}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (hSV : StoreValidRules S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR T R) :

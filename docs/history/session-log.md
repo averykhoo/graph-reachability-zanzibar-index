@@ -30,6 +30,93 @@ from here.
 
 ---
 
+## 2026-09-14h — `P6`: stage 1 of `D1-split` LANDS, is GATED, and both sabotages attribute
+
+rows: `P6` (Log `2026-09-14h`; brief updated). Nothing re-ranked — `P6` stays `NOW`.
+
+task lint: clean (13 checks, 183 task file(s) parsed), 26 warning(s)
+read: board only
+
+**The accuracy fix is in the shipped model and the ten-phase gate is green on this tree.**
+`GraphIndex/ReconcileStars.lean::declaredWildcardShapes` (pass 1, the old `wildcardShapes` body
+verbatim) + `::throughShapes` (Python's second pass) + `::wildcardShapes = declared ++
+new-through`; `FullScope.lean::W4Fragment.wsBare` re-pointed at pass 1 so the fragment stays
+extensionally identical. Execution map and every figure:
+[`docs/p6-part-iv-plan-2026-09-14.md`](../p6-part-iv-plan-2026-09-14.md) § "Corrections
+appended 2026-09-14h (sixth)" — read it before the (fifth), which it supersedes.
+
+**What the previous session mispriced, and the build is what said so.** The (fourth)
+correction put stage 1's cost in the `wildcardShapes` cone. That cone was almost entirely
+inert: the whole tree reached `FullScope` with **four** structural breaks, every one a proof
+that stepped through the old body with `List.mem_flatMap` — AGENT-predicted by a census and
+KERNEL-confirmed, including the one site `rg` cannot see
+(`FullScope.lean:586::w4_within_scope`), which needed no edit at all. The actual work was that
+**74 bareness carries and ~19 membership conclusions were stated over the FULL list**, so
+re-pointing `wsBare` stranded every one of them.
+
+**The route, and why it cost nothing.** Every "no ghost star coverage" linchpin already ENDED
+at a literal wildcard restriction — it was already proving pass-1 membership and the weaker
+conclusion was throwing that away. Tightening those conclusions to `declaredWildcardShapes` was
+free at every site and let the carries move with them. It also hands back, as a **corollary**,
+the "Tier-1 coverage-false" lemma the (fourth) correction had listed as a separate REASONED
+obligation: contrapose `ReconcileStarsComplete.lean::coveredFn_declared` and a through-shape
+that is not separately declared is never covered on this fragment.
+
+* **Four new helpers, deliberately SUBJECT-GENERIC**: `::coveredFn_declared_w3c` /
+  `::coveredFn_bare_w3c` and `CascadeStable.lean::coveredFn_declared_shadow` /
+  `::coveredFn_bare_shadow`. They take no bareness hypothesis and produce one, which is what
+  breaks a circularity the read bridges cannot — `checkFn_eq_sem_*` will not speak below
+  `s.name = STAR → s.predicate = BARE`.
+* **Four lemmas RELOCATED up the import chain**, statements and proofs unchanged:
+  `graphRec_star_declared` `CascadeStrataResettle` → `CascadeStable`;
+  `checkFnR_star_declared{,_d,_d_filt}` `CascadeStrataEnum` → `CascadeStrataSettle`.
+  `formal/audited_theorems.txt` pins by NAME not path, so that pin is undisturbed.
+  (!) `docs/history/session-log.md:2810` now cites a stale path and is deliberately **not**
+  edited — frozen history.
+
+**Sabotage, both arms run, verbatim output on the plan doc.** `S1` — `throughShapes := []`, the
+narrowest plausible weakening because it is exactly the pre-fix state — gave **four
+`decide`-level CLAIM reds** naming their own propositions, and **nothing else in `FullScope`'s
+1080-module closure moved**. That cuts twice: the new pins are the sole guard against silent
+regression, and it is an independent mechanical confirmation that stage 1 is INERT on today's
+fragment. `S1` also caught an **inert arm in this session's own control** —
+`throughShapes SxThruPlain = throughShapes SxThruDerived` survives as `[] = []`, so only the
+membership arm is live under that attack. `S2` (drop the `BARE` gate) left `FullScope` GREEN as
+its control and reddened only the correspondence lemma — but as a **proof-script** red, which
+by `P6` step 3a's own rule is not a pin. `GraphIndex/TtuStarWide.lean::WideWitness.SwNB` and
+`::nonBareTupleset_declines_through_shape` were added in response, and `S2b` gives the CLAIM
+red (`decide` proved `throughShapes SwNB = []` is false).
+
+**The durable deliverable is not the enumeration.** That was one line; the reason it stayed
+wrong for a month is that Python's second loop had **two independent Lean transcriptions** —
+`UsStarWrite.lean::Schema.isStarTuplesetThrough` (2026-08-14) and, missing, the list — in
+modules that cannot import each other.
+`TtuStarWide.lean::mem_throughShapes_iff_isStarTuplesetThrough` now pins them equal.
+
+**Measured against the shipped Python, not argued in Lean.**
+[`formal/probes/p6_stage1_python_shapes_2026-09-14.py`](../../formal/probes/p6_stage1_python_shapes_2026-09-14.py)
+(rc=0, transcript in its header): `derive_schema_info` returns the same two shapes at both
+witness schemas, and `parse_openfga_schema` **ADMITS** `SxThruPlain`. A schema the index
+compiles and runs therefore carries a non-`BARE` subject-wildcard shape — which is what makes
+re-pointing `wsBare` mandatory rather than tidy, and is stronger evidence than the Lean-side
+argument it replaces.
+
+⚠ **Three generated goldens were regenerated deliberately** (`audited_theorems.txt` +15 with
+none removed, `headline_definitions.txt`, `headline_statements.txt` one line, plus
+`FINAL_REVIEW.md`'s counts block). Regenerating destroys the signal a golden carried, so:
+`W4Fragment`'s field COUNT and NAMES are unchanged, which is what
+`formal/conformance/test_w4fragment_scope_pin.py` guards by a hand-maintained list nothing
+regenerates; and the semantic content of the statement change is now carried positively by
+`FullScope.lean::sxThruDerived_wsBare_over_full_list_fails` rather than only by a golden.
+
+**Still owed:** stage 2 — widen `W4Fragment.ttuStarFree` to `TtuStarFreeW` (decidability
+already settled 2026-08-16 by `ttuStarFreeWB_iff`); and the two deliberate representation
+divergences from Python's `sorted(frozenset(...))` — a shape produced twice by pass 2 appears
+twice in the Lean list, and the orders differ — recorded on `::wildcardShapes` and
+`CORRESPONDENCE.md` §7, with **no** order- or multiplicity-sensitive consumer yet checked.
+
+---
+
 ## 2026-09-14g — `P6`: step 0 answered, the menu refuted, and route `D`'s root cause found
 
 rows: `P6` (Log `2026-09-14g`; brief updated). Nothing re-ranked — `P6` stays `NOW`.

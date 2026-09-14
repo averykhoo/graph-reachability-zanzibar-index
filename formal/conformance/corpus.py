@@ -986,7 +986,10 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     # + a PYTHON-ONLY three-backend differential
     # (`test_conformance_nary_strata.py::test_wildcard_userset_three_way`).
     # NEVER `GRAPH_FRAGMENT`: `FullScope.lean::W4Fragment.wsBare` is literally
-    # `∀ sh ∈ wildcardShapes S, sh.2 = BARE`, and this schema's shape set contains
+    # `∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE` (pass 1 of
+    # `derive_schema_info` — it read `wildcardShapes` until 2026-09-14h, when that
+    # name was corrected to cover BOTH Python passes and `wsBare` was re-pointed at
+    # pass 1 to keep the fragment the same size), and this schema's shape set contains
     # `(group, member)` — non-bare by construction — so `wsBare` is FALSE here and
     # every theorem routed through `graph_correct` says nothing about this corpus.
     # `wsBare`'s own doc comment records the asymmetry deliberately ("Python
