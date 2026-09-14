@@ -424,7 +424,7 @@ def runCascade2 (S : Schema) (T : Store) (σ : GraphState) (jobs1 jobs2 : List W
 inductive ReachedByW3d2 : GraphState → Schema → Store → Prop where
   | empty (S : Schema) : ReachedByW3d2 (emptyState S) S []
   | write {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
-      (hadm : FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t)))
+      (hadm : FoldAdmitsBridged σ (rewriteClosureL S (rawWriteTuples S t)))
       (hprev : ReachedByW3d2 σ S T) :
       ReachedByW3d2 (σ.writeLoggedRules S t) S (t :: T)
   | remove {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
@@ -713,13 +713,20 @@ def untOccCount (S : Schema) (T : Store) (a b : NodeKey) : Nat :=
 
 /-- One logged retraction's effect on `count p`: it decrements by one iff `u`'s materialized
     edge IS `p` (Nat subtraction floors the absent case). The exact dual of `writeLoggedOne`'s
-    `+1` (`count_foldl_writeDirect`'s per-step growth). -/
-theorem count_removeLoggedOne (u : Tuple) (p : NodeKey × NodeKey) (σ : GraphState) :
+    `+1` (`count_foldl_writeBridgedOne`'s per-step growth).
+
+    ★ `P6` step 3b (2026-09-14): gains the same `wAny` scope its write-side dual gains, for
+    the mirror-image reason — re-point #3 makes the retraction RELEASE bridge edges, so it
+    can now shrink a count that `edgeOfTuple` never contributed to. Off the `wAny` targets it
+    is exactly the old law (`Cascade.lean::count_releasePostLogged_of_ne_wAny`). -/
+theorem count_removeLoggedOne (u : Tuple) (p : NodeKey × NodeKey)
+    (hp2 : p.2.variant ≠ Variant.wAny) (σ : GraphState) :
     (σ.removeLoggedOne u).edges.count p
       = σ.edges.count p - (if edgeOfTuple u = p then 1 else 0) := by
   unfold GraphState.removeLoggedOne edgeOfTuple
   by_cases hmem : (subjNode u.subject, objNode u.object u.relation) ∈ σ.edges
-  · rw [if_pos hmem, pushDelta_edges, removeEdgeOne_edges]
+  · rw [if_pos hmem, count_releasePostLogged_of_ne_wAny _ _ hp2,
+      pushDelta_edges, removeEdgeOne_edges]
     by_cases hp : (subjNode u.subject, objNode u.object u.relation) = p
     · rw [if_pos hp]; subst hp; exact List.count_erase_self
     · rw [if_neg hp, Nat.sub_zero]
@@ -735,7 +742,8 @@ theorem count_removeLoggedOne (u : Tuple) (p : NodeKey × NodeKey) (σ : GraphSt
 /-- The logged rule-routed retraction's count-shrink law: `count p` drops by the number of
     closure members whose materialized edge is `p` — the exact dual of R3's
     `count_writeLoggedRules`. UNCONDITIONAL (Nat subtraction). -/
-theorem count_removeLoggedRules (p : NodeKey × NodeKey) (S : Schema) (t : Tuple) :
+theorem count_removeLoggedRules (p : NodeKey × NodeKey) (hp2 : p.2.variant ≠ Variant.wAny)
+    (S : Schema) (t : Tuple) :
     ∀ (σ : GraphState),
       (σ.removeLoggedRules S t).edges.count p
         = σ.edges.count p
@@ -747,7 +755,7 @@ theorem count_removeLoggedRules (p : NodeKey × NodeKey) (S : Schema) (t : Tuple
   | cons u rest ih =>
     intro σ
     simp only [List.foldl_cons]
-    rw [ih (σ.removeLoggedOne u), count_removeLoggedOne u p σ, List.map_cons]
+    rw [ih (σ.removeLoggedOne u), count_removeLoggedOne u p hp2 σ, List.map_cons]
     by_cases hp : edgeOfTuple u = p
     · subst hp
       rw [if_pos rfl, List.count_cons_self]
@@ -774,13 +782,17 @@ theorem untOccCount_erase (S : Schema) (T : Store) (t : Tuple) (a b : NodeKey) (
   omega
 
 /-- The retraction only SHRINKS the edge multiset: any surviving edge was already present.
-    (Off the R4 count-shrink law `count_removeLoggedRules` — a present edge has positive
-    count, which the retraction can only lower, so it was positive, hence present, in `σ`.) -/
+
+    ★ `P6` step 3b (2026-09-14): statement UNCHANGED — and it had to be re-proved to keep it
+    that way. It used to be derived from the count-shrink law `count_removeLoggedRules`,
+    which now carries a `wAny` side condition; routing through the count would have
+    imported that condition into a MEMBERSHIP fact that does not need it, and from there
+    into every consumer. Proved instead off `CascadeStable.lean::removeLoggedRules_edges_subset`,
+    which is unconditional because "only shrinks" is true of the release epilogue too.
+    **Take the shortest honest route, not the one the old proof happened to use.** -/
 theorem mem_removeLoggedRules_edges {σ : GraphState} {S : Schema} {t : Tuple}
-    {e : NodeKey × NodeKey} (h : e ∈ (σ.removeLoggedRules S t).edges) : e ∈ σ.edges := by
-  rw [← List.count_pos_iff] at h ⊢
-  rw [count_removeLoggedRules e S t σ] at h
-  omega
+    {e : NodeKey × NodeKey} (h : e ∈ (σ.removeLoggedRules S t).edges) : e ∈ σ.edges :=
+  removeLoggedRules_edges_subset σ S t e h
 
 /-! ### Filter preserves the count of a kept element -/
 
@@ -826,6 +838,45 @@ theorem count_foldl_writeDirect (a b : NodeKey) :
     rw [ih hrest, hstep, List.count_cons, List.map_cons, List.count_cons]
     omega
 
+/-- ★★ **The BRIDGED write-fold count-growth lemma, and it needs a SCOPE that the plain one
+    does not** (`P6` step 3b, 2026-09-14).
+
+    The plain lemma above is an EXACT equation, and after the re-point it is **false** as
+    stated for the bridged fold: `GraphState.bridgePre` materialises in-bridges, so the
+    fold adds edges the right-hand side's `edgeOfTuple` sum does not account for. ⚠ And they
+    are not out of R3's reach by taint either — `UsStarWrite.lean::NoBridgedDerived` says a
+    bridged shape is UNTAINTED, so a bridge edge sits squarely inside "every untainted
+    direct edge", which is exactly R3's quantifier.
+
+    The fix is a scope, not an error term: **every bridge edge targets a `wAnyNode`**, while
+    every `edgeOfTuple` targets an `objNode`. So at `b.variant ≠ Variant.wAny` the two folds
+    count identically, and the equation survives verbatim. The side condition is discharged
+    for free wherever `b` is an `objNode` (`State.lean::objNode_ne_wAny`).
+
+    `hadm` is `FoldAdmitsBridged` because that is the fold's real precondition — see
+    `Cascade.lean::foldl_writeBridgedOne_edge_complete` for why `FoldAdmits` cannot be used
+    to describe a bridged fold at all. -/
+theorem count_foldl_writeBridgedOne (a b : NodeKey) (hb : b.variant ≠ Variant.wAny) :
+    ∀ (us : List Tuple) {σ : GraphState}, FoldAdmitsBridged σ us →
+      (us.foldl (fun acc u => acc.writeBridgedOne u) σ).edges.count (a, b)
+        = σ.edges.count (a, b) + (us.map edgeOfTuple).count (a, b) := by
+  intro us
+  induction us with
+  | nil => intro σ _; simp
+  | cons u rest ih =>
+    intro σ hfa
+    obtain ⟨hadm, hrest⟩ := hfa
+    -- the prologue is count-inert HERE (`hb`), so the step reduces to the plain one
+    have hbp : (σ.bridgePre u).edges.count (a, b) = σ.edges.count (a, b) :=
+      count_bridgePre_of_ne_wAny σ u (p := (a, b)) hb
+    have hstep : (σ.writeBridgedOne u).edges = edgeOfTuple u :: (σ.bridgePre u).edges := by
+      unfold GraphState.writeBridgedOne
+      rw [if_pos hadm, addEdge_edges]
+      rfl
+    simp only [List.foldl_cons]
+    rw [ih hrest, hstep, List.count_cons, hbp, List.map_cons, List.count_cons]
+    omega
+
 /-- The logged rule-routed write's count-growth: the edge count grows by the closure's
     occurrence count of `(a,b)` (the logged core is the unlogged `writeRulesRaw`,
     `writeLoggedRules_evalEq`; then `count_foldl_writeDirect` under `FoldAdmits`).
@@ -833,14 +884,15 @@ theorem count_foldl_writeDirect (a b : NodeKey) :
     **RE-POINTED by step 4c-ii (THE FLIP, obligation G)**: both `hadm` and the RHS's
     occurrence list are now the leaf-routed closure `rewriteClosureL S (rawWriteTuples S t)`.
     `count_foldl_writeDirect` is list-generic, so only the list moved. -/
-theorem count_writeLoggedRules (a b : NodeKey) (σ : GraphState) (S : Schema) (t : Tuple)
-    (hadm : FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t))) :
+theorem count_writeLoggedRules (a b : NodeKey) (hb : b.variant ≠ Variant.wAny)
+    (σ : GraphState) (S : Schema) (t : Tuple)
+    (hadm : FoldAdmitsBridged σ (rewriteClosureL S (rawWriteTuples S t))) :
     (σ.writeLoggedRules S t).edges.count (a, b)
       = σ.edges.count (a, b)
         + ((rewriteClosureL S (rawWriteTuples S t)).map edgeOfTuple).count (a, b) := by
   rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).edges]
   unfold GraphState.writeRulesRaw
-  exact count_foldl_writeDirect a b (rewriteClosureL S (rawWriteTuples S t)) hadm
+  exact count_foldl_writeBridgedOne a b hb (rewriteClosureL S (rawWriteTuples S t)) hadm
 
 /-! ### The cascade leg — a routed diffing pass is untainted-count-inert
 
@@ -951,15 +1003,15 @@ theorem w3cJobsValid_Rnode_ne {S : Schema} {b : NodeKey}
     each job's `W3cJobValid` (`w3cJobsValid_Rnode_ne`) rather than off `enumJobs2At`. -/
 theorem reachedByW3d2_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2 σ S T) :
-    ∀ a b : NodeKey, isDerived S (b.type, b.pred) = false →
+    ∀ a b : NodeKey, isDerived S (b.type, b.pred) = false → b.variant ≠ Variant.wAny →
       σ.edges.count (a, b) = untOccCount S T a b := by
   induction h with
   | empty S =>
-    intro a b _
+    intro a b _ _
     simp [untOccCount, emptyState]
   | @write σp S T t hadm hprev ih =>
-    intro a b hb
-    rw [count_writeLoggedRules a b σp S t hadm, ih a b hb]
+    intro a b hb hbv
+    rw [count_writeLoggedRules a b hbv σp S t hadm, ih a b hb hbv]
     unfold untOccCount
     rw [List.flatMap_cons, List.map_append, List.count_append]
     -- Both sides now literally add the SAME summand,
@@ -967,17 +1019,17 @@ theorem reachedByW3d2_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     -- leg materialises it (`count_writeLoggedRules`) and `untOccCount` sums it (R5).
     omega
   | @remove σp S T t hadm _ _ _ _ _ hprev ih =>
-    intro a b hb
+    intro a b hb hbv
     -- Exact Nat arithmetic: post-R5 `count_removeLoggedRules` SUBTRACTS and
     -- `untOccCount_erase` SPLITS OFF the same L-closure count, so no floor is hit.
-    rw [count_removeLoggedRules (a, b) S t σp, ih a b hb, untOccCount_erase S T t a b hadm]
+    rw [count_removeLoggedRules (a, b) hbv S t σp, ih a b hb hbv, untOccCount_erase S T t a b hadm]
     omega
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
-    intro a b hb
+    intro a b hb hbv
     have h1 : ∀ j ∈ jobs1, b ≠ objNode ⟨j.dt, j.on⟩ j.R := w3cJobsValid_Rnode_ne hb jobs1 hjv1
     have h2 : ∀ j ∈ jobs2, b ≠ objNode ⟨j.dt, j.on⟩ j.R := w3cJobsValid_Rnode_ne hb jobs2 hjv2
     rw [count_runCascade2_of_ne S T σp jobs1 jobs2 h1 h2]
-    exact ih a b hb
+    exact ih a b hb hbv
 
 /-! ### ★ THE R5 WITNESS BLOCK — the fixture that used to REFUTE R3, now pinning it
 
@@ -1131,13 +1183,17 @@ theorem writeThenRemove_edge_count_zero (p : NodeKey × NodeKey) :
     (((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
         LeafRuleWitness.tlEditor).removeLoggedRules LeafRuleWitness.SlV
         LeafRuleWitness.tlEditor).edges.count p = 0 := by
-  obtain ⟨a, b⟩ := p
-  rw [count_removeLoggedRules (a, b) LeafRuleWitness.SlV LeafRuleWitness.tlEditor,
-    count_writeLoggedRules a b (emptyState LeafRuleWitness.SlV) LeafRuleWitness.SlV
-      LeafRuleWitness.tlEditor lrV_foldAdmits]
-  have hz : (emptyState LeafRuleWitness.SlV).edges.count (a, b) = 0 := by
-    simp [emptyState]
-  omega
+  -- ★ `P6` step 3b (2026-09-14): proved off the EDGE LIST rather than off the count laws.
+  -- Those laws now carry a `wAny` scope (the bridged leg can add and release `wAny`-targeted
+  -- edges), and this statement is deliberately at an ARBITRARY `p` -- which is the whole
+  -- point of it, since the leak it refutes was at one specific edge. Deciding the list keeps
+  -- the arbitrary `p` and needs no scope: at `SlV` nothing is bridged, so the round trip is
+  -- empty outright.
+  have hnil : (((emptyState LeafRuleWitness.SlV).writeLoggedRules LeafRuleWitness.SlV
+      LeafRuleWitness.tlEditor).removeLoggedRules LeafRuleWitness.SlV
+      LeafRuleWitness.tlEditor).edges = [] := by decide
+  rw [hnil]
+  simp
 
 /-- The leaked edge itself, named: after the round trip `doc:d1#viewer.0@user:alice` is GONE.
     This is the literal negation of the deleted `writeThenRemove_leaks_leaf_edge`. -/
@@ -1285,15 +1341,15 @@ theorem w3cJobsValid_cands_bare {S : Schema} :
     derived); the R5b remove-leg's source-keyed retraction discharge needs THIS form. -/
 theorem reachedByW3d2_srcOccCount {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2 σ S T) :
-    ∀ a b : NodeKey, a.pred ≠ BARE →
+    ∀ a b : NodeKey, a.pred ≠ BARE → b.variant ≠ Variant.wAny →
       σ.edges.count (a, b) = untOccCount S T a b := by
   induction h with
   | empty S =>
-    intro a b _
+    intro a b _ _
     simp [untOccCount, emptyState]
   | @write σp S T t hadm hprev ih =>
-    intro a b ha
-    rw [count_writeLoggedRules a b σp S t hadm, ih a b ha]
+    intro a b ha hbv
+    rw [count_writeLoggedRules a b hbv σp S t hadm, ih a b ha hbv]
     unfold untOccCount
     rw [List.flatMap_cons, List.map_append, List.count_append]
     -- Same R5 mechanism as the target-side twin: the state and the `(S,T)` function name
@@ -1303,17 +1359,18 @@ theorem reachedByW3d2_srcOccCount {σ : GraphState} {S : Schema} {T : Store}
     -- could never exclude them). The fix is the state function, not the guard.
     omega
   | @remove σp S T t hadm _ _ _ _ _ hprev ih =>
-    intro a b ha
-    rw [count_removeLoggedRules (a, b) S t σp, ih a b ha, untOccCount_erase S T t a b hadm]
+    intro a b ha hbv
+    rw [count_removeLoggedRules (a, b) hbv S t σp, ih a b ha hbv,
+      untOccCount_erase S T t a b hadm]
     omega
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ _ ih =>
-    intro a b ha
+    intro a b ha hbv
     have h1 : ∀ j ∈ jobs1, ∀ c ∈ j.cands, c.predicate = BARE :=
       w3cJobsValid_cands_bare jobs1 hjv1
     have h2 : ∀ j ∈ jobs2, ∀ c ∈ j.cands, c.predicate = BARE :=
       w3cJobsValid_cands_bare jobs2 hjv2
     rw [count_runCascade2_of_src S T σp jobs1 jobs2 ha h1 h2]
-    exact ih a b ha
+    exact ih a b ha hbv
 
 /-! ### ★ THE R3-SOURCE WITNESS — the userset-subject fixture, now pinning R3-source
 
@@ -1385,7 +1442,8 @@ theorem tlUsEditor_srcOccCount_agrees :
         (subjNode ⟨"group", "g1", "member"⟩, objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0))
       = 1 := by
   rw [reachedByW3d2_srcOccCount tlUsEditor_chain (subjNode ⟨"group", "g1", "member"⟩)
-    (objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)) (by decide)]
+    (objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)) (by decide)
+    (objNode_ne_wAny ⟨"doc", "d1"⟩ (leafPred "viewer" 0))]
   exact tlUsEditor_untOccCount_leaf_one
 
 /-! ## ★ THE PLAIN/LEAF-ROUTED CLOSURE LOCALISATION — where the two closures AGREE
@@ -1573,7 +1631,8 @@ theorem tvDer_srcOccCount_agrees :
         (subjNode ⟨"group", "g1", "member"⟩, objNode ⟨"doc", "d1"⟩ "viewer")
       = 0 := by
   rw [reachedByW3d2_srcOccCount tvDer_chain (subjNode ⟨"group", "g1", "member"⟩)
-    (objNode ⟨"doc", "d1"⟩ "viewer") (by decide)]
+    (objNode ⟨"doc", "d1"⟩ "viewer") (by decide)
+    (objNode_ne_wAny ⟨"doc", "d1"⟩ "viewer")]
   exact tvDer_untOccCount_zero
 
 /-- **The scope marker, now the NECESSITY CONTROL for the routing premise.** `tvDer` is
@@ -1590,13 +1649,74 @@ theorem tvDer_not_storeValidD : ¬ StoreValidRulesD LeafRuleWitness.SlV [tvDer] 
 
 /-! ## R-node terminality over the two-round closure -/
 
+/-- ★★ **Every `wAny`-TARGETED edge of a W3d-2 state is a BRIDGE**, i.e. its source is a
+    bridged-in concrete. (`P6` step 3b, 2026-09-14.)
+
+    **Why this has to exist.** The R3 occurrence-count family gained a `b.variant ≠
+    Variant.wAny` scope, because `untOccCount` sums `edgeOfTuple` and a bridge edge is not
+    one. The `remove` arm of `reachedByW3d2_edge_source_ne_R` consumes R3-source at an
+    ARBITRARY `b` and cannot use its own induction hypothesis there (the store hypothesis
+    weakens the wrong way across `T.erase t`), so it needs a separate account of what a
+    `wAny`-targeted edge can be. This is that account, and it is the strongest available:
+    such an edge exists only because the bridge prologue put it there.
+
+    ⚠ The conclusion is about `σ`'s OWN `bridgedInConcrete`, which is fine to carry across
+    legs because the predicate reads only `σ.schema`
+    (`UsStarWrite.lean::bridgedInConcrete_of_schema_eq`) and every leg is schema-inert. -/
+theorem reachedByW3d2_wAny_edge_bridged {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d2 σ S T) :
+    ∀ a b, (a, b) ∈ σ.edges → b.variant = Variant.wAny →
+      σ.bridgedInConcrete a = true ∧ b = wAnyNode (a.type, a.pred) := by
+  induction h with
+  | empty S =>
+    intro a b hab _
+    simp [emptyState] at hab
+  | @write σp S T t hadm hprev ih =>
+    intro a b hab hbv
+    have hsc : (σp.writeLoggedRules S t).schema = σp.schema := by
+      rw [reachedByW3d2_schema (ReachedByW3d2.write t hadm hprev),
+        reachedByW3d2_schema hprev]
+    rw [bridgedInConcrete_of_schema_eq hsc a]
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hab
+    unfold GraphState.writeRulesRaw at hab
+    rcases foldl_writeBridgedOne_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
+      with hold | ⟨u, hu, _, h2⟩ | ⟨hbr, h2⟩
+    · exact ih a b hold hbv
+    · exact absurd (h2 ▸ hbv) (objNode_ne_wAny u.object u.relation)
+    · exact ⟨hbr, h2⟩
+  | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
+    intro a b hab hbv
+    have hsc : (σp.removeLoggedRules S t).schema = σp.schema :=
+      removeLoggedRules_schema σp S t
+    refine ⟨?_, (ih a b (removeLoggedRules_edges_subset σp S t (a, b) hab) hbv).2⟩
+    rw [bridgedInConcrete_of_schema_eq hsc a]
+    exact (ih a b (removeLoggedRules_edges_subset σp S t (a, b) hab) hbv).1
+  | @cascade σp S T jobs1 jobs2 hjv1 hjv2 hc1 hs1 hc2 hs2 hprev ih =>
+    intro a b hab hbv
+    have hsc : (runCascade2 S T σp jobs1 jobs2).schema = σp.schema := by
+      rw [reachedByW3d2_schema (ReachedByW3d2.cascade jobs1 jobs2 hjv1 hjv2 hc1 hs1 hc2 hs2 hprev),
+        reachedByW3d2_schema hprev]
+    rw [bridgedInConcrete_of_schema_eq hsc a]
+    unfold runCascade2 at hab
+    split at hab
+    · have hab' : (a, b) ∈ (reconcileJobsLR S T (reconcileJobsLR S T σp jobs1) jobs2).edges := hab
+      rcases reconcileJobsLR_edge_sound jobs2 _ a b hab' with hmid | ⟨j, _, _, _, _, h2⟩
+      · rcases reconcileJobsLR_edge_sound jobs1 σp a b hmid with hold | ⟨j, _, _, _, _, h2⟩
+        · exact ⟨(ih a b hold hbv).1, (ih a b hold hbv).2⟩
+        · exact absurd (h2 ▸ hbv) (objNode_ne_wAny ⟨j.dt, j.on⟩ j.R)
+      · exact absurd (h2 ▸ hbv) (objNode_ne_wAny ⟨j.dt, j.on⟩ j.R)
+    · exact ⟨(ih a b hab hbv).1, (ih a b hab hbv).2⟩
+
 /-- **No W3d-2 edge is sourced at an `R`-userset node** (the two-round analog of
     `reachedByW3d_edge_source_ne_R`): a logged write's edge sources are rewrite-
-    closure subjects, either round's cascade edge sources are bare candidates. -/
+    closure subjects, either round's cascade edge sources are bare candidates, and a
+    write's bridge edge sources are bridged-in concretes, which `NoBridgedDerived` keeps
+    off the derived shapes. -/
 theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
-    {dt R : String} (hRne : R ≠ BARE) (h : ReachedByW3d2 σ S T) :
+    {dt R : String} (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S)
+    (h : ReachedByW3d2 σ S T) :
     isDerived S (dt, R) = true → NoTtuTarget S R → NoStoreSubjectR T R →
-      ∀ a b, (a, b) ∈ σ.edges → a.pred ≠ R := by
+      ∀ a b, (a, b) ∈ σ.edges → a.type = dt → a.pred ≠ R := by
   -- OBLIGATION (A), W3d-2 twin: `rewriteClosureL_subject_pred_ne_of_noTtuTarget` needs
   -- `hder` to rule out the LEAF layer's TTU targets (`NoTtuTarget` ranges over
   -- `schemaRewrites` only). Schema-level, so no weakening line anywhere.
@@ -1605,17 +1725,24 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
     intro _ _ _ a b hab
     simp [emptyState] at hab
   | @write σp S T t hadm hprev ih =>
-    intro hder hnt hns a b hab
+    intro hder hnt hns a b hab hty
     rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hab
     unfold GraphState.writeRulesRaw at hab
-    rcases foldl_writeDirect_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
-      with hin | ⟨u, hu, h1, _⟩
-    · exact ih hder hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin
+    rcases foldl_writeBridgedOne_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
+      with hin | ⟨u, hu, h1, _⟩ | ⟨hsw, _⟩
+    · exact ih hNBD hder hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin hty
     · rw [h1, subjNode_pred]
       exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder
         (hns t List.mem_cons_self) hu
+    · -- THE BRIDGE DISJUNCT, W3d-2 twin: identical to the W3d one, and it uses the
+      -- in-file `reachedByW3d2_schema` rather than a relocated lemma.
+      intro hpr
+      have hshape := (bridgedInConcrete_elim hsw).2.2.2
+      rw [reachedByW3d2_schema hprev, hty, hpr] at hshape
+      rw [hNBD dt R hder] at hshape
+      exact Bool.noConfusion hshape
   | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
-    intro hder hnt hns a b hab
+    intro hder hnt hns a b hab _hty
     -- The removed-store edge `(a,b)` with a source-`R` predicate would need a stored
     -- tuple in `T.erase t` whose subject predicate is `R` (via the source occurrence
     -- count), contradicting `NoStoreSubjectR (T.erase t) R`.
@@ -1623,7 +1750,15 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
     have haBARE : a.pred ≠ BARE := by rw [haR]; exact hRne
     have hrem : ReachedByW3d2 (σp.removeLoggedRules S t) S (T.erase t) :=
       ReachedByW3d2.remove t hadm hdrain hSVT hBST hTST htermT hprev
-    have hcount := reachedByW3d2_srcOccCount hrem a b haBARE
+    -- ★ `P6` step 3b (2026-09-14): R3-source is now scoped off the `wAny` targets, so the
+    -- bridge case is split out FIRST and answered by `hNBD` rather than by the count.
+    by_cases hbv : b.variant = Variant.wAny
+    · have hbr := (reachedByW3d2_wAny_edge_bridged hrem a b hab hbv).1
+      have hshape := (bridgedInConcrete_elim hbr).2.2.2
+      rw [reachedByW3d2_schema hrem, _hty, haR] at hshape
+      rw [hNBD dt R hder] at hshape
+      exact Bool.noConfusion hshape
+    have hcount := reachedByW3d2_srcOccCount hrem a b haBARE hbv
     have hne : untOccCount S (T.erase t) a b ≠ 0 := by
       rw [← hcount]
       intro hz
@@ -1644,7 +1779,7 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
     exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder (hns t' ht') hu'
       (by rw [← subjNode_pred u.subject, hsrc, haR])
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ hprev ih =>
-    intro hder hnt hns a b hab
+    intro hder hnt hns a b hab hty
     unfold runCascade2 at hab
     split at hab
     · have hab' : (a, b) ∈ (reconcileJobsLR S T (reconcileJobsLR S T σp jobs1)
@@ -1652,7 +1787,7 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
       rcases reconcileJobsLR_edge_sound jobs2 _ a b hab' with hmid | ⟨j, hj, c, hc, h1, _⟩
       · rcases reconcileJobsLR_edge_sound jobs1 σp a b hmid
           with hold | ⟨j, hj, c, hc, h1, _⟩
-        · exact ih hder hnt hns a b hold
+        · exact ih hNBD hder hnt hns a b hold hty
         · rw [h1, subjNode_pred]
           obtain ⟨_, hcb, _⟩ := hjv1 j hj
           rw [hcb c hc]
@@ -1661,17 +1796,19 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
         obtain ⟨_, hcb, _⟩ := hjv2 j hj
         rw [hcb c hc]
         exact Ne.symm hRne
-    · exact ih hder hnt hns a b hab
+    · exact ih hNBD hder hnt hns a b hab hty
 
 /-- **The derived R-node is never an edge source on a W3d-2 state.** -/
 theorem reachedByW3d2_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
     {dt on R : String}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hRne : R ≠ BARE) (hder : isDerived S (dt, R) = true) (h : ReachedByW3d2 σ S T) :
+    (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hder : isDerived S (dt, R) = true)
+    (h : ReachedByW3d2 σ S T) :
     ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges := by
   obtain ⟨hnt, hns⟩ := hterm dt R hder
   intro y hy
-  exact reachedByW3d2_edge_source_ne_R hRne h hder hnt hns _ y hy (objNode_pred ⟨dt, on⟩ R)
+  exact reachedByW3d2_edge_source_ne_R hRne hNBD h hder hnt hns _ y hy
+    (objNode_type ⟨dt, on⟩ R) (objNode_pred ⟨dt, on⟩ R)
 
 /-- R-node terminality survives a routed logged batch, from any terminal base state
     (the batch-transported form — stackable round over round). -/
@@ -1743,6 +1880,7 @@ theorem hLU2_of_hLU {S : Schema}
 theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
     {jobs1 jobs2 : List W3cJob}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hNBD : NoBridgedDerived S)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
@@ -1790,7 +1928,7 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
   obtain ⟨hRne1, _, _, _, _, _, hder1, _, _⟩ := hjv1 j1 hj1
   -- j1's R-node is terminal at the mid state → the row's only candidate object is
   -- the R-node itself
-  have hbase1 := reachedByW3d2_Rnode_not_source (on := j1.on) hterm hRne1 hder1 h
+  have hbase1 := reachedByW3d2_Rnode_not_source (on := j1.on) hterm hRne1 hNBD hder1 h
   have hmidT1 := reconcileJobsLR_Rnode_not_source (T := T) (jobs := jobs1)
     hRne1 hjv1 hbase1
   have hreach1 : ∀ v, (reconcileJobsLR S T σ jobs1).reach d'.node v = false := by
@@ -1839,7 +1977,7 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
   have hjdt : j.dt = j1.dt := by rw [← h1', hc1, htype1]
   -- (B) j's own R-node is terminal at the final state → the emission's only
   -- candidate object is itself, and no derived def may read j.R (hLU2)
-  have hbase2 := reachedByW3d2_Rnode_not_source (on := j.on) hterm hRne2 hder2 h
+  have hbase2 := reachedByW3d2_Rnode_not_source (on := j.on) hterm hRne2 hNBD hder2 h
   have hmidT2 := reconcileJobsLR_Rnode_not_source (T := T) (jobs := jobs1)
     hRne2 hjv1 hbase2
   have hfinT2 := reconcileJobsLR_Rnode_not_source (T := T) (jobs := jobs2)
@@ -1911,6 +2049,7 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
 theorem cascade2_drains {σ : GraphState} {S : Schema} {T : Store}
     {jobs1 jobs2 : List W3cJob}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hNBD : NoBridgedDerived S)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
@@ -1921,7 +2060,7 @@ theorem cascade2_drains {σ : GraphState} {S : Schema} {T : Store}
         (σ.frontierMax σ.watermark))
     (h : ReachedByW3d2 σ S T) :
     Quiescent (runCascade2 S T σ jobs1 jobs2) := by
-  rw [runCascade2_no_abort hterm hLU2 hjv1 hjv2 hscope2 h]
+  rw [runCascade2_no_abort hterm hNBD hLU2 hjv1 hjv2 hscope2 h]
   intro d hd
   exact mem_outbox_le_maxOutboxId _ d hd
 

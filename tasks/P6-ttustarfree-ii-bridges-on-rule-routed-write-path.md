@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: Step 3b UNBLOCKED (TK68 closed). 3 re-points; the R-node cone is MEASURED at 47 decls / 12 files
+brief: STEP 3b COMPLETE 2026-09-14e -- steps 3-15 landed, tree GREEN, pins regenerated. Next: part (iv)
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-14
-updated: 2026-09-14
+moved: 2026-09-14e
+updated: 2026-09-14e
 closed:
 ---
 
@@ -1532,3 +1532,92 @@ The durable answer landed instead of the docstring: `hQ_free_statement_is_false`
 NEXT ACTION, UNCHANGED AND NOW THE ONLY THING LEFT THAT IS NOT ADDITIVE: step 3, the `LeafRules`
 re-point. Every piece of step-3b work that could be done without re-pointing has now been done and
 committed green across four commits. What remains is genuinely red from step 3 to step 15.
+
+### 2026-09-14e
+
+STEP 3b IS COMPLETE. Steps 3-15 all landed; the whole tree is GREEN and the ten-phase gate
+was run on it. `lake build` rc=0, `Build completed successfully (1089 jobs).`
+Full map: `docs/p6-step3b-plan-2026-09-13.md` sec "Corrections appended 2026-09-14d" (start
+there), then "...2026-09-14c" and "...2026-09-14b". Pin rationale:
+`formal/history/p6-step3b-pin-regeneration-2026-09-14.md`.
+
+WHAT LANDED. All three re-points plus step 14:
+* RE-POINT #2 (`LeafRules.lean::GraphState.writeRulesRaw` folds `writeBridgedOne`),
+  #1 (`Cascade.lean::GraphState.writeLoggedOne` = `bridgePreLogged` + `addEdge` + delta),
+  #3 (`::removeLoggedOne`'s then-branch wrapped in `releasePostLogged`).
+* Step 6 + its W3d-2 twin: the R-node restatement, conclusion gains `a.type = dt`,
+  hypotheses gain `(hNBD : NoBridgedDerived S)`; carry threaded ~30 sites and DISCHARGED at
+  `FullScope.lean::GraphAdmission.noBridgedDerived`.
+* Step 8 -- the plan's SINGLE SCHEDULE RISK -- cost a ONE-LINE `abbrev` widening
+  (`UntaintedShadow` gains the `BridgeNode` disjunct) because `C10` had pre-paid its 69
+  support declarations. NO new `GraphAdmission` field, exactly as forecast.
+* Step 14 (`FoldAdmits` -> `FoldAdmitsBridged`, 17 binders / 6 files) and the two RUNTIME
+  GATES (`Exec.lean::graphRunAux`, `::graphRunOpsAux` -> `foldAdmitsBridgedB`).
+
+(!) STEP 14 IS A PRECONDITION OF STEP 8, NOT A FOLLOW-UP -- and the kernel forced it, not a
+judgement call. `untaintedShadow_writeLegL` needs `foldl_writeBridgedOne_edge_complete`, and
+the 2026-09-14 refutation says that lemma cannot be stated over `FoldAdmits` AT ALL. The
+executed order was 3 -> 5 -> 6 -> 7 -> 14 -> 8. The plan's ordering is impossible; do not
+restore it.
+
+(!) THE DELIBERATE TRIPWIRE FIRED, ALONE, AND THAT IS THE CHEAPEST ASSURANCE IN THIS ITEM.
+Moving the constructor binder produced EXACTLY ONE error, at
+`Cascade.lean::FoldAdmitsHonestyWitness.w3d_write_applies_with_the_stale_hypothesis` -- the
+declaration planted the day before for this moment. Prescribed response applied (pin moved
+to an admitted fixture, constructor NOT weakened); the flip and the literal error text are
+recorded at `::w3d_write_applies_with_the_bridged_hypothesis`. A trap that reddens ONE
+declaration is worth more than one that reddens a module: it distinguishes "the constructor
+moved" from "the file broke".
+
+(!) THE LARGEST THING THE PLAN DID NOT CONTAIN: the R3/R4 occurrence-count stack needed a
+SCOPE. R3 says an UNTAINTED edge's multiplicity equals `untOccCount`; the bridged leg
+materialises edges that are no tuple's `edgeOfTuple`, so R3 is FALSE as stated -- and
+NEITHER existing guard fences them out. R3-target's `isDerived = false` ADMITS them
+(`NoBridgedDerived` says a bridged shape is exactly untainted); R3-source's `a.pred != BARE`
+admits them too. Fixed with `b.variant != Variant.wAny`, free wherever `b` is a literal
+`objNode` (`State.lean::objNode_ne_wAny`, minted for it). ⚠ Membership monotonicity is NOT
+enough -- a leg erasing one copy of a doubly-present edge preserves `∈` and breaks `count`.
+One site needed a new structural lemma rather than a binder:
+`CascadeStrata.lean::reachedByW3d2_wAny_edge_bridged`.
+
+(!) THE SECOND: the `_d` chain carries `ComputedOrDirect`, not `ComputedOnly`, so T2/T3
+could not be discharged there. GENERALISED rather than forked -- the chain never needed
+`.direct` absent, it needed `.ttu` absent, and both predicates forbid `.ttu`. Eleven twins
+landed; see sec F2.
+
+PINS (step 15), all deliberate and RED-first:
+* statement pin RED at exactly the two rows sec Blockers named (`runCascade2_no_abort`,
+  `cascade2_drains`), each gaining `hNBD` and nothing else.
+* definition pin 253 -> 264, and the MEMBERSHIP change is the evidence: `FoldAdmits` and
+  `foldAdmitsB` LEFT the pinned closure; `FoldAdmitsBridged`, `foldAdmitsBridgedB`,
+  `NoBridgedDerived` and nine bridge definitions ENTERED it. The stale predicates leaving
+  and the honest ones entering is the best evidence step 14 did what it claims.
+* `Exec.lean::reachedByW3d2E_edgeCount_store_indexed`'s staleness trap fired as designed
+  (hand-copied R3 statement); updated, NOT simplified -- the duplication is the mechanism.
+* `audited_theorems.txt` UNTOUCHED. `anchor_check` 659/659 (the checker caught three bad
+  paths in my own new CORRESPONDENCE prose). `FINAL_REVIEW.md` counts regenerated.
+
+ASSURANCE ADDED, and two sweeps CHANGED THE DELIVERABLE:
+* `LeafRules.lean::SlBridgeWitness` (14 pins) and `Cascade.lean::BridgedLegWitness` (8 new)
+  sit on the definitions that MOVED -- every step-3a witness is stated on `bridgePre`/
+  `writeBridgedOne` directly and so cannot be flipped by any re-point. Sweep tables with
+  literal `lake` output are in the docstrings.
+* M8 found an OVERCLAIMING docstring: a `!=` non-vacuity pin stayed green under the very
+  mutation it was cited as guarding. Fixed by COUNTING. A `!=` non-vacuity is the weakest
+  useful form -- prefer one that names the thing or counts it.
+* M9 reddened ONLY A PROOF on its first pass -- the error-recovery mode again. Fixed by
+  adding a cycle fixture at `writeLoggedOne`. The step-3a order pins could not see it
+  because they never mention the definition that moved.
+
+(!) TWO AUDITED NAMES ARE NOW MILDLY MISLEADING AND MUST STAY:
+`reachedByW3d_edges_target_plain` (and its W3d-2 twin) conclude `!= Variant.wAll`, not
+`= Variant.plain` -- the old reading is FALSE since a bridge target is `wAny`. Renaming reds
+step 4a. Same for `LeafRules.lean::writeRulesRaw_untaintedSchema`, which no longer mentions
+`GraphState.writeRules` at all (false for the FUEL reason, not the bridging reason -- no
+premise repairs it).
+
+NEXT: `P6` (ii) is DONE. The still-owed follow-on is part (iv) -- widening
+`FullScope.lean::W4Fragment.ttuStarFree` to `TtuStarWide.lean::TtuStarFreeW`. Its
+precondition ("until part (ii) composes `ensureInBridges` into the rule-routed write path")
+is now MET and `CORRESPONDENCE.md` sec 7 records that; the field itself is UNTOUCHED and the
+2026-08-10 refutation no longer blocks it.

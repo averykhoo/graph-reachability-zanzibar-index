@@ -156,6 +156,14 @@ def NoBridgedDerived (S : Schema) : Prop :=
 def GraphState.bridgedInConcrete (σ : GraphState) (c : NodeKey) : Bool :=
   c.variant == Variant.plain && c.name != STAR && σ.schema.isSubjectWildcardUserset c.type c.pred
 
+/-- **`bridgedInConcrete` depends on the state ONLY through its schema.** ★ ADDITIVE,
+    `P6` step 3b (2026-09-14): this is what lets the bridge disjunct of
+    `foldl_writeBridgedOne_edges_sound` be keyed on the fold's START state — the accumulator's
+    schema never moves, so a claim made at one accumulator is a claim at all of them. -/
+theorem bridgedInConcrete_of_schema_eq {σ σ' : GraphState} (h : σ.schema = σ'.schema)
+    (c : NodeKey) : σ.bridgedInConcrete c = σ'.bridgedInConcrete c := by
+  unfold GraphState.bridgedInConcrete; rw [h]
+
 /-- `bridgedInConcrete` decomposed: a bridged-in-concrete node is plain, star-free, of
     a declared subject-wildcard userset shape (hence `pred ≠ BARE`).
 
@@ -866,13 +874,11 @@ theorem writeBridgedOne_edges_sound {σ : GraphState} {t : Tuple} {a b : NodeKey
     (hab : (a, b) ∈ (σ.writeBridgedOne t).edges) :
     (a, b) ∈ σ.edges ∨
       (a = subjNode t.subject ∧ b = objNode t.object t.relation) ∨
-      (σ.schema.isSubjectWildcardUserset a.type a.pred = true ∧
-        b = wAnyNode (a.type, a.pred)) := by
+      (σ.bridgedInConcrete a = true ∧ b = wAnyNode (a.type, a.pred)) := by
   -- The PROLOGUE alone: an edge of `bridgePre` is old or one of its two in-bridges.
   have hpre : ∀ {x y : NodeKey}, (x, y) ∈ (σ.bridgePre t).edges →
       (x, y) ∈ σ.edges ∨
-        (σ.schema.isSubjectWildcardUserset x.type x.pred = true ∧
-          y = wAnyNode (x.type, x.pred)) := by
+        (σ.bridgedInConcrete x = true ∧ y = wAnyNode (x.type, x.pred)) := by
     intro x y hxy
     unfold GraphState.bridgePre at hxy
     rcases ensureInBridges_edges_mem hxy with hin | ⟨heq, hbr⟩
@@ -881,14 +887,18 @@ theorem writeBridgedOne_edges_sound {σ : GraphState} {t : Tuple} {a b : NodeKey
       · simp only [addNode_edges] at hin'; exact Or.inl hin'
       · obtain ⟨e1, e2⟩ := Prod.ext_iff.mp heq
         subst e1
-        have hsw := (bridgedInConcrete_elim hbr).2.2.2
-        simp only [addNode_schema] at hsw
-        exact Or.inr ⟨hsw, e2⟩
+        refine Or.inr ⟨?_, e2⟩
+        rw [bridgedInConcrete_of_schema_eq
+          (σ := σ) (σ' := (σ.addNode (subjNode t.subject)).addNode
+            (objNode t.object t.relation)) (by simp)]
+        exact hbr
     · obtain ⟨e1, e2⟩ := Prod.ext_iff.mp heq
       subst e1
-      have hsw := (bridgedInConcrete_elim hbr).2.2.2
-      simp only [ensureInBridges_schema, addNode_schema] at hsw
-      exact Or.inr ⟨hsw, e2⟩
+      refine Or.inr ⟨?_, e2⟩
+      rw [bridgedInConcrete_of_schema_eq
+        (σ := σ) (σ' := ((σ.addNode (subjNode t.subject)).addNode
+          (objNode t.object t.relation)).ensureInBridges (subjNode t.subject)) (by simp)]
+      exact hbr
   unfold GraphState.writeBridgedOne at hab
   split at hab
   · -- admitted: the grant edge on top of the prologue
@@ -918,8 +928,7 @@ theorem foldl_writeBridgedOne_edges_sound (us : List Tuple) :
       (a, b) ∈ (us.foldl (fun acc u => acc.writeBridgedOne u) σ).edges →
       (a, b) ∈ σ.edges ∨
         (∃ u ∈ us, a = subjNode u.subject ∧ b = objNode u.object u.relation) ∨
-        (σ.schema.isSubjectWildcardUserset a.type a.pred = true ∧
-          b = wAnyNode (a.type, a.pred)) := by
+        (σ.bridgedInConcrete a = true ∧ b = wAnyNode (a.type, a.pred)) := by
   induction us with
   | nil => intro σ a b hab; exact Or.inl hab
   | cons t rest ih =>
@@ -933,8 +942,47 @@ theorem foldl_writeBridgedOne_edges_sound (us : List Tuple) :
       · exact Or.inr (Or.inr ⟨hsw, hw⟩)
     · exact Or.inr (Or.inl ⟨u, List.mem_cons_of_mem _ hu, h1, h2⟩)
     · -- the IH's bridge disjunct is keyed on the accumulator; the schema is fold-invariant
-      rw [writeBridgedOne_schema] at hsw
+      rw [bridgedInConcrete_of_schema_eq (writeBridgedOne_schema σ t)] at hsw
       exact Or.inr (Or.inr ⟨hsw, hw⟩)
+
+/-! ### ★ MULTIPLICITY off the bridge targets (`P6` step 3b, 2026-09-14)
+
+The R3 occurrence-count stack (`CascadeStrata.lean::untOccCount` and its family) reasons
+about `List.count`, not `∈`, and its whole content is an EXACT equation — so it cannot
+tolerate the bridge edges the re-pointed write leg adds. The resolution is not to weaken the
+equation but to SCOPE it: every bridge edge has a `wAnyNode` target, and `untOccCount` sums
+`edgeOfTuple`, whose targets are `objNode`s. So off the `wAny` targets the bridged fold
+counts exactly what the plain fold counted, and the R3 family gains one side condition
+rather than an error term.
+
+⚠ Membership monotonicity is NOT enough here and the distinction is easy to miss: a leg that
+erased one copy of a doubly-present non-bridge edge would preserve `∈` and break `count`. -/
+
+/-- One in-bridge leg is multiplicity-inert at any non-`wAny`-targeted pair: the only edge it
+    can add is `(c, wAnyNode (c.type, c.pred))`. -/
+theorem count_ensureInBridges_of_ne_wAny (σ : GraphState) (c : NodeKey)
+    {p : NodeKey × NodeKey} (hp : p.2.variant ≠ Variant.wAny) :
+    (σ.ensureInBridges c).edges.count p = σ.edges.count p := by
+  have hne : ((c, wAnyNode (c.type, c.pred)) == p) = false := by
+    rw [beq_eq_false_iff_ne]
+    intro heq
+    exact hp (congrArg NodeKey.variant (congrArg Prod.snd heq)).symm
+  unfold GraphState.ensureInBridges
+  split
+  · split
+    · rw [addNode_edges]
+    · split
+      · rw [addEdge_edges, addNode_edges, List.count_cons, hne]; simp
+      · rw [addNode_edges]
+  · rfl
+
+/-- …and so is the whole unlogged bridge prologue, both endpoints. -/
+theorem count_bridgePre_of_ne_wAny (σ : GraphState) (t : Tuple)
+    {p : NodeKey × NodeKey} (hp : p.2.variant ≠ Variant.wAny) :
+    (σ.bridgePre t).edges.count p = σ.edges.count p := by
+  unfold GraphState.bridgePre
+  rw [count_ensureInBridges_of_ne_wAny _ _ hp, count_ensureInBridges_of_ne_wAny _ _ hp,
+    addNode_edges, addNode_edges]
 
 /-! ### ★ Monotonicity, node soundness and endpoint closure (`P6` step 3b, 2026-09-13)
 

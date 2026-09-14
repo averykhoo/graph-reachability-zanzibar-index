@@ -66,15 +66,31 @@ theorem nreaches_factor {P : NodeKey × NodeKey → Prop}
 
 /-! ## Write-leg bookkeeping — the logged fold's outbox and edges -/
 
-/-- One logged write step keeps the watermark. -/
+/-! ★ **`P6` step 3b, 2026-09-14 — the write-leg bookkeeping below keeps every STATEMENT
+across re-point #1; the proofs swap one discharger each.** The pattern is uniform: where a
+proof reached for a `writeDirect_*` projection it now reaches for the bridge prologue's
+(`Cascade.lean::bridgePreLogged_*`), because the then-branch of `writeLoggedOne` is
+`(σ.bridgePreLogged t).addEdge …` rather than `σ.writeDirect t`. `GraphState.addEdge` is the
+structure update `{ σ with edges := … }`, so its watermark/outbox/nodes projections reduce
+definitionally and need no lemma — which is just as well, because **`addEdge_watermark` and
+`addEdge_outbox` do not exist** (`State.lean` has `addEdge_nodes` / `_residue` / `_schema` /
+`_edges` only). -/
+
+/-- One logged write step keeps the watermark. The bridge prologue must not move the drain
+    cursor — that is `bridgePreLogged_watermark`'s whole job. -/
 theorem writeLoggedOne_watermark (σ : GraphState) (t : Tuple) :
     (σ.writeLoggedOne t).watermark = σ.watermark := by
   unfold GraphState.writeLoggedOne
   split
-  · rw [pushDelta_watermark, writeDirect_watermark]
+  · rw [pushDelta_watermark]
+    exact bridgePreLogged_watermark σ t
   · rfl
 
-/-- One logged write step only pushes outbox rows. -/
+/-- One logged write step only pushes outbox rows.
+
+    ⚠ Post-re-point this is a STRONGER fact than it looks: the prologue itself emits (one
+    row per bridge that fires), so "only pushes" now has to survive two emitting stages, not
+    one. `bridgePreLogged_outbox_mono` is the first. -/
 theorem writeLoggedOne_outbox_mono (σ : GraphState) (t : Tuple) :
     ∀ d ∈ σ.outbox, d ∈ (σ.writeLoggedOne t).outbox := by
   intro d hd
@@ -82,8 +98,8 @@ theorem writeLoggedOne_outbox_mono (σ : GraphState) (t : Tuple) :
   split
   · rw [pushDelta_outbox]
     refine List.mem_cons_of_mem _ ?_
-    rw [writeDirect_outbox]
-    exact hd
+    show d ∈ (σ.bridgePreLogged t).outbox
+    exact bridgePreLogged_outbox_mono σ t d hd
   · exact hd
 
 /-- The logged fold only pushes outbox rows. -/
@@ -103,12 +119,17 @@ theorem writeLoggedRules_outbox_mono (σ : GraphState) (S : Schema) (t : Tuple) 
   unfold GraphState.writeLoggedRules
   exact foldl_writeLoggedOne_outbox_mono (rewriteClosureL S (rawWriteTuples S t)) σ
 
-/-- A logged write leg only adds edges (its core is the unlogged `writeRules`). -/
+/-- A logged write leg only adds edges (its core is the unlogged `writeRulesRaw`).
+
+    ★ `P6` step 3b (2026-09-14): statement unchanged, discharger swapped for the bridged
+    twin. Monotonicity is **strictly easier** after the re-point, not harder — bridging only
+    ever ADDS a node and an edge (`UsStarWrite.lean::ensureInBridges_mono`), and a refused
+    grant rolls the whole prologue back to `σ` rather than to some partially-bridged state. -/
 theorem writeLoggedRules_edges_mono (σ : GraphState) (S : Schema) (t : Tuple) :
     ∀ ab ∈ σ.edges, ab ∈ (σ.writeLoggedRules S t).edges := by
   intro ab hab
   rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).edges]
-  exact foldl_writeDirect_edges_mono _ ab hab
+  exact foldl_writeBridgedOne_edges_mono _ ab hab
 
 /-- **New edges carry frontier rows.** Every edge of a logged write leg is an old
     edge, or has an emitted outbox row with an id strictly above the (unchanged)
@@ -135,28 +156,45 @@ theorem writeLoggedRules_edge_delta (σ : GraphState) (S : Schema) (t : Tuple) :
     refine ih (σc.writeLoggedOne u) (by rw [writeLoggedOne_watermark, hwm]) ?_ ab hab
     intro ab' hab'
     unfold GraphState.writeLoggedOne at hab' ⊢
-    by_cases hadm : σc.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true
+    by_cases hadm : (σc.bridgePreLogged u).admitEdge (subjNode u.subject)
+        (objNode u.object u.relation) = true
     · rw [if_pos hadm] at hab' ⊢
-      rw [pushDelta_edges, writeDirect_edges, if_pos hadm] at hab'
+      rw [pushDelta_edges, addEdge_edges] at hab'
       rw [pushDelta_outbox]
       rcases List.mem_cons.mp hab' with heq | hmem
-      · -- the fresh edge: its row is the pushed head
-        refine Or.inr ⟨⟨(σc.writeDirect u).nextDeltaId, objNode u.object u.relation,
+      · -- the fresh GRANT edge: its row is the pushed head
+        refine Or.inr ⟨⟨((σc.bridgePreLogged u).addEdge (subjNode u.subject)
+            (objNode u.object u.relation)).nextDeltaId, objNode u.object u.relation,
           u.relation, true⟩, List.mem_cons_self, ?_, ?_⟩
-        · show σ.watermark < (σc.writeDirect u).nextDeltaId
-          have h1 : (σc.writeDirect u).nextDeltaId
-              = max (σc.writeDirect u).maxOutboxId (σc.writeDirect u).watermark + 1 := rfl
-          have h2 : (σc.writeDirect u).watermark = σc.watermark :=
-            writeDirect_watermark σc u
+        · show σ.watermark < ((σc.bridgePreLogged u).addEdge (subjNode u.subject)
+            (objNode u.object u.relation)).nextDeltaId
+          have h1 : ((σc.bridgePreLogged u).addEdge (subjNode u.subject)
+                (objNode u.object u.relation)).nextDeltaId
+              = max ((σc.bridgePreLogged u).addEdge (subjNode u.subject)
+                  (objNode u.object u.relation)).maxOutboxId
+                ((σc.bridgePreLogged u).addEdge (subjNode u.subject)
+                  (objNode u.object u.relation)).watermark + 1 := rfl
+          have h2 : ((σc.bridgePreLogged u).addEdge (subjNode u.subject)
+              (objNode u.object u.relation)).watermark = σc.watermark :=
+            bridgePreLogged_watermark σc u
           omega
-        · show (⟨(σc.writeDirect u).nextDeltaId, objNode u.object u.relation,
+        · show (⟨((σc.bridgePreLogged u).addEdge (subjNode u.subject)
+            (objNode u.object u.relation)).nextDeltaId, objNode u.object u.relation,
             u.relation, true⟩ : Delta).node = ab'.2
           rw [heq]
-      · rcases h ab' hmem with hold | ⟨d, hd, hgt, hnode⟩
-        · exact Or.inl hold
-        · refine Or.inr ⟨d, List.mem_cons_of_mem _ ?_, hgt, hnode⟩
-          rw [writeDirect_outbox]
-          exact hd
+      · -- ★ `P6` step 3b (2026-09-14): the one genuinely NEW case. Post-re-point this is
+        -- an edge of the PROLOGUE, not of `σc` — so it is old, or it is a BRIDGE edge,
+        -- which carries its own frontier row at the bridge target. That the row sits at
+        -- `ab.2` on the bridge arm too is what lets this theorem keep its statement
+        -- instead of weakening to a disjunction over the two endpoints; see
+        -- `Cascade.lean::ensureInBridgesLogged_edge_delta`.
+        rcases bridgePreLogged_edge_delta σc u ab' hmem with hold | ⟨d, hd, hgt, hnode⟩
+        · rcases h ab' hold with hσ | ⟨d, hd, hgt', hnode⟩
+          · exact Or.inl hσ
+          · exact Or.inr ⟨d, List.mem_cons_of_mem _
+              (bridgePreLogged_outbox_mono σc u d hd), hgt', hnode⟩
+        · refine Or.inr ⟨d, List.mem_cons_of_mem _ hd, ?_, hnode⟩
+          rw [← hwm]; exact hgt
     · rw [if_neg hadm] at hab' ⊢
       exact h ab' hab'
 
@@ -246,7 +284,14 @@ theorem edgesClosed_reconcileJobsD {S : Schema} {T : Store} :
     exact hcl ab' hab'
 
 /-- **Every W3d state is edge endpoint-closed** — the `reach ↔ NReaches` bridge is
-    available on the whole interleaved chain. -/
+    available on the whole interleaved chain.
+
+    ★ `P6` step 3b (2026-09-14): statement unchanged, one discharger swapped. The bridged
+    fold preserves endpoint closure for a structural reason worth stating once, because
+    several proofs below lean on it: `ensureInBridges` interns the `wAnyNode` via `addNode`
+    on EVERY bridged branch *before* it can add the bridge edge, and `bridgePre` adds both
+    grant endpoints first — so no stage can produce an edge whose endpoint is not already a
+    node. -/
 theorem reachedByW3d_edgesClosed {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d σ S T) :
     ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes := by
@@ -259,7 +304,7 @@ theorem reachedByW3d_edgesClosed {σ : GraphState} {S : Schema} {T : Store}
     intro ab hab
     rw [hev.edges] at hab
     rw [hev.nodes]
-    exact edgesClosed_foldl_writeDirect (rewriteClosureL S (rawWriteTuples S t)) σp ih ab hab
+    exact edgesClosed_foldl_writeBridgedOne (rewriteClosureL S (rawWriteTuples S t)) σp ih ab hab
   | @cascade σp S T jobs hjv hcover hscope hprev ih =>
     intro ab hab
     rcases runCascade_cases S T σp jobs with hrc | hrc
@@ -277,17 +322,33 @@ theorem reachedByW3d_edgesClosed {σ : GraphState} {S : Schema} {T : Store}
 
 /-! ## Plain edge targets over the interleaved closure (the attack's fragment fence) -/
 
-/-- **Every W3d edge target is plain** on `BareStarStore` stores: a routed edge's
+/-- **No W3d edge target is a `wAll` node** on `BareStarStore` stores: a routed edge's
     object is the raw write's object (star-free by `BareStarStore`), a cascade edge's
-    object is the job's concrete `on`. This is the fence the attack found load-bearing:
-    a `wAll`-targeted edge would flip probe 3 at every object of the type while
-    `affectedKeys` skips the star-named head (Python's
+    object is the job's concrete `on`, and a write's bridge target is a `wAny`. This is the
+    fence the attack found load-bearing: a `wAll`-targeted edge would flip probe 3 at every
+    object of the type while `affectedKeys` skips the star-named head (Python's
     `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` never dirties a derived
     own-key from one, and rejects the derived-head case outright). The store
-    hypothesis is taken at the chain's own store and weakens along the prefix. -/
+    hypothesis is taken at the chain's own store and weakens along the prefix.
+
+    ★★ **RESTATED by `P6` step 3b (2026-09-14). The old form went HARD-FALSE.** It read
+    `∀ ab ∈ σ.edges, ab.2.variant = Variant.plain`; once the write leg materialises
+    in-bridges there is a counterexample in every bridged write, because a bridge target is
+    `wAnyNode (ty,p) = ⟨ty, STAR, p, Variant.wAny⟩`. ⚠ **The NAME is audited**
+    (`formal/audited_theorems.txt`, plus a `#print axioms` row in `Audit.lean`) and the
+    name therefore stays, misleading suffix and all — renaming it would red `verify.sh`
+    step 4a. The statement is not pinned, so it was free to move.
+
+    **Why `≠ wAll` and not the disjunctive `plain ∨ wAny`.** Its sole consumer chain is
+    `writeLeg_reach_wAll_false` → `writeLeg_graphRec_stable` → `writeLeg_checkFn_stable`,
+    and every use feeds `DirectCorrect.lean::nreaches_target_variant_ne` a `wAllNode` to
+    derive `False`. `≠ wAll` is exactly sufficient and needs NO case split at any consumer;
+    the disjunction would push a two-way `rcases` into three proofs to say the same thing.
+    The same restatement is owed at the twin `CascadeStrataSettle.lean::
+    reachedByW3d2_edges_target_plain` (NOT audited), which has six consumers. -/
 theorem reachedByW3d_edges_target_plain {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d σ S T) :
-    BareStarStore T → ∀ ab ∈ σ.edges, ab.2.variant = Variant.plain := by
+    BareStarStore T → ∀ ab ∈ σ.edges, ab.2.variant ≠ Variant.wAll := by
   induction h with
   | empty S =>
     intro _ ab hab
@@ -296,14 +357,21 @@ theorem reachedByW3d_edges_target_plain {σ : GraphState} {S : Schema} {T : Stor
     intro hBS ab hab
     rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hab
     obtain ⟨a, b⟩ := ab
-    rcases foldl_writeDirect_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
-      with hold | ⟨w, hw, _, h2⟩
+    rcases foldl_writeBridgedOne_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
+      with hold | ⟨w, hw, _, h2⟩ | ⟨_, h2⟩
     · exact ih (fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')) (a, b) hold
-    · show b.variant = Variant.plain
+    · show b.variant ≠ Variant.wAll
       have hwo : w.object.name ≠ STAR := by
         rw [rewriteClosureL_object hw]
         exact (hBS t List.mem_cons_self).2
       rw [h2, objNode_plain hwo]
+      exact Variant.noConfusion
+    · -- ★ THE NEW DISJUNCT, and the reason this statement had to move: a bridge target is
+      -- `wAnyNode`, so it is NOT plain. It is not `wAll` either, and that is all the fence
+      -- was ever used for.
+      show b.variant ≠ Variant.wAll
+      rw [h2]
+      exact Variant.noConfusion
   | @cascade σp S T jobs hjv hcover hscope hprev ih =>
     intro hBS ab hab
     rcases runCascade_cases S T σp jobs with hrc | hrc
@@ -313,9 +381,10 @@ theorem reachedByW3d_edges_target_plain {σ : GraphState} {S : Schema} {T : Stor
       obtain ⟨a, b⟩ := ab
       rcases reconcileJobsD_edge_sound jobs σp a b hab' with hold | ⟨j, hj, c, _, _, h2⟩
       · exact ih hBS (a, b) hold
-      · show b.variant = Variant.plain
+      · show b.variant ≠ Variant.wAll
         obtain ⟨_, _, _, _, _, _, _, _, hon⟩ := hjv j hj
         rw [h2, objNode_plain hon]
+        exact Variant.noConfusion
     · rw [hrc] at hab
       exact ih hBS ab hab
 
@@ -370,7 +439,7 @@ theorem writeLeg_reach_stable {σ : GraphState} {S : Schema} {t : Tuple}
     intro ab hab
     rw [hev.edges] at hab
     rw [hev.nodes]
-    exact edgesClosed_foldl_writeDirect (rewriteClosureL S (rawWriteTuples S t)) σ hclσ ab hab
+    exact edgesClosed_foldl_writeBridgedOne (rewriteClosureL S (rawWriteTuples S t)) σ hclσ ab hab
   cases h' : (σ.writeLoggedRules S t).reach x (objNode ⟨dt, on⟩ r')
     <;> cases h0 : σ.reach x (objNode ⟨dt, on⟩ r')
   · rfl
@@ -412,10 +481,10 @@ theorem writeLeg_reach_stable {σ : GraphState} {S : Schema} {t : Tuple}
     whose edge targets are plain (the attack's fragment fence). -/
 theorem writeLeg_reach_wAll_false {σ : GraphState} {S : Schema} {t : Tuple}
     {dt r' : String}
-    (htp' : ∀ ab ∈ (σ.writeLoggedRules S t).edges, ab.2.variant = Variant.plain) :
+    (htp' : ∀ ab ∈ (σ.writeLoggedRules S t).edges, ab.2.variant ≠ Variant.wAll) :
     (∀ u, (σ.writeLoggedRules S t).reach u (wAllNode dt r') = false) ∧
     (∀ u, σ.reach u (wAllNode dt r') = false) := by
-  have htp0 : ∀ ab ∈ σ.edges, ab.2.variant = Variant.plain :=
+  have htp0 : ∀ ab ∈ σ.edges, ab.2.variant ≠ Variant.wAll :=
     fun ab hab => htp' ab (writeLoggedRules_edges_mono σ S t ab hab)
   constructor
   · intro u
@@ -423,14 +492,14 @@ theorem writeLeg_reach_wAll_false {σ : GraphState} {S : Schema} {t : Tuple}
     | false => rfl
     | true =>
       exfalso
-      have := nreaches_target_plain htp' (reach_sound hc)
+      have := nreaches_target_variant_ne htp' (reach_sound hc)
       simp [wAllNode] at this
   · intro u
     cases hc : σ.reach u (wAllNode dt r') with
     | false => rfl
     | true =>
       exfalso
-      have := nreaches_target_plain htp0 (reach_sound hc)
+      have := nreaches_target_variant_ne htp0 (reach_sound hc)
       simp [wAllNode] at this
 
 /-- **Write-leg `graphRec` stability off the mapped keys** (fan-out completeness,
@@ -440,7 +509,7 @@ theorem writeLeg_reach_wAll_false {σ : GraphState} {S : Schema} {t : Tuple}
 theorem writeLeg_graphRec_stable {σ : GraphState} {S : Schema} {t : Tuple}
     {dt on R r' : String} {e : Expr}
     (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
-    (htp' : ∀ ab ∈ (σ.writeLoggedRules S t).edges, ab.2.variant = Variant.plain)
+    (htp' : ∀ ab ∈ (σ.writeLoggedRules S t).edges, ab.2.variant ≠ Variant.wAll)
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hr' : r' ∈ computedRefs e) (hon : on ≠ STAR)
     (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
@@ -463,7 +532,7 @@ theorem writeLeg_graphRec_stable {σ : GraphState} {S : Schema} {t : Tuple}
 theorem writeLeg_checkFn_stable {σ : GraphState} {S : Schema} {t : Tuple} (T' : Store)
     {dt on R : String} {e : Expr}
     (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
-    (htp' : ∀ ab ∈ (σ.writeLoggedRules S t).edges, ab.2.variant = Variant.plain)
+    (htp' : ∀ ab ∈ (σ.writeLoggedRules S t).edges, ab.2.variant ≠ Variant.wAll)
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hco : ComputedOnly e) (hon : on ≠ STAR)
     (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.writeLoggedRules S t))
@@ -492,7 +561,7 @@ theorem affectedObjects_writeLeg_mono {σ : GraphState} {S : Schema} {t : Tuple}
     refine List.mem_cons_of_mem _ (List.mem_filter.mpr ⟨?_, ?_⟩)
     · have hev := writeLoggedRules_evalEq (EvalEq.refl σ) S t
       rw [hev.nodes]
-      exact foldl_writeDirect_nodes_mono (rewriteClosureL S (rawWriteTuples S t)) σ v hvn
+      exact foldl_writeBridgedOne_nodes_mono (rewriteClosureL S (rawWriteTuples S t)) σ v hvn
     · exact reach_complete hclσ'
         (NReaches.mono_subset (writeLoggedRules_edges_mono σ S t) (reach_sound hvr))
 
@@ -508,7 +577,7 @@ theorem cascadeKeys_writeLeg_mono {σ : GraphState} {S : Schema} {t : Tuple}
     intro ab hab
     rw [hev.edges] at hab
     rw [hev.nodes]
-    exact edgesClosed_foldl_writeDirect (rewriteClosureL S (rawWriteTuples S t)) σ hclσ ab hab
+    exact edgesClosed_foldl_writeBridgedOne (rewriteClosureL S (rawWriteTuples S t)) σ hclσ ab hab
   intro k hk
   unfold cascadeKeys at hk ⊢
   obtain ⟨d, hd, hkd⟩ := List.mem_flatMap.mp hk
@@ -661,7 +730,7 @@ structure ShadowOver (P : NodeKey → Prop) (σ σ0 : GraphState) : Prop where
     self-adapting `first | … | …` sites stay GREEN — which is exactly why those three
     are not evidence and this probe is. -/
 abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
-  ShadowOver (fun k => DerNode S k ∨ LeafNode S k) σ σ0
+  ShadowOver (fun k => DerNode S k ∨ LeafNode S k ∨ BridgeNode S k) σ σ0
 
 /-! ### Leaf-free `computed` operands (4c-ii step 7)
 
@@ -1320,6 +1389,50 @@ rewriteStep_subject_pred_gen`, is the wrong shape and does not transfer: it CONS
 **No new `LeafScope` / `GraphAdmission` field is needed** — `hNK`, `hCO`, `hQ` and `hDR`
 below are hypotheses 1, 2, 5 and 6 of `reachedByW3d_shadow` verbatim. -/
 
+/-- ★ **The TTU-FREE form, and the one the `_d` chain needs** (`P6` step 3b step 8,
+    2026-09-14). The argument below never used `ComputedOnly` for anything except "a derived
+    def has no TTU node"; stating that directly lets BOTH shadow chains use one lemma —
+    `reachedByW3d2_shadow_d` carries `ComputedOrDirect`, which is equally TTU-free
+    (`ReconcileCorrect.lean::exprTtus_computedOrDirect`). The `ComputedOnly` form below is
+    kept as a wrapper so its existing consumers do not move. -/
+theorem isSubjectWildcardUserset_false_of_ttuFree {S : Schema} {ty p : String}
+    (hNK : NodupKeys S)
+    (hTF : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → exprTtus e = [])
+    (hQ : TtuTargetsSat S NotLeafName)
+    (hDR : DirectRestrictionsNotLeaf S)
+    (hleaf : ¬ NotLeafName p) :
+    S.isSubjectWildcardUserset ty p = false := by
+  have hA : S.defs.any (fun d => (exprRestrictions d.2).contains (ty, p, true)) = false := by
+    by_contra hcon
+    rw [Bool.not_eq_false] at hcon
+    simp only [List.any_eq_true] at hcon
+    obtain ⟨d, hd, hmem⟩ := hcon
+    rw [List.contains_eq_mem] at hmem
+    obtain ⟨rs, hrs, hr⟩ :=
+      mem_exprDirectsAll_of_mem_exprRestrictions (of_decide_eq_true hmem)
+    exact hleaf (hDR d hd rs hrs (ty, p, true) hr)
+  have hB : S.isStarTuplesetThrough ty p = false := by
+    by_contra hcon
+    rw [Bool.not_eq_false] at hcon
+    unfold Schema.isStarTuplesetThrough at hcon
+    simp only [List.any_eq_true] at hcon
+    obtain ⟨d, hd, tt, htt, hcond⟩ := hcon
+    rw [Bool.and_eq_true, beq_iff_eq] at hcond
+    have htr : tt.1 = p := hcond.1
+    cases hder : isDerived S d.1 with
+    | true =>
+      rw [hTF d.1.1 d.1.2 d.2 (lookup_of_mem hNK hd) hder] at htt
+      simp at htt
+    | false =>
+      have htt' : (tt.1, tt.2) ∈ exprTtus d.2 := htt
+      have hrule : (⟨d.1.1, tt.2, d.1.2, RuleKind.ttu tt.1⟩ : RRule) ∈ schemaRewrites S :=
+        mem_schemaRewrites_of_mem_exprArms hd hder
+          (mem_exprArms_of_mem_exprTtus
+            (containsBool_of_mem_defs_untainted hNK hd hder) htt')
+      exact hleaf (htr ▸ hQ _ hrule tt.1 rfl)
+  simp only [Schema.isSubjectWildcardUserset, hA, hB, Bool.or_self, Bool.and_false]
+
+
 /-- **T2, the payoff.** At a LEAF predicate — `¬ NotLeafName p`, i.e. `p ≠ BARE` and `p`
     carries a `'.'` — no subject-wildcard userset shape is declared, so nothing of that
     shape is ever bridged in.
@@ -1784,6 +1897,52 @@ theorem computedOnly_of_unionAll {es : List Expr} {sub : Expr}
       exact computedOnly_foldl_union es e (hall e (List.mem_cons_self ..))
         (fun x hx => hall x (List.mem_cons_of_mem _ hx))
 
+/-! ★ The `ComputedOrDirect` twins of the three helpers above (`P6` step 3b step 8,
+2026-09-14). Each is its original with the `.direct` arm's `h.elim` replaced by the
+now-inhabited case — `splitPure` returns a `.direct` node whole, and `ComputedOrDirect` is
+happy there. -/
+
+theorem computedOrDirect_of_mem_splitPure_snd :
+    ∀ {e : Expr}, ComputedOrDirect e → ∀ x ∈ (splitPure e).2, ComputedOrDirect x := by
+  intro e
+  induction e with
+  | direct rs => intro h x hx; simp [splitPure] at hx
+  | computed R => intro h x hx; simp [splitPure] at hx; subst hx; exact h
+  | ttu tgt ts => intro h; exact h.elim
+  | union a b iha ihb =>
+      intro h x hx
+      rw [splitPure] at hx
+      simp only [List.mem_append] at hx
+      rcases hx with hx | hx
+      · exact iha h.1 x hx
+      · exact ihb h.2 x hx
+  | inter a b _ _ => intro h x hx; simp [splitPure] at hx; subst hx; exact h
+  | excl a b _ _ => intro h x hx; simp [splitPure] at hx; subst hx; exact h
+
+theorem computedOrDirect_foldl_union :
+    ∀ (es : List Expr) (e : Expr), ComputedOrDirect e →
+      (∀ x ∈ es, ComputedOrDirect x) → ComputedOrDirect (es.foldl Expr.union e) := by
+  intro es
+  induction es with
+  | nil => intro e he _; simpa using he
+  | cons a es ih =>
+      intro e he hall
+      simp only [List.foldl_cons]
+      refine ih _ ?_ (fun x hx => hall x (List.mem_cons_of_mem _ hx))
+      exact ⟨he, hall a (List.mem_cons_self ..)⟩
+
+theorem computedOrDirect_of_unionAll {es : List Expr} {sub : Expr}
+    (hall : ∀ x ∈ es, ComputedOrDirect x) (h : unionAll es = some sub) :
+    ComputedOrDirect sub := by
+  cases es with
+  | nil => simp [unionAll] at h
+  | cons e es =>
+      rw [unionAll] at h
+      simp only [Option.some.injEq] at h
+      subst h
+      exact computedOrDirect_foldl_union es e (hall e (List.mem_cons_self ..))
+        (fun x hx => hall x (List.mem_cons_of_mem _ hx))
+
 /-- **The MERGED closure leaf of a `ComputedOnly` subtree is `ComputedOnly`** — the arm
     that covers `persistedLeaves`' pure-union merge, and the one a lemma written only for
     atoms would miss. -/
@@ -1806,6 +1965,49 @@ theorem computedOnly_of_closure_mem_atomLeaves {S : Schema} {ty : String} {e sub
     (hco : ComputedOnly e) (h : PLeaf.closure sub ∈ atomLeaves S ty e) : ComputedOnly sub := by
   cases e with
   | direct rs => exact hco.elim
+  | computed R =>
+      rw [atomLeaves] at h
+      split at h
+      · simp at h
+      · simp only [List.mem_singleton, PLeaf.closure.injEq] at h
+        subst h
+        exact hco
+  | ttu tgt ts => exact hco.elim
+  | union a b => simp [atomLeaves] at h
+  | inter a b => simp [atomLeaves] at h
+  | excl a b => simp [atomLeaves] at h
+
+/-- The `ComputedOrDirect` twin of `computedOnly_of_closure_mem_pureLeaves`. ★ ADDITIVE,
+    `P6` step 3b step 8 (2026-09-14) — see the section note below `computedOnly_of_closure_
+    mem_persistedLeaves` for why the whole chain needed a `ComputedOrDirect` copy. -/
+theorem computedOrDirect_of_closure_mem_pureLeaves {e sub : Expr}
+    (hco : ComputedOrDirect e) (h : PLeaf.closure sub ∈ pureLeaves e) :
+    ComputedOrDirect sub := by
+  simp only [pureLeaves, List.mem_append] at h
+  rcases h with h | h
+  · split at h <;> simp at h
+  · split at h
+    · simp at h
+    · rename_i sub' heq
+      simp only [List.mem_singleton, PLeaf.closure.injEq] at h
+      subst h
+      exact computedOrDirect_of_unionAll (computedOrDirect_of_mem_splitPure_snd hco) heq
+
+/-- The `ComputedOrDirect` twin of `computedOnly_of_closure_mem_atomLeaves`. The `.direct`
+    arm is no longer refuted by the premise — instead `atomLeaves` sends it to a STORAGE
+    leaf, so there is no `.closure` leaf to be about. -/
+theorem computedOrDirect_of_closure_mem_atomLeaves {S : Schema} {ty : String} {e sub : Expr}
+    (hco : ComputedOrDirect e) (h : PLeaf.closure sub ∈ atomLeaves S ty e) :
+    ComputedOrDirect sub := by
+  cases e with
+  | direct rs =>
+      rw [atomLeaves] at h
+      split at h
+      · exact computedOrDirect_of_closure_mem_pureLeaves hco h
+      · simp only [List.mem_append, List.mem_map] at h
+        rcases h with h | h
+        · split at h <;> simp at h
+        · obtain ⟨_, _, hx⟩ := h; exact PLeaf.noConfusion hx
   | computed R =>
       rw [atomLeaves] at h
       split at h
@@ -1863,6 +2065,116 @@ theorem computedOnly_closure_persistedLeaves_and_spine {S : Schema} {ty : String
         exact h.elim ((iha hco.1).1 sub) ((ihb hco.2).1 sub)
       · simp only [unionSpineLeaves, List.mem_append] at h
         exact h.elim ((iha hco.1).1 sub) ((ihb hco.2).1 sub)
+
+/-! ### ★ The `ComputedOrDirect` twins of the leaf-kind chain (`P6` step 3b step 8, 2026-09-14)
+
+**Why these exist.** `T3` — "no closure member's subject is a bridge node" — runs through
+`kind_computed_of_mem_leafRewrites_computedOnly`, which is stated under the
+`ComputedOnly`-at-derived premise the `reachedByW3d_shadow` family binds. The W3d-2 `_d`
+shadow chain (`CascadeStrataSettle.lean::reachedByW3d2_shadow_d`) binds **`ComputedOrDirect`**
+instead — that is the whole point of the `_d` chain, which exists to admit derived defs with
+`direct` arms — so `T3` could not be discharged there.
+
+**The two predicates differ only at `.direct`, and this chain never needed `.direct` to be
+absent.** `RulesWrite.lean::exprArms` returns `[]` at a `.direct` node, so a direct arm mints
+no rewrite rule at all and cannot mint a `.ttu` one; and `Leaf.lean::persistedLeaves` sends a
+`.direct` to a STORAGE leaf, never a `.closure` leaf. So the whole chain generalises verbatim,
+with the two `hco.elim` steps replaced by "this case is empty". Three twins, no new content.
+
+⚠ The `ComputedOnly` originals are LEFT IN PLACE and unchanged — they still have consumers,
+and making them wrappers would have moved an audited-adjacent proof for no gain. -/
+
+theorem computedOrDirect_closure_persistedLeaves_and_spine {S : Schema} {ty : String} :
+    ∀ (e : Expr), ComputedOrDirect e →
+      (∀ sub, PLeaf.closure sub ∈ persistedLeaves S ty e → ComputedOrDirect sub) ∧
+      (∀ sub, PLeaf.closure sub ∈ unionSpineLeaves S ty e → ComputedOrDirect sub) := by
+  intro e
+  induction e with
+  | direct rs =>
+      intro hco
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves] at h
+        exact computedOrDirect_of_closure_mem_atomLeaves hco h
+      · simp only [unionSpineLeaves] at h
+        exact computedOrDirect_of_closure_mem_atomLeaves hco h
+  | computed R =>
+      intro hco
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves] at h
+        exact computedOrDirect_of_closure_mem_atomLeaves hco h
+      · simp only [unionSpineLeaves] at h
+        exact computedOrDirect_of_closure_mem_atomLeaves hco h
+  | ttu tgt ts => intro hco; exact hco.elim
+  | union a b iha ihb =>
+      intro hco
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves] at h
+        split at h
+        · exact computedOrDirect_of_closure_mem_pureLeaves hco h
+        · simp only [List.mem_append] at h
+          exact h.elim ((iha hco.1).2 sub) ((ihb hco.2).2 sub)
+      · simp only [unionSpineLeaves, List.mem_append] at h
+        exact h.elim ((iha hco.1).2 sub) ((ihb hco.2).2 sub)
+  | inter a b iha ihb =>
+      intro hco
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves, List.mem_append] at h
+        exact h.elim ((iha hco.1).1 sub) ((ihb hco.2).1 sub)
+      · simp only [unionSpineLeaves, List.mem_append] at h
+        exact h.elim ((iha hco.1).1 sub) ((ihb hco.2).1 sub)
+  | excl a b iha ihb =>
+      intro hco
+      refine ⟨fun sub h => ?_, fun sub h => ?_⟩
+      · simp only [persistedLeaves, List.mem_append] at h
+        exact h.elim ((iha hco.1).1 sub) ((ihb hco.2).1 sub)
+      · simp only [unionSpineLeaves, List.mem_append] at h
+        exact h.elim ((iha hco.1).1 sub) ((ihb hco.2).1 sub)
+
+/-- Every rewrite arm of a `ComputedOrDirect` expression is a `.computed` arm: `exprArms`
+    mints a `.ttu` rule at a `.ttu` node and nowhere else, and mints NOTHING at a `.direct`
+    node (`RulesWrite.lean::exprArms`). -/
+theorem kind_computed_of_mem_exprArms_computedOrDirect :
+    ∀ {e : Expr}, ComputedOrDirect e → ∀ {ot outRel : String} {r : RRule},
+      r ∈ exprArms ot outRel e → r.kind = RuleKind.computed := by
+  intro e
+  induction e with
+  | direct rs => intro _ _ _ _ hr; simp [exprArms] at hr
+  | computed R =>
+      intro _ _ _ _ hr
+      simp only [exprArms, List.mem_singleton] at hr
+      subst hr
+      rfl
+  | ttu tgt ts => intro hco; exact hco.elim
+  | union a b iha ihb =>
+      intro hco _ _ _ hr
+      rw [exprArms, List.mem_append] at hr
+      exact hr.elim (iha hco.1) (ihb hco.2)
+  | inter a b _ _ => intro _ _ _ _ hr; simp [exprArms] at hr
+  | excl a b _ _ => intro _ _ _ _ hr; simp [exprArms] at hr
+
+/-- **The killer, at the `_d` chain's premise.** Twin of
+    `kind_computed_of_mem_leafRewrites_computedOnly`, same proof. -/
+theorem kind_computed_of_mem_leafRewrites_computedOrDirect {S : Schema}
+    (hNK : NodupKeys S)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOrDirect e)
+    {r : RRule} (h : r ∈ leafRewrites S) : r.kind = RuleKind.computed := by
+  unfold leafRewrites at h
+  obtain ⟨d, hd, hdr⟩ := List.mem_flatMap.mp h
+  have hdefs : d ∈ S.defs := (List.mem_filter.mp hd).1
+  have hder : isDerived S d.1 = true := (List.mem_filter.mp hd).2
+  have hco : ComputedOrDirect d.2 := hCO d.1.1 d.1.2 d.2 (lookup_of_mem hNK hdefs) hder
+  unfold keyLeafRewrites at hdr
+  obtain ⟨pi, hpi, hr⟩ := List.mem_flatMap.mp hdr
+  split at hr
+  · rename_i sub heq
+    have hmem : PLeaf.closure sub ∈ persistedLeaves S d.1.1 d.2 := by
+      rw [← heq]
+      have := List.mem_map_of_mem (f := Prod.fst) hpi
+      rwa [List.zipIdx_map_fst] at this
+    exact kind_computed_of_mem_exprArms_computedOrDirect
+      ((computedOrDirect_closure_persistedLeaves_and_spine d.2 hco).1 sub hmem) hr
+  · simp at hr
 
 /-- **Every `.closure` leaf of a `ComputedOnly` allocation is `ComputedOnly`.** -/
 theorem computedOnly_of_closure_mem_persistedLeaves {S : Schema} {ty : String} {e sub : Expr}
@@ -2142,6 +2454,42 @@ theorem not_bridgeNode_of_star_bare {S : Schema} {T : Store}
   rintro ⟨ty, p, hsw, hnode⟩
   rw [isSubjectWildcardUserset_false_of_star_bare hNK hCO hmd hTT hTS hBS ht hu hnode] at hsw
   exact Bool.noConfusion hsw
+
+/-- ★ **The `leafRewrites`-kind form, and the one BOTH shadow chains can reach.** `P6` step
+    3b step 8 (2026-09-14): the `ComputedOnly` premise below was only ever a route to *"the
+    leaf layer mints no `.ttu` rule"*, and the `_d` chain reaches that fact from
+    `ComputedOrDirect` instead (`kind_computed_of_mem_leafRewrites_computedOrDirect`).
+    Taking the CONCLUSION as the hypothesis lets one lemma serve both. -/
+theorem rewriteClosureL_star_bare_of_leafKinds {S : Schema} {T : Store}
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+    (hLK : ∀ r ∈ leafRewrites S, r.kind = RuleKind.computed)
+    (hTT : TtuTuplesetsDirect S) (hTS : TtuStarFree S T) (hBS : BareStarStore T)
+    {t : Tuple} (ht : t ∈ T) {u : Tuple}
+    (hu : u ∈ rewriteClosureL S (rawWriteTuples S t))
+    (hstar : u.subject.name = STAR) : u.subject.predicate = BARE := by
+  have hsub := rewriteClosureL_star_subject hTT hTS hmd hLK ht hu hstar
+  rw [hsub]
+  exact (hBS t ht).1 (by rw [← hsub]; exact hstar)
+
+/-- ★ **T3 at the `leafRewrites`-kind premise** — the form the `_d` shadow chain consumes. -/
+theorem not_bridgeNode_of_star_bare_of_leafKinds {S : Schema} {T : Store}
+    (hmd : ∀ r ∈ schemaRewrites S, isLeafPred r.matchRel = false)
+    (hLK : ∀ r ∈ leafRewrites S, r.kind = RuleKind.computed)
+    (hTT : TtuTuplesetsDirect S) (hTS : TtuStarFree S T) (hBS : BareStarStore T)
+    {t : Tuple} (ht : t ∈ T) {u : Tuple}
+    (hu : u ∈ rewriteClosureL S (rawWriteTuples S t)) :
+    ¬ BridgeNode S (subjNode u.subject) := by
+  rintro ⟨ty, p, hsw, hnode⟩
+  have hstar : u.subject.name = STAR := star_of_subjNode_eq_wAnyNode hnode
+  have hbare : u.subject.predicate = BARE :=
+    rewriteClosureL_star_bare_of_leafKinds hmd hLK hTT hTS hBS ht hu hstar
+  have hp : p = BARE := by
+    have h2 := congrArg NodeKey.pred hnode
+    simp only [subjNode_pred, wAnyNode] at h2
+    exact h2.symm.trans hbare
+  rw [hp] at hsw
+  simp [Schema.isSubjectWildcardUserset] at hsw
+
 
 /-- **NON-VACUITY for `BridgeNode` itself**: the predicate is inhabited, at the one scenario
     the whole `P6` bridge item runs on (`UsStarWrite.lean::ThroughShapeWitness.Sthru`, whose
@@ -2539,65 +2887,195 @@ theorem shadow_admitEdge_agree {Extra : NodeKey → Prop} {σ σ0 : GraphState}
   unfold GraphState.admitEdge
   rw [shadow_reach_agree hsh ha b]
 
+/-! ### ★★ The BRIDGE layer of the shadow (`P6` step 3b, step 8 — 2026-09-14)
+
+The re-pointed logged write leg runs `GraphState.bridgePreLogged` before its grant, so it
+materialises edges the shadow's `σ0` does not have and never will — the recorded design
+leaves `RulesWrite.lean::GraphState.writeRules` unbridged (a 40-module reverse cone against
+`writeBridgedOne`'s 24, and bridging it re-opens `checkFn_eq_sem_bs`). `ShadowOver.classify`
+therefore needs a home for those edges, and `ShadowOver.term` needs them to be terminal.
+
+**The two obligations are stated on the SCHEMA, not on the state**, and that is what makes
+them survive a fold. `GraphState.bridgedInConcrete` reads `σ.schema`; the schema is
+invariant along every leg here (`Cascade.lean::writeLoggedOne_schema`,
+`::bridgePreLogged_schema`), so a hypothesis phrased on `Sc` transfers from accumulator to
+accumulator by rewriting, where a hypothesis phrased on `σ` would have to be re-established
+at each step.
+
+  `hT` — a bridge TARGET is an `Extra`. Discharged at `BridgeNode` by `bridgeNode_wAnyNode`.
+  `hS` — a bridge SOURCE is NOT an `Extra`. This is where `T1`/`T2`/disjointness are
+         consumed, and stating it over an arbitrary `c` rather than per-endpoint is
+         deliberate: all three disjuncts are killed by facts about `c` alone
+         (`NoBridgedDerived` for `DerNode`, `not_bridgedInConcrete_of_leafNode` for
+         `LeafNode`, `not_bridgedInConcrete_of_bridgeNode` for `BridgeNode`), so the
+         subject/object split the plan sketched buys nothing and costs two obligations. -/
+
+/-- Adding a node preserves the shadow: edges are untouched and `nodesSub` only gets easier. -/
+theorem shadowOver_addNode {Extra : NodeKey → Prop} {σ σ0 : GraphState}
+    (hsh : ShadowOver Extra σ σ0) (k : NodeKey) : ShadowOver Extra (σ.addNode k) σ0 := by
+  refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
+  · rw [addNode_edges]; exact hsh.classify
+  · rw [addNode_edges]; exact hsh.sub
+  · intro k' hk'
+    rw [addNode_nodes]
+    exact List.mem_cons_of_mem _ (hsh.nodesSub k' hk')
+  · intro ab hab
+    rw [addNode_edges] at hab
+    rw [addNode_nodes]
+    obtain ⟨h1, h2⟩ := hsh.closed ab hab
+    exact ⟨List.mem_cons_of_mem _ h1, List.mem_cons_of_mem _ h2⟩
+  · rw [addNode_edges]; exact hsh.term
+
+/-- One logged in-bridge leg preserves the shadow: its only new edge is `c → w_any(c)`,
+    whose TARGET is an extra (`hT`) and whose SOURCE is not (`hS`, so `term` is unbroken). -/
+theorem untaintedShadow_ensureInBridgesLogged {Extra : NodeKey → Prop} {Sc : Schema}
+    {σ σ0 : GraphState} (hsh : ShadowOver Extra σ σ0) (hsc : σ.schema = Sc)
+    {c : NodeKey} (hc : c ∈ σ.nodes)
+    (hT : ∀ ty p, Sc.isSubjectWildcardUserset ty p = true → Extra (wAnyNode (ty, p)))
+    (hS : ∀ k : NodeKey, k.variant = Variant.plain →
+      Sc.isSubjectWildcardUserset k.type k.pred = true → ¬ Extra k) :
+    ShadowOver Extra (σ.ensureInBridgesLogged c) σ0 := by
+  have hsw : σ.bridgedInConcrete c = true → Sc.isSubjectWildcardUserset c.type c.pred = true :=
+    fun h => hsc ▸ (bridgedInConcrete_elim h).2.2.2
+  refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
+  · intro ab hab
+    rw [ensureInBridgesLogged_edges] at hab
+    rcases ensureInBridges_edges_mem hab with hold | ⟨heq, hbr⟩
+    · exact hsh.classify ab hold
+    · exact Or.inr (by rw [heq]; exact hT c.type c.pred (hsw hbr))
+  · intro ab hab
+    rw [ensureInBridgesLogged_edges]
+    exact ensureInBridges_edges_mono (hsh.sub ab hab)
+  · intro k hk
+    rw [ensureInBridgesLogged_nodes]
+    exact ensureInBridges_mono (hsh.nodesSub k hk)
+  · rw [ensureInBridgesLogged_edges, ensureInBridgesLogged_nodes]
+    exact edgesClosed_ensureInBridges hsh.closed hc
+  · intro k hk y hy
+    rw [ensureInBridgesLogged_edges] at hy
+    rcases ensureInBridges_edges_mem hy with hold | ⟨heq, hbr⟩
+    · exact hsh.term k hk y hold
+    · have hkc : k = c := by
+        have := congrArg Prod.fst heq
+        simpa using this
+      exact hS c (bridgedInConcrete_elim hbr).1 (hsw hbr) (hkc ▸ hk)
+
+/-- The whole logged bridge prologue preserves the shadow — both endpoints' legs, on top of
+    the two node interns that precede them. -/
+theorem untaintedShadow_bridgePreLogged {Extra : NodeKey → Prop} {Sc : Schema}
+    {σ σ0 : GraphState} (hsh : ShadowOver Extra σ σ0) (hsc : σ.schema = Sc) (u : Tuple)
+    (hT : ∀ ty p, Sc.isSubjectWildcardUserset ty p = true → Extra (wAnyNode (ty, p)))
+    (hS : ∀ k : NodeKey, k.variant = Variant.plain →
+      Sc.isSubjectWildcardUserset k.type k.pred = true → ¬ Extra k) :
+    ShadowOver Extra (σ.bridgePreLogged u) σ0 := by
+  unfold GraphState.bridgePreLogged
+  have h2 : ShadowOver Extra ((σ.addNode (subjNode u.subject)).addNode
+      (objNode u.object u.relation)) σ0 :=
+    shadowOver_addNode (shadowOver_addNode hsh _) _
+  have hsc2 : ((σ.addNode (subjNode u.subject)).addNode
+      (objNode u.object u.relation)).schema = Sc := by
+    rw [addNode_schema, addNode_schema]; exact hsc
+  have hmem : subjNode u.subject ∈ ((σ.addNode (subjNode u.subject)).addNode
+      (objNode u.object u.relation)).nodes := by
+    rw [addNode_nodes]
+    exact List.mem_cons_of_mem _ (by rw [addNode_nodes]; exact List.mem_cons_self)
+  have h3 := untaintedShadow_ensureInBridgesLogged h2 hsc2 hmem hT hS
+  refine untaintedShadow_ensureInBridgesLogged h3 (by rw [ensureInBridgesLogged_schema]; exact hsc2)
+    ?_ hT hS
+  rw [ensureInBridgesLogged_nodes]
+  refine ensureInBridges_mono ?_
+  rw [addNode_nodes]
+  exact List.mem_cons_self
+
 /-- One parallel step: the logged write on `σ`, the plain write on the shadow —
-    admission agrees, so the shadow relation is maintained. -/
-theorem untaintedShadow_writeLoggedOne {Extra : NodeKey → Prop} {σ σ0 : GraphState}
-    (hsh : ShadowOver Extra σ σ0) {u : Tuple}
-    (ha : ¬ Extra (subjNode u.subject)) :
+    admission agrees, so the shadow relation is maintained.
+
+    ★★ **`P6` step 3b step 8 (2026-09-14): the STATEMENT is unchanged; the proof now runs
+    through the BRIDGED pre-state, and two hypotheses arrive.** The admission probe moved —
+    `writeLoggedOne` reads `(σ.bridgePreLogged u).admitEdge`, not `σ.admitEdge` — so
+    `shadow_admitEdge_agree` has to be applied at the prologue's state rather than at `σ`,
+    which is only legal once the prologue is itself known to shadow `σ0`. That is
+    `untaintedShadow_bridgePreLogged` above, and it is the whole content of the step; from
+    there the grant case is character-for-character the old proof with `bridgePreLogged`
+    substituted for `σ`. -/
+theorem untaintedShadow_writeLoggedOne {Extra : NodeKey → Prop} {Sc : Schema}
+    {σ σ0 : GraphState} (hsh : ShadowOver Extra σ σ0) (hsc : σ.schema = Sc) {u : Tuple}
+    (ha : ¬ Extra (subjNode u.subject))
+    (hT : ∀ ty p, Sc.isSubjectWildcardUserset ty p = true → Extra (wAnyNode (ty, p)))
+    (hS : ∀ k : NodeKey, k.variant = Variant.plain →
+      Sc.isSubjectWildcardUserset k.type k.pred = true → ¬ Extra k) :
     ShadowOver Extra (σ.writeLoggedOne u) (σ0.writeDirect u) := by
-  have hadm := shadow_admitEdge_agree hsh ha (objNode u.object u.relation)
+  have hpre : ShadowOver Extra (σ.bridgePreLogged u) σ0 :=
+    untaintedShadow_bridgePreLogged hsh hsc u hT hS
+  have hadm := shadow_admitEdge_agree hpre ha (objNode u.object u.relation)
   unfold GraphState.writeLoggedOne
-  by_cases hb : σ.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true
+  by_cases hb : (σ.bridgePreLogged u).admitEdge (subjNode u.subject)
+      (objNode u.object u.relation) = true
   · rw [if_pos hb]
     have hb0 : σ0.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true := by
       rw [← hadm]; exact hb
-    have hcl : ∀ ab ∈ (σ.writeDirect u).edges,
-        ab.1 ∈ (σ.writeDirect u).nodes ∧ ab.2 ∈ (σ.writeDirect u).nodes :=
-      edgesClosed_writeDirect hsh.closed u
     have hcl0 : ∀ ab ∈ (σ0.writeDirect u).edges,
         ab.1 ∈ (σ0.writeDirect u).nodes ∧ ab.2 ∈ (σ0.writeDirect u).nodes :=
       edgesClosed_writeDirect hsh.closed0 u
+    have hsubjMem : subjNode u.subject ∈ (σ.bridgePreLogged u).nodes := by
+      unfold GraphState.bridgePreLogged
+      rw [ensureInBridgesLogged_nodes]
+      refine ensureInBridges_mono ?_
+      rw [ensureInBridgesLogged_nodes]
+      refine ensureInBridges_mono ?_
+      rw [addNode_nodes]
+      exact List.mem_cons_of_mem _ (by rw [addNode_nodes]; exact List.mem_cons_self)
+    have hobjMem : objNode u.object u.relation ∈ (σ.bridgePreLogged u).nodes := by
+      unfold GraphState.bridgePreLogged
+      rw [ensureInBridgesLogged_nodes]
+      refine ensureInBridges_mono ?_
+      rw [ensureInBridgesLogged_nodes]
+      refine ensureInBridges_mono ?_
+      rw [addNode_nodes]
+      exact List.mem_cons_self
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
     · -- classify
       intro ab hab
-      rw [pushDelta_edges, writeDirect_edges, if_pos hb] at hab
+      rw [pushDelta_edges, addEdge_edges] at hab
       rw [writeDirect_edges, if_pos hb0]
       rcases List.mem_cons.mp hab with heq | hmem
       · exact Or.inl (heq ▸ List.mem_cons_self)
-      · rcases hsh.classify ab hmem with h0 | hD
+      · rcases hpre.classify ab hmem with h0 | hD
         · exact Or.inl (List.mem_cons_of_mem _ h0)
         · exact Or.inr hD
     · -- sub
       intro ab hab
       rw [writeDirect_edges, if_pos hb0] at hab
-      rw [pushDelta_edges, writeDirect_edges, if_pos hb]
+      rw [pushDelta_edges, addEdge_edges]
       rcases List.mem_cons.mp hab with heq | hmem
       · exact heq ▸ List.mem_cons_self
-      · exact List.mem_cons_of_mem _ (hsh.sub ab hmem)
+      · exact List.mem_cons_of_mem _ (hpre.sub ab hmem)
     · -- nodesSub
       intro k hk
       rw [writeDirect_nodes, if_pos hb0] at hk
-      rw [pushDelta_nodes, writeDirect_nodes, if_pos hb]
+      rw [pushDelta_nodes, addEdge_nodes]
       rcases List.mem_cons.mp hk with heq | hk2
-      · exact heq ▸ List.mem_cons_self
+      · exact heq ▸ hobjMem
       · rcases List.mem_cons.mp hk2 with heq | hk3
-        · exact List.mem_cons_of_mem _ (heq ▸ List.mem_cons_self)
-        · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (hsh.nodesSub k hk3))
+        · exact heq ▸ hsubjMem
+        · exact hpre.nodesSub k hk3
     · -- closed
       intro ab hab
-      rw [pushDelta_edges] at hab
-      rw [pushDelta_nodes]
-      exact hcl ab hab
+      rw [pushDelta_edges, addEdge_edges] at hab
+      rw [pushDelta_nodes, addEdge_nodes]
+      rcases List.mem_cons.mp hab with heq | hmem
+      · exact heq ▸ ⟨hsubjMem, hobjMem⟩
+      · exact hpre.closed ab hmem
     · -- closed0
       exact hcl0
     · -- term
       intro k hk y hy
-      rw [pushDelta_edges, writeDirect_edges, if_pos hb] at hy
+      rw [pushDelta_edges, addEdge_edges] at hy
       rcases List.mem_cons.mp hy with heq | hmem
       · have h1 : k = subjNode u.subject := (Prod.ext_iff.mp heq).1
         rw [h1] at hk
         exact ha hk
-      · exact hsh.term k hk y hmem
+      · exact hpre.term k hk y hmem
   · rw [if_neg hb]
     have hb0 : σ0.admitEdge (subjNode u.subject) (objNode u.object u.relation) = false := by
       rw [← hadm]
@@ -2606,18 +3084,22 @@ theorem untaintedShadow_writeLoggedOne {Extra : NodeKey → Prop} {σ σ0 : Grap
     exact hsh
 
 /-- The parallel write-leg fold maintains the shadow. -/
-theorem untaintedShadow_writeLeg {Extra : NodeKey → Prop} :
-    ∀ (us : List Tuple) (σ σ0 : GraphState), ShadowOver Extra σ σ0 →
+theorem untaintedShadow_writeLeg {Extra : NodeKey → Prop} {Sc : Schema}
+    (hT : ∀ ty p, Sc.isSubjectWildcardUserset ty p = true → Extra (wAnyNode (ty, p)))
+    (hS : ∀ k : NodeKey, k.variant = Variant.plain →
+      Sc.isSubjectWildcardUserset k.type k.pred = true → ¬ Extra k) :
+    ∀ (us : List Tuple) (σ σ0 : GraphState), ShadowOver Extra σ σ0 → σ.schema = Sc →
       (∀ u ∈ us, ¬ Extra (subjNode u.subject)) →
       ShadowOver Extra (us.foldl (fun acc u => acc.writeLoggedOne u) σ)
         (us.foldl (fun acc u => acc.writeDirect u) σ0) := by
   intro us
   induction us with
-  | nil => intro σ σ0 hsh _; exact hsh
+  | nil => intro σ σ0 hsh _ _; exact hsh
   | cons u rest ih =>
-    intro σ σ0 hsh hs
+    intro σ σ0 hsh hsc hs
     simp only [List.foldl_cons]
-    exact ih _ _ (untaintedShadow_writeLoggedOne hsh (hs u List.mem_cons_self))
+    exact ih _ _ (untaintedShadow_writeLoggedOne hsh hsc (hs u List.mem_cons_self) hT hS)
+      (by rw [writeLoggedOne_schema]; exact hsc)
       (fun x hx => hs x (List.mem_cons_of_mem _ hx))
 
 /-- `FoldAdmits` is `EvalEq`-congruent (it reads only edges/nodes through
@@ -2633,32 +3115,62 @@ theorem foldAdmits_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) :
     refine ⟨by rw [admitEdge_evalEq h]; exact hadm, ?_⟩
     exact ih (writeDirect_evalEq h u) hrest
 
-/-- **Admission transfers to the shadow**: the logged fold and the shadow's plain
-    fold accept the same writes. -/
-theorem untaintedShadow_foldAdmits {Extra : NodeKey → Prop} :
-    ∀ (us : List Tuple) (σ σ0 : GraphState), ShadowOver Extra σ σ0 →
+/-- `FoldAdmitsBridged` is `EvalEq`-congruent too. ★ ADDITIVE, `P6` step 3b step 14
+    (2026-09-14). It needs one more congruence than its plain twin — the prologue's
+    (`Cascade.lean::bridgePre_evalEq`), because the probe reads `σ.bridgePre u` — and that is
+    the only difference. -/
+theorem foldAdmitsBridged_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) :
+    ∀ (us : List Tuple), FoldAdmitsBridged σ us → FoldAdmitsBridged σ' us := by
+  intro us
+  induction us generalizing σ' σ with
+  | nil => intro _; exact trivial
+  | cons u rest ih =>
+    intro hfa
+    obtain ⟨hadm, hrest⟩ := hfa
+    refine ⟨by rw [admitEdge_evalEq (bridgePre_evalEq h u)]; exact hadm, ?_⟩
+    exact ih (writeBridgedOne_evalEq h u) hrest
+
+/-- **Admission transfers to the shadow**: the logged (BRIDGED) fold and the shadow's plain
+    fold accept the same writes.
+
+    ★★ **`P6` step 3b step 14 (2026-09-14): the INPUT moved to `FoldAdmitsBridged`; the
+    output did NOT.** That asymmetry is the theorem's whole content now, and it is the
+    honest shape: the left fold bridges and the right one does not, so a single predicate
+    cannot describe both. What it says is that the STRONGER hypothesis on the bridged side
+    still yields the plain one on the shadow side — which is exactly the direction the
+    shadow is used in, and the direction that would have been unsound the other way round. -/
+theorem untaintedShadow_foldAdmits {Extra : NodeKey → Prop} {Sc : Schema}
+    (hT : ∀ ty p, Sc.isSubjectWildcardUserset ty p = true → Extra (wAnyNode (ty, p)))
+    (hS : ∀ k : NodeKey, k.variant = Variant.plain →
+      Sc.isSubjectWildcardUserset k.type k.pred = true → ¬ Extra k) :
+    ∀ (us : List Tuple) (σ σ0 : GraphState), ShadowOver Extra σ σ0 → σ.schema = Sc →
       (∀ u ∈ us, ¬ Extra (subjNode u.subject)) →
-      FoldAdmits σ us → FoldAdmits σ0 us := by
+      FoldAdmitsBridged σ us → FoldAdmits σ0 us := by
   intro us
   induction us with
-  | nil => intro σ σ0 _ _ _; exact trivial
+  | nil => intro σ σ0 _ _ _ _; exact trivial
   | cons u rest ih =>
-    intro σ σ0 hsh hs hfa
+    intro σ σ0 hsh hsc hs hfa
     obtain ⟨hadm1, hrest⟩ := hfa
+    -- ⚠ the probe on the σ side reads the BRIDGED pre-state, so the shadow agreement has to
+    -- be taken there — which is legal because the prologue itself shadows σ0.
+    have hpre : ShadowOver Extra (σ.bridgePreLogged u) σ0 :=
+      untaintedShadow_bridgePreLogged hsh hsc u hT hS
     have hadm0 : σ0.admitEdge (subjNode u.subject) (objNode u.object u.relation) = true := by
-      rw [← shadow_admitEdge_agree hsh (hs u List.mem_cons_self) (objNode u.object u.relation)]
+      rw [← shadow_admitEdge_agree hpre (hs u List.mem_cons_self) (objNode u.object u.relation)]
+      -- `bridgePreLogged` differs from `bridgePre` only in the outbox, which `admitEdge`
+      -- does not read.
+      rw [admitEdge_evalEq (bridgePreLogged_evalEq (EvalEq.refl σ) u)]
       exact hadm1
     refine ⟨hadm0, ?_⟩
-    -- the fold's next state on the σ side is `writeLoggedOne`'s CORE = `writeDirect`
     have hstep : ShadowOver Extra (σ.writeLoggedOne u) (σ0.writeDirect u) :=
-      untaintedShadow_writeLoggedOne hsh (hs u List.mem_cons_self)
-    have hfd : FoldAdmits (σ.writeLoggedOne u) rest := by
-      -- `FoldAdmits σ (u :: rest)` continues at `σ.writeDirect u`; the logged step's
-      -- core equals it (`EvalEq`), and `FoldAdmits` reads only edges/nodes
-      have hev : EvalEq (σ.writeLoggedOne u) (σ.writeDirect u) :=
-        writeLoggedOne_evalEq (EvalEq.refl σ) u
-      exact foldAdmits_evalEq hev rest hrest
-    exact ih _ _ hstep (fun x hx => hs x (List.mem_cons_of_mem _ hx)) hfd
+      untaintedShadow_writeLoggedOne hsh hsc (hs u List.mem_cons_self) hT hS
+    have hfd : FoldAdmitsBridged (σ.writeLoggedOne u) rest := by
+      -- the logged step's CORE is `writeBridgedOne`, which is where the bridged fold
+      -- continues; the two agree on everything `FoldAdmitsBridged` reads.
+      exact foldAdmitsBridged_evalEq (writeLoggedOne_evalEq (EvalEq.refl σ) u) rest hrest
+    exact ih _ _ hstep (by rw [writeLoggedOne_schema]; exact hsc)
+      (fun x hx => hs x (List.mem_cons_of_mem _ hx)) hfd
 
 /-! ### The TWO-LIST write leg — what THE FLIP (step 4c-ii) needs
 
@@ -2692,20 +3204,33 @@ theorem shadowOver_evalEq_left {Extra : NodeKey → Prop} {σ1 σ2 σ0 : GraphSt
     from `σ`, the shadow's plain fold runs `vs` from `σ0`; both folds must be fully
     admitted, since the correspondence is now carried by edge COMPLETENESS on each side
     rather than by a shared step. -/
-theorem untaintedShadow_writeLegL {Extra : NodeKey → Prop}
+theorem untaintedShadow_writeLegL {Extra : NodeKey → Prop} {Sc : Schema}
+    (hT : ∀ ty p, Sc.isSubjectWildcardUserset ty p = true → Extra (wAnyNode (ty, p)))
+    (hS : ∀ k : NodeKey, k.variant = Variant.plain →
+      Sc.isSubjectWildcardUserset k.type k.pred = true → ¬ Extra k)
     (us vs : List Tuple) (σ σ0 : GraphState) (hsh : ShadowOver Extra σ σ0)
+    (hsc : σ.schema = Sc)
     (hus : ∀ u ∈ us, ¬ Extra (subjNode u.subject))
     (hextra : ∀ u ∈ us, u ∈ vs ∨ Extra (objNode u.object u.relation))
     (hsub : ∀ u ∈ vs, u ∈ us)
-    (hadmU : FoldAdmits σ us) (hadmV : FoldAdmits σ0 vs) :
+    (hadmU : FoldAdmitsBridged σ us) (hadmV : FoldAdmits σ0 vs) :
     ShadowOver Extra (us.foldl (fun acc u => acc.writeLoggedOne u) σ)
       (vs.foldl (fun acc u => acc.writeDirect u) σ0) := by
+  -- ★ `P6` step 3b (2026-09-14). `shadowOver_evalEq_left` retargets the LEFT fold, and
+  -- after re-point #1 it lands on `writeBridgedOne`, not `writeDirect`. Every σ-side
+  -- discharger below therefore moves to its bridged twin while every σ0-side one stays —
+  -- that split is the whole repair, and the asymmetry is the design (`writeRules` is
+  -- deliberately unbridged). ⚠ `hadmU` moved to `FoldAdmitsBridged` because
+  -- `foldl_writeBridgedOne_edge_complete` CANNOT be stated over `FoldAdmits`
+  -- (`Cascade.lean::FoldAdmitsHonestyWitness.foldl_edge_complete_is_false_for_the_bridged_fold`
+  -- is the kernel refutation) — which is why step 14 is a precondition of this step and not
+  -- a follow-up to it.
   refine shadowOver_evalEq_left (foldl_writeLoggedOne_evalEq us (EvalEq.refl σ)) ?_
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · -- classify
     intro ab hab
     obtain ⟨a, b⟩ := ab
-    rcases foldl_writeDirect_edges_sound us hab with hold | ⟨u, hu, h1, h2⟩
+    rcases foldl_writeBridgedOne_edges_sound us hab with hold | ⟨u, hu, h1, h2⟩ | ⟨hsw, h2⟩
     · rcases hsh.classify (a, b) hold with h0 | hE
       · exact Or.inl (foldl_writeDirect_edges_mono vs _ h0)
       · exact Or.inr hE
@@ -2716,30 +3241,43 @@ theorem untaintedShadow_writeLegL {Extra : NodeKey → Prop}
           Prod.ext h1 h2]
         exact hc
       · exact Or.inr (by rw [show (a, b).2 = objNode u.object u.relation from h2]; exact hE)
+    · -- ★ THE BRIDGE DISJUNCT: the edge is a bridge, so its target is an `Extra` and
+      -- `classify` sends it right rather than looking for it in σ0. This is the obligation
+      -- the third extras disjunct exists to discharge.
+      refine Or.inr ?_
+      show Extra (a, b).2
+      rw [h2]
+      exact hT a.type a.pred (hsc ▸ (bridgedInConcrete_elim hsw).2.2.2)
   · -- sub
     intro ab hab
     obtain ⟨a, b⟩ := ab
     rcases foldl_writeDirect_edges_sound vs hab with hold | ⟨u, hu, h1, h2⟩
-    · exact foldl_writeDirect_edges_mono us _ (hsh.sub (a, b) hold)
+    · exact foldl_writeBridgedOne_edges_mono us _ (hsh.sub (a, b) hold)
     · rw [show (a, b) = (subjNode u.subject, objNode u.object u.relation) from
         Prod.ext h1 h2]
-      exact foldl_writeDirect_edge_complete us hadmU u (hsub u hu)
+      exact foldl_writeBridgedOne_edge_complete us hadmU u (hsub u hu)
   · -- nodesSub
     intro k hk
     rcases foldl_writeDirect_nodes_sound vs σ0 k hk with hold | ⟨u, hu, hwk⟩
-    · exact foldl_writeDirect_nodes_mono us σ k (hsh.nodesSub k hold)
-    · have hedge := foldl_writeDirect_edge_complete us hadmU u (hsub u hu)
-      have hcl := edgesClosed_foldl_writeDirect us σ hsh.closed _ hedge
+    · exact foldl_writeBridgedOne_nodes_mono us σ k (hsh.nodesSub k hold)
+    · have hedge := foldl_writeBridgedOne_edge_complete us hadmU u (hsub u hu)
+      have hcl := edgesClosed_foldl_writeBridgedOne us σ hsh.closed _ hedge
       rcases hwk with heq | heq
       · rw [heq]; exact hcl.1
       · rw [heq]; exact hcl.2
-  · exact edgesClosed_foldl_writeDirect us σ hsh.closed
+  · exact edgesClosed_foldl_writeBridgedOne us σ hsh.closed
   · exact edgesClosed_foldl_writeDirect vs σ0 hsh.closed0
   · -- term
     intro k hk y hy
-    rcases foldl_writeDirect_edges_sound us hy with hold | ⟨u, hu, h1, _⟩
+    rcases foldl_writeBridgedOne_edges_sound us hy with hold | ⟨u, hu, h1, _⟩ | ⟨hsw, _⟩
     · exact hsh.term k hk y hold
     · exact hus u hu (h1 ▸ hk)
+    · -- ★ THE BRIDGE DISJUNCT for `term`: the edge's SOURCE `k` is a bridged-in concrete, and
+      -- `hS` says no such node is an `Extra` — so the premise `hk : Extra k` is impossible.
+      -- This is where `T1` (`NoBridgedDerived`), `T2` (`not_bridgedInConcrete_of_leafNode`)
+      -- and the `wAny`-variant disjointness are consumed, all through one hypothesis.
+      exact hS k (bridgedInConcrete_elim hsw).1
+        (hsc ▸ (bridgedInConcrete_elim hsw).2.2.2) hk
 
 /-! ### The cascade leg preserves the shadow (σ0 fixed) -/
 
@@ -2858,15 +3396,24 @@ theorem untaintedShadow_applyD {S : Schema} {T : Store} {σ σ0 : GraphState}
   -- candidate's predicate is `BARE`, and `Leaf.lean::bare_subjNode_not_leafNode` refutes
   -- `LeafNode` there outright. The `DerNode` half is the argument this proof already made
   -- inline in `term`, lifted here so both halves live in one place.
+  -- ★ `P6` step 3b step 8 (2026-09-14): the `BridgeNode` disjunct joins, and it is free for
+  -- the THIRD time from the same `hcb`. `bridgeNode_elim` recovers `pred ≠ BARE` from
+  -- `isSubjectWildcardUserset`'s OUTER guard, and a candidate's subject node has predicate
+  -- `BARE` — so a cascade candidate can never be a bridge node. (That guard's placement has
+  -- now paid three times: `bridgedInConcrete_elim`, `bridgeNode_elim`, and here. Do not push
+  -- it inside the disjunction.)
   have hoffW : ∀ c ∈ j.cands,
-      ¬ (DerNode S (subjNode c) ∨ LeafNode S (subjNode c)) := by
-    rintro c hc (⟨dt, on, R, _, hRne', _, hkey⟩ | hleaf)
+      ¬ (DerNode S (subjNode c) ∨ LeafNode S (subjNode c) ∨ BridgeNode S (subjNode c)) := by
+    rintro c hc (⟨dt, on, R, _, hRne', _, hkey⟩ | hleaf | hbr)
     · have hp : R = c.predicate := by
         have := congrArg NodeKey.pred hkey.symm
         simpa [objNode_pred, subjNode_pred] using this
       rw [hcb c hc] at hp
       exact hRne' hp
     · exact bare_subjNode_not_leafNode (hcb c hc) hleaf
+    · refine (bridgeNode_elim hbr).2.2.1 ?_
+      rw [subjNode_pred]
+      exact hcb c hc
   refine ⟨?_, ?_, ?_, ?_, hsh.closed0, ?_⟩
   · -- classify
     intro ab hab
@@ -2997,10 +3544,16 @@ theorem writeLegExtrasWide_L {S : Schema} {t : Tuple}
     (hLS : LeafScope S) (hon : t.object.name ≠ STAR) :
     ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
       u ∈ rewriteClosure S t ∨
-        (DerNode S (objNode u.object u.relation) ∨ LeafNode S (objNode u.object u.relation)) :=
+        (DerNode S (objNode u.object u.relation) ∨ LeafNode S (objNode u.object u.relation)
+          ∨ BridgeNode S (objNode u.object u.relation)) :=
+  -- ★ `P6` step 3b step 8 (2026-09-14): the third disjunct is WIDENING ONLY. A closure
+  -- member's object node is never a bridge node, but this obligation does not have to say
+  -- so — it is a disjunction, and the `LeafNode` arm already discharges every case. Do not
+  -- be tempted to prove the stronger `¬ BridgeNode` here; it is owed at `term`
+  -- (`hsubjWL`), not at `classify`.
   fun u hu =>
     (rewriteClosureL_extras_leafNode hLS.wf hLS.matchNotLeaf hLS.derivedNameNonempty hon
-      u hu).imp id Or.inr
+      u hu).imp id (fun h => Or.inr (Or.inl h))
 
 /-- **The shadow's own plain-list admission, from the FAITHFUL (L-list) one.**
 
@@ -3065,10 +3618,13 @@ theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
     DirectRestrictionsNotLeaf S →
     LeafScope S →
     BareStarStore T →
+    NoBridgedDerived S →
+    TtuTuplesetsDirect S →
+    TtuStarFree S T →
     ∃ σ0, ReachedByRulesAdmitted σ0 S T ∧ UntaintedShadow S σ σ0 := by
   induction h with
   | empty S =>
-    intro _ _ _ _ _ _ _ _
+    intro _ _ _ _ _ _ _ _ _ _ _
     refine ⟨emptyState S, ReachedByRulesAdmitted.empty S, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · intro ab hab; simp [emptyState] at hab
     · intro ab hab; simp [emptyState] at hab
@@ -3077,12 +3633,13 @@ theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
     · intro ab hab; simp [emptyState] at hab
     · intro k _ y hy; simp [emptyState] at hy
   | @write σp S T t hadm hprev ih =>
-    intro hNK hCO hSV hterm hQ hDR hLS hBS
+    intro hNK hCO hSV hterm hQ hDR hLS hBS hNBD hTT hTS
     obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO
       (fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht'))
       (fun dt R hder => ⟨(hterm dt R hder).1,
         fun t' ht' => (hterm dt R hder).2 t' (List.mem_cons_of_mem _ ht')⟩)
       hQ hDR hLS (fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht'))
+      hNBD hTT (fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht'))
     -- ⚠ The PLAIN-list subject fact (`hsubjW`, the pre-flip `rewriteClosure S t` form built
     -- from `rewriteClosure_subject_pred_ne` + `rewriteClosure_subject_not_leafNode hQ`) was
     -- DELETED here in round 2, not commented out: post-flip its only consumer was
@@ -3109,10 +3666,27 @@ theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
     -- `LeafScope` carrier; it is PROVABLY not derivable from the name-shape fields
     -- `GraphAdmission` already carried (`admissionNameShape_does_not_give_noLeafSubjects`
     -- below), which is why the carrier exists.
-    have hsubjWL : ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
+    have hsubjWL0 : ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
         ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)) :=
       writeLegSubjectsWide_L hLS.noLeafSubjects hterm
         (noLeafStoreSubjects_of_storeValidRules hDR hSV t List.mem_cons_self)
+    -- ★ **`P6` step 3b step 8's `T3`, DISCHARGED HERE** (2026-09-14). The widened extras
+    -- predicate adds `BridgeNode`, so obligation (D) gains a third disjunct: no member of
+    -- the list the re-pointed write leg folds has a bridge node as its SUBJECT. That is
+    -- `not_bridgeNode_of_star_bare`, and its six premises are every one of them FREE at this
+    -- site — `hNK` and `hCO` are premises 1 and 2, `hmd` comes from `hLS.matchNotLeaf`,
+    -- `hBS` is premise 8, and `hTT`/`hTS` are the TWO NEW BINDERS this step costs
+    -- (`TtuTuplesetsDirect S`, `TtuStarFree S T`), both already bound at all five call sites.
+    -- Nothing new is assumed that the fragment did not already carry.
+    have hsubjWL : ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
+        ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)
+          ∨ BridgeNode S (subjNode u.subject)) := by
+      intro u hu hc
+      rcases hc with h | h | h
+      · exact hsubjWL0 u hu (Or.inl h)
+      · exact hsubjWL0 u hu (Or.inr h)
+      · exact not_bridgeNode_of_star_bare hNK hCO hLS.matchNotLeaf hTT hTS hBS
+          (t := t) List.mem_cons_self hu h
     -- OBLIGATION (E), object half — DISCHARGED through `writeLegExtrasWide_L`; `hon` is the
     -- head tuple's `BareStarStore` conjunct.
     have hextraL := writeLegExtrasWide_L (t := t) hLS (hBS t List.mem_cons_self).2
@@ -3125,18 +3699,47 @@ theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
     -- instead is what looked impossible: `FoldAdmits` has no order-free restriction lemma,
     -- and σp's acyclicity is `CascadeInv.lean::reachedByW3d_structInv`, which is DOWNSTREAM
     -- of this module.
+    -- ★ The two shadow-side bridge obligations, discharged once and reused at both call
+    -- sites below. `hTshadow` routes the bridge TARGET onto the new `BridgeNode` disjunct;
+    -- `hSshadow` is where `T1` and `T2` are consumed — a bridged-in concrete is neither a
+    -- `DerNode` (`hNBD`) nor a `LeafNode` (`not_bridgedInConcrete_of_leafNode`) nor a
+    -- `BridgeNode` (variant: a bridge source is `plain`, a bridge node is `wAny`).
+    have hTshadow : ∀ ty p, S.isSubjectWildcardUserset ty p = true →
+        (DerNode S (wAnyNode (ty, p)) ∨ LeafNode S (wAnyNode (ty, p))
+          ∨ BridgeNode S (wAnyNode (ty, p))) :=
+      fun ty p h => Or.inr (Or.inr (bridgeNode_wAnyNode h))
+    have hSshadow : ∀ k : NodeKey, k.variant = Variant.plain →
+        S.isSubjectWildcardUserset k.type k.pred = true →
+        ¬ (DerNode S k ∨ LeafNode S k ∨ BridgeNode S k) := by
+      intro k hkv hksw hc
+      rcases hc with ⟨dt, on, R, hder', _, hon', rfl⟩ | hleaf | hbr
+      · -- T1: `NoBridgedDerived` un-bridges every derived key, and this node's SHAPE is
+        -- exactly that key (`objNode_type` / `objNode_pred`).
+        rw [objNode_type, objNode_pred] at hksw
+        rw [hNBD dt R hder'] at hksw
+        exact Bool.noConfusion hksw
+      · -- T2: a leaf-named predicate is never a bridged-in SHAPE. Taken at the shape level
+        -- (`isSubjectWildcardUserset_false_of_notLeafName`) rather than through
+        -- `not_bridgedInConcrete_of_leafNode`, because the goal here is about the shape and
+        -- routing through the state predicate would drag in a `name ≠ STAR` side condition
+        -- that says nothing extra.
+        have hnl : ¬ NotLeafName k.pred := fun h => not_leafNode_of_notLeafName h hleaf
+        rw [isSubjectWildcardUserset_false_of_notLeafName hNK hCO hQ hDR hnl] at hksw
+        exact Bool.noConfusion hksw
+      · exact Variant.noConfusion (hkv ▸ (bridgeNode_elim hbr).1)
     have hadmVL : FoldAdmits σ0 (rewriteClosureL S (rawWriteTuples S t)) :=
-      untaintedShadow_foldAdmits (rewriteClosureL S (rawWriteTuples S t)) σp σ0 hsh
-        hsubjWL hadm
+      untaintedShadow_foldAdmits hTshadow hSshadow (rewriteClosureL S (rawWriteTuples S t))
+        σp σ0 hsh (reachedByW3d_schema hprev) hsubjWL hadm
     have hadmV : FoldAdmits σ0 (rewriteClosure S t) :=
       foldAdmits_plain_of_L h0 hadmVL hsubL
     exact ⟨σ0.writeRules S t,
       ReachedByRulesAdmitted.step t h0 hadmV,
-      untaintedShadow_writeLegL (rewriteClosureL S (rawWriteTuples S t))
-        (rewriteClosure S t) σp σ0 hsh hsubjWL hextraL hsubL hadm hadmV⟩
+      untaintedShadow_writeLegL hTshadow hSshadow (rewriteClosureL S (rawWriteTuples S t))
+        (rewriteClosure S t) σp σ0 hsh (reachedByW3d_schema hprev)
+        hsubjWL hextraL hsubL hadm hadmV⟩
   | @cascade σp S T jobs hjv hcover hscope hprev ih =>
-    intro hNK hCO hSV hterm hQ hDR hLS hBS
-    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSV hterm hQ hDR hLS hBS
+    intro hNK hCO hSV hterm hQ hDR hLS hBS hNBD hTT hTS
+    obtain ⟨σ0, h0, hsh⟩ := ih hNK hCO hSV hterm hQ hDR hLS hBS hNBD hTT hTS
     exact ⟨σ0, h0,
       untaintedShadow_cascade hsh (reachedByRules_of_admitted h0) hSV hNK hCO hjv⟩
 
@@ -3150,8 +3753,9 @@ theorem shadow_graphRec_agree {S : Schema} {σ σ0 : GraphState}
     {r' : String} (hnl : ¬ LeafNode S (objNode ⟨dt', on'⟩ r'))
     (hunt : isDerived S (dt', r') = false) :
     GraphModel.graphRec σ s dt' on' r' = GraphModel.graphRec σ0 s dt' on' r' := by
-  have hv1 : ¬ (DerNode S (objNode ⟨dt', on'⟩ r') ∨ LeafNode S (objNode ⟨dt', on'⟩ r')) := by
-    rintro (⟨dt, on, R, hder, _, _, heq⟩ | hleaf)
+  have hv1 : ¬ (DerNode S (objNode ⟨dt', on'⟩ r') ∨ LeafNode S (objNode ⟨dt', on'⟩ r')
+      ∨ BridgeNode S (objNode ⟨dt', on'⟩ r')) := by
+    rintro (⟨dt, on, R, hder, _, _, heq⟩ | hleaf | hbr)
     · have htype : dt' = dt := by
         have := congrArg NodeKey.type heq
         simpa [objNode_type] using this
@@ -3161,6 +3765,13 @@ theorem shadow_graphRec_agree {S : Schema} {σ σ0 : GraphState}
       rw [htype, hpred, hder] at hunt
       cases hunt
     · exact hnl hleaf
+    · -- ★ `P6` step 3b step 8 (2026-09-14): the THIRD disjunct, and it costs NO new
+      -- premise — the same variant argument the other two use. A bridge node is `wAny`
+      -- (`bridgeNode_elim`); an `objNode` never is (`State.lean::objNode_ne_wAny`), at any
+      -- object name including `STAR`. This is what makes the widening cheap on the READ
+      -- side: `shadow_reach_agree` is applied tree-wide at exactly two target shapes,
+      -- `objNode ⟨dt',on'⟩ r'` and `wAllNode dt' r'`, and a `wAnyNode` matches neither.
+      exact objNode_ne_wAny ⟨dt', on'⟩ r' (bridgeNode_elim hbr).1
   -- PRE-WIDENED (4c-ii step 6, 2026-08-31c). This `have` is deliberately STRONGER than
   -- what `shadow_reach_agree` asked for BEFORE the flip, which is why the two uses below
   -- used to go through `Or.inl`. **The re-point has happened (4c-ii, 2026-09-02d):**
@@ -3200,13 +3811,19 @@ theorem shadow_graphRec_agree {S : Schema} {σ σ0 : GraphState}
   --
   -- 14 sites, 11 + 3, and they are why "thread the predicate" and "add the query
   -- premise" could not be separated: `graph_correct_w3d2` and `_d` each host ONE OF EACH.
-  have hv3 : ¬ (DerNode S (wAllNode dt' r') ∨ LeafNode S (wAllNode dt' r')) := by
-    rintro (⟨dt, on, R, _, _, hon, heq⟩ | ⟨ty, on, p, _, _, hon, heq⟩)
+  have hv3 : ¬ (DerNode S (wAllNode dt' r') ∨ LeafNode S (wAllNode dt' r')
+      ∨ BridgeNode S (wAllNode dt' r')) := by
+    rintro (⟨dt, on, R, _, _, hon, heq⟩ | ⟨ty, on, p, _, _, hon, heq⟩ | hbr)
     · rw [objNode_plain hon] at heq
       have := congrArg NodeKey.variant heq
       simp [wAllNode] at this
     · rw [objNode_plain hon] at heq
       have := congrArg NodeKey.variant heq
+      simp [wAllNode] at this
+    · -- ★ `P6` step 3b step 8 (2026-09-14): `wAll` ≠ `wAny`, the third variant mismatch in
+      -- a row. Both extras added since 4c-ii die here for the same structural reason, which
+      -- is why the read side kept every statement across both widenings.
+      have := (bridgeNode_elim hbr).1
       simp [wAllNode] at this
   unfold GraphModel.graphRec GraphModel.probeNonDerived
   dsimp only
@@ -3249,18 +3866,22 @@ of the leg (the W3d read bridge, at both stores) and the guard is unchanged
 (fan-out completeness). Together: `SettledKey` transports across write legs at
 unmapped keys (`settledKey_writeLeg`). -/
 
-/-- A write leg never touches any residue row. -/
+/-- A write leg never touches any residue row.
+
+    ★ `P6` step 3b (2026-09-14): statement unchanged. The bridge prologue is residue-inert
+    for the same reason the grant is — it only interns nodes and adds edges — so this is a
+    one-line swap onto `UsStarWrite.lean::writeBridgedOne_residue`. -/
 theorem writeLoggedRules_residue (σ : GraphState) (S : Schema) (t : Tuple) :
     (σ.writeLoggedRules S t).residue = σ.residue := by
   rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).residue]
   show ((rewriteClosureL S (rawWriteTuples S t)).foldl
-    (fun acc u => acc.writeDirect u) σ).residue = σ.residue
+    (fun acc u => acc.writeBridgedOne u) σ).residue = σ.residue
   generalize rewriteClosureL S (rawWriteTuples S t) = us
   induction us generalizing σ with
   | nil => rfl
   | cons u rest ih =>
     simp only [List.foldl_cons]
-    rw [ih, writeDirect_residue]
+    rw [ih, writeBridgedOne_residue]
 
 /-- **No rule of the FULL leaf-routed rule set outputs onto a DERIVED key.** The
     `schemaRewritesL` extension of `RulesWrite.lean::noRuleOutputs_of_derived`: the untainted
@@ -3300,8 +3921,8 @@ theorem writeLeg_derived_inedges_eq {σ : GraphState} {S : Schema} {t : Tuple} {
   constructor
   · intro h
     rw [(writeLoggedRules_evalEq (EvalEq.refl σ) S t).edges] at h
-    rcases foldl_writeDirect_edges_sound (rewriteClosureL S (rawWriteTuples S t)) h
-      with hold | ⟨w, hw, _h1, h2⟩
+    rcases foldl_writeBridgedOne_edges_sound (rewriteClosureL S (rawWriteTuples S t)) h
+      with hold | ⟨w, hw, _h1, h2⟩ | ⟨_, h2⟩
     · exact hold
     · exfalso
       have htype : dt = w.object.type := by
@@ -3332,6 +3953,12 @@ theorem writeLeg_derived_inedges_eq {σ : GraphState} {S : Schema} {t : Tuple} {
           have hlp := isLeafPred_outRel_of_mem_leafRewrites hrl
           rw [hrout, ← hrel, isLeafPred_eq_false_of_relNameOK hRok] at hlp
           exact Bool.noConfusion hlp
+    · -- ★ `P6` step 3b (2026-09-14): the BRIDGE disjunct, and it costs one line. The edge's
+      -- target here is `wAnyNode (u.type, u.pred)`, but the goal's target is
+      -- `objNode ⟨dt, on⟩ R`, which is never `wAny` (`State.lean::objNode_ne_wAny`). No
+      -- premise, no `relNameOK` machinery, any `on` including `STAR`. The whole hRok/leaf
+      -- chain above is untouched.
+      exact absurd (congrArg NodeKey.variant h2) (objNode_ne_wAny ⟨dt, on⟩ R)
   · exact fun h => writeLoggedRules_edges_mono σ S t _ h
 
 /-- `checkFn` ignores its store argument on `ComputedOnly` defs (the store feeds only
@@ -3356,9 +3983,10 @@ theorem writeLeg_sem_stable {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
-    (h : ReachedByW3d σ S T) (hadm : FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t)))
+    (h : ReachedByW3d σ S T) (hadm : FoldAdmitsBridged σ (rewriteClosureL S (rawWriteTuples S t)))
     {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hco : ComputedOnly e)
@@ -3376,8 +4004,10 @@ theorem writeLeg_sem_stable {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
       fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
   have h' : ReachedByW3d (σ.writeLoggedRules S t) S (t :: T) :=
     ReachedByW3d.write t hadm h
-  obtain ⟨σ0', h0', hsh'⟩ := reachedByW3d_shadow h' hNK hCO hSV hterm hQ hDR hLS hBS
-  obtain ⟨σ0, h0, hsh⟩ := reachedByW3d_shadow h hNK hCO hSVw htermw hQ hDR hLS hBSw
+  obtain ⟨σ0', h0', hsh'⟩ :=
+    reachedByW3d_shadow h' hNK hCO hSV hterm hQ hDR hLS hBS hNBD hTT hTS
+  obtain ⟨σ0, h0, hsh⟩ :=
+    reachedByW3d_shadow h hNK hCO hSVw htermw hQ hDR hLS hBSw hNBD hTT hTSw
   have hclσ := reachedByW3d_edgesClosed h
   have htp' := reachedByW3d_edges_target_plain h' hBS
   calc sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩
@@ -3424,10 +4054,11 @@ theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
-    (h : ReachedByW3d σ S T) (hadm : FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t)))
+    (h : ReachedByW3d σ S T) (hadm : FoldAdmitsBridged σ (rewriteClosureL S (rawWriteTuples S t)))
     {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hco : ComputedOnly e)
@@ -3440,7 +4071,7 @@ theorem settledKey_writeLeg {σ : GraphState} {S : Schema} {T : Store} {t : Tupl
   have hsem : ∀ s : SubjectRef, (s.name = STAR → s.predicate = BARE) →
       sem S (t :: T) ⟨s, R, ⟨dt, on⟩⟩ = sem S T ⟨s, R, ⟨dt, on⟩⟩ :=
     fun s hs => writeLeg_sem_stable hWF hTT hNK hR hSV hBS hTS hCO hMatch hStrat
-      hQ hDR hLS hcr hterm h hadm hlk hder hco hleafUnt hunmapped hs hon
+      hQ hDR hLS hcr hNBD hterm h hadm hlk hder hco hleafUnt hunmapped hs hon
   constructor
   · intro res hres
     rw [writeLoggedRules_residue] at hres
@@ -3589,14 +4220,19 @@ theorem nreaches_factor_last {P : NodeKey × NodeKey → Prop}
     · exact Or.inr hP
 
 /-- One logged retraction only shrinks the edge multiset (a local subset fact, upstream of
-    the count law `mem_removeLoggedRules_edges`). -/
+    the count law `mem_removeLoggedRules_edges`).
+
+    ★ `P6` step 3b (2026-09-14): statement unchanged. The release epilogue can only shrink
+    too — it erases a bridge edge or declines — so "only shrinks" composes; the added step
+    is `Cascade.lean::releasePostLogged_edges_subset`. -/
 theorem removeLoggedOne_edges_subset (σ : GraphState) (u : Tuple) :
     ∀ ab ∈ (σ.removeLoggedOne u).edges, ab ∈ σ.edges := by
   intro ab hab
   unfold GraphState.removeLoggedOne at hab
   split at hab
-  · rw [pushDelta_edges, removeEdgeOne_edges] at hab
-    exact List.mem_of_mem_erase hab
+  · have hab' := releasePostLogged_edges_subset _ u ab hab
+    rw [pushDelta_edges, removeEdgeOne_edges] at hab'
+    exact List.mem_of_mem_erase hab'
   · exact hab
 
 /-- The retraction fold only shrinks the edge multiset. -/
@@ -3617,13 +4253,19 @@ theorem removeLoggedRules_edges_subset (σ : GraphState) (S : Schema) (t : Tuple
   unfold GraphState.removeLoggedRules
   exact foldl_removeLoggedOne_edges_subset (rewriteClosureL S (rawWriteTuples S t)) σ
 
-/-- One logged retraction only pushes outbox rows. -/
+/-- One logged retraction only pushes outbox rows.
+
+    ★ `P6` step 3b (2026-09-14): statement unchanged. Post-re-point the retraction has TWO
+    emitting stages (the edge's own row, then the release epilogue's per-collected-bridge
+    rows), so "only pushes" now composes `releasePostLogged_outbox_mono` over the existing
+    argument — a retraction still never DROPS a frontier row. -/
 theorem removeLoggedOne_outbox_mono (σ : GraphState) (u : Tuple) :
     ∀ d ∈ σ.outbox, d ∈ (σ.removeLoggedOne u).outbox := by
   intro d hd
   unfold GraphState.removeLoggedOne
   split
-  · rw [pushDelta_outbox]
+  · refine releasePostLogged_outbox_mono _ u d ?_
+    rw [pushDelta_outbox]
     refine List.mem_cons_of_mem _ ?_
     rw [removeEdgeOne_outbox]
     exact hd
@@ -3663,32 +4305,54 @@ theorem removeLoggedRules_edge_delta (σ : GraphState) (S : Schema) (t : Tuple) 
     · exact ih (σc.removeLoggedOne u) (by rw [removeLoggedOne_watermark, hwm]) ab hin1 hout
     · by_cases hp : (subjNode u.subject, objNode u.object u.relation) ∈ σc.edges
       · have hσ1 : σc.removeLoggedOne u
-            = (σc.removeEdgeOne (subjNode u.subject) (objNode u.object u.relation)).pushDelta
-                (objNode u.object u.relation) u.relation true := by
+            = ((σc.removeEdgeOne (subjNode u.subject) (objNode u.object u.relation)).pushDelta
+                (objNode u.object u.relation) u.relation true).releasePostLogged u := by
           unfold GraphState.removeLoggedOne; rw [if_pos hp]
-        rw [hσ1, pushDelta_edges, removeEdgeOne_edges] at hin1
-        have hpeq : ab = (subjNode u.subject, objNode u.object u.relation) := by
-          by_contra hne
-          exact hin1 ((List.mem_erase_of_ne hne).mpr hin)
-        subst hpeq
-        refine ⟨⟨(σc.removeEdgeOne (subjNode u.subject) (objNode u.object u.relation)).nextDeltaId,
-            objNode u.object u.relation, u.relation, true⟩, ?_, ?_, rfl⟩
-        · refine foldl_removeLoggedOne_outbox_mono rest _ _ ?_
-          rw [hσ1, pushDelta_outbox]
-          exact List.mem_cons_self
-        · show σ.watermark
-            < (σc.removeEdgeOne (subjNode u.subject) (objNode u.object u.relation)).nextDeltaId
-          have hdef : (σc.removeEdgeOne (subjNode u.subject)
-                (objNode u.object u.relation)).nextDeltaId
-              = max (σc.removeEdgeOne (subjNode u.subject)
-                  (objNode u.object u.relation)).maxOutboxId
-                (σc.removeEdgeOne (subjNode u.subject)
-                  (objNode u.object u.relation)).watermark + 1 := rfl
-          have hw : (σc.removeEdgeOne (subjNode u.subject)
-              (objNode u.object u.relation)).watermark = σc.watermark :=
-            removeEdgeOne_watermark σc _ _
-          rw [hwm] at hw
-          omega
+        have hw1 : ((σc.removeEdgeOne (subjNode u.subject)
+            (objNode u.object u.relation)).pushDelta
+              (objNode u.object u.relation) u.relation true).watermark = σc.watermark := by
+          rw [pushDelta_watermark]
+          exact removeEdgeOne_watermark σc _ _
+        by_cases hin2 : ab ∈ ((σc.removeEdgeOne (subjNode u.subject)
+            (objNode u.object u.relation)).pushDelta
+              (objNode u.object u.relation) u.relation true).edges
+        · -- ★ `P6` step 3b (2026-09-14): THE NEW BRANCH. The edge survived the grant erase
+          -- and was collected by the RELEASE epilogue instead — so it is a bridge edge, and
+          -- the row that accounts for it is the release's, at the bridge target. That
+          -- `d.node = ab.2` holds on this arm too is what lets this theorem keep its
+          -- statement rather than weakening to a disjunction over endpoints; the fact is
+          -- proved once at `Cascade.lean::releaseInBridgesLogged_edge_delta`.
+          rw [hσ1] at hin1
+          obtain ⟨d, hd, hgt, hnode⟩ := releasePostLogged_edge_delta _ u ab hin2 hin1
+          refine ⟨d, foldl_removeLoggedOne_outbox_mono rest _ _ (by rw [hσ1]; exact hd),
+            ?_, hnode⟩
+          rw [← hwm, ← hw1]; exact hgt
+        · rw [pushDelta_edges, removeEdgeOne_edges] at hin2
+          have hpeq : ab = (subjNode u.subject, objNode u.object u.relation) := by
+            by_contra hne
+            exact hin2 ((List.mem_erase_of_ne hne).mpr hin)
+          subst hpeq
+          refine ⟨⟨(σc.removeEdgeOne (subjNode u.subject)
+              (objNode u.object u.relation)).nextDeltaId,
+              objNode u.object u.relation, u.relation, true⟩, ?_, ?_, rfl⟩
+          · refine foldl_removeLoggedOne_outbox_mono rest _ _ ?_
+            rw [hσ1]
+            refine releasePostLogged_outbox_mono _ u _ ?_
+            rw [pushDelta_outbox]
+            exact List.mem_cons_self
+          · show σ.watermark
+              < (σc.removeEdgeOne (subjNode u.subject) (objNode u.object u.relation)).nextDeltaId
+            have hdef : (σc.removeEdgeOne (subjNode u.subject)
+                  (objNode u.object u.relation)).nextDeltaId
+                = max (σc.removeEdgeOne (subjNode u.subject)
+                    (objNode u.object u.relation)).maxOutboxId
+                  (σc.removeEdgeOne (subjNode u.subject)
+                    (objNode u.object u.relation)).watermark + 1 := rfl
+            have hw : (σc.removeEdgeOne (subjNode u.subject)
+                (objNode u.object u.relation)).watermark = σc.watermark :=
+              removeEdgeOne_watermark σc _ _
+            rw [hwm] at hw
+            omega
       · exfalso
         apply hin1
         unfold GraphState.removeLoggedOne
@@ -3762,10 +4426,10 @@ theorem removeLeg_reach_stable {σ : GraphState} {S : Schema} {t : Tuple}
     fence sits on `σ`, the bigger multiset, and transfers to the post-state by subset). -/
 theorem removeLeg_reach_wAll_false {σ : GraphState} {S : Schema} {t : Tuple}
     {dt r' : String}
-    (htp : ∀ ab ∈ σ.edges, ab.2.variant = Variant.plain) :
+    (htp : ∀ ab ∈ σ.edges, ab.2.variant ≠ Variant.wAll) :
     (∀ u, (σ.removeLoggedRules S t).reach u (wAllNode dt r') = false) ∧
     (∀ u, σ.reach u (wAllNode dt r') = false) := by
-  have htpp : ∀ ab ∈ (σ.removeLoggedRules S t).edges, ab.2.variant = Variant.plain :=
+  have htpp : ∀ ab ∈ (σ.removeLoggedRules S t).edges, ab.2.variant ≠ Variant.wAll :=
     fun ab hab => htp ab (removeLoggedRules_edges_subset σ S t ab hab)
   constructor
   · intro u
@@ -3773,14 +4437,14 @@ theorem removeLeg_reach_wAll_false {σ : GraphState} {S : Schema} {t : Tuple}
     | false => rfl
     | true =>
       exfalso
-      have := nreaches_target_plain htpp (reach_sound hc)
+      have := nreaches_target_variant_ne htpp (reach_sound hc)
       simp [wAllNode] at this
   · intro u
     cases hc : σ.reach u (wAllNode dt r') with
     | false => rfl
     | true =>
       exfalso
-      have := nreaches_target_plain htp (reach_sound hc)
+      have := nreaches_target_variant_ne htp (reach_sound hc)
       simp [wAllNode] at this
 
 /-- **Retraction-leg `graphRec` stability off the mapped keys** (dual of
@@ -3790,7 +4454,7 @@ theorem removeLeg_reach_wAll_false {σ : GraphState} {S : Schema} {t : Tuple}
 theorem removeLeg_graphRec_stable {σ : GraphState} {S : Schema} {t : Tuple}
     {dt on R r' : String} {e : Expr}
     (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
-    (htp : ∀ ab ∈ σ.edges, ab.2.variant = Variant.plain)
+    (htp : ∀ ab ∈ σ.edges, ab.2.variant ≠ Variant.wAll)
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hr' : r' ∈ computedRefs e) (hon : on ≠ STAR)
     (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
@@ -3812,7 +4476,7 @@ theorem removeLeg_graphRec_stable {σ : GraphState} {S : Schema} {t : Tuple}
 theorem removeLeg_checkFn_stable {σ : GraphState} {S : Schema} {t : Tuple} (T' : Store)
     {dt on R : String} {e : Expr}
     (hclσ : ∀ ab ∈ σ.edges, ab.1 ∈ σ.nodes ∧ ab.2 ∈ σ.nodes)
-    (htp : ∀ ab ∈ σ.edges, ab.2.variant = Variant.plain)
+    (htp : ∀ ab ∈ σ.edges, ab.2.variant ≠ Variant.wAll)
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hco : ComputedOnly e) (hon : on ≠ STAR)
     (hunmapped : (dt, R, on) ∉ cascadeKeys S (σ.removeLoggedRules S t))
@@ -3866,19 +4530,45 @@ theorem rewriteClosureL_notarget_derived {S : Schema} {T : Store} {t : Tuple}
   · exact noRuleOutputsL_of_derived hWF hder r hr'
       ⟨hro.trans htype.symm, hrout.trans hrel.symm⟩
 
-/-- Membership of `(a,b)` survives one retraction step when no closure member targets `b`. -/
+/-- Membership of `(a,b)` survives one retraction step when no closure member targets `b`
+    and `b` is not a bridge target.
+
+    ★★ **RESTATED by `P6` step 3b (2026-09-14) — the old form went FALSE, and subtly.**
+    It read exactly as now minus `hb`, and the counterexample is immediate once the
+    retraction releases: take `b = wAnyNode ((subjNode u.subject).type,
+    (subjNode u.subject).pred)`. Then `hne` HOLDS — an `objNode` is never a `wAny`
+    (`State.lean::objNode_ne_wAny`) — while `releasePostLogged` erases
+    `(subjNode u.subject, b)` anyway, because the release is keyed on the ENDPOINT it
+    collects, not on anything the closure targeted. So `hne` was never the right fence for
+    a bridge edge; it fences the GRANT.
+
+    One added hypothesis repairs it and nothing else moves. It is **free at the whole
+    consumer chain** (`mem_foldl_removeLoggedOne_edges_iff_of_notarget` →
+    `removeLeg_derived_inedges_eq`), which instantiates `b := objNode ⟨dt, on⟩ R` and
+    discharges `hb` by `objNode_ne_wAny` with no premise of its own. Neither name is
+    audited, so the statement was free to move. -/
 theorem mem_removeLoggedOne_edges_iff_of_ne {σ : GraphState} {u : Tuple} {a b : NodeKey}
-    (hne : objNode u.object u.relation ≠ b) :
+    (hne : objNode u.object u.relation ≠ b) (hb : b.variant ≠ Variant.wAny) :
     ((a, b) ∈ (σ.removeLoggedOne u).edges ↔ (a, b) ∈ σ.edges) := by
   unfold GraphState.removeLoggedOne
   split
-  · rw [pushDelta_edges]
-    exact mem_removeEdgeOne_edges_of_ne (by intro h; exact hne (congrArg Prod.snd h).symm)
+  · constructor
+    · intro h
+      have h' := releasePostLogged_edges_subset _ u (a, b) h
+      rw [pushDelta_edges] at h'
+      exact (mem_removeEdgeOne_edges_of_ne
+        (by intro hh; exact hne (congrArg Prod.snd hh).symm)).mp h'
+    · intro h
+      refine mem_releasePostLogged_edges_of_ne_wAny _ u hb ?_
+      rw [pushDelta_edges]
+      exact (mem_removeEdgeOne_edges_of_ne
+        (by intro hh; exact hne (congrArg Prod.snd hh).symm)).mpr h
   · exact Iff.rfl
 
-/-- Membership of `(a,b)` survives the retraction fold when no closure member targets `b`. -/
+/-- Membership of `(a,b)` survives the retraction fold when no closure member targets `b`
+    and `b` is not a bridge target. ★ `P6` step 3b (2026-09-14): forwards the new `hb`. -/
 theorem mem_foldl_removeLoggedOne_edges_iff_of_notarget (us : List Tuple) {a b : NodeKey}
-    (hnt : ∀ w ∈ us, objNode w.object w.relation ≠ b) :
+    (hnt : ∀ w ∈ us, objNode w.object w.relation ≠ b) (hb : b.variant ≠ Variant.wAny) :
     ∀ (σ : GraphState),
       ((a, b) ∈ (us.foldl (fun acc u => acc.removeLoggedOne u) σ).edges ↔ (a, b) ∈ σ.edges) := by
   induction us with
@@ -3887,7 +4577,7 @@ theorem mem_foldl_removeLoggedOne_edges_iff_of_notarget (us : List Tuple) {a b :
     intro σ
     simp only [List.foldl_cons]
     rw [ih (fun w hw => hnt w (List.mem_cons_of_mem _ hw)) (σ.removeLoggedOne u)]
-    exact mem_removeLoggedOne_edges_iff_of_ne (hnt u List.mem_cons_self)
+    exact mem_removeLoggedOne_edges_iff_of_ne (hnt u List.mem_cons_self) hb
 
 /-- **The retraction never touches a derived key's in-edges** (dual of
     `writeLeg_derived_inedges_eq`): via `noRuleOutputs_of_derived` no rewrite-closure member
@@ -3903,7 +4593,8 @@ theorem removeLeg_derived_inedges_eq {σ : GraphState} {S : Schema} {t : Tuple} 
   unfold GraphState.removeLoggedRules
   exact mem_foldl_removeLoggedOne_edges_iff_of_notarget
     (rewriteClosureL S (rawWriteTuples S t))
-    (fun w hw => rewriteClosureL_notarget_derived hWF hSV ht hlk hder hco w hw) σ
+    (fun w hw => rewriteClosureL_notarget_derived hWF hSV ht hlk hder hco w hw)
+    (objNode_ne_wAny ⟨dt, on⟩ R) σ
 
 /-! ## Obligation (D) of the write-path cone — SCOUTED 2026-09-05: it is ONE PREMISE SHORT
 

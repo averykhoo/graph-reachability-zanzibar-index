@@ -114,7 +114,7 @@ transport verbatim across a retraction. -/
     (σ.removeLoggedOne t).residue = σ.residue := by
   unfold GraphState.removeLoggedOne
   by_cases hmem : (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges
-  · rw [if_pos hmem, pushDelta_residue, removeEdgeOne_residue]
+  · rw [if_pos hmem, releasePostLogged_residue, pushDelta_residue, removeEdgeOne_residue]
   · rw [if_neg hmem]
 
 /-- The logged rule-routed retraction leaves the residue map untouched (fold of the above). -/

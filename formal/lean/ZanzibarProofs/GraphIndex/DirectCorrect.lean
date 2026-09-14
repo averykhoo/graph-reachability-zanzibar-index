@@ -599,6 +599,26 @@ theorem nreaches_target_plain {edges : List (NodeKey × NodeKey)}
   | edge he => exact hpl _ he
   | head _ _ ih => exact ih
 
+/-- **The `≠` form of `nreaches_target_plain`, and the one a BRIDGED write leg needs.**
+
+    ★ ADDITIVE, `P6` step 3b (2026-09-14). Once the logged write leg materialises
+    in-bridges, *"every edge target is plain"* is **false** — a bridge target is
+    `wAnyNode (ty, p) = ⟨ty, STAR, p, Variant.wAny⟩` (`State.lean::wAnyNode`). But no
+    consumer of the plain-target fence ever needed plainness: every one of them feeds
+    `nreaches_target_plain` a `wAllNode` and derives `False`. So the fence restates as
+    `≠ Variant.wAll` and this is its transport lemma.
+
+    Deliberately generic in the excluded variant rather than specialised to `wAll`: the
+    three-variant `NodeKey` already forced one copy of this induction, and a fourth variant
+    would otherwise force another. `nreaches_target_plain` is left untouched — it is still
+    the right tool on the unbridged legs, and several of them still use it. -/
+theorem nreaches_target_variant_ne {edges : List (NodeKey × NodeKey)} {V : Variant}
+    (hpl : ∀ e ∈ edges, e.2.variant ≠ V) {u v : NodeKey}
+    (hr : NReaches edges u v) : v.variant ≠ V := by
+  induction hr with
+  | edge he => exact hpl _ he
+  | head _ _ ih => exact ih
+
 /-! ## T2b on the fragment, assembled -/
 
 /-- **T2b, star-free pure-direct fragment (a genuine end-to-end instance).**

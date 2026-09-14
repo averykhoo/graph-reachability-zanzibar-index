@@ -142,15 +142,15 @@ theorem enumJobs2At_Rnode_ne {S : Schema} {T : Store} {σe : GraphState}
       unchanged; the store is unchanged, so the Σ is unchanged. -/
 theorem reachedByW3d2E_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2E σ S T) :
-    ∀ a b : NodeKey, isDerived S (b.type, b.pred) = false →
+    ∀ a b : NodeKey, isDerived S (b.type, b.pred) = false → b.variant ≠ Variant.wAny →
       σ.edges.count (a, b) = untOccCount S T a b := by
   induction h with
   | empty S =>
-    intro a b _
+    intro a b _ _
     simp [untOccCount, emptyState]
   | @write σp S T t hadm hprev ih =>
-    intro a b hb
-    rw [count_writeLoggedRules a b σp S t hadm, ih a b hb]
+    intro a b hb hbv
+    rw [count_writeLoggedRules a b hbv σp S t hadm, ih a b hb hbv]
     unfold untOccCount
     rw [List.flatMap_cons, List.map_append, List.count_append]
     -- Post-R5 both sides add the SAME L-closure summand. This is the FULLY-OPERATIONAL
@@ -158,11 +158,12 @@ theorem reachedByW3d2E_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     -- `graph_correct`'s remove leg — stands on.
     omega
   | @remove σp S T t hadm _ _ _ _ _ hprev ih =>
-    intro a b hb
-    rw [count_removeLoggedRules (a, b) S t σp, ih a b hb, untOccCount_erase S T t a b hadm]
+    intro a b hb hbv
+    rw [count_removeLoggedRules (a, b) hbv S t σp, ih a b hb hbv,
+      untOccCount_erase S T t a b hadm]
     omega
   | @cascade σp S T hprev ih =>
-    intro a b hb
+    intro a b hb hbv
     have hkfacts : ∀ (σe : GraphState) (n : Nat),
         ∀ k ∈ cascadeKeysAbove S σe n, isDerived S (k.1, k.2.1) = true ∧ k.2.2 ≠ STAR :=
       fun σe n k hk => ⟨(mem_cascadeKeysAbove_props hk).1, (mem_cascadeKeysAbove_props hk).2.2⟩
@@ -171,7 +172,7 @@ theorem reachedByW3d2E_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     have h2 : ∀ j ∈ enumJobs2R2 S T σp, b ≠ objNode ⟨j.dt, j.on⟩ j.R :=
       enumJobs2At_Rnode_ne (hkfacts _ _) hb
     rw [count_runCascade2_of_ne S T σp (enumJobs2R1 S T σp) (enumJobs2R2 S T σp) h1 h2]
-    exact ih a b hb
+    exact ih a b hb hbv
 
 /-! ## ★ R3 ON THE FULLY-OPERATIONAL CHAIN — PINNED AT THE FIXTURE THAT REFUTED IT
 
@@ -211,7 +212,7 @@ theorem reachedByW3d2E_untOccCount_leaf_pinned :
       ([] : Store) LeafRuleWitness.tlEditor lrV_foldAdmits
       (ReachedByW3d2E.empty LeafRuleWitness.SlV))
     (subjNode ⟨"user", "alice", BARE⟩) (objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0))
-    lrV_leafNode_not_derived]
+    lrV_leafNode_not_derived (objNode_ne_wAny ⟨"doc", "d1"⟩ (leafPred "viewer" 0))]
   exact lrV_untOccCount_leaf_one
 
 /-- **And at the ordinary untainted target**, where R3 was true before R5 as well — kept so
@@ -228,5 +229,6 @@ theorem reachedByW3d2E_untOccCount_nonleaf_pinned :
       ([] : Store) LeafRuleWitness.tlEditor lrV_foldAdmits
       (ReachedByW3d2E.empty LeafRuleWitness.SlV))
     (subjNode ⟨"user", "alice", BARE⟩) (objNode ⟨"doc", "d1"⟩ "editor") (by decide)
+    (objNode_ne_wAny ⟨"doc", "d1"⟩ "editor")
 
 end Zanzibar
