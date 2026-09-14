@@ -27,7 +27,11 @@ This file assembles the **read half**:
 Fragment hypotheses on the store are `BareStarStore T` + `TtuStarFree S T` (replacing
 `StarFreeStore`); the schema stays one `ComputedOnly` derived stratum over untainted `computed`
 operands (decision-15 scope: object wildcards and wildcard usersets over derived relations stay
-rejected; `wildcardShapes` carries only bare-subject-star shapes).
+rejected; `declaredWildcardShapes` -- pass 1, which is what `W4Fragment.wsBare` speaks for
+since the 2026-09-14h split -- carries only bare-subject-star shapes. ⚠ The FULL
+`wildcardShapes` does not: it is Python's two-pass list and may hold a non-BARE
+star-tupleset through-shape, which is why bareness is now recovered from COVERAGE via
+`coveredFn_declared` rather than read off a row's membership).
 -/
 
 namespace Zanzibar
@@ -139,11 +143,24 @@ theorem reconcileJobsC_edges_mono {S : Schema} {T : Store} :
 
 /-! ## The linchpin — no ghost star coverage
 
-**`coveredFn σ0 sh = true → sh ∈ wildcardShapes S`**: a `sem`-true BARE-star subject has a
-DECLARED wildcard shape. This is what collapses the space rule: the master theorem pins
-`res.stars = (wildcardShapes S).filter (coveredFn σ0)`, so `res.stars.contains sh ↔
-(sh ∈ wildcardShapes S ∧ coveredFn σ0 sh)` — and the read correspondence needs it
-`↔ coveredFn σ0 sh` alone. Route: a true `coveredFn` has a true `computed` leaf (boolean
+**`coveredFn σ0 sh = true → sh ∈ declaredWildcardShapes S`**: a `sem`-true BARE-star subject
+has a DECLARED wildcard shape — declared by a LITERAL restriction, i.e. pass 1 of
+`zanzibar_utils_v1.py::derive_schema_info`. This is what collapses the space rule: the master
+theorem pins `res.stars = (wildcardShapes S).filter (coveredFn σ0)`, so
+`res.stars.contains sh ↔ (sh ∈ declaredWildcardShapes S ∧ coveredFn σ0 sh)` — and the read
+correspondence needs it `↔ coveredFn σ0 sh` alone.
+
+★ **The conclusion tightened from `wildcardShapes` to `declaredWildcardShapes` on
+2026-09-14h, and that tightening is what let the split land at all.** The route below has
+always ended at a wildcard-flagged literal restriction, so pass-1 membership was what it
+proved; stating the weaker conclusion cost nothing until `wildcardShapes` grew Python's
+second pass, at which point every consumer that read bareness off a row's membership was
+stranded. Read contrapositively it is also the "Tier-1" fact `P6` part (iv) needed: a
+star-tupleset through-shape that is not separately declared is NEVER covered on this
+fragment — which is precisely why correcting the enumeration is INERT here and only becomes
+live once `W4Fragment.ttuStarFree` widens.
+
+Route: a true `coveredFn` has a true `computed` leaf (boolean
 trees are false on all-false leaves), whose probe read leaves from the star subject's own
 `wAny` node; the first edge out is a materialised closure tuple whose subject IS that node
 (`reachedByRules_edge_sound`); a star closure member carries its stored seed's subject
@@ -219,7 +236,7 @@ theorem coveredFn_declared {S : Schema} {T : Store} {σ0 : GraphState}
     (h0 : ReachedByRulesAdmitted σ0 S T)
     {dt on R : String} {e : Expr} (hco : ComputedOnly e) {sh : Shape}
     (hcov : σ0.coveredFn T dt on R e sh = true) :
-    sh ∈ wildcardShapes S := by
+    sh ∈ declaredWildcardShapes S := by
   -- 1. some computed leaf's graph read is true
   unfold GraphState.coveredFn GraphState.checkFn at hcov
   obtain ⟨r', _hr', hleaf⟩ := evalE_computedOnly_true_leaf e hco hcov
@@ -271,8 +288,10 @@ theorem coveredFn_declared {S : Schema} {T : Store} {σ0 : GraphState}
     simpa using hwc
   have hsh1 : sh.1 = r.1 := by rw [← hty, hts]; rfl
   have hsh2 : sh.2 = r.2.1 := by rw [← hpred, hts]; rfl
-  -- 7. assemble the `wildcardShapes` membership
-  unfold wildcardShapes
+  -- 7. assemble the `wildcardShapes` membership — via pass 1, the DECLARED restrictions
+  --    (this trace ends at a literal wildcard restriction, so `declaredWildcardShapes` is
+  --    the pass that holds it; `throughShapes` is unreachable from here)
+  unfold declaredWildcardShapes
   refine List.mem_flatMap.mpr ⟨((t.object.type, t.relation), e'), mem_defs_of_lookup hlk', ?_⟩
   refine List.mem_filterMap.mpr ⟨r, mem_exprRestrictions_of_directs hdirs hrmem, ?_⟩
   rw [if_pos hr22, ← hsh1, ← hsh2]
@@ -396,7 +415,7 @@ theorem graphRec_star_declared_d {S : Schema} {T : Store} {σ0 : GraphState}
     (h0 : ReachedByRulesAdmitted σ0 S T)
     {sh : Shape} {dt' on' r' : String}
     (hleaf : GraphModel.graphRec σ0 (starSubj sh) dt' on' r' = true) :
-    sh ∈ wildcardShapes S := by
+    sh ∈ declaredWildcardShapes S := by
   have hstar : (starSubj sh).name = STAR := rfl
   have hreach : ∃ v, σ0.reach (subjNode (starSubj sh)) v = true := by
     unfold GraphModel.graphRec GraphModel.probeNonDerived at hleaf
@@ -444,7 +463,7 @@ theorem graphRec_star_declared_d {S : Schema} {T : Store} {σ0 : GraphState}
   have hr22 : r.2.2 = true := by rw [htstar] at hwc; simpa using hwc
   have hsh1 : sh.1 = r.1 := by rw [← hty, hts]; rfl
   have hsh2 : sh.2 = r.2.1 := by rw [← hpred, hts]; rfl
-  unfold wildcardShapes
+  unfold declaredWildcardShapes
   refine List.mem_flatMap.mpr ⟨((t.object.type, t.relation), e'), mem_defs_of_lookup hlk', ?_⟩
   refine List.mem_filterMap.mpr ⟨r, hRinRestr r hrmem, ?_⟩
   rw [if_pos hr22, ← hsh1, ← hsh2]
@@ -498,7 +517,7 @@ theorem directArm_star_declared {S : Schema} {T : Store} {rec : Rec} {q : Query}
     (hlk : S.lookup (dt, R) = some e) (hba : DirectArmsBare e)
     (hrs : rs ∈ exprDirectsAll e)
     (hdl : directLeaf rec (starSubj sh) T q rs dt on R = true) :
-    sh ∈ wildcardShapes S := by
+    sh ∈ declaredWildcardShapes S := by
   have hbr : ∀ r ∈ rs, r.2.1 = BARE := directArmsBare_mem hba hrs
   have hbareG : ∀ g ∈ grantsOf T rs dt on R, g.subject.predicate = BARE :=
     grantsOf_bare_subjects T rs dt on R hbr
@@ -521,7 +540,7 @@ theorem directArm_star_declared {S : Schema} {T : Store} {rec : Rec} {q : Query}
   have hr22 : r.2.2 = true := by rw [hgstar] at hwc; simpa using hwc
   have hsh1 : sh.1 = r.1 := by rw [← hty, hgty]
   have hsh2 : sh.2 = r.2.1 := by rw [← hpred, hgpred]
-  unfold wildcardShapes
+  unfold declaredWildcardShapes
   refine List.mem_flatMap.mpr ⟨((dt, R), e), mem_defs_of_lookup hlk, ?_⟩
   refine List.mem_filterMap.mpr ⟨r, mem_exprRestrictions_of_directsAll hrs hrmem, ?_⟩
   rw [if_pos hr22, ← hsh1, ← hsh2]
@@ -536,11 +555,66 @@ theorem coveredFn_declared_d {S : Schema} {T : Store} {σ0 : GraphState}
     {dt on R : String} {e : Expr} (hlk : S.lookup (dt, R) = some e)
     (hcd : ComputedOrDirect e) (hba : DirectArmsBare e) {sh : Shape}
     (hcov : σ0.coveredFn T dt on R e sh = true) :
-    sh ∈ wildcardShapes S := by
+    sh ∈ declaredWildcardShapes S := by
   unfold GraphState.coveredFn GraphState.checkFn at hcov
   rcases evalE_computedOrDirect_true_leaf e hcd hcov with ⟨r', _hr', hleaf⟩ | ⟨rs, hrs, hdl⟩
   · exact graphRec_star_declared_d hTT hSV hTS h0 hleaf
   · exact directArm_star_declared hlk hba hrs hdl
+
+/-- **The linchpin at a W3c STATE rather than at its admitted base (2026-09-14h).**
+
+    Needed because the 2026-09-14h split made `wildcardShapes` the two-pass list Python
+    actually enumerates, so a row's candidate can be a star-tupleset through-shape whose
+    predicate is NOT `BARE`, while `W4Fragment.wsBare` — correctly — speaks only for pass 1.
+    Every consumer that used to read bareness straight off a row's membership now has to go
+    via COVERAGE, and several of them hold the coverage at the W3c state `σ` rather than at
+    the master's base `σ0`.
+
+    ★ **This is also the "Tier-1 coverage-false" fact in its useful form**: contrapositively,
+    a shape that is in `throughShapes S` and not in `declaredWildcardShapes S` is never
+    `coveredFn`-true anywhere on this fragment — which is why correcting the enumeration is
+    INERT here and only becomes live when `W4Fragment.ttuStarFree` widens (`P6` part (iv)).
+
+    The transport is leafwise: the master's agreement covers UNTAINTED keys, `hleafUnt` says
+    every `computed` leaf of `e` is untainted, and `evalE_computedOnly` lifts pointwise leaf
+    agreement to the whole boolean tree. -/
+theorem coveredFn_declared_w3c {S : Schema} {T : Store} {σ : GraphState}
+    (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRules S T) (hTS : TtuStarFree S T)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (h : ReachedByW3c σ S T)
+    {dt on R : String} {e : Expr} (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    {sh : Shape} (hcov : σ.coveredFn T dt on R e sh = true) :
+    sh ∈ declaredWildcardShapes S := by
+  obtain ⟨σ0, hσ0, hag, _, _⟩ := reachedByW3c_master hterm hCO hLU h
+  refine coveredFn_declared hTT hSV hTS hσ0 hco (dt := dt) (on := on) (R := R) ?_
+  have htrans : σ0.coveredFn T dt on R e sh = σ.coveredFn T dt on R e sh := by
+    unfold GraphState.coveredFn GraphState.checkFn
+    exact evalE_computedOnly e hco
+      (fun r' hr' => (hag (starSubj sh) dt on r' (hleafUnt r' hr')).symm)
+  rw [htrans]
+  exact hcov
+
+/-- Bareness of a row's star shape, on a W3c state — the composition consumers actually
+    want: a `coveredFn`-true shape is declared (pass 1), and `W4Fragment.wsBare` speaks for
+    exactly the declared shapes. Before the 2026-09-14h split this was `hWSbare` applied
+    straight to the row membership; that step is no longer available and this is its
+    replacement. -/
+theorem coveredFn_bare_w3c {S : Schema} {T : Store} {σ : GraphState}
+    (hTT : TtuTuplesetsDirect S) (hSV : StoreValidRules S T) (hTS : TtuStarFree S T)
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
+    (h : ReachedByW3c σ S T)
+    {dt on R : String} {e : Expr} (hco : ComputedOnly e)
+    (hleafUnt : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    {sh : Shape} (hcov : σ.coveredFn T dt on R e sh = true) : sh.2 = BARE :=
+  hWSbare sh (coveredFn_declared_w3c hTT hSV hTS hterm hCO hLU h hco hleafUnt hcov)
 
 /-! ## Row characterisation — every persisted W3c row reads at `sem` level
 
@@ -565,13 +639,13 @@ theorem w3c_row_char_d {S : Schema} {T : Store} {σ : GraphState}
     (hba : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → DirectArmsBare e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3c σ S T)
     {dt on R : String} {e : Expr} {res : Residue}
     (hlk : S.lookup (dt, R) = some e) (hon : on ≠ STAR)
     (hrow : σ.residue (objNode ⟨dt, on⟩ R) R = some res) :
     (∀ sh, res.stars.contains sh = true ↔
-      (sh ∈ wildcardShapes S ∧ sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true)) ∧
+      (sh ∈ declaredWildcardShapes S ∧ sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true)) ∧
     (∀ n ∈ res.neg, n.name ≠ STAR ∧ sem S T ⟨n, R, ⟨dt, on⟩⟩ = false) ∧
     (∀ n ∈ res.upos, n.predicate ≠ BARE ∧ n.name ≠ STAR ∧
       sem S T ⟨n, R, ⟨dt, on⟩⟩ = true) := by
@@ -588,15 +662,25 @@ theorem w3c_row_char_d {S : Schema} {T : Store} {σ : GraphState}
     checkFn_eq_sem_bs_d hWF hTT hNK hR hSV hBS hTS hMatch hStrat hterm
       (ReachedByW3aAdmitted.base hσ0) hlk (hcd _ _ _ hlk hder') (hba _ _ _ hlk hder')
       (hLU _ _ _ hlk hder') hx hon
+  -- The row's candidate list is the CORRECTED (two-pass) `wildcardShapes`, but a member of
+  -- the row is `coveredFn`-true, and the strengthened linchpin says a covered shape is
+  -- DECLARED (pass 1). That is what lets `hWSbare` — a pass-1 statement since the
+  -- 2026-09-14h split — still reach every row member, and it is also the Tier-1
+  -- "a through-shape is never covered on this fragment" fact, obtained as a by-product
+  -- rather than proved separately.
+  have hdeclOfCov : ∀ sh : Shape, σ0.coveredFn T dt on R e sh = true →
+      sh ∈ declaredWildcardShapes S := fun _ hcov =>
+    coveredFn_declared_d hTT hSV hTS hσ0 hlk (hcd _ _ _ hlk hder') (hba _ _ _ hlk hder') hcov
   refine ⟨?_, ?_, ?_⟩
   · intro sh
     rw [hstars]
     constructor
     · intro hc
       rw [List.contains_eq_mem] at hc
-      obtain ⟨hws, hcov⟩ := List.mem_filter.mp (of_decide_eq_true hc)
-      refine ⟨hws, ?_⟩
-      rw [← hbridge (starSubj sh) (fun _ => hWSbare sh hws)]
+      obtain ⟨_hws, hcov⟩ := List.mem_filter.mp (of_decide_eq_true hc)
+      have hdecl := hdeclOfCov sh hcov
+      refine ⟨hdecl, ?_⟩
+      rw [← hbridge (starSubj sh) (fun _ => hWSbare sh hdecl)]
       exact hcov
     · rintro ⟨hws, hsem⟩
       have hcov : σ0.coveredFn T dt on R e sh = true := by
@@ -604,7 +688,8 @@ theorem w3c_row_char_d {S : Schema} {T : Store} {σ : GraphState}
         rw [hbridge (starSubj sh) (fun _ => hWSbare sh hws)]
         exact hsem
       rw [List.contains_eq_mem]
-      exact decide_eq_true (List.mem_filter.mpr ⟨hws, hcov⟩)
+      exact decide_eq_true
+        (List.mem_filter.mpr ⟨mem_wildcardShapes_of_mem_declared hws, hcov⟩)
   · intro n hn
     obtain ⟨_hcov, hnstar, hchk⟩ := hnegm n hn
     refine ⟨hnstar, ?_⟩
@@ -615,7 +700,9 @@ theorem w3c_row_char_d {S : Schema} {T : Store} {σ : GraphState}
     exact ⟨hnp, hnstar, by rw [← hbridge n (fun hx => absurd hx hnstar)]; exact hchk⟩
 
 /-- **`w3c_row_char`** — the `ComputedOnly` wrapper over the `_d` core `w3c_row_char_d`.
-    Byte-identical statement to HEAD; delegates by deriving `StoreValidRulesD` and the
+    Statement tracks the core (the `stars` conjunct moved to `declaredWildcardShapes` with
+    the 2026-09-14h split — see the core's proof for why that is a strengthening and not a
+    narrowing); delegates by deriving `StoreValidRulesD` and the
     `ComputedOrDirect`/`DirectArmsBare` def conditions from `StoreValidRules`/`ComputedOnly`
     (`storeValidRulesD_of_storeValidRules`, `computedOnly_computedOrDirect`/`_directArmsBare`). -/
 theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
@@ -627,13 +714,13 @@ theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3c σ S T)
     {dt on R : String} {e : Expr} {res : Residue}
     (hlk : S.lookup (dt, R) = some e) (hon : on ≠ STAR)
     (hrow : σ.residue (objNode ⟨dt, on⟩ R) R = some res) :
     (∀ sh, res.stars.contains sh = true ↔
-      (sh ∈ wildcardShapes S ∧ sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true)) ∧
+      (sh ∈ declaredWildcardShapes S ∧ sem S T ⟨starSubj sh, R, ⟨dt, on⟩⟩ = true)) ∧
     (∀ n ∈ res.neg, n.name ≠ STAR ∧ sem S T ⟨n, R, ⟨dt, on⟩⟩ = false) ∧
     (∀ n ∈ res.upos, n.predicate ≠ BARE ∧ n.name ≠ STAR ∧
       sem S T ⟨n, R, ⟨dt, on⟩⟩ = true) :=
@@ -712,11 +799,11 @@ theorem reconcileJobsC_neg_complete {S : Schema} {T : Store}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     {s : SubjectRef} {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e)
     (hsstar : s.name ≠ STAR) (hon : on ≠ STAR)
-    (hshWS : s.shape ∈ wildcardShapes S)
+    (hshWS : s.shape ∈ declaredWildcardShapes S)
     (hsemStar : sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true)
     (hsemF : sem S T ⟨s, R, ⟨dt, on⟩⟩ = false) :
     ∀ (jobs : List W3cJob) (σ : GraphState), ReachedByW3c σ S T →
@@ -774,7 +861,8 @@ theorem reconcileJobsC_neg_complete {S : Schema} {T : Store}
       rw [Bool.and_eq_true]
       constructor
       · rw [List.contains_eq_mem]
-        exact decide_eq_true (List.mem_filter.mpr ⟨hshWS, hcovS⟩)
+        exact decide_eq_true
+          (List.mem_filter.mpr ⟨mem_wildcardShapes_of_mem_declared hshWS, hcovS⟩)
       · rw [hchkS, hsemF]
         rfl
     · -- another key: the row at the query key is untouched
@@ -805,7 +893,7 @@ theorem reconcileJobsC_upos_complete {S : Schema} {T : Store}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     {s : SubjectRef} {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e)
     (hsu : s.predicate ≠ BARE) (hsstar : s.name ≠ STAR) (hon : on ≠ STAR)
@@ -859,8 +947,12 @@ theorem reconcileJobsC_upos_complete {S : Schema} {T : Store}
           (fun sh => σ.coveredFn T dt on R e sh)).contains s.shape = false := by
         by_contra hc
         rw [Bool.not_eq_false, List.contains_eq_mem] at hc
-        have hws := List.mem_of_mem_filter (of_decide_eq_true hc)
-        exact hsu (hWSbare s.shape hws)
+        -- Membership in the CANDIDATE list no longer implies bareness (the list is the
+        -- corrected two-pass one since 2026-09-14h); membership in the COVERED filter still
+        -- does, via the linchpin.
+        obtain ⟨_hws, hcov⟩ := List.mem_filter.mp (of_decide_eq_true hc)
+        exact hsu (coveredFn_bare_w3c hTT hSV hTS hterm hCO hLU hWSbare hσ
+          (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) hcov)
       rw [Bool.and_eq_true, hnc]
       exact ⟨rfl, by rw [hchkS, hsemT]⟩
     · have hne : ¬(objNode ⟨dt, on⟩ R = objNode ⟨jdt, jon⟩ jR ∧ R = jR) := by
@@ -962,12 +1054,12 @@ theorem w3cComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : W3cComplete S T σ)
     {s : SubjectRef} {dt on R : String} {e : Expr}
     (hlk : S.lookup (dt, R) = some e) (hder : isDerived S (dt, R) = true)
     (hsb : s.predicate = BARE) (hss : s.name ≠ STAR) (hon : on ≠ STAR)
-    (hnotcov : ¬(s.shape ∈ wildcardShapes S ∧
+    (hnotcov : ¬(s.shape ∈ declaredWildcardShapes S ∧
       sem S T ⟨starSubj s.shape, R, ⟨dt, on⟩⟩ = true))
     (hsem : sem S T ⟨s, R, ⟨dt, on⟩⟩ = true) :
     (subjNode s, objNode ⟨dt, on⟩ R) ∈ σ.edges := by
@@ -1021,11 +1113,13 @@ theorem w3cComplete_derived_edge {S : Schema} {T : Store} {σ : GraphState}
     simp only [Option.getD_some]
     by_contra hc
     rw [Bool.not_eq_false, List.contains_eq_mem] at hc
-    obtain ⟨hws, hcov⟩ := List.mem_filter.mp (of_decide_eq_true hc)
-    refine hnotcov ⟨hws, ?_⟩
+    obtain ⟨_hws, hcov⟩ := List.mem_filter.mp (of_decide_eq_true hc)
+    have hdecl := coveredFn_declared_w3c hTT hSV hTS hterm hCO hLU hσpre
+      (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder) hcov
+    refine hnotcov ⟨hdecl, ?_⟩
     rw [← checkFn_eq_sem_w3c (s := starSubj s.shape) hWF hTT hNK hR hSV hBS hTS hCO hMatch
       hStrat hterm hσpre hlk (hCO _ _ _ hlk hder) (hLU _ _ _ hlk hder)
-      (fun _ => hWSbare s.shape hws) hon]
+      (fun _ => hWSbare s.shape hdecl) hon]
     exact hcov
   have hsfil : s ∈ jc.filter (fun c => !(σ1.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)) := by
     refine List.mem_filter.mpr ⟨hjs, ?_⟩
@@ -1110,7 +1204,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : W3cComplete S T σ)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
@@ -1164,7 +1258,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
       subst hsp
       rw [if_pos rfl]
       have hsem_ws : sem S T ⟨⟨st, STAR, BARE⟩, R, ⟨dt, on⟩⟩ = true →
-          (st, BARE) ∈ wildcardShapes S := by
+          (st, BARE) ∈ declaredWildcardShapes S := by
         intro hsm
         refine coveredFn_declared hTT hSV hTS h0B hco (dt := dt) (on := on) (R := R) ?_
         show σ0B.checkFn T (starSubj (st, BARE)) dt on R e = true
@@ -1178,7 +1272,8 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
         cases hsm : sem S T ⟨⟨st, STAR, BARE⟩, R, ⟨dt, on⟩⟩
         · rfl
         · exfalso
-          obtain ⟨j, hj, hkm⟩ := hrowEx dt on R e hlk hder (st, BARE) (hsem_ws hsm) hqo hsm
+          obtain ⟨j, hj, hkm⟩ := hrowEx dt on R e hlk hder (st, BARE)
+            (mem_wildcardShapes_of_mem_declared (hsem_ws hsm)) hqo hsm
           have hsome := reconcileJobsC_row_isSome (S := S) (T := T) jobs σ0B
             (Or.inr ⟨j, hj, hkm⟩)
           rw [← hσB, hrow] at hsome
@@ -1216,9 +1311,10 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
             cases hsm : sem S T ⟨⟨st, sn, BARE⟩, R, ⟨dt, on⟩⟩
           · rfl
           · exfalso
-            by_cases hcov : (st, BARE) ∈ wildcardShapes S ∧
+            by_cases hcov : (st, BARE) ∈ declaredWildcardShapes S ∧
                 sem S T ⟨starSubj (st, BARE), R, ⟨dt, on⟩⟩ = true
-            · obtain ⟨j, hj, hkm⟩ := hrowEx dt on R e hlk hder (st, BARE) hcov.1 hqo hcov.2
+            · obtain ⟨j, hj, hkm⟩ := hrowEx dt on R e hlk hder (st, BARE)
+                (mem_wildcardShapes_of_mem_declared hcov.1) hqo hcov.2
               have hsome := reconcileJobsC_row_isSome (S := S) (T := T) jobs σ0B
                 (Or.inr ⟨j, hj, hkm⟩)
               rw [← hσB, hrow] at hsome
@@ -1248,8 +1344,10 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
             · by_contra hsm
               rw [Bool.not_eq_true] at hsm
               obtain ⟨hws, hsemStar⟩ := (hchar.1 (st, BARE)).mp hcS
-              have hall := hcovN dt on R e hlk hder ⟨st, sn, BARE⟩ hstar hqo hws hsemStar hsm
-              obtain ⟨j, hj, hkm⟩ := hrowEx dt on R e hlk hder (st, BARE) hws hqo hsemStar
+              have hall := hcovN dt on R e hlk hder ⟨st, sn, BARE⟩ hstar hqo
+                (mem_wildcardShapes_of_mem_declared hws) hsemStar hsm
+              obtain ⟨j, hj, hkm⟩ := hrowEx dt on R e hlk hder (st, BARE)
+                (mem_wildcardShapes_of_mem_declared hws) hqo hsemStar
               obtain ⟨res', hres', hmem⟩ := reconcileJobsC_neg_complete
                 (s := ⟨st, sn, BARE⟩) hWF hTT hNK hR hSV hBS
                 hTS hMatch hStrat hterm hCO hLU hWSbare hlk hstar hqo hws hsemStar hsm
@@ -1266,7 +1364,7 @@ theorem graph_correct_w3c {S : Schema} {T : Store} {σ : GraphState} (q : Query)
                 || (res.stars.contains (st, BARE) && !res.neg.contains ⟨st, sn, BARE⟩)) = true := by
             intro hsm
             rw [Bool.or_eq_true, Bool.and_eq_true]
-            by_cases hcov : (st, BARE) ∈ wildcardShapes S ∧
+            by_cases hcov : (st, BARE) ∈ declaredWildcardShapes S ∧
                 sem S T ⟨starSubj (st, BARE), R, ⟨dt, on⟩⟩ = true
             · refine Or.inr ⟨(hchar.1 (st, BARE)).mpr hcov, ?_⟩
               cases hcnt : res.neg.contains ⟨st, sn, BARE⟩

@@ -318,7 +318,12 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
     "wsBare": {
         "demands": (
             "Every declared wildcard restriction in the schema is bare (`[T:*]`), never a "
-            "wildcard userset (`[T:*#p]`)."
+            "wildcard userset (`[T:*#p]`). Scoped to `derive_schema_info`'s FIRST pass "
+            "(`ReconcileStars.lean::declaredWildcardShapes`) since 2026-09-14h; it read the "
+            "whole shape set before that name was corrected to cover both passes, and "
+            "re-pointing it is what kept this field the same SIZE rather than quietly "
+            "shrinking the fragment -- `FullScope.lean::sxThruDerived_wsBare_over_full_list_"
+            "fails` pins that."
         ),
         "classification": "MIXED",
         "evidence": "zanzibar_utils_v1.py::_build_plan_tree",

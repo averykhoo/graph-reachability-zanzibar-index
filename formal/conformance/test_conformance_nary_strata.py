@@ -401,7 +401,9 @@ def test_required_leaf_kinds_are_exactly_the_compilers_kinds():
 # Lean `sem` x oracle x set engine) PLUS the python-only three-backend leg below.
 # NEITHER may enter `SCHEMAS` or `GRAPH_FRAGMENT`.**
 #   * `wildcard_userset` is outside `FullScope.lean::W4Fragment.wsBare`
-#     (`∀ sh ∈ wildcardShapes S, sh.2 = BARE`; this schema's shape set contains
+#     (`∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE` since 2026-09-14h -- it read
+#     `wildcardShapes` before that name was corrected to cover both passes of
+#     `derive_schema_info`; this schema's shape set contains
 #     the non-bare `(group, member)`). `wsBare`'s own doc comment already records
 #     the asymmetry — Python admits wildcard usersets over UNTAINTED relations and
 #     rejects them only over derived ones — so this is a declared Lean gap.

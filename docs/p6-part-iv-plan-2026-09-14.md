@@ -15,6 +15,281 @@ in a tracked file), **AGENT** (a subagent's report, reconciled but not re-derive
 
 ---
 
+## Corrections appended 2026-09-14h (sixth) — stage 1 is GREEN: `lake build` completes, 1089/1089
+
+*supersedes:* the (fifth) correction's *"Steps 1–3 are REASONED"* and its *"nothing after
+`FullScope` has been elaborated"*. Both are now settled by the kernel. Everything else in
+(fifth) stands, including its correction of the (fourth) staging.
+
+**KERNEL, `lake build`, `RC=0`, `ERR=0`, `Build completed successfully (1089 jobs)`.** The
+route the (fifth) correction reasoned out is the route that worked, with one addition it did
+not anticipate.
+
+### The three planned steps, all confirmed
+
+1. **The 19 linchpin conclusions tightened to `declaredWildcardShapes` — free at every
+   site**, exactly as reasoned: every one of those proofs already ended at a literal wildcard
+   restriction. Not one needed a new argument.
+2. **The 74 + 1 bareness carries moved to `declaredWildcardShapes`** and discharge from
+   `W4Fragment.wsBare` unchanged.
+3. **The operational sites stayed on the full two-pass `wildcardShapes`** — the fold's
+   candidate list, `ReachedByW3c`'s constructor, `reconcileStarsKey*`, and every
+   `res.stars = (wildcardShapes S).filter …`. The characterisation/operational split turned
+   out to be **textually clean**: a characterisation always reads `… ∈ wildcardShapes S`, an
+   operational site always hands the parenthesised list to a fold, so the sweep could be
+   mechanical (`.scratch/repoint.py`) rather than site-by-site.
+
+### ★ What (fifth) did NOT anticipate — the linchpin had to move UP the import chain
+
+Re-pointing made the routed linchpin load-bearing inside
+`CascadeStrataResettle::settledComplete_jobsLR_targeted{,_d}`, which sits **upstream** of the
+module that held it. Four lemmas were relocated, statements and proofs byte-unchanged:
+
+| lemma | from | to |
+|---|---|---|
+| `graphRec_star_declared` | `CascadeStrataResettle` | `CascadeStable` |
+| `checkFnR_star_declared` / `_d` / `_d_filt` | `CascadeStrataEnum` | `CascadeStrataSettle` |
+
+`formal/audited_theorems.txt` pins audited theorems **by NAME, not by path**, so the
+relocation does not disturb that pin — verified by reading the check
+(`verify.sh` step 4a compares name sets). ⚠ `docs/history/session-log.md:2810` cites
+`CascadeStrataEnum.lean::checkFnR_star_declared` and is now stale; it is FROZEN history and
+is deliberately **not** edited (`CLAUDE.md`, "Status lines inside `docs/history/` are FROZEN").
+
+### Four new helpers, and why they are subject-generic
+
+`ReconcileStarsComplete::coveredFn_declared_w3c` / `::coveredFn_bare_w3c` (transport through
+`reachedByW3c_master`'s leafwise agreement + `evalE_computedOnly`) and
+`CascadeStable::coveredFn_declared_shadow` / `::coveredFn_bare_shadow` (transport through
+`UntaintedShadow`, the same first step as `checkFn_eq_sem_w3d`).
+
+⚠ **They take NO bareness hypothesis and produce one, and that is the whole point.** The read
+bridges (`checkFn_eq_sem_*`, `checkFnR_eq_sem_settled*`) all refuse to speak below
+`s.name = STAR → s.predicate = BARE`, so using them to establish bareness is circular. Going
+through the linchpin is the only non-circular route, and it is why the fix needed lemmas at
+all rather than just a rename.
+
+### Also landed
+
+* `TtuStarWide::mem_throughShapes_iff_isStarTuplesetThrough` — the two independent Lean
+  transcriptions of Python's second loop, pinned equal. **This, not the enumeration, is the
+  durable deliverable**: the enumeration was one line, and the reason it stayed wrong for a
+  month is that nothing in the tree could see it.
+* `SettledKey` (`CascadeStable`) and `w3c_row_char{,_d}` row characterisations restated over
+  `declaredWildcardShapes` — a STRENGTHENING (the rows provably cannot hold anything else),
+  with the reason recorded in situ.
+* Stale doc-claims corrected where the change refutes them: `UsStarWrite.lean`'s header
+  (the sharpest — *"`wildcardShapes` sweeps only LITERAL restrictions"*),
+  `ReconcileStarsComplete.lean`'s header and linchpin block, `FullScope.lean`'s
+  `sxUsWild_other_admission_fields_hold` block, `Audit.lean`'s W3c block,
+  `formal/conformance/corpus.py`, `::test_conformance_nary_strata.py`,
+  `::test_w4fragment_scope_pin.py`.
+
+### ★ THE GATE IS GREEN — all ten phases, on this tree (2026-09-14h)
+
+`lean PASSED (holes=0, audits=615, pinned=615)`; `conf-tile:1..5/5 PASSED` (110/109/109/109/109,
+each at its floor); `tests-tile:1..4/4 PASSED` (288/287/287/287). `gate_status.py`: **COVERED
+on this tree.** Three generated goldens were regenerated deliberately, and each delta is
+exactly the change and nothing else:
+
+| golden | delta | why |
+|---|---|---|
+| `formal/audited_theorems.txt` | **+13, none removed** | the 13 new `#print axioms` lines |
+| `formal/headline_definitions.txt` | +2 rows (`declaredWildcardShapes`, `throughShapes`); bodies of `wildcardShapes`, `SettledKey`, `CompleteKey`, `W3dJobCoverage`, `W4Fragment` | the split + the re-points |
+| `formal/headline_statements.txt` | **1 line** — `W4WitnessDirect.fragment` | its `wsBare` conjunct |
+
+⚠ **Regenerating a golden destroys the signal it carried — say what replaced it.**
+`test_w4fragment_scope_pin.py`'s own docstring makes this point about
+`headline_definitions.txt`. What protects the change here is that `W4Fragment`'s field COUNT
+and NAMES are **unchanged** (10, same order), which is the structural signal that module
+guards by a HAND-MAINTAINED list nothing regenerates; and that the semantic content of the
+statement change is now carried positively by
+`FullScope.lean::sxThruDerived_wsBare_over_full_list_fails` rather than only by a golden.
+
+### ★ SABOTAGE — both attacks RUN, both attributable, literal output below
+
+`docs/sabotage-procedure.md`. The tree was green (1089 jobs, `RC=0`) immediately before each
+arm, which is the instrument control: a red below cannot be pre-existing breakage.
+
+**`S1` — `throughShapes (_S : Schema) : List Shape := []`.** The narrowest *plausible*
+weakening, not a catastrophe: it is exactly the pre-2026-09-14h state, i.e. what a future
+"simplification" of the split would restore. `lake build ZanzibarProofs.FullScope` → `RC=1`,
+**four reds, every one a `decide`-level CLAIM red naming its own proposition**:
+
+```text
+error: ZanzibarProofs/FullScope.lean:1165:13: Tactic `decide` proved that the proposition
+  ("folder", "viewer") ∈ wildcardShapes SxThruDerived            is false
+error: ZanzibarProofs/FullScope.lean:1165:24: … ¬∀ sh ∈ wildcardShapes SxThruDerived, sh.2 = BARE   is false
+error: ZanzibarProofs/FullScope.lean:1165:46: … ("folder", "viewer") ∈ throughShapes SxThruDerived  is false
+error: ZanzibarProofs/FullScope.lean:1175:24: … ("folder", "viewer") ∈ throughShapes SxThruPlain    is false
+```
+
+★ **And NOTHING ELSE in FullScope's 1080-module closure reddened.** That is the finding, and
+it cuts two ways. It means the two new pins are the **sole** guard against silent regression
+to the pre-fix model — no other declaration in the development notices. It is also an
+INDEPENDENT, mechanical confirmation of the "stage 1 is inert on today's fragment" claim,
+which up to that point rested on contraposing `coveredFn_declared`: if emptying pass 2 broke
+nothing but the pins, then nothing on this fragment was depending on pass 2's content.
+
+⚠ **An INERT arm, caught by asking what each arm was supposed to move.** The control
+`sxThruPlain_gains_same_through_shape`'s FIRST conjunct —
+`throughShapes SxThruPlain = throughShapes SxThruDerived` — **survives `S1`**, because
+`[] = []`. Only its membership arm is live under this attack. That is `P6` step 2's quiet
+failure exactly (a mutation that does not move the property reads like a clean pin); the arm
+is kept because it does real work against a *different* attack (one that changes only one
+schema's shapes), but it must not be counted as evidence here.
+
+**`S2` — drop the `r.2.1 == BARE` conjunct from `throughShapes`' filter.** Chosen to be
+single-variable in the other direction: at `SxThruDerived`/`SxThruPlain` the only wildcard
+restriction IS bare, so both lists are unchanged and **`FullScope` builds GREEN** — the
+control. `lake build ZanzibarProofs.GraphIndex.TtuStarWide` → `RC=1`, one red, in
+`mem_throughShapes_iff_isStarTuplesetThrough` and nowhere else:
+
+```text
+error: ZanzibarProofs/GraphIndex/TtuStarWide.lean:105:12: Tactic `rewrite` failed …
+  case mp.some.isTrue …  hc : r.2.2 = true
+```
+
+⚠ **On its first run `S2` produced only a PROOF-SCRIPT red** — the tactic stopped matching
+because the `if` condition lost a conjunct — **and by `P6` step 3a's own rule that is not a
+pin.** No schema in the tree exhibited the countermodel, so the claim itself was never
+decided; `S2` showed the correspondence was *coupled* to the filter, not that it was
+*pinned*.
+
+**`S2b` — the same mutation, after adding the missing witness.**
+`TtuStarWide.lean::WideWitness.SwNB` is the schema the gap named: a tupleset carrying a
+wildcard **USERSET** restriction `[folder:*#viewer]` rather than a bare `[folder:*]`, where
+Python's `r.predicate == '...'` gate (`zanzibar_utils_v1.py:1008`) means the second loop must
+contribute nothing. `::nonBareTupleset_declines_through_shape` asserts that both
+transcriptions decline it, plus a non-vacuity arm so the pin cannot pass by the situation
+being absent. Re-running `S2` against it:
+
+```text
+error: ZanzibarProofs/GraphIndex/TtuStarWide.lean:176:13: Tactic `decide` proved that the proposition
+  throughShapes SwNB = []
+is false
+```
+
+★ **That is a CLAIM red**, alongside the script red, with `FullScope` green throughout as the
+control. The `BARE` gate on pass 2 is now pinned rather than merely coupled.
+
+### Still not established at this line
+
+* The dedup/order divergences from Python's `sorted(frozenset(...))` remain, deliberately,
+  and are recorded on `ReconcileStars.lean::wildcardShapes` and in `CORRESPONDENCE.md` §7.
+* **Stage 2 (part iv proper) is untouched.** `W4Fragment.ttuStarFree` is unchanged, so the
+  corrected enumeration is inert on today's fragment — see `CORRESPONDENCE.md` §7 for why
+  that is a theorem here and not merely an observation.
+
+---
+
+## Corrections appended 2026-09-14h (fifth) — stage 1 IN FLIGHT: the split LANDS, and the re-point's real cost is MEASURED at 74 + 19 sites
+
+*supersedes:* the (fourth) correction's staging line *"Stage 1 … the split definitions; `wsBare`
+re-pointed; the Tier-1 coverage-false lemma; repair of the bridge-site through-shape cases"* —
+that enumeration was right about the parts and **wrong about which one is the work**. It is not
+the bridge sites. It is that **74 downstream proof carries and 19 membership-lemma conclusions
+are stated over the FULL list**, and re-pointing `wsBare` alone strands every one of them.
+
+### What LANDED (KERNEL — `lake build` is the referee, not a census)
+
+| step | site | state |
+|---|---|---|
+| split | `ReconcileStars.lean::declaredWildcardShapes` (old body, renamed) / `::throughShapes` (Python pass 2) / `::wildcardShapes` (`declared ++ through.filter (∉ declared)`) | **BUILDS** |
+| glue | `::mem_wildcardShapes_of_mem_declared` / `::mem_wildcardShapes_of_mem_through` / `::mem_wildcardShapes_iff` | **BUILDS** |
+| repair | 4 × `unfold wildcardShapes` → `mem_wildcardShapes_of_mem_declared` + `unfold declaredWildcardShapes` (`ReconcileStarsComplete.lean::coveredFn_declared` / `::graphRec_star_declared_d` / `::directArm_star_declared`, `CascadeStrataResettle.lean::graphRec_star_declared`) | **BUILDS** |
+| re-point | `FullScope.lean::W4Fragment.wsBare` → `declaredWildcardShapes` | **RED, 3 errors** — see below |
+| pins | `FullScope.lean::sxThruDerived_wsBare_over_full_list_fails` (+ its one-axis control `::sxThruPlain_gains_same_through_shape`), `TtuStarWide.lean::mem_throughShapes_iff_isStarTuplesetThrough` | written, **NOT YET ELABORATED** (`FullScope` is the failing module, so nothing after it was checked — step 3a's truncation trap) |
+
+★ **The 235-reference cone was almost entirely inert, as the census predicted**: the whole-tree
+build reached `FullScope` — 1084 of 1089 targets, including all nine `Equiv.lean` headline
+theorems — with exactly **4** structural breaks, every one a proof that stepped through the old
+body with `List.mem_flatMap`. **AGENT-predicted and KERNEL-confirmed**, including the one site
+`rg wildcardShapes` cannot see (`FullScope.lean:586::w4_within_scope`, which builds the
+membership inline); that site needed **no** edit, because re-pointing `wsBare` at pass 1 made
+its inline `mem_flatMap`/`mem_filterMap` term correct as written.
+
+### ★ THE REAL COST, and it is not where the (fourth) correction put it
+
+Re-pointing `wsBare` reds `FullScope.lean` at `:638` (`graph_correct_w3d2E_d`), `:798`
+(`reachedByW3d2E_inv`) and `:871` (`w4Fragment_of_untainted`), all the same error:
+
+```text
+hF.wsBare has type    ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE
+but is expected       ∀ sh ∈ wildcardShapes S, sh.2 = BARE
+```
+
+**MEASURED (`rg`, 2026-09-14h) — the carry pattern `∀ sh ∈ wildcardShapes S, sh.2 = BARE` occurs
+74 times across 12 files**: `CascadeStrataSettle` 17, `CascadeStrataResettle` 11, `Equiv` 9,
+`CascadeEnum` 7, `CascadeStrataEnum` 7, `ReconcileStarsComplete` 6, `CascadeSettle` 4,
+`CascadeStrataAssemble` 4, `FullScope` 3 (a 4th is the new pin and MUST NOT move),
+`CascadeStrataEdge` 3, `CascadeInv` 2, `CascadeStable` 1. Plus **1** at `Sd`
+(`FullScope.lean::W4WitnessDirect.fragment`).
+
+⚠ **A full-list bareness carry is FALSE on the admitted fragment, so "just keep the carries" is
+not on the table.** `W4Witness.SxThruPlain` is `GraphAdmission`-admitted
+(`::sxThruPlain_admitted`, audited) and its pass-2 shape is `("folder","viewer")` — predicate
+`"viewer"`. This also kills the cheaper repair of deriving full-list bareness from
+`GraphAdmission.usWild`: `usWild` only refuses a *derived* bridged-in key, and `SxThruPlain`'s
+through-shape is untainted by construction (that is the whole point of the control).
+
+★ **And that is measured against the SHIPPED PYTHON, not just argued in Lean** —
+`formal/probes/p6_stage1_python_shapes_2026-09-14.py` (rc=0, verbatim transcript in its
+header). `derive_schema_info` returns `[('folder','...'), ('folder','viewer')]` at **both**
+schemas — matching the corrected Lean enumeration shape for shape — and
+`parse_openfga_schema` **ADMITS `SxThruPlain`** while refusing `SxThruDerived`. So a schema
+the implementation compiles and runs carries a non-`BARE` subject-wildcard shape, which is
+the strongest available form of "the full-list `wsBare` would have shrunk the fragment": it
+is a fact about the code, not about the model. ⚠ Read the refusal of `SxThruDerived`
+carefully — it is about the through-shape being DERIVED, not about it being non-bare, so it
+is a consistency check on `::sxThruDerived_not_admitted` and NOT the load-bearing half.
+
+### The route, DECIDED — strengthen the linchpin rather than weaken the fragment
+
+**REASONED, and the reason is first-hand:** all four repaired sites above proved
+`sh ∈ wildcardShapes S` by tracing a covered star back to a **literal wildcard restriction** —
+i.e. every one of them actually establishes pass-1 membership, and the `++` was pure loss. So:
+
+1. **Strengthen the 19 "no ghost star coverage" conclusions from `wildcardShapes` to
+   `declaredWildcardShapes`** (`ReconcileStarsComplete::coveredFn_declared`, `::coveredFn_declared_d`,
+   `::graphRec_star_declared_d`, `::directArm_star_declared`; `CascadeStrataResettle::graphRec_star_declared`;
+   `CascadeStrataEnum::checkFnR_star_declared{,_d,_d_filt}`; the `w3d_leg_context` /
+   `w3d2_leg_context{,_d,_d_filt}` conjuncts; and the `have … : sem → sh ∈ wildcardShapes S`
+   blocks inside `graph_correct_w3c/w3d/w3d2{,_d}` and `checkFnR_eq_sem_settled{,_d,_d_filt}`).
+   This is a **strengthening**, free at every site, and consumers that still want the full list
+   get there by `mem_wildcardShapes_of_mem_declared`.
+2. **Move the 74 + 1 bareness carries to `declaredWildcardShapes`.** They then discharge from
+   `W4Fragment.wsBare` unchanged.
+3. **Leave the OPERATIONAL sites on the full `wildcardShapes`** — everything passed to the fold
+   (`ReachedByW3c`'s constructor, `applyLoggedR`, `reconcileStarsKey*`) and every residue-row
+   characterisation `res.stars.contains sh ↔ (sh ∈ wildcardShapes S ∧ sem … = true)`. **That is
+   the fix**; collapsing these back to pass 1 would undo it silently.
+
+★ **The (fourth) correction's "Tier-1 coverage-false lemma, REASONED only" falls out as a
+COROLLARY of step 1 rather than needing its own proof:** if a shape is in `throughShapes S` and
+not in `declaredWildcardShapes S`, the strengthened linchpin makes `coveredFn σ sh = true`
+contradictory, so it is never covered on this fragment. That is a strictly better outcome than
+the plan forecast — the obligation is discharged by the same edit that creates it, not carried.
+
+### Still not established at this line
+
+* Steps 1–3 are **REASONED**; only the split itself and the 4 repairs are KERNEL-confirmed.
+* Nothing after `FullScope` has been elaborated — `TtuStarWide`, `Exec`, `Cli`, `Audit` are
+  unevaluated, so the 4-break count is an **"at least these"**, never an "only these"
+  (`P6` step 3a's truncation trap).
+* **Two representation divergences from Python remain, deliberately** and are recorded on
+  `ReconcileStars.lean::wildcardShapes`: Python's shape set is a `frozenset` rendered
+  `sorted(…)`, so a shape produced twice by pass 2 appears twice here, and the orders differ.
+  Inert for every consumer today (the list is read only through `∈` / `filter` / `any`) —
+  **unchecked** against any future order- or multiplicity-sensitive consumer.
+* The `Inv` bareness worry from the (fourth) correction is **ANSWERED, first-hand READ and
+  NEGATIVE**: `State.lean:722::Inv.negStarCovered` requires only
+  `res.stars.contains n.shape = true`, with no predicate constraint, and
+  `BareStarCorrect.lean:44::BareStarStore` constrains STORE tuples, not residue rows. No `Inv`
+  clause pins bareness of a persisted `stars` row, so none of them obstructs the fix.
+
+---
+
 ## Corrections appended 2026-09-14g (fourth) — DECISION `D1-split`, and the kill-check PASSES
 
 *supersedes:* the third correction's *"Two defects, not one"* and its `D1`/`D2`/`D3` table's

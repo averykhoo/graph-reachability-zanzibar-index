@@ -667,7 +667,10 @@ namespace Zanzibar
 -- W3a-admitted shadow). `coveredFn_declared` — THE LINCHPIN, no ghost star coverage: a
 -- `sem`-covered shape is DECLARED (true computed leaf → wAny-sourced probe → first edge →
 -- materialised closure tuple → the star seed carries its subject → `restrictionMatches`'
--- wildcard flag names a `wildcardShapes` entry). `w3c_row_char`: every persisted row reads
+-- wildcard flag names a `declaredWildcardShapes` entry — PASS 1, and since 2026-09-14h the
+-- conclusion says so: the trace has always ended at a literal wildcard restriction, and
+-- stating it over the corrected two-pass `wildcardShapes` was throwing that away).
+-- `w3c_row_char`: every persisted row reads
 -- at `sem` level (master provenance + the star-relaxed bridge). Batch completeness for the
 -- WHOLESALE residue recompute: `reconcileJobsC_row_isSome` (row existence),
 -- `reconcileJobsC_neg_complete` / `reconcileJobsC_upos_complete` (an attack-first `#eval`
@@ -2017,6 +2020,61 @@ namespace Zanzibar
 -- four controls stay GREEN — so the red is attributable to disjunct (b), not to breakage.
 #print axioms Schema.isStarTuplesetThrough
 #print axioms ThroughShapeWitness.through_shape_is_bridged_in
+-- ★ 2026-09-14h — `derive_schema_info`'s SECOND loop had TWO independent Lean
+-- transcriptions, four weeks and several modules apart, and they DISAGREED for a day:
+-- `Schema.isStarTuplesetThrough` (the decision procedure, part (i), 2026-08-14) modelled it
+-- while `ReconcileStars.lean::wildcardShapes` -- the list the cascade's star fold actually
+-- enumerates, and whose docstring named the same Python function -- did not. The cost was a
+-- phantom userset subject answering wrongly at `P6`'s divergence store, because
+-- `CascadeStrata.lean::GraphState.reconcileResidueKeyR` is `stars := shapes.filter …` and a
+-- filter cannot mint a shape its input never held. `::throughShapes` is the corrected
+-- enumeration and `mem_throughShapes_iff_isStarTuplesetThrough` makes the redundancy
+-- MECHANICAL rather than hopeful: break either transcription and it goes red, so the pair
+-- cannot silently drift apart again. That is the durable half of the fix -- the enumeration
+-- itself is a one-line correction, and nothing in the tree could previously see it wrong.
+#print axioms declaredWildcardShapes
+#print axioms throughShapes
+#print axioms wildcardShapes
+#print axioms mem_wildcardShapes_of_mem_declared
+#print axioms mem_wildcardShapes_of_mem_through
+#print axioms mem_wildcardShapes_iff
+#print axioms mem_throughShapes_iff_isStarTuplesetThrough
+-- ⚠ The iff above is a `Prop`, so a mutation to `throughShapes` reddens it as a TACTIC
+-- failure -- and step 3a's rule is that a red on a proof is not a pin. Measured: sabotage
+-- `S2` (2026-09-14h) dropped the `BARE` gate from `throughShapes`' filter and produced
+-- exactly that, with `FullScope` GREEN throughout, because no schema in the tree exhibited
+-- the countermodel. `WideWitness.SwNB` is that schema -- a tupleset carrying a wildcard
+-- USERSET restriction `[folder:*#viewer]` instead of a bare `[folder:*]` -- and re-running
+-- the same mutation against it (`S2b`) gives a CLAIM red: "`decide` proved that the
+-- proposition `throughShapes SwNB = []` is false". The pin below is what makes the `BARE`
+-- gate pinned rather than merely coupled.
+#print axioms WideWitness.SwNB
+#print axioms WideWitness.nonBareTupleset_declines_through_shape
+-- The split's own guard rails. `sxThruDerived_wsBare_over_full_list_fails` asserts BOTH
+-- halves positively: the corrected list really does mint the through-shape here `(1)`, and
+-- `W4Fragment.wsBare` over that full list is therefore FALSE `(2)` -- so collapsing
+-- `wildcardShapes` back to one pass reddens the first, and restating `wsBare` over the full
+-- list is refused by the second. `(3)` attributes the flip to pass 2 rather than to some
+-- other newly enumerated shape, and `sxThruPlain_gains_same_through_shape` is the one-axis
+-- control showing the UNTAINTED sibling gains the same shape (so the fact is about the star
+-- tupleset, not about the taint). ⚠ The load-bearing measurement is not in Lean at all:
+-- `formal/probes/p6_stage1_python_shapes_2026-09-14.py` shows the shipped compiler ADMITS
+-- `SxThruPlain` while `derive_schema_info` gives it the non-bare shape `('folder','viewer')`
+-- -- i.e. the full-list `wsBare` is false on a schema the index RUNS, which is what makes
+-- re-pointing the field mandatory rather than tidy.
+#print axioms W4Witness.sxThruDerived_wsBare_over_full_list_fails
+#print axioms W4Witness.sxThruPlain_gains_same_through_shape
+-- The two-and-two helpers the re-point needed: since a row's candidate may now be non-BARE,
+-- bareness is recovered from COVERAGE via the linchpin instead of from row membership. The
+-- `_w3c` pair transports through `reachedByW3c_master`'s leafwise agreement; the `_shadow`
+-- pair through `UntaintedShadow`. Both are deliberately SUBJECT-GENERIC -- they take no
+-- bareness hypothesis and produce one -- which is exactly what breaks the circularity the
+-- read bridge alone cannot (`checkFn_eq_sem_*` will not speak below `s.name = STAR →
+-- s.predicate = BARE`).
+#print axioms coveredFn_declared_w3c
+#print axioms coveredFn_bare_w3c
+#print axioms coveredFn_declared_shadow
+#print axioms coveredFn_bare_shadow
 #print axioms ThroughShapeWitness.literal_disjunct_is_false
 #print axioms ThroughShapeWitness.control_one_char_delta_is_not_bridged_in
 #print axioms ThroughShapeWitness.concrete_node_is_bridged

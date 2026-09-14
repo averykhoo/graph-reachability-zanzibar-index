@@ -341,7 +341,9 @@ since the citations were stamped and was rewritten again on 2026-07-26.
 
 | Lean | models | Python |
 |---|---|---|
-| `GraphIndex/ReconcileStars.lean::wildcardShapes` | declared wildcard shapes → candidate stars | `index_v4/processor.py::DeltaProcessor.__init__` (`self.subject_shapes = sorted(widx.schema_info.subject_wildcard_shapes)`), consumed by `::_EvalContext.leaf_stars` |
+| `GraphIndex/ReconcileStars.lean::wildcardShapes` — **BOTH passes since 2026-09-14h** (`declared ++ through`) | the subject-wildcard shape set → the star fold's candidate list | `zanzibar_utils_v1.py::derive_schema_info` **in full**, feeding `::SchemaInfo.subject_wildcard_shapes`; consumed at `index_v4/processor.py::DeltaProcessor.__init__` (`self.subject_shapes = sorted(widx.schema_info.subject_wildcard_shapes)`) by `::_EvalContext.leaf_stars`. ⚠ Modelled pass 1 ONLY until 2026-09-14h, while this row named the two-pass Python function — the drift that made a phantom userset subject answer wrongly (§7) |
+| `GraphIndex/ReconcileStars.lean::declaredWildcardShapes` — pass 1 | wildcard shapes carried by a literal `[T:*]` / `[T:*#p]` restriction | `zanzibar_utils_v1.py::derive_schema_info`'s FIRST loop (`:990-995`). **`FullScope.lean::W4Fragment`'s `wsBare` field is stated over THIS**, not over the combined list, so the fragment did not shrink when the second pass landed — `FullScope.lean::sxThruDerived_wsBare_over_full_list_fails` is that decision made red-on-regression |
+| `GraphIndex/ReconcileStars.lean::throughShapes` — pass 2 | star-tupleset TTU through-shapes, as a LIST | `zanzibar_utils_v1.py::derive_schema_info`'s SECOND loop (`:1001-1009`). The enumeration twin of the decision procedure `GraphIndex/UsStarWrite.lean::Schema.isStarTuplesetThrough`; the two are pinned equal by `GraphIndex/TtuStarWide.lean::mem_throughShapes_iff_isStarTuplesetThrough`, so this development's **two** independent transcriptions of one Python loop cannot silently disagree again |
 | `GraphIndex/ReconcileStars.lean::GraphState.coveredFn` | star-subject coverage read | `index_v4/processor.py::_EvalContext.leaf_stars` (probes each declared shape with `'*'` as the subject NAME) and `::DeltaProcessor.member_stars` / `::DeltaProcessor.residue_stars` |
 | `GraphIndex/ReconcileStars.lean::GraphState.reconcileResidueKey` (wholesale `stars`/`neg`/`upos` recompute) | the full-object recompute | `index_v4/processor.py::DeltaProcessor._reconcile` steps (1) stars fold via `plan.stars_fn`, (2)/(2a) neg candidates incl. from-chain (`::DeltaProcessor._leaf_concretes`, `::DeltaProcessor._derived_leaf_neg_ids`, `::DeltaProcessor._from_chain_keys`), (2c) `upos` wholesale |
 | `GraphIndex/ReconcileStars.lean::GraphState.reconcileKeyC` / `::GraphState.reconcileStarsKey` (residue-THEN-edges) | the ORDER: residue written before the edge audit | `index_v4/processor.py::DeltaProcessor._reconcile` — step (3) `::DeltaProcessor._store_residue` upsert precedes the step-(4) edge audit |
@@ -1217,9 +1219,36 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   `wsBare` at a `declaredWildcardShapes`, because the corrected list otherwise falsifies the
   audited `FullScope.lean::sxThruDerived_wsBare_holds_but_usWild_fails`.
 
-  ⚠ This boundary is therefore **diagnosed, not yet closed** — the shipped Lean definitions
-  are untouched and the kill-check is a simulation at one store. Do not read the diagnosis as
-  a landed fix; `P6` stage 1 is what lands it.
+  ★ **LANDED 2026-09-14h (`P6` stage 1) — the enumeration gap above is CLOSED in the shipped
+  model.** `GraphIndex/ReconcileStars.lean::wildcardShapes` is now
+  `declaredWildcardShapes ++ throughShapes` and models both of `derive_schema_info`'s passes;
+  `W4Fragment.wsBare` reads pass 1 so the fragment is unchanged in size. The paragraphs above
+  are kept because they are the diagnosis, not the status — read them for the mechanism.
+
+  **What the fix does NOT do, stated plainly: it is INERT on today's fragment, by
+  construction.** `W4Fragment.ttuStarFree` excludes exactly the stores in which a
+  star-tupleset through-shape could be `coveredFn`-true, and that is now a THEOREM rather
+  than an observation — contrapose
+  `GraphIndex/ReconcileStarsComplete.lean::coveredFn_declared`, whose conclusion tightened to
+  `declaredWildcardShapes` in the same change, and a through-shape that is not separately
+  declared is never covered here. So stage 1 buys FIDELITY (the model now says what the code
+  does) and unblocks part (iv); it changes no answer at any schema/store pair inside the
+  present fragment. The divergence store that produced this entry was always outside it.
+
+  ⚠ Two representation divergences from Python are still open and are recorded on
+  `GraphIndex/ReconcileStars.lean::wildcardShapes` itself: Python's shape set is a
+  `frozenset` rendered `sorted(...)` at
+  `index_v4/processor.py::DeltaProcessor.__init__`, so a shape produced twice by pass 2
+  appears twice in the Lean list, and the two orders differ. Inert for every consumer today —
+  the list is read only through `∈` / `filter` / `any` — and **unchecked** against any future
+  order- or multiplicity-sensitive consumer.
+
+  ★ **The durable half of the fix is not the enumeration, which was one line, but that
+  nothing in the tree could previously SEE it wrong.** Python's second loop had two
+  independent Lean transcriptions — `GraphIndex/UsStarWrite.lean::Schema.isStarTuplesetThrough`
+  (2026-08-14) and, absent, the list — in modules that cannot import each other.
+  `GraphIndex/TtuStarWide.lean::mem_throughShapes_iff_isStarTuplesetThrough` now pins them
+  equal, so breaking either one reddens the gate.
 
   **Not a Python bug, and that was checked first-hand rather than argued**: the same
   schema, store and seven queries run through `tests/parity.py::ParityEngine` (graph index

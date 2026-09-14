@@ -530,7 +530,7 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) →
-    (∀ sh ∈ wildcardShapes S, sh.2 = BARE) →
+    (∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE) →
     StoreValidRules S T → BareStarStore T → TtuStarFree S T →
     (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
     EdgeHygienic σ := by
@@ -661,7 +661,7 @@ theorem reachedByW3dC_inv {σ : GraphState} {S : Schema} {T : Store}
       ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (hSV : StoreValidRules S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
     (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →

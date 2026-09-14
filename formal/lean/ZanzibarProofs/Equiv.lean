@@ -427,7 +427,7 @@ theorem backend_equivalence_w3c (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : W3cComplete S T σ)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR) :
@@ -450,7 +450,7 @@ theorem exclusion_effective_w3c (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : W3cComplete S T σ)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
@@ -476,7 +476,7 @@ theorem no_ghost_grant_w3c (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : W3cComplete S T' σ')
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
@@ -515,7 +515,7 @@ theorem backend_equivalence_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
@@ -544,7 +544,7 @@ theorem exclusion_effective_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3dC σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
@@ -575,7 +575,7 @@ theorem no_ghost_grant_w3d (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3dC σ' S T') (hq : cascadeKeys S σ' = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
@@ -615,7 +615,7 @@ theorem backend_equivalence_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
@@ -645,7 +645,7 @@ theorem exclusion_effective_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3d2C σ S T) (hq : cascadeKeys S σ = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
@@ -679,7 +679,7 @@ theorem no_ghost_grant_w3d2 (S : Schema) (T' : Store) (σ' : GraphState) (q : Qu
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
           ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false)
-    (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
+    (hWSbare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE)
     (h : ReachedByW3d2C σ' S T') (hq : cascadeKeys S σ' = [])
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
     (hqo : q.object.name ≠ STAR)
