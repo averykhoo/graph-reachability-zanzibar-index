@@ -1081,6 +1081,29 @@ theorem exprTtus_computedOnly : ∀ {e : Expr}, ComputedOnly e → exprTtus e = 
   | excl a b iha ihb =>
     intro h; simp only [exprTtus, iha h.1, ihb h.2, List.append_nil]
 
+/-- **`ComputedOrDirect` is TTU-free too.** ★ ADDITIVE, `P6` step 3b step 8 (2026-09-14).
+
+    `exprTtus_computedOnly` below is what the `T2` chain
+    (`CascadeStable.lean::isSubjectWildcardUserset_false_of_notLeafName`) uses to kill the
+    star-tupleset disjunct at a DERIVED def. But the `_d` shadow chain
+    (`CascadeStrataSettle.lean::reachedByW3d2_shadow_d`) carries `ComputedOrDirect`, not
+    `ComputedOnly` — that is the whole point of the `_d` chain, which exists to admit
+    derived defs with `direct` arms. The two predicates differ only on `.direct`, and the
+    `T2` argument never needed `.direct` to be absent: it needs `.ttu` to be absent, and
+    **both predicates forbid `.ttu`**. So the chain generalises rather than forking. -/
+theorem exprTtus_computedOrDirect : ∀ {e : Expr}, ComputedOrDirect e → exprTtus e = [] := by
+  intro e
+  induction e with
+  | computed _ => intro _; rfl
+  | direct _ => intro _; rfl
+  | ttu _ _ => intro h; exact h.elim
+  | union a b iha ihb =>
+    intro h; simp only [exprTtus, iha h.1, ihb h.2, List.append_nil]
+  | inter a b iha ihb =>
+    intro h; simp only [exprTtus, iha h.1, ihb h.2, List.append_nil]
+  | excl a b iha ihb =>
+    intro h; simp only [exprTtus, iha h.1, ihb h.2, List.append_nil]
+
 /-- **`DirectArmsConcrete S`** — a **derived** def's `Direct` arms carry no wildcard-flagged
     restriction (`r.2.2 = false` on every arm reachable through any boolean nesting).
 

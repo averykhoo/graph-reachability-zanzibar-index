@@ -621,7 +621,7 @@ theorem graph_correct {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     (hql : publicOfLeaf S q.object.type q.relation = none) :
     GraphModel.check σ q = sem S T q :=
   graph_correct_w3d2E_d q hA.wf hA.ttuDirect hA.nodup hA.ranked hA.storeValid
-    hF.bareStar hF.ttuStarFree hA.matchDecl hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hA.leafScope hA.computedRefsNotLeaf hF.term
+    hF.bareStar hF.ttuStarFree hA.matchDecl hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hA.leafScope hA.computedRefsNotLeaf hA.noBridgedDerived hF.term
     hF.computedOrDirect hF.directArmsBare hF.directArmsConcrete
     hF.computedOnlyOperands hF.twoStrata hF.wsBare hF.noUnionDirects h hq hqs hqo hql
 
@@ -783,7 +783,7 @@ theorem graph_reached_inv {S : Schema} {T : Store} {σ : GraphState}
     (h : ReachedBy σ S T) :
     Inv S σ :=
   reachedByW3d2E_inv h hA.wf hA.ttuDirect hA.nodup hA.ranked hA.matchDecl
-    hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hA.leafScope hA.computedRefsNotLeaf hN.computedOnly hF.twoStrata hF.wsBare hN.storeValid hF.bareStar
+    hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hA.leafScope hA.computedRefsNotLeaf hA.noBridgedDerived hN.computedOnly hF.twoStrata hF.wsBare hN.storeValid hF.bareStar
     hF.ttuStarFree hF.term
 
 /-! ## The W2 subsumption — untainted schemas sit inside the full scope
@@ -1928,7 +1928,9 @@ theorem correct_applies {σ : GraphState} (q : Query)
       cases hpl : publicOfLeaf Sd q.object.type q.relation with
       | none => rfl
       | some v => rw [hpl] at hnone; exact absurd rfl hnone
-    exact graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) ⟨hWF, by decide, by decide, by decide⟩ (by decide) hterm
+    exact graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) ⟨hWF, by decide, by decide, by decide⟩ (by decide)
+      (fun _ _ hder => (by decide : ∀ k ∈ taintedKeys Sd, Sd.isSubjectWildcardUserset k.1 k.2 = false)
+        _ (List.mem_of_elem_eq_true hder)) hterm
       hCD hDAB hCOop hLU2 hWSbare hNoUD h hq hqs hqo hql
 
 /-- **CONDITION-2 INSTRUMENT (2026-09-01): the migrated row still exercises the CORE,
@@ -2057,7 +2059,9 @@ theorem coverage_applies {σ : GraphState} {on : String} (hqo : on ≠ STAR)
       List.mem_cons, List.not_mem_nil, or_false] at hr'
     subst hr'
     exact absurd hd' (by decide)
-  exact w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) ⟨hWF, by decide, by decide, by decide⟩ (by decide) hterm
+  exact w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) ⟨hWF, by decide, by decide, by decide⟩ (by decide)
+      (fun _ _ hder => (by decide : ∀ k ∈ taintedKeys Sd, Sd.isSubjectWildcardUserset k.1 k.2 = false)
+        _ (List.mem_of_elem_eq_true hder)) hterm
     hCD hDAB hWSbare h hlk hder (hCD _ _ _ hlk hder) (hDAB _ _ _ hlk hder) hqo
     (hCOop _ _ _ hlk hder) (hLU2 _ _ _ hlk hder) hsettledOps
 
@@ -2127,7 +2131,10 @@ theorem toC_applies {σ : GraphState} (h : ReachedByW3d2E σ Sd Td) :
     ReachedByW3d2C σ Sd Td := by
   obtain ⟨hWF, hNK, hStrat, hTT, hMatch, hR, hSV⟩ := accepts
   obtain ⟨hCD, hDAB, hCOop, hLU2, hWSbare, _, hBS, hTS, hterm⟩ := fragment
-  exact reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) ⟨hWF, by decide, by decide, by decide⟩ (by decide) hCD hDAB directArmsConcrete
+  exact reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) ⟨hWF, by decide, by decide, by decide⟩ (by decide)
+    (fun _ _ hder => (by decide : ∀ k ∈ taintedKeys Sd, Sd.isSubjectWildcardUserset k.1 k.2 = false)
+      _ (List.mem_of_elem_eq_true hder))
+    hCD hDAB directArmsConcrete
     hCOop hLU2 hWSbare hSV hBS hTS hterm
 
 /-- **The leg-4 E-chain FINAL is jointly dischargeable at the Direct-arm pair**:
@@ -2175,7 +2182,9 @@ theorem w3d2E_correct_applies {σ : GraphState} (q : Query)
       cases hpl : publicOfLeaf Sd q.object.type q.relation with
       | none => rfl
       | some v => rw [hpl] at hnone; exact absurd rfl hnone
-    exact graph_correct_w3d2E_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) ⟨hWF, by decide, by decide, by decide⟩ (by decide) hterm hCD hDAB
+    exact graph_correct_w3d2E_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat (ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)) (by decide) ⟨hWF, by decide, by decide, by decide⟩ (by decide)
+      (fun _ _ hder => (by decide : ∀ k ∈ taintedKeys Sd, Sd.isSubjectWildcardUserset k.1 k.2 = false)
+        _ (List.mem_of_elem_eq_true hder)) hterm hCD hDAB
       directArmsConcrete hCOop hLU2 hWSbare hNoUD h hq hqs hqo hql
 
 /-- **CONDITION-2 INSTRUMENT for the E-chain row** — the twin of

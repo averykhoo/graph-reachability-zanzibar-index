@@ -147,6 +147,24 @@ def NodeKey.isPlain (k : NodeKey) : Bool := k.variant == Variant.plain
 @[simp] theorem objNode_pred (o : ObjectRef) (R : String) : (objNode o R).pred = R := by
   unfold objNode; split <;> rfl
 
+/-- **An `objNode` is never a `wAny` node** — it is `plain` at a concrete object and `wAll`
+    at a star one, and `wAnyNode` is the third variant.
+
+    ★ ADDITIVE, `P6` step 3b (2026-09-14). Once the write leg materialises in-bridges,
+    every edge-soundness case split downstream gains a third disjunct — *"…or it is a
+    bridge edge, whose target is `wAnyNode (a.type, a.pred)`"* — and at any goal about an
+    `objNode` target that disjunct dies **by variant alone**: no premise, no `relNameOK`
+    machinery, any object name including `STAR`. Notice the fact once here rather than
+    re-deriving `congrArg NodeKey.variant` in each proof; it is used at
+    `CascadeStable.lean::writeLeg_derived_inedges_eq` and its twins.
+
+    Deliberately NOT `@[simp]`: the global simp set is load-bearing in this development and
+    `C10`'s note records that a single additive change to it is the kind of thing that moves
+    a warning count without moving a statement. -/
+theorem objNode_ne_wAny (o : ObjectRef) (R : String) :
+    (objNode o R).variant ≠ Variant.wAny := by
+  unfold objNode; split <;> simp
+
 /-! ## Reachability (transitive closure of the direct edges) -/
 
 /-- Fuel-bounded reachability: is there a directed path `u → v` of length `1..fuel`?

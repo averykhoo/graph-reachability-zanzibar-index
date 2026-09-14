@@ -47,9 +47,9 @@ open scoped List
     R3 supplies the `≥` that makes the Nat subtraction exact. -/
 theorem removeLoggedRules_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2E σ S T) (t : Tuple) (ht : t ∈ T) (a b : NodeKey)
-    (hb : isDerived S (b.type, b.pred) = false) :
+    (hb : isDerived S (b.type, b.pred) = false) (hbv : b.variant ≠ Variant.wAny) :
     (σ.removeLoggedRules S t).edges.count (a, b) = untOccCount S (T.erase t) a b := by
-  rw [count_removeLoggedRules (a, b) S t σ, reachedByW3d2E_untOccCount h a b hb,
+  rw [count_removeLoggedRules (a, b) hbv S t σ, reachedByW3d2E_untOccCount h a b hb hbv,
     untOccCount_erase S T t a b ht]
   omega
 
@@ -61,7 +61,7 @@ theorem removeLoggedRules_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     hence membership matches (`count > 0 ↔ mem`). -/
 theorem drain_removeLoggedRules_untOccCount {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2E σ S T) (t : Tuple) (ht : t ∈ T) (a b : NodeKey)
-    (hb : isDerived S (b.type, b.pred) = false) :
+    (hb : isDerived S (b.type, b.pred) = false) (hbv : b.variant ≠ Variant.wAny) :
     (runCascade2 S (T.erase t) (σ.removeLoggedRules S t)
         (enumJobs2R1 S (T.erase t) (σ.removeLoggedRules S t))
         (enumJobs2R2 S (T.erase t) (σ.removeLoggedRules S t))).edges.count (a, b)
@@ -74,7 +74,7 @@ theorem drain_removeLoggedRules_untOccCount {σ : GraphState} {S : Schema} {T : 
   have h2 : ∀ j ∈ enumJobs2R2 S (T.erase t) (σ.removeLoggedRules S t),
       b ≠ objNode ⟨j.dt, j.on⟩ j.R := enumJobs2At_Rnode_ne (hkfacts _ _) hb
   rw [count_runCascade2_of_ne S (T.erase t) (σ.removeLoggedRules S t) _ _ h1 h2]
-  exact removeLoggedRules_untOccCount h t ht a b hb
+  exact removeLoggedRules_untOccCount h t ht a b hb hbv
 
 /-- **The untainted membership confluence** (`count > 0 ↔ mem`). An untainted edge `(a,b)`
     survives the remove-then-drain iff it still has a positive occurrence count over
@@ -84,12 +84,12 @@ theorem drain_removeLoggedRules_untOccCount {σ : GraphState} {S : Schema} {T : 
     for a fresh add-only rebuild over `T.erase t`. -/
 theorem mem_drain_removeLoggedRules_untainted {σ : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2E σ S T) (t : Tuple) (ht : t ∈ T) (a b : NodeKey)
-    (hb : isDerived S (b.type, b.pred) = false) :
+    (hb : isDerived S (b.type, b.pred) = false) (hbv : b.variant ≠ Variant.wAny) :
     (a, b) ∈ (runCascade2 S (T.erase t) (σ.removeLoggedRules S t)
         (enumJobs2R1 S (T.erase t) (σ.removeLoggedRules S t))
         (enumJobs2R2 S (T.erase t) (σ.removeLoggedRules S t))).edges
       ↔ 0 < untOccCount S (T.erase t) a b := by
-  rw [← drain_removeLoggedRules_untOccCount h t ht a b hb, Nat.pos_iff_ne_zero, ne_eq,
+  rw [← drain_removeLoggedRules_untOccCount h t ht a b hb hbv, Nat.pos_iff_ne_zero, ne_eq,
     List.count_eq_zero, not_not]
 
 /-! ## `ReadEq` — the MEMBERSHIP-level read-agreement relation (R4 part 2, deliverable iii)
@@ -234,12 +234,12 @@ theorem check_readEq {σ' σ : GraphState} (h : ReadEq σ' σ) (q : Query) :
 theorem untEdgeMem_drain_removeLoggedRules_rebuild {σ σr : GraphState} {S : Schema} {T : Store}
     (h : ReachedByW3d2E σ S T) (t : Tuple) (ht : t ∈ T)
     (hr : ReachedByW3d2E σr S (T.erase t)) (a b : NodeKey)
-    (hb : isDerived S (b.type, b.pred) = false) :
+    (hb : isDerived S (b.type, b.pred) = false) (hbv : b.variant ≠ Variant.wAny) :
     (a, b) ∈ (runCascade2 S (T.erase t) (σ.removeLoggedRules S t)
         (enumJobs2R1 S (T.erase t) (σ.removeLoggedRules S t))
         (enumJobs2R2 S (T.erase t) (σ.removeLoggedRules S t))).edges
       ↔ (a, b) ∈ σr.edges := by
-  rw [mem_drain_removeLoggedRules_untainted h t ht a b hb,
-    ← reachedByW3d2E_untOccCount hr a b hb, List.count_pos_iff]
+  rw [mem_drain_removeLoggedRules_untainted h t ht a b hb hbv,
+    ← reachedByW3d2E_untOccCount hr a b hb hbv, List.count_pos_iff]
 
 end Zanzibar

@@ -162,14 +162,43 @@ theorem structInv_releaseInBridgesLogged {S : Schema} {σ : GraphState} (h : Str
   · exact structInv_releaseInBridges h c
   · exact structInv_pushDelta (structInv_releaseInBridges h c) _ _ true
 
-/-- A single logged routed-edge write preserves `StructInv` (accept branch =
-    `writeDirect` then `pushDelta`; reject branch = identity). -/
+/-- The whole logged bridge prologue preserves `StructInv` — both endpoint legs on top of
+    the two node interns. ★ ADDITIVE, `P6` step 3b (2026-09-14). -/
+theorem structInv_bridgePreLogged {S : Schema} {σ : GraphState} (h : StructInv S σ)
+    (t : Tuple) : StructInv S (σ.bridgePreLogged t) := by
+  unfold GraphState.bridgePreLogged
+  have h0a : StructInv S (σ.addNode (subjNode t.subject)) :=
+    structInv_addNode h (nodeEnc_subjNode t.subject)
+  have h0 : StructInv S ((σ.addNode (subjNode t.subject)).addNode
+      (objNode t.object t.relation)) :=
+    structInv_addNode h0a (nodeEnc_objNode t.object t.relation)
+  have hsub : subjNode t.subject ∈ ((σ.addNode (subjNode t.subject)).addNode
+      (objNode t.object t.relation)).nodes :=
+    List.mem_cons_of_mem _ List.mem_cons_self
+  have h1 := structInv_ensureInBridgesLogged h0 hsub
+  refine structInv_ensureInBridgesLogged h1 ?_
+  rw [ensureInBridgesLogged_nodes]
+  exact ensureInBridges_mono List.mem_cons_self
+
+/-- The release epilogue preserves `StructInv` — a release only ERASES an edge, so both
+    endpoint closure and acyclicity are free. ★ ADDITIVE, `P6` step 3b (2026-09-14). -/
+theorem structInv_releasePostLogged {S : Schema} {σ : GraphState} (h : StructInv S σ)
+    (t : Tuple) : StructInv S (σ.releasePostLogged t) := by
+  unfold GraphState.releasePostLogged
+  exact structInv_releaseInBridgesLogged (structInv_releaseInBridgesLogged h _) _
+
+/-- A single logged routed-edge write preserves `StructInv`.
+
+    ★ `P6` step 3b (2026-09-14): statement unchanged, and the proof got SHORTER. The accept
+    branch is now `bridgePreLogged` + `addEdge` + `pushDelta`, whose acyclicity argument is
+    exactly the one `UsStarWrite.lean::structInv_writeBridgedOne` (audited) already makes —
+    so rather than restating it against the logged prologue, transport it along the
+    correspondence the re-point was built around. `Cascade.lean::structInv_of_evalEq` is the
+    transport, and it is sound because `StructInv` never mentions the outbox or the
+    watermark, which is the only place the logged and unlogged legs differ. -/
 theorem structInv_writeLoggedOne {S : Schema} {σ : GraphState} (h : StructInv S σ)
-    (t : Tuple) : StructInv S (σ.writeLoggedOne t) := by
-  unfold GraphState.writeLoggedOne
-  split
-  · exact structInv_pushDelta (structInv_writeDirect h t) _ _ true
-  · exact h
+    (t : Tuple) : StructInv S (σ.writeLoggedOne t) :=
+  structInv_of_evalEq (writeLoggedOne_evalEq (EvalEq.refl σ) t) (structInv_writeBridgedOne h t)
 
 /-- The logged rule-routed write preserves `StructInv` (a fold of `writeLoggedOne`). -/
 theorem structInv_writeLoggedRules {S : Schema} {σ : GraphState} (h : StructInv S σ)
@@ -193,7 +222,9 @@ theorem structInv_removeLoggedOne {S : Schema} {σ : GraphState} (h : StructInv 
     (t : Tuple) : StructInv S (σ.removeLoggedOne t) := by
   unfold GraphState.removeLoggedOne
   split
-  · exact structInv_pushDelta (structInv_removeEdgeOne h _ _) _ _ true
+  · -- ★ `P6` step 3b (2026-09-14): one composition step added for the release epilogue.
+    exact structInv_releasePostLogged
+      (structInv_pushDelta (structInv_removeEdgeOne h _ _) _ _ true) t
   · exact h
 
 /-- The logged rule-routed retraction preserves `StructInv` (a fold of
@@ -495,6 +526,7 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     TtuTargetsSat S NotLeafName → DirectRestrictionsNotLeaf S →
     LeafScope S →
     ComputedRefsNotLeaf S →
+    NoBridgedDerived S →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false) →
@@ -504,10 +536,10 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     EdgeHygienic σ := by
   induction h with
   | empty S =>
-    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ k r res hrow
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ k r res hrow
     simp [emptyState] at hrow
   | @write σp S T t hadm hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU hWSbare hSV hBS hTS hterm
       k r res hrow
     -- weaken the store-indexed hypotheses back to `T` for the IH
     have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
@@ -520,7 +552,7 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     have hW3dpost : ReachedByW3d (σp.writeLoggedRules S t) S (t :: T) :=
       ReachedByW3d.write t hadm (reachedByW3dC_toW3d hprev)
     have hEHp : EdgeHygienic σp :=
-      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU hWSbare hSVw hBSw hTSw htermw
+      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU hWSbare hSVw hBSw hTSw htermw
     -- the row is the pre-write row, at a declared derived key
     rw [writeLoggedRules_residue] at hrow
     obtain ⟨dt, on, R, e, hk, hr, hlk, hder, hon⟩ :=
@@ -537,7 +569,7 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
       rw [writeLeg_derived_inedges_eq hWF hSV hlk hder hco (subjNode n)] at hedge
       exact (hEHp _ _ _ hrow).2 n hn (NReaches.edge hedge)
   | @cascade σp S T jobs hjv hcover hscope hcovg hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU hWSbare hSV hBS hTS hterm
       k r res hrow
     have hW3dpost : ReachedByW3d (runCascade S T σp jobs) S T :=
       ReachedByW3d.cascade jobs hjv hcover hscope (reachedByW3dC_toW3d hprev)
@@ -550,7 +582,7 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     · -- targeted key: SettledKey verdicts vs the bare-sourced single edge
       obtain ⟨⟨hrowS, hedgeS⟩, _⟩ :=
         settledComplete_cascade_targeted hWF hTT hNK hR hSV hBS hTS hMatch
-          hStrat hQ hDR hLS hcr hterm hCO hLU hWSbare (reachedByW3dC_toW3d hprev) hjv hcovg hlk hder
+          hStrat hQ hDR hLS hcr hNBD hterm hCO hLU hWSbare (reachedByW3dC_toW3d hprev) hjv hcovg hlk hder
           hon htgt
       obtain ⟨_, h2, h3⟩ := hrowS res hrow
       constructor
@@ -575,7 +607,7 @@ theorem reachedByW3dC_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     · -- untargeted key: row and in-edges verbatim from the pre-leg state
       have hnot : ∀ j ∈ jobs, ¬ j.keyMatch dt on R := fun j hj hkm => htgt ⟨j, hj, hkm⟩
       have hEHp : EdgeHygienic σp :=
-        ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU hWSbare hSV hBS hTS hterm
+        ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU hWSbare hSV hBS hTS hterm
       rcases runCascade_cases S T σp jobs with hrc | hrc
       · have hev := reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs
         have hupd_res : ({ reconcileJobsL S T σp jobs with
@@ -631,12 +663,13 @@ theorem reachedByW3dC_inv {σ : GraphState} {S : Schema} {T : Store}
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
     (hWSbare : ∀ sh ∈ wildcardShapes S, sh.2 = BARE)
     (hSV : StoreValidRules S T) (hBS : BareStarStore T) (hTS : TtuStarFree S T)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR T R) :
     Inv S σ := by
   have hst := reachedByW3dC_structInv h
   have hhy := reachedByW3d_residueHygienic (reachedByW3dC_toW3d h)
-  have heh := reachedByW3dC_edgeHygienic h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU
+  have heh := reachedByW3dC_edgeHygienic h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU
     hWSbare hSV hBS hTS hterm
   exact
     { schemaEq := hst.schemaEq

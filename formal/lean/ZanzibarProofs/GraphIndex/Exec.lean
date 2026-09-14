@@ -79,7 +79,12 @@ def graphRunAux (S : Schema) : List Tuple → GraphState → Store →
   | t :: ts, σ, T =>
       -- step 4c-ii: the runtime gate must decide the admission of the list the write leg
       -- ACTUALLY folds, which is now the leaf-routed one (`GraphState.writeLoggedRules`).
-      if foldAdmitsB σ (rewriteClosureL S (rawWriteTuples S t)) then
+      -- ★ `P6` step 3b step 14 (2026-09-14): and it must decide the admission of the FOLD
+      -- the leg actually runs, which since re-point #1 is the BRIDGED one. `foldAdmitsB`
+      -- probes the unbridged state and is strictly WEAKER, so leaving it here would let
+      -- the driver accept a batch the write leg then refuses — the runtime half of the
+      -- honesty obligation (`Cascade.lean::FoldAdmitsHonestyWitness`).
+      if foldAdmitsBridgedB σ (rewriteClosureL S (rawWriteTuples S t)) then
         let σw := σ.writeLoggedRules S t
         graphRunAux S ts (cascadeLeg S (t :: T) σw) (t :: T)
       else none
@@ -111,7 +116,7 @@ theorem graphRunAux_reached {S : Schema} :
     split at heq
     case isTrue hadm =>
       exact ih (ReachedByW3d2E.cascade
-        (ReachedByW3d2E.write t ((foldAdmitsB_iff _ _).mp hadm) h)) heq
+        (ReachedByW3d2E.write t ((foldAdmitsBridgedB_iff _ _).mp hadm) h)) heq
     case isFalse => cases heq
 
 /-- **The driver is honest**: anything `graphRun` outputs is an operationally
@@ -450,8 +455,9 @@ def graphRunOpsAux (S : Schema) : List GraphOp → GraphState → Store →
     Option (GraphState × Store)
   | [], σ, T => some (σ, T)
   | GraphOp.add t :: ops, σ, T =>
-      -- step 4c-ii: same re-point as `graphRunAux`.
-      if foldAdmitsB σ (rewriteClosureL S (rawWriteTuples S t)) then
+      -- step 4c-ii: same re-point as `graphRunAux`; ★ and the same step-14 move to the
+      -- bridged gate (2026-09-14).
+      if foldAdmitsBridgedB σ (rewriteClosureL S (rawWriteTuples S t)) then
         graphRunOpsAux S ops (cascadeLeg S (t :: T) (σ.writeLoggedRules S t)) (t :: T)
       else none
   | GraphOp.remove t :: ops, σ, T =>
@@ -489,7 +495,7 @@ theorem graphRunOpsAux_reached {S : Schema} :
       split at heq
       case isTrue hadm =>
         exact ih (ReachedByW3d2E.cascade
-          (ReachedByW3d2E.write t ((foldAdmitsB_iff _ _).mp hadm) h)) heq
+          (ReachedByW3d2E.write t ((foldAdmitsBridgedB_iff _ _).mp hadm) h)) heq
       case isFalse => cases heq
     | remove t =>
       rw [graphRunOpsAux] at heq
@@ -1263,7 +1269,13 @@ theorem reachedByW3d2E_edgeCount_store_indexed :
       ∀ (σ : GraphState) (S : Schema) (T : Store),
         ReachedByW3d2E σ S T →
           ∀ a b : NodeKey, isDerived S (b.type, b.pred) = false →
+            b.variant ≠ Variant.wAny →
               σ.edges.count (a, b) = f S T a b :=
+  -- ★ `P6` step 3b (2026-09-14): THE STALENESS TRAP FIRED, AS DESIGNED. The statement is
+  -- hand-copied from `RemoveOccCount.lean::reachedByW3d2E_untOccCount` precisely so that a
+  -- binder change there breaks this declaration rather than silently diverging from it;
+  -- R3 gained a `wAny` scope and this copy is updated to match. Do not "simplify" it into
+  -- a reference to that theorem — the duplication IS the trap.
   ⟨untOccCount, fun _ _ _ h => reachedByW3d2E_untOccCount h⟩
 
 /-- `SlV` admits the ONE-ELEMENT store `[tlEditor]` under the full 13-field bundle. Round 5

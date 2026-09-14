@@ -429,7 +429,7 @@ def enumJobs2R2 (S : Schema) (T : Store) (σ : GraphState) : List W3cJob :=
 inductive ReachedByW3d2E : GraphState → Schema → Store → Prop where
   | empty (S : Schema) : ReachedByW3d2E (emptyState S) S []
   | write {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
-      (hadm : FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t)))
+      (hadm : FoldAdmitsBridged σ (rewriteClosureL S (rawWriteTuples S t)))
       (hprev : ReachedByW3d2E σ S T) :
       ReachedByW3d2E (σ.writeLoggedRules S t) S (t :: T)
   | remove {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
@@ -514,6 +514,7 @@ theorem reachedByW3d2E_toC_d {σ : GraphState} {S : Schema} {T : Store}
     TtuTargetsSat S NotLeafName → DirectRestrictionsNotLeaf S →
     LeafScope S →
     ComputedRefsNotLeaf S →
+    NoBridgedDerived S →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOrDirect e) →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -532,10 +533,10 @@ theorem reachedByW3d2E_toC_d {σ : GraphState} {S : Schema} {T : Store}
     ReachedByW3d2C σ S T := by
   induction h with
   | empty S =>
-    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
     exact ReachedByW3d2C.empty S
   | @write σp S T t hadm hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCD hDAB hDAC hCOop hLU2 hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCD hDAB hDAC hCOop hLU2 hWSbare hSV hBS hTS hterm
     have hSVw : StoreValidRulesD S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
     have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
     have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
@@ -544,22 +545,22 @@ theorem reachedByW3d2E_toC_d {σ : GraphState} {S : Schema} {T : Store}
       fun dt R hd => ⟨(hterm dt R hd).1,
         fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
     exact ReachedByW3d2C.write t hadm
-      (ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCD hDAB hDAC hCOop hLU2 hWSbare hSVw hBSw hTSw
+      (ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCD hDAB hDAC hCOop hLU2 hWSbare hSVw hBSw hTSw
         htermw)
   | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCD hDAB hDAC hCOop hLU2 hWSbare _hSV _hBS _hTS
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCD hDAB hDAC hCOop hLU2 hWSbare _hSV _hBS _hTS
       _hterm
     -- the pre-remove store's PLAIN validity is a `ReachedByW3d2E.remove` carry; the `_d`
     -- induction hypothesis wants the widened form, which is strictly weaker
     have hSVDT : StoreValidRulesD S T :=
       storeValidRulesD_of_storeValidRules_directArmsBare hSVT hDAB
     exact ReachedByW3d2C.remove t hadm hdrain hSVT hBST hTST htermT
-      (ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCD hDAB hDAC hCOop hLU2 hWSbare hSVDT hBST hTST
+      (ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCD hDAB hDAC hCOop hLU2 hWSbare hSVDT hBST hTST
         htermT)
   | @cascade σp S T hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCD hDAB hDAC hCOop hLU2 hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCD hDAB hDAC hCOop hLU2 hWSbare hSV hBS hTS hterm
     have hC : ReachedByW3d2C σp S T :=
-      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCD hDAB hDAC hCOop hLU2 hWSbare hSV hBS hTS hterm
+      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCD hDAB hDAC hCOop hLU2 hWSbare hSV hBS hTS hterm
     have hW3d2 : ReachedByW3d2 σp S T := reachedByW3d2C_toW3d2 hC
     have hres_p : ResidueSubjectsStarFree σp := reachedByW3d2_residueStarFree hW3d2
     -- round-1 validity: per-key edge facts at the leg start. Unlike the untainted
@@ -591,6 +592,7 @@ theorem reachedByW3d2E_toC_d {σ : GraphState} {S : Schema} {T : Store}
     -- full store (the 2026-07-20b kill), so `_filt` is the only route that composes
     obtain ⟨σ0, h0, hsh⟩ :=
       reachedByW3d2_shadow_d hW3d2 hNK hCD hDAB hSV hterm hWF hBS hQ hDR hLS hMatch
+        hNBD hTT hTS
     have hunt : ∀ a b, (a, b) ∈ σ0.edges → isDerived S (b.type, b.pred) = false :=
       reachedByRulesAdmitted_untStore_edge_untainted
         (fun t' ht' => by simpa using List.of_mem_filter ht') h0
@@ -620,7 +622,7 @@ theorem reachedByW3d2E_toC_d {σ : GraphState} {S : Schema} {T : Store}
       obtain ⟨hder, _, hon⟩ := mem_cascadeKeysAbove_props hk
       rw [← hje] at hops ⊢
       exact w3dJobCoverage_enumJob2D_state hWF hTT hNK hR hSV hBS hTS hMatch
-        hStrat hQ hDR hLS hcr hterm hCD hDAB hWSbare hW3d2 hlk hder (hCD _ _ _ hlk hder)
+        hStrat hQ hDR hLS hcr hNBD hterm hCD hDAB hWSbare hW3d2 hlk hder (hCD _ _ _ hlk hder)
         (hDAB _ _ _ hlk hder) hon (hCOop _ _ _ hlk hder) (hLU2 _ _ _ hlk hder)
         (fun r' hr' hd' => hops r' hr' hd')
     -- round-2 CONDITIONAL coverage: the routed `_filt` leg context at the MID state
@@ -652,7 +654,7 @@ theorem reachedByW3d2E_toC_d {σ : GraphState} {S : Schema} {T : Store}
         exact reconcileJobsLR_reach_collapse hjv1 htb
           (reachedByW3d2_Rnode_source_bare_d hW3d2 hWF hd' hDAB hSV) hu
       obtain ⟨hbridge, hcovDecl⟩ := w3d2_leg_context_d_filt hWF hTT hNK hR hSV hBS hTS
-        hMatch hStrat hterm hWSbare h0 hshmid hσmidS hcr hlk hder hcd hba hon hCOope hLU2e
+        hMatch hStrat hterm hWSbare h0 hshmid hσmidS hcr hNBD hlk hder hcd hba hon hCOope hLU2e
         hopsC
       exact w3dJobCoverage_enumJob2D hcd hba hclmid hon hbridge hcovDecl hWSbare
     exact ReachedByW3d2C.cascade (enumJobs2R1 S T σp) (enumJobs2R2 S T σp)
@@ -684,6 +686,7 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
     TtuTargetsSat S NotLeafName → DirectRestrictionsNotLeaf S →
     LeafScope S →
     ComputedRefsNotLeaf S →
+    NoBridgedDerived S →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOnly e) →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -694,7 +697,7 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
     StoreValidRules S T → BareStarStore T → TtuStarFree S T →
     (∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R) →
     ReachedByW3d2C σ S T := by
-  intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU2 hWSbare hSV hBS hTS hterm
+  intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU2 hWSbare hSV hBS hTS hterm
   have hDAB : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       DirectArmsBare e :=
     fun dt R e hlk hder => computedOnly_directArmsBare (hCO dt R e hlk hder)
@@ -702,7 +705,7 @@ theorem reachedByW3d2E_toC {σ : GraphState} {S : Schema} {T : Store}
     intro dt R e hlk hder rs hrs
     rw [exprDirectsAll_computedOnly (hCO dt R e hlk hder)] at hrs
     exact absurd hrs List.not_mem_nil
-  exact reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr
+  exact reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD
     (fun dt R e hlk hder => computedOnly_computedOrDirect (hCO dt R e hlk hder))
     hDAB hDAC
     (fun _ _ _ _ _ r' _ hd' e' hlk' => hCO _ r' e' hlk' hd')
@@ -726,6 +729,7 @@ theorem graph_correct_w3d2E_d {S : Schema} {T : Store} {σ : GraphState} (q : Qu
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCD : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOrDirect e)
@@ -747,9 +751,9 @@ theorem graph_correct_w3d2E_d {S : Schema} {T : Store} {σ : GraphState} (q : Qu
     (hqo : q.object.name ≠ STAR)
     (hql : publicOfLeaf S q.object.type q.relation = none) :
     GraphModel.check σ q = sem S T q :=
-  graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCD hDAB hCOop
+  graph_correct_w3d2_d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hNBD hterm hCD hDAB hCOop
     hLU2 hWSbare hNoUD
-    (reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCD hDAB hDAC hCOop hLU2
+    (reachedByW3d2E_toC_d h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCD hDAB hDAC hCOop hLU2
       hWSbare hSV hBS hTS hterm)
     hq hqs hqo hql
 
@@ -771,6 +775,7 @@ theorem graph_correct_w3d2E {S : Schema} {T : Store} {σ : GraphState} (q : Quer
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOnly e)
@@ -793,7 +798,7 @@ theorem graph_correct_w3d2E {S : Schema} {T : Store} {σ : GraphState} (q : Quer
     exact absurd hrs List.not_mem_nil
   exact graph_correct_w3d2E_d q hWF hTT hNK hR
     (storeValidRulesD_of_storeValidRules_directArmsBare hSV hDAB) hBS hTS hMatch hStrat hQ hDR hLS
-    hcr
+    hcr hNBD
     hterm (fun dt R e hlk hder => computedOnly_computedOrDirect (hCO dt R e hlk hder))
     hDAB hDAC (fun _ _ _ _ _ r' _ hd' e' hlk' => hCO _ r' e' hlk' hd') hLU2 hWSbare
     (fun dt R e hlk hder => exprDirects_computedOnly (hCO dt R e hlk hder))

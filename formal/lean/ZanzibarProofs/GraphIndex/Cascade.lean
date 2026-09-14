@@ -1,7 +1,10 @@
 import ZanzibarProofs.GraphIndex.ReconcileDiff
 -- Step 4c-ii, THE FLIP: the live logged write leg is now leaf-routed, so this module
--- needs `rawWriteTuples` (`Leaf.lean:762`), `rewriteClosureL` (`LeafRules.lean:214`) and
--- `GraphState.writeRulesRaw` (`LeafRules.lean:255`). **Cycle-checked by transitive
+-- needs `Leaf.lean::rawWriteTuples`, `LeafRules.lean::rewriteClosureL` and
+-- `LeafRules.lean::GraphState.writeRulesRaw`. (⚠ The three line numbers this comment
+-- carried until 2026-09-14 were ALL stale — `:762`/`:214`/`:255` against live
+-- `:793`/`:229`/`:336`. Symbols only from here on; grep, do not trust a number.)
+-- **Cycle-checked by transitive
 -- closure**: `LeafRules`' import cone is `Leaf` → {`Write`, `RulesWrite`,
 -- `Spec.Stabilize`} plus `RulesSound`'s 29-module cone, and no module in it is a
 -- `Cascade*` module, so no cycle is created and no new module is added to the build.
@@ -511,26 +514,44 @@ def GraphState.bridgePreLogged (σ : GraphState) (t : Tuple) : GraphState :=
     admitted, emit its delta row (`_emit` fires on actual flips; a rejected write
     inserts nothing).
 
-    ⚠ **`P6` step 3b re-points this at `GraphState.bridgePreLogged` above** (measured
-    2026-09-13d: the whole edit is `σ → σ.bridgePreLogged t` in the two probe positions
-    plus `writeDirect → addEdge`). Do not do it without the cone — the first two modules'
-    measured fallout is on the `P6` row's `2026-09-13d` Log entry. -/
+    ★ **`P6` step 3b RE-POINT #1 LANDED 2026-09-14**, exactly as measured 2026-09-13d:
+    `σ → σ.bridgePreLogged t` in the two probe positions, plus `writeDirect → addEdge`.
+
+    ⚠ **`addEdge`, NOT `writeDirect`, and the difference is load-bearing.** The admission
+    guard moves OUT to the `if`, where it probes the BRIDGED state. Leaving `writeDirect`
+    in the then-branch would re-probe `admitEdge` on the UNBRIDGED `σ` inside it and so
+    double-guard against the wrong state — a write the shipped index rejects for a cycle
+    through a fresh bridge would be admitted here. The order is Python's: bridge first,
+    then probe, then grant (`index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` ahead
+    of `add_edge_by_id`), and it is behaviourally pinned at
+    `UsStarWrite.lean::BridgedWriteWitness.{bridged_probe_refuses_the_cycle,
+    unbridged_probe_admits_the_cycle, cycle_write_materialises_nothing}`.
+
+    **The body below is character-for-character the LHS of `writeBridgedOne_logged_evalEq`**
+    (step 3a, below), which is why the flip is a re-point and not a new proof. -/
 def GraphState.writeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
-  if σ.admitEdge (subjNode t.subject) (objNode t.object t.relation)
-  then (σ.writeDirect t).pushDelta (objNode t.object t.relation) t.relation true
+  if (σ.bridgePreLogged t).admitEdge (subjNode t.subject) (objNode t.object t.relation)
+  then ((σ.bridgePreLogged t).addEdge (subjNode t.subject)
+    (objNode t.object t.relation)).pushDelta (objNode t.object t.relation) t.relation true
   else σ
 
 /-- **The logged rule-routed write**: the LEAF-ROUTED fold with a delta row per accepted
     rewrite-closure member (`RuleSet.apply` + per-triple `add_tuple`, each `add_edge`
     emitting its flips).
 
-    **RE-POINTED by step 4c-ii (THE FLIP)**: the seed list is `rawWriteTuples S t`
-    (`Leaf.lean:762` — stage 1, `RuleSet.apply`'s re-addressing of the raw write onto its
-    storage leaves) and the closure is `rewriteClosureL` (`LeafRules.lean:214` — stage 2,
-    the closure under `schemaRewritesL = schemaRewrites ++ leafRewrites`). Its unlogged
-    twin is therefore `GraphState.writeRulesRaw` (`LeafRules.lean:255`), NOT
-    `GraphState.writeRules`; see `writeLoggedRules_evalEq` below. On an untainted schema
-    the two coincide definitionally (`writeRulesRaw_untaintedSchema`). -/
+    **RE-POINTED by step 4c-ii (THE FLIP)**: the seed list is `Leaf.lean::rawWriteTuples`
+    (stage 1, `RuleSet.apply`'s re-addressing of the raw write onto its storage leaves) and
+    the closure is `LeafRules.lean::rewriteClosureL` (stage 2, the closure under
+    `schemaRewritesL = schemaRewrites ++ leafRewrites`). Its unlogged twin is therefore
+    `LeafRules.lean::GraphState.writeRulesRaw`, NOT `RulesWrite.lean::GraphState.writeRules`;
+    see `writeLoggedRules_evalEq` below.
+
+    ⚠ **STALE SENTENCE REMOVED 2026-09-14 (`P6` step 3b).** This read "on an untainted
+    schema the two coincide definitionally (`writeRulesRaw_untaintedSchema`)", naming
+    `writeRules`. After re-point #2 that is FALSE — and false for the FUEL reason, not the
+    bridging reason, so no premise repairs it (`LeafRules.lean::writeRulesRaw_untaintedSchema`
+    carries the full argument). The untainted fact that survives is the LIST equation
+    `LeafRules.lean::rewriteClosureL_rawWriteTuples_untaintedSchema`. -/
 def GraphState.writeLoggedRules (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
   (rewriteClosureL S (rawWriteTuples S t)).foldl (fun acc u => acc.writeLoggedOne u) σ
 
@@ -547,6 +568,19 @@ structure EvalEq (σ' σ : GraphState) : Prop where
   residue : σ'.residue = σ.residue
 
 theorem EvalEq.refl (σ : GraphState) : EvalEq σ σ := ⟨rfl, rfl, rfl, rfl⟩
+
+/-- **`StructInv` transports along `EvalEq`.** ★ ADDITIVE, `P6` step 3b (2026-09-14).
+    `State.lean::StructInv` reads only schema, nodes and edges — the outbox and watermark are
+    not among its clauses — so it is exactly the kind of fact an `EvalEq` carries. This turns
+    every logged leg's `StructInv` obligation into its unlogged twin's, instead of a second
+    copy of the same acyclicity argument: `CascadeInv.lean::structInv_writeLoggedOne` is now
+    one line over the audited `UsStarWrite.lean::structInv_writeBridgedOne`. -/
+theorem structInv_of_evalEq {S : Schema} {σ' σ : GraphState} (h : EvalEq σ' σ)
+    (hs : StructInv S σ) : StructInv S σ' where
+  schemaEq := by rw [h.schema]; exact hs.schemaEq
+  nodeEnc := by rw [h.nodes]; exact hs.nodeEnc
+  edgesClosed := by rw [h.edges, h.nodes]; exact hs.edgesClosed
+  acyclic := by rw [h.edges]; exact hs.acyclic
 
 theorem EvalEq.trans {σ₁ σ₂ σ₃ : GraphState} (h₁ : EvalEq σ₁ σ₂) (h₂ : EvalEq σ₂ σ₃) :
     EvalEq σ₁ σ₃ :=
@@ -630,6 +664,28 @@ theorem bridgePreLogged_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (t : Tu
   exact ensureInBridgesLogged_evalEq_congr
     (ensureInBridgesLogged_evalEq_congr h0 (subjNode t.subject)) (objNode t.object t.relation)
 
+/-- The UNLOGGED bridge prologue is `EvalEq`-congruent. ★ ADDITIVE, `P6` step 3b step 14
+    (2026-09-14): needed because `FoldAdmitsBridged` probes `σ.bridgePre u`, so transporting
+    that predicate along an `EvalEq` — which `untaintedShadow_foldAdmits` does at every fold
+    step — needs the congruence at the prologue, not just at the grant. -/
+theorem bridgePre_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (t : Tuple) :
+    EvalEq (σ'.bridgePre t) (σ.bridgePre t) := by
+  unfold GraphState.bridgePre
+  have h0 : EvalEq ((σ'.addNode (subjNode t.subject)).addNode (objNode t.object t.relation))
+      ((σ.addNode (subjNode t.subject)).addNode (objNode t.object t.relation)) :=
+    ⟨by simp [h.schema], by simp [h.edges], by simp [h.nodes], by simp [h.residue]⟩
+  exact ensureInBridges_evalEq (ensureInBridges_evalEq h0 _) _
+
+/-- …and so is the bridged write step itself. -/
+theorem writeBridgedOne_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (t : Tuple) :
+    EvalEq (σ'.writeBridgedOne t) (σ.writeBridgedOne t) := by
+  have hp := bridgePre_evalEq h t
+  unfold GraphState.writeBridgedOne
+  rw [admitEdge_evalEq hp]
+  split
+  · exact ⟨by simp [hp.schema], by simp [hp.edges], by simp [hp.nodes], by simp [hp.residue]⟩
+  · exact h
+
 /-- ★ **The BRIDGED logged step is `EvalEq` to the bridged unlogged step** — `P6` step 3a,
     and the theorem step 3b re-points `writeLoggedOne_evalEq` onto. Stated on the bridged
     pair now, while it is additive, so that the flip is a re-point and not a new proof:
@@ -650,28 +706,32 @@ theorem writeBridgedOne_logged_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) 
   · exact ⟨by simp [hp.schema], by simp [hp.edges], by simp [hp.nodes], by simp [hp.residue]⟩
   · exact h
 
-/-- One logged write step is `EvalEq` to the unlogged step. -/
+/-- One logged write step is `EvalEq` to the unlogged step.
+
+    ★ **STATEMENT MOVED by `P6` step 3b re-point #1 (2026-09-14)**: the RHS was
+    `σ.writeDirect t` and is now `σ.writeBridgedOne t`. Both sides moved in the same step,
+    so the correspondence itself is unchanged in content — and the whole proof collapses to
+    the step-3a lemma, which was stated on the bridged pair in advance precisely so this
+    would be a re-point rather than a re-proof. -/
 theorem writeLoggedOne_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (t : Tuple) :
-    EvalEq (σ'.writeLoggedOne t) (σ.writeDirect t) := by
+    EvalEq (σ'.writeLoggedOne t) (σ.writeBridgedOne t) := by
   unfold GraphState.writeLoggedOne
-  rw [admitEdge_evalEq h]
-  by_cases hb : σ.admitEdge (subjNode t.subject) (objNode t.object t.relation) = true
-  · rw [if_pos hb]
-    have hw := writeDirect_evalEq h t
-    exact ⟨hw.schema, hw.edges, hw.nodes, hw.residue⟩
-  · rw [if_neg hb]
-    rw [writeDirect_reject (Bool.eq_false_iff.mpr hb)]
-    exact h
+  exact writeBridgedOne_logged_evalEq h t
 
 /-- **The logged fold's core is the plain `writeDirect` fold, at ANY list.** The
     list-generic form of `writeLoggedRules_evalEq` below — extracted by step 4c-ii because
     the post-flip shadow leg pairs the logged fold on the LEAF-ROUTED list against a plain
     fold on the untainted one, and so needs the correspondence at a list that is not
     `rewriteClosureL S (rawWriteTuples S t)`
-    (`CascadeStable.lean::untaintedShadow_writeLegL`). -/
+    (`CascadeStable.lean::untaintedShadow_writeLegL`).
+
+    ★ **STATEMENT MOVED by `P6` step 3b re-point #1 (2026-09-14)**: the second fold's body
+    was `acc.writeDirect u` and is now `acc.writeBridgedOne u`. The PROOF BODY is
+    untouched — it was already `exact ih (writeLoggedOne_evalEq h u)`, so re-pointing the
+    one-step lemma re-points this one for free. -/
 theorem foldl_writeLoggedOne_evalEq : ∀ (us : List Tuple) {σ' σ : GraphState}, EvalEq σ' σ →
     EvalEq (us.foldl (fun acc u => acc.writeLoggedOne u) σ')
-      (us.foldl (fun acc u => acc.writeDirect u) σ) := by
+      (us.foldl (fun acc u => acc.writeBridgedOne u) σ) := by
   intro us
   induction us with
   | nil => intro σ' σ h; exact h
@@ -683,9 +743,15 @@ theorem foldl_writeLoggedOne_evalEq : ∀ (us : List Tuple) {σ' σ : GraphState
 /-- **The logged routed write's core is the unlogged `writeRulesRaw`.** All W2 edge/node
     facts about the leaf-routed fold transfer to `writeLoggedRules` through this.
 
-    **RE-POINTED by step 4c-ii (THE FLIP)** from `GraphState.writeRules` to
-    `GraphState.writeRulesRaw` (`LeafRules.lean:255`) — both sides fold over the same
-    list `rewriteClosureL S (rawWriteTuples S t)`. -/
+    **RE-POINTED by step 4c-ii (THE FLIP)** from `RulesWrite.lean::GraphState.writeRules` to
+    `LeafRules.lean::GraphState.writeRulesRaw` — both sides fold over the same
+    list `rewriteClosureL S (rawWriteTuples S t)`.
+
+    ★ **`P6` step 3b, 2026-09-14 — THIS STATEMENT DID NOT MOVE, and that is what makes every
+    downstream `CascadeStable` repair a lemma substitution rather than a restatement.** Both
+    sides of the `EvalEq` were re-pointed in the same step (`writeLoggedOne` onto the bridged
+    prologue, `writeRulesRaw` onto `writeBridgedOne`), so the correspondence is preserved
+    verbatim and every consumer's `rw [(writeLoggedRules_evalEq …).edges]` still fires. -/
 theorem writeLoggedRules_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (S : Schema)
     (t : Tuple) : EvalEq (σ'.writeLoggedRules S t) (σ.writeRulesRaw S t) :=
   foldl_writeLoggedOne_evalEq (rewriteClosureL S (rawWriteTuples S t)) h
@@ -702,6 +768,25 @@ theorem writeLoggedRules_evalEq {σ' σ : GraphState} (h : EvalEq σ' σ) (S : S
     (σ.bridgePreLogged t).watermark = σ.watermark := by
   unfold GraphState.bridgePreLogged
   simp [GraphState.addNode]
+
+/-- The bridge prologue is schema-inert, and so is the whole re-pointed write step.
+
+    ★ ADDITIVE, `P6` step 3b step 8 (2026-09-14). Needed because the shadow's bridge
+    obligations are stated on `σ.schema` — `GraphState.bridgedInConcrete` reads the STATE's
+    schema, not a free `S` — so a fold-level lemma has to carry them from accumulator to
+    accumulator, and that is exactly a schema-invariance argument. -/
+@[simp] theorem bridgePreLogged_schema (σ : GraphState) (t : Tuple) :
+    (σ.bridgePreLogged t).schema = σ.schema := by
+  unfold GraphState.bridgePreLogged
+  simp [GraphState.addNode]
+
+@[simp] theorem writeLoggedOne_schema (σ : GraphState) (t : Tuple) :
+    (σ.writeLoggedOne t).schema = σ.schema := by
+  unfold GraphState.writeLoggedOne
+  split
+  · rw [pushDelta_schema, addEdge_schema]
+    exact bridgePreLogged_schema σ t
+  · rfl
 
 /-! ### ★ The write-side bridge legs' OUTBOX facts (`P6` step 3b, 2026-09-13g)
 
@@ -798,7 +883,18 @@ theorem bridgePreLogged_edge_delta (σ : GraphState) (t : Tuple) :
         by simpa [GraphState.addNode] using hgt, hnode⟩
   · exact Or.inr ⟨d, hd, by simpa [GraphState.addNode] using hgt, hnode⟩
 
-/-- The logged write leaves the watermark untouched. -/
+/-- The logged write leaves the watermark untouched.
+
+    ★ **STATEMENT UNCHANGED across `P6` step 3b re-point #1 (2026-09-14); only the tactic
+    block moved.** The then-branch was `writeDirect` and is now `bridgePreLogged` + `addEdge`,
+    so `rw [writeDirect_watermark]` no longer fires. ⚠ It cannot be replaced by the obvious
+    `rw [addEdge_watermark]` either — **there is no such lemma anywhere in the tree**
+    (`State.lean` carries `addEdge_nodes` / `_residue` / `_schema` / `_edges` and no
+    watermark twin), which is why the last step is an `exact` through defeq rather than a
+    `rw` chain of named lemmas: `GraphState.addEdge` is the structure update
+    `{ σ with edges := … }` and leaves the watermark reducibly alone. The bridge prologue
+    is what needs an actual lemma, and it has one (`bridgePreLogged_watermark`) — a bridge
+    leg must not move the drain cursor. -/
 theorem writeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
     (σ.writeLoggedRules S t).watermark = σ.watermark := by
   unfold GraphState.writeLoggedRules
@@ -810,7 +906,8 @@ theorem writeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
     rw [ih]
     unfold GraphState.writeLoggedOne
     split
-    · rw [pushDelta_watermark, writeDirect_watermark]
+    · rw [pushDelta_watermark]
+      exact bridgePreLogged_watermark σ u
     · rfl
 
 /-! ## Logged retractions (W3d remove-leg R2 substrate — the retract mirror of the
@@ -827,6 +924,21 @@ uses `removeEdgeOne` (erase ONE copy — the ref-counted `-1`, NOT the filter-al
 delta the way `writeLoggedOne` emits its write delta. These are STANDALONE additive defs:
 the `remove` constructor on `ReachedByW3d2E` (which consumes them) is a LATER leg (R5),
 armed with the R4 confluence — added last so every increment stays green. -/
+
+/-- ★ **The retract mirror of `bridgePreLogged` — the EPILOGUE of a logged retraction.**
+    Python's `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted` runs
+    `remove_edge_by_id`, then `_maybe_remove_bridges(subject)` and
+    `_maybe_remove_bridges(obj)` — so the release is an epilogue on BOTH endpoints, in that
+    order, and `P6` step 3b re-point #3 wraps exactly this around `removeLoggedOne`'s
+    then-branch.
+
+    (Landed by step 3a as an ADDITIVE definition with no caller; **MOVED up above
+    `removeLoggedOne` on 2026-09-14** by re-point #3, which made it a caller. Pure
+    relocation — statement and body are unchanged, and `Cascade.lean` has no forward
+    references, so the definition must precede its use.) -/
+def GraphState.releasePostLogged (σ : GraphState) (t : Tuple) : GraphState :=
+  (σ.releaseInBridgesLogged (subjNode t.subject)).releaseInBridgesLogged
+    (objNode t.object t.relation)
 
 /-- One logged routed-edge retraction: erase ONE copy of the guarded direct edge and,
     iff a copy was actually present to remove, emit its retraction delta row. The exact
@@ -845,22 +957,29 @@ armed with the R4 confluence — added last so every increment stays green. -/
     `::ReachabilityIndex._remove_edge_locked` / the non-existent-endpoint `ValueError`
     in `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted`; store consistency
     makes the else-branch dead at every admitted removal (an R3 fact), so it is present
-    only for totality. -/
+    only for totality.
+
+    ★ **`P6` step 3b RE-POINT #3 LANDED 2026-09-14 — the bridge RELEASE epilogue.** The
+    then-branch is now wrapped in `releasePostLogged`, mirroring Python's order in
+    `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted`: `remove_edge_by_id`
+    (which emits) FIRST, then `_maybe_remove_bridges` on both endpoints. So the wrap goes
+    **outside** `pushDelta`, not between the erase and the emit.
+
+    ⚠ **The else-branch stays a bare `σ`, and that is a fidelity decision, not an
+    oversight.** Python raises `AdmissionRejected` out of `remove_edge_by_id`
+    (`index_v4/core.py::ReachabilityIndex._remove_edge_locked`) and so never reaches the
+    release pair: a removal that found no edge must not run the epilogue. Wrapping the
+    whole `if` instead would release bridges on a no-op retraction.
+
+    ⚠ **Why this re-point is free for the W3d theory**: `ReachedByW3d` (below) has NO
+    remove constructor — write and cascade only — so nothing in the W3d closure development
+    sees it. That is why step 3b does it FIRST of the three, as four lines of tactic
+    repair. -/
 def GraphState.removeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
   if (subjNode t.subject, objNode t.object t.relation) ∈ σ.edges
-  then (σ.removeEdgeOne (subjNode t.subject) (objNode t.object t.relation)).pushDelta
-    (objNode t.object t.relation) t.relation true
+  then ((σ.removeEdgeOne (subjNode t.subject) (objNode t.object t.relation)).pushDelta
+    (objNode t.object t.relation) t.relation true).releasePostLogged t
   else σ
-
-/-- ★ **The retract mirror of `bridgePreLogged` — the EPILOGUE of a logged retraction**
-    (`P6` step 3a, ADDITIVE: nothing calls it yet). Python's
-    `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted` runs
-    `remove_edge_by_id`, then `_maybe_remove_bridges(subject)` and
-    `_maybe_remove_bridges(obj)` — so the release is an epilogue on BOTH endpoints, in that
-    order, and step 3b wraps exactly this around `removeLoggedOne`'s then-branch. -/
-def GraphState.releasePostLogged (σ : GraphState) (t : Tuple) : GraphState :=
-  (σ.releaseInBridgesLogged (subjNode t.subject)).releaseInBridgesLogged
-    (objNode t.object t.relation)
 
 /-- **The logged rule-routed retraction**: the retract mirror of `writeLoggedRules` — fold
     `removeLoggedOne` over the SAME `rewriteClosureL S (rawWriteTuples S t)` the write path
@@ -903,34 +1022,23 @@ def RemoveAdmits (_σ : GraphState) (T : Store) (t : Tuple) : Prop := t ∈ T
   unfold GraphState.releaseInBridgesLogged
   split <;> simp
 
-/-- One logged retraction leaves the schema fixed. -/
-@[simp] theorem removeLoggedOne_schema (σ : GraphState) (t : Tuple) :
-    (σ.removeLoggedOne t).schema = σ.schema := by
-  unfold GraphState.removeLoggedOne
-  split
-  · rw [pushDelta_schema, removeEdgeOne_schema]
-  · rfl
+/-- The release epilogue is residue-inert. ★ ADDITIVE, `P6` step 3b (2026-09-14): re-point
+    #3 put it inside `removeLoggedOne`, and two downstream `removeLoggedOne_residue` twins
+    (`CascadeStrataInv.lean`, `CascadeStrataSettle.lean`) are one `rw` over it. -/
+@[simp] theorem releaseInBridgesLogged_residue (σ : GraphState) (c : NodeKey) :
+    (σ.releaseInBridgesLogged c).residue = σ.residue := by
+  unfold GraphState.releaseInBridgesLogged
+  split <;> simp
 
-/-- One logged retraction leaves the nodes fixed (node GC is modeled away, cf.
-    `removeEdgeOne`). -/
-@[simp] theorem removeLoggedOne_nodes (σ : GraphState) (t : Tuple) :
-    (σ.removeLoggedOne t).nodes = σ.nodes := by
-  unfold GraphState.removeLoggedOne
-  split
-  · rw [pushDelta_nodes, removeEdgeOne_nodes]
-  · rfl
-
-/-- One logged retraction leaves the watermark untouched (it only decrements an edge and
-    appends a frontier row — the drain watermark advances in the cascade, not here). -/
-@[simp] theorem removeLoggedOne_watermark (σ : GraphState) (t : Tuple) :
-    (σ.removeLoggedOne t).watermark = σ.watermark := by
-  unfold GraphState.removeLoggedOne
-  split
-  · rw [pushDelta_watermark, removeEdgeOne_watermark]
-  · rfl
+@[simp] theorem releasePostLogged_residue (σ : GraphState) (t : Tuple) :
+    (σ.releasePostLogged t).residue = σ.residue := by
+  unfold GraphState.releasePostLogged; simp
 
 /-- The release epilogue leaves the schema, the nodes and the watermark fixed — the three
-    projections `removeLoggedOne`'s own trio needs when step 3b wraps it (`P6` step 3a). -/
+    projections `removeLoggedOne`'s own trio needs now that step 3b's re-point #3 wraps it.
+    (Landed by `P6` step 3a; **MOVED up above that trio on 2026-09-14**, when the re-point
+    turned "the dischargers step 3b will need" into "the dischargers the next three proofs
+    call". Statements and proofs unchanged.) -/
 @[simp] theorem releasePostLogged_schema (σ : GraphState) (t : Tuple) :
     (σ.releasePostLogged t).schema = σ.schema := by
   unfold GraphState.releasePostLogged; simp
@@ -942,6 +1050,38 @@ def RemoveAdmits (_σ : GraphState) (T : Store) (t : Tuple) : Prop := t ∈ T
 @[simp] theorem releasePostLogged_watermark (σ : GraphState) (t : Tuple) :
     (σ.releasePostLogged t).watermark = σ.watermark := by
   unfold GraphState.releasePostLogged; simp
+
+/-! ★ **The trio below keeps its STATEMENTS across `P6` step 3b re-point #3 (2026-09-14)**;
+each proof gains one leading `rw` through the release epilogue. `removeLoggedOne_nodes` is
+the one worth pausing on: it stays TRUE because `releaseInBridges` removes an EDGE via
+`removeEdgeOne` and this model has no node GC — a deliberate, recorded model/Python gap.
+If node GC is ever modelled, this is the theorem that goes false first. -/
+
+/-- One logged retraction leaves the schema fixed. -/
+@[simp] theorem removeLoggedOne_schema (σ : GraphState) (t : Tuple) :
+    (σ.removeLoggedOne t).schema = σ.schema := by
+  unfold GraphState.removeLoggedOne
+  split
+  · rw [releasePostLogged_schema, pushDelta_schema, removeEdgeOne_schema]
+  · rfl
+
+/-- One logged retraction leaves the nodes fixed (node GC is modeled away, cf.
+    `removeEdgeOne`). -/
+@[simp] theorem removeLoggedOne_nodes (σ : GraphState) (t : Tuple) :
+    (σ.removeLoggedOne t).nodes = σ.nodes := by
+  unfold GraphState.removeLoggedOne
+  split
+  · rw [releasePostLogged_nodes, pushDelta_nodes, removeEdgeOne_nodes]
+  · rfl
+
+/-- One logged retraction leaves the watermark untouched (it only decrements an edge and
+    appends a frontier row — the drain watermark advances in the cascade, not here). -/
+@[simp] theorem removeLoggedOne_watermark (σ : GraphState) (t : Tuple) :
+    (σ.removeLoggedOne t).watermark = σ.watermark := by
+  unfold GraphState.removeLoggedOne
+  split
+  · rw [releasePostLogged_watermark, pushDelta_watermark, removeEdgeOne_watermark]
+  · rfl
 
 /-! ### ★ The release epilogue's EDGE and OUTBOX facts (`P6` step 3b, 2026-09-13g)
 
@@ -997,6 +1137,62 @@ theorem releasePostLogged_edges_subset (σ : GraphState) (t : Tuple) :
   unfold GraphState.releasePostLogged at he
   exact releaseInBridgesLogged_edges_subset σ _ e
     (releaseInBridgesLogged_edges_subset _ _ e he)
+
+/-- ★ **The release leg erases ONLY `wAny`-targeted edges**, so anything else survives it
+    verbatim. `GraphState.releaseInBridges` erases exactly
+    `(c, wAnyNode (c.type, c.pred))`, whose target is a `wAny` node by construction
+    (`State.lean::wAnyNode`).
+
+    (`P6` step 3b, 2026-09-14.) This is the ONE fact that lets the retraction leg's
+    edge-preservation family keep working: those theorems say "an edge survives one
+    retraction step when no closure member targets it", and after re-point #3 that is FALSE
+    as stated — the release can erase a bridge edge no closure member ever targeted. Adding
+    `b.variant ≠ Variant.wAny` is strictly sufficient and free at every consumer, because
+    the consumer chain instantiates `b := objNode ⟨dt, on⟩ R` and
+    `State.lean::objNode_ne_wAny` discharges it. ⚠ Do NOT instead widen the `hne` premise
+    into a disjunction over the two endpoints' bridge shapes: that pushes two obligations
+    where one variant fact suffices. -/
+theorem mem_releaseInBridgesLogged_edges_of_ne_wAny (σ : GraphState) (c : NodeKey)
+    {a b : NodeKey} (hb : b.variant ≠ Variant.wAny) (h : (a, b) ∈ σ.edges) :
+    (a, b) ∈ (σ.releaseInBridgesLogged c).edges := by
+  rw [releaseInBridgesLogged_edges]
+  unfold GraphState.releaseInBridges
+  split
+  · refine (mem_removeEdgeOne_edges_of_ne ?_).mpr h
+    intro heq
+    exact hb (congrArg NodeKey.variant (congrArg Prod.snd heq))
+  · exact h
+
+/-- …and so does the whole epilogue, both legs. -/
+theorem mem_releasePostLogged_edges_of_ne_wAny (σ : GraphState) (t : Tuple)
+    {a b : NodeKey} (hb : b.variant ≠ Variant.wAny) (h : (a, b) ∈ σ.edges) :
+    (a, b) ∈ (σ.releasePostLogged t).edges := by
+  unfold GraphState.releasePostLogged
+  exact mem_releaseInBridgesLogged_edges_of_ne_wAny _ _ hb
+    (mem_releaseInBridgesLogged_edges_of_ne_wAny σ _ hb h)
+
+/-- ★ **The release leg is MULTIPLICITY-inert off the `wAny` targets.** The membership form
+    above is not enough for the R3 occurrence-count stack, which reasons about `List.count`
+    rather than `∈`: an epilogue that erased one copy of a non-bridge edge would preserve
+    membership at multiplicity ≥ 2 and still break the count law. (`P6` step 3b, 2026-09-14.) -/
+theorem count_releaseInBridgesLogged_of_ne_wAny (σ : GraphState) (c : NodeKey)
+    {p : NodeKey × NodeKey} (hp : p.2.variant ≠ Variant.wAny) :
+    (σ.releaseInBridgesLogged c).edges.count p = σ.edges.count p := by
+  rw [releaseInBridgesLogged_edges]
+  unfold GraphState.releaseInBridges
+  split
+  · refine count_removeEdgeOne_of_ne ?_
+    intro heq
+    exact hp (congrArg NodeKey.variant (congrArg Prod.snd heq))
+  · rfl
+
+/-- …and so is the whole epilogue. -/
+theorem count_releasePostLogged_of_ne_wAny (σ : GraphState) (t : Tuple)
+    {p : NodeKey × NodeKey} (hp : p.2.variant ≠ Variant.wAny) :
+    (σ.releasePostLogged t).edges.count p = σ.edges.count p := by
+  unfold GraphState.releasePostLogged
+  rw [count_releaseInBridgesLogged_of_ne_wAny _ _ hp,
+    count_releaseInBridgesLogged_of_ne_wAny _ _ hp]
 
 /-- ★ **A released bridge edge carries its frontier row** (per-leg retract mirror of
     `ensureInBridgesLogged_edge_delta`): an edge present before the logged release and
@@ -1133,6 +1329,205 @@ theorem epilogue_declines_on_a_live_node :
     ((base.writeBridgedOne BridgedWriteWitness.tThru).releasePostLogged
       BridgedWriteWitness.tThru).edges
       = (base.writeBridgedOne BridgedWriteWitness.tThru).edges := by decide
+
+/-! ### ★★ `P6` step 3b, RE-POINTS #1 and #3 — the ROUND TRIP (2026-09-14)
+
+**The plan's ASSURANCE BLOCKER, discharged here.** Every pin ABOVE this note is stated on
+`bridgePreLogged` / `bridgePre` / `writeBridgedOne` / `releasePostLogged` **directly** — I
+checked each one — and therefore **no re-point can flip any of them**. The composition would
+otherwise land with zero red-to-green evidence: `writeLoggedOne` and `removeLoggedOne` are
+the definitions that actually moved, and until now nothing decided anything about them.
+
+The six pins below sit on the re-pointed definitions themselves. `round_trip_returns_to_base`
+is the one to read first: it is what the *pair* of re-points buys, and it is FALSE under
+either one alone.
+
+⚠ **`writeLoggedOne`/`removeLoggedOne` here are the LOGGED leg, so these pins also carry the
+outbox discipline** — a bridge that fires without its frontier row, or a release that moves
+the drain cursor, would break the cascade rather than the edge set, and no edge-level pin
+would see it.
+
+##### CONTROLLED — MUTATION SWEEP (2026-09-14)
+
+Five mutations, one `lake build ZanzibarProofs.GraphIndex.Cascade` each, file restored
+byte-clean between runs (`md5 53738b9610ed673e93b95d4209c0921c` is the swept file). The
+GREEN column was written down BEFORE each run. **Two of the five changed the deliverable**,
+and that is the point of recording them rather than the reds alone.
+
+```
+M0  INSTRUMENT CONTROL -- flip `unbridged_probe_would_have_admitted_it`, `= true` -> `= false`.
+    RED: exactly 1, attributed by line and proposition. -> the harness works.
+
+M6  UNDO RE-POINT #3 -- drop `.releasePostLogged t` from `removeLoggedOne`'s then-branch.
+    RED: the `removeLoggedOne_{schema,nodes,watermark}` trio (stale `rw`) and ONE kernel
+    refutation:
+      error: Cascade.lean:1267:58: Tactic `decide` proved that the proposition
+        ((base.writeLoggedOne …tThru).removeLoggedOne …tThru).edges = base.edges
+      is false
+    GREEN: every `writeLoggedOne_*` pin, `absent_retraction_is_the_identity`,
+    `round_trip_leaves_the_watermark`.
+    -> the bridge LEAKS on a write-then-remove without #3, refuted rather than argued.
+
+M7  WRONG PLACEMENT -- wrap the WHOLE `if` instead of the then-branch.
+    RED: the trio's `rfl` steps, and exactly ONE kernel refutation:
+      error: Cascade.lean:1295:2: Tactic `decide` proved that the proposition
+        (bridgedOnly.removeLoggedOne …tThru).edges = bridgedOnly.edges
+      is false
+    GREEN: `round_trip_returns_to_base` -- at the round-trip fixture the two placements
+    AGREE, which is exactly why that pin cannot stand in for this one.
+    -> `absent_retraction_is_the_identity` is the ONLY thing in the tree separating the two
+       placements. It was added for this mutation.
+
+M8  UNDO RE-POINT #1 -- `writeLoggedOne` back to `if σ.admitEdge … then (σ.writeDirect t)…`.
+    RED: `writeLoggedOne_evalEq` and `writeLoggedRules_watermark` (proof failures), plus
+    THREE kernel refutations: `writeLoggedOne_creates_the_bridge`,
+    `writeLoggedOne_emits_the_bridge_row`, `round_trip_starts_two_edges_up`.
+    ⚠ **THIS RUN CHANGED THE DELIVERABLE.** On its first pass the third refutation did not
+    exist: the pin read `(base.writeLoggedOne tThru).edges ≠ base.edges` and stayed GREEN,
+    because the routed GRANT alone already makes that true. The docstring on
+    `round_trip_returns_to_base` claimed it as the non-vacuity that forbids the
+    "no bridge, so nothing to collect" reading, and **it did not forbid it**. Both were
+    fixed: the pin now counts (`= base.edges.length + 2`) and the docstring now points at
+    the pins that actually discriminate. A `≠` non-vacuity is the weakest useful form;
+    prefer one that names the thing, or counts it.
+    GREEN: `round_trip_returns_to_base` -- correctly, and that is the reading the fix
+    documents rather than hides.
+
+M9  WRONG ORDER -- probe `σ.admitEdge` (UNBRIDGED) while still writing the bridged state,
+    i.e. bridge-after-probe. The `M5` shape from step 3a, at the logged leg.
+    RED: `writeLoggedOne_evalEq` (proof failure) and TWO kernel refutations:
+      error: Cascade.lean:1302:78: … (base.writeLoggedOne …tCycle).edges = base.edges
+      is false
+      error: Cascade.lean:1308:80: … (base.writeLoggedOne …tCycle).outbox = base.outbox
+      is false
+    ⚠ **THIS RUN ALSO CHANGED THE DELIVERABLE.** On its first pass BOTH refutations were
+    absent — the namespace had no cycle fixture, every other pin stayed green, and the only
+    red was a broken PROOF. Per `docs/sabotage-procedure.md` §"A RED ON A HELPER LEMMA DOES
+    NOT PROPAGATE", a proof-only red is not evidence: Lean admits a failed declaration at
+    its stated type, so a later rewrite of `writeLoggedOne_evalEq` would have retired the
+    only signal that the ORDER is load-bearing on this leg. `logged_leg_refuses_the_cycle`
+    and `_silently` were added in response, and `unbridged_probe_would_have_admitted_it`
+    is their attribution.
+    -> the step-3a order pins (`UsStarWrite.lean::BridgedWriteWitness`) are stated on
+       `bridgePre`/`writeBridgedOne` DIRECTLY and are blind to this mutation. A pin must
+       name the definition that moved.
+```
+
+⚠ **Honest limit.** A module sweep: a mutation here stops the build at `Cascade`, so every
+downstream consumer is un-elaborated and each RED list means *"at least these"*. The line
+numbers in the fenced block are the swept file's and were pushed down by this very note —
+resolve by SYMBOL. -/
+
+/-- ★★ **RE-POINT #1, observed at `writeLoggedOne`.** The live logged write leg materialises
+    the in-bridge. FALSE on 2026-09-13, when `writeLoggedOne` was
+    `if σ.admitEdge … then (σ.writeDirect t).pushDelta … else σ`. -/
+theorem writeLoggedOne_creates_the_bridge :
+    (subjNode BridgedWriteWitness.tThru.subject, BridgedWriteWitness.w0)
+      ∈ (base.writeLoggedOne BridgedWriteWitness.tThru).edges := by decide
+
+/-- ★ **…and it comes with its frontier row**, at the bridge TARGET, which is the
+    denormalisation `writeLoggedRules_edge_delta`'s `d.node = ab.2` shape depends on. The
+    whole row is pinned, not its length: a row at the wrong key would keep a length pin
+    green. -/
+theorem writeLoggedOne_emits_the_bridge_row :
+    ⟨1, BridgedWriteWitness.w0, "viewer", true⟩
+      ∈ (base.writeLoggedOne BridgedWriteWitness.tThru).outbox := by decide
+
+/-- ★ **ATTRIBUTION CONTROL for re-point #1**: at a member with no bridged-in endpoint the
+    re-pointed `writeLoggedOne` agrees with the PRE-RE-POINT body, spelled out. So the pin
+    above is the bridge's doing and not "the definition changed everywhere". -/
+theorem writeLoggedOne_control_agrees_with_the_old_body :
+    (base.writeLoggedOne BridgedWriteWitness.tCtrl).edges
+      = (if base.admitEdge (subjNode BridgedWriteWitness.tCtrl.subject)
+            (objNode BridgedWriteWitness.tCtrl.object BridgedWriteWitness.tCtrl.relation)
+          then ((base.writeDirect BridgedWriteWitness.tCtrl).pushDelta
+            (objNode BridgedWriteWitness.tCtrl.object BridgedWriteWitness.tCtrl.relation)
+            BridgedWriteWitness.tCtrl.relation true)
+          else base).edges := by decide
+
+/-- ★★ **RE-POINTS #1 AND #3 TOGETHER — the round trip.** Write a through-shape member on
+    the live logged leg, then retract it on the live logged leg: the edge multiset returns
+    to exactly where it started.
+
+    ⚠ **This equation is NOT by itself evidence for re-point #1, and an earlier draft of
+    this docstring said it was.** Undoing #1 leaves it GREEN — no bridge is created, so the
+    retraction has nothing to collect and the round trip closes for the wrong reason
+    (mutation `M8`, measured). What forbids that reading is
+    `writeLoggedOne_creates_the_bridge` above, which names the bridge edge, plus
+    `round_trip_starts_two_edges_up` below, which pins that the intermediate state is two
+    edges — grant AND bridge — above `base`. Read the three together.
+    What this pin DOES carry alone is re-point #3: without it the bridge is created and
+    never released, so a write-then-remove **leaks** it — the `_leak_accumulates` shape,
+    kernel-refuted as mutation `M6`. -/
+theorem round_trip_returns_to_base :
+    ((base.writeLoggedOne BridgedWriteWitness.tThru).removeLoggedOne
+      BridgedWriteWitness.tThru).edges = base.edges := by decide
+
+/-- **NON-VACUITY for the round trip, in the form that actually discriminates.** The
+    intermediate state sits exactly TWO edges above `base` — the routed grant and the
+    subject's in-bridge. A `≠ base.edges` pin would have been satisfied by the grant alone
+    and so would have stayed green with re-point #1 undone; this one does not. -/
+theorem round_trip_starts_two_edges_up :
+    (base.writeLoggedOne BridgedWriteWitness.tThru).edges.length
+      = base.edges.length + 2 := by decide
+
+/-- ★ **RE-POINT #3 does not move the drain cursor.** The release epilogue runs inside a
+    retraction that also emits; the watermark is the cascade's to advance, not the write
+    leg's. An epilogue that touched it would desynchronise the drain from the frontier
+    without changing a single edge. -/
+theorem round_trip_leaves_the_watermark :
+    ((base.writeLoggedOne BridgedWriteWitness.tThru).removeLoggedOne
+      BridgedWriteWitness.tThru).watermark = base.watermark := by decide
+
+/-- ★★ **RE-POINT #1 PROBES THE BRIDGED STATE, and this pin is what makes the ORDER
+    observable on the LOGGED leg.** ⚠ It exists because a mutation asked for it: moving the
+    guard back to `σ.admitEdge` while keeping the bridged write — *probe first, bridge
+    second* — left every other pin in this namespace green (`M9`). `UsStarWrite.lean::
+    BridgedWriteWitness.{bridged_probe_refuses_the_cycle, cycle_write_materialises_nothing}`
+    pin the order on the UNLOGGED step and cannot see it here, because they never mention
+    `writeLoggedOne`.
+
+    `tCycle` is the wildcard-userset grant `folder:*#viewer viewer folder:f1`, whose object
+    endpoint's own in-bridge closes a cycle with it. Bridge-before-grant REFUSES it — the
+    shipped index's behaviour, where "cycle errors attach to the grant, the offending
+    write" — so the logged leg materialises nothing at all. -/
+theorem logged_leg_refuses_the_cycle :
+    (base.writeLoggedOne BridgedWriteWitness.tCycle).edges = base.edges := by decide
+
+/-- ★ **…and emits nothing either.** The edge pin alone would be satisfied by a leg that
+    rolled the edge back but left the frontier row, which is the worse failure: a delta
+    with no edge behind it drives a cascade over a grant that was rejected. -/
+theorem logged_leg_refuses_the_cycle_silently :
+    (base.writeLoggedOne BridgedWriteWitness.tCycle).outbox = base.outbox := by decide
+
+/-- ★ **ATTRIBUTION for the order.** The UNBRIDGED probe ADMITS the same grant. So the two
+    refusals above are the bridge prologue's doing, and a `writeLoggedOne` that probed
+    before bridging would accept a write the shipped index rejects. -/
+theorem unbridged_probe_would_have_admitted_it :
+    base.admitEdge (subjNode BridgedWriteWitness.tCycle.subject)
+      (objNode BridgedWriteWitness.tCycle.object BridgedWriteWitness.tCycle.relation)
+      = true := by decide
+
+/-- ★★ **THE ELSE-BRANCH IS OBSERVABLE, and this is the only pin that sees it.** A
+    retraction that finds no edge must be the IDENTITY: Python raises `AdmissionRejected`
+    out of `remove_edge_by_id` (`index_v4/core.py::ReachabilityIndex._remove_edge_locked`)
+    and never reaches `_maybe_remove_bridges`. Re-point #3 therefore wraps
+    `removeLoggedOne`'s **then-branch**, not its whole `if`.
+
+    `bridgedOnly` is the state where that distinction bites: it carries the bridge and NOT
+    the grant, so the `∈ σ.edges` guard fails, while `epilogue_fires` (above, same fixture)
+    proves the release would have collected that bridge had it run. Wrapping the whole `if`
+    — the plausible and wrong edit — would revoke a live bridge on a retraction of a tuple
+    that was never there. Nothing else in the tree distinguishes the two placements. -/
+theorem absent_retraction_is_the_identity :
+    (bridgedOnly.removeLoggedOne BridgedWriteWitness.tThru).edges = bridgedOnly.edges := by
+  decide
+
+/-- **NON-VACUITY for the placement pin**: `bridgedOnly` really does carry something the
+    epilogue would take, so the identity above is a decision not to act, not an absence of
+    anything to act on. -/
+theorem bridgedOnly_has_something_to_release :
+    bridgedOnly.edges ≠ base.edges := by decide
 
 end BridgedLegWitness
 
@@ -1524,244 +1919,6 @@ theorem reconcileJobsD_schema {S : Schema} {T : Store} :
 
 /-! ## The W3d closure — interleaved logged writes and cascades -/
 
-/-- **`ReachedByW3d σ S T`** — the interleaved scheduler closure: admitted logged
-    rule-routed writes and cascade runs, in ANY order (Python: each write
-    transaction runs its own in-transaction cascade; `build_index` batches many
-    writes before one backfill). The jobs of a cascade leg must cover exactly the
-    frontier's affected keys (`_map_deltas_to_keys` + the per-key reconcile loop):
-    every cascade key has a job, every job settles a cascade key. -/
-inductive ReachedByW3d : GraphState → Schema → Store → Prop where
-  | empty (S : Schema) : ReachedByW3d (emptyState S) S []
-  | write {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
-      (hadm : FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t)))
-      (hprev : ReachedByW3d σ S T) :
-      ReachedByW3d (σ.writeLoggedRules S t) S (t :: T)
-  | cascade {σ : GraphState} {S : Schema} {T : Store} (jobs : List W3cJob)
-      (hjv : ∀ j ∈ jobs, W3cJobValid S j)
-      (hcover : ∀ k ∈ cascadeKeys S σ, ∃ j ∈ jobs, j.key = k)
-      (hscope : ∀ j ∈ jobs, j.key ∈ cascadeKeys S σ)
-      (hprev : ReachedByW3d σ S T) :
-      ReachedByW3d (runCascade S T σ jobs) S T
-
-/-- **Every W3d state carries its own schema** — the read's `isDerived` routing reads
-    the right `S`.
-
-    (Lives here since `P6` step 3b, 2026-09-13g; it was `CascadeSettle.lean`'s — pure
-    relocation, name/statement/proof unchanged, and the name is audited
-    (`formal/audited_theorems.txt`) so it had to stay exactly that. `Cascade.lean` needs it
-    and imports that file's consumers, not the other way round: the `P6` R-node
-    restatement must convert `σ.schema.isSubjectWildcardUserset …` into a claim about `S`,
-    because bridging is keyed on the STATE's schema.) -/
-theorem reachedByW3d_schema {σ : GraphState} {S : Schema} {T : Store}
-    (h : ReachedByW3d σ S T) : σ.schema = S := by
-  induction h with
-  | empty S => rfl
-  | @write σp S T t hadm hprev ih =>
-    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).schema]
-    show ((rewriteClosureL S (rawWriteTuples S t)).foldl
-      (fun acc u => acc.writeDirect u) σp).schema = S
-    rw [foldl_writeDirect_schema]
-    exact ih
-  | @cascade σp S T jobs hjv hcover hscope hprev ih =>
-    rcases runCascade_cases S T σp jobs with hrc | hrc
-    · rw [hrc]
-      show (reconcileJobsL S T σp jobs).schema = S
-      rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).schema, reconcileJobsD_schema]
-      exact ih
-    · rw [hrc]
-      exact ih
-
-/-! ## Edge soundness and R-node terminality over the interleaved closure -/
-
-/-- Every edge of an unlogged diffing batch is an old edge or a candidate's derived
-    edge onto the job's own R-node (removal only shrinks; NB old edges need NOT
-    survive — the stale-edge retraction). -/
-theorem reconcileJobsD_edge_sound {S : Schema} {T : Store} :
-    ∀ (jobs : List W3cJob) (σ : GraphState) (a b : NodeKey),
-      (a, b) ∈ (reconcileJobsD S T σ jobs).edges →
-      (a, b) ∈ σ.edges ∨
-        ∃ j ∈ jobs, ∃ c ∈ j.cands, a = subjNode c ∧ b = objNode ⟨j.dt, j.on⟩ j.R := by
-  intro jobs
-  induction jobs with
-  | nil => intro σ a b h; exact Or.inl h
-  | cons j rest ih =>
-    intro σ a b h
-    have hfold : reconcileJobsD S T σ (j :: rest)
-        = reconcileJobsD S T (j.applyD S T σ) rest := by
-      unfold reconcileJobsD
-      rw [List.foldl_cons]
-    rw [hfold] at h
-    rcases ih _ a b h with hin | ⟨j', hj', c, hc, h1, h2⟩
-    · unfold W3cJob.applyD at hin
-      rcases reconcileStarsKeyD_edge_sound T j.dt j.on j.R j.e (wildcardShapes S)
-        j.cands j.negCands j.uposCands σ a b hin with hold | ⟨c, hc, h1, h2⟩
-      · exact Or.inl hold
-      · exact Or.inr ⟨j, List.mem_cons_self, c, hc, h1, h2⟩
-    · exact Or.inr ⟨j', List.mem_cons_of_mem _ hj', c, hc, h1, h2⟩
-
-/-- **No W3d edge is sourced at an `R`-userset node** (the interleaved analog of
-    `reachedByW3a_edge_source_ne_R`): a logged write's edge sources are rewrite-
-    closure subjects (predicate ≠ `R` by `NoTtuTarget` + `NoStoreSubjectR`), a
-    cascade's edge sources are bare candidates (`BARE ≠ R`). The store hypothesis is
-    taken at the chain's own store and weakens along the prefix. -/
-theorem reachedByW3d_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
-    {dt R : String} (hRne : R ≠ BARE) (h : ReachedByW3d σ S T) :
-    isDerived S (dt, R) = true → NoTtuTarget S R → NoStoreSubjectR T R →
-      ∀ a b, (a, b) ∈ σ.edges → a.pred ≠ R := by
-  induction h with
-  | empty S =>
-    intro _ _ _ a b hab
-    simp [emptyState] at hab
-  | @write σp S T t hadm hprev ih =>
-    intro hder hnt hns a b hab
-    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hab
-    unfold GraphState.writeRulesRaw at hab
-    rcases foldl_writeDirect_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
-      with hin | ⟨u, hu, h1, _⟩
-    · exact ih hder hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin
-    · rw [h1, subjNode_pred]
-      exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder
-        (hns t List.mem_cons_self) hu
-  | @cascade σp S T jobs hjv hcover hscope hprev ih =>
-    intro hder hnt hns a b hab
-    unfold runCascade at hab
-    split at hab
-    · have hab' : (a, b) ∈ (reconcileJobsL S T σp jobs).edges := hab
-      rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).edges] at hab'
-      rcases reconcileJobsD_edge_sound jobs σp a b hab' with hold | ⟨j, hj, c, hc, h1, _⟩
-      · exact ih hder hnt hns a b hold
-      · rw [h1, subjNode_pred]
-        obtain ⟨_, hcb, _⟩ := hjv j hj
-        rw [hcb c hc]
-        exact Ne.symm hRne
-    · exact ih hder hnt hns a b hab
-
-/-- **The derived R-node is never an edge source on a W3d state.** -/
-theorem reachedByW3d_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
-    {dt on R : String}
-    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hRne : R ≠ BARE) (hder : isDerived S (dt, R) = true) (h : ReachedByW3d σ S T) :
-    ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges := by
-  obtain ⟨hnt, hns⟩ := hterm dt R hder
-  intro y hy
-  exact reachedByW3d_edge_source_ne_R hRne h hder hnt hns _ y hy (objNode_pred ⟨dt, on⟩ R)
-
-/-- R-node terminality survives the batch itself (the mid-cascade state the leftover
-    check reads): a batch edge's source is a bare candidate, never an R-node. -/
-theorem reconcileJobsL_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
-    {jobs : List W3cJob} {dt on R : String}
-    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hRne : R ≠ BARE) (hder : isDerived S (dt, R) = true) (h : ReachedByW3d σ S T)
-    (hjv : ∀ j ∈ jobs, W3cJobValid S j) :
-    ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ (reconcileJobsL S T σ jobs).edges := by
-  intro y hy
-  rw [(reconcileJobsL_evalEq (EvalEq.refl σ) S T jobs).edges] at hy
-  rcases reconcileJobsD_edge_sound jobs σ _ y hy with hold | ⟨j, hj, c, hc, h1, _⟩
-  · exact reachedByW3d_Rnode_not_source hterm hRne hder h y hold
-  · obtain ⟨_, hcb, _⟩ := hjv j hj
-    have hpred : (objNode ⟨dt, on⟩ R).pred = BARE := by
-      rw [h1, subjNode_pred, hcb c hc]
-    rw [objNode_pred] at hpred
-    exact hRne hpred
-
-/-! ## T5 — the reject branch never fires; the drain is justified -/
-
-/-- **`runCascade_no_abort` (T5 half a).** On the fragment the leftover check always
-    passes: every row above the round frontier is a pass-emitted row at a derived
-    R-node, whose reach cone is empty (terminality) and whose own predicate is
-    derived — hence not a computed operand of any derived def (`hLU`) — so it maps
-    to no keys. Python's leftover `raise InvariantViolation` (the tail of
-    `index_v4/processor.py::DeltaProcessor._run_cascade`) is dead code
-    at one stratum. -/
-theorem runCascade_no_abort {σ : GraphState} {S : Schema} {T : Store}
-    {jobs : List W3cJob}
-    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
-      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hjv : ∀ j ∈ jobs, W3cJobValid S j) (h : ReachedByW3d σ S T) :
-    runCascade S T σ jobs
-      = { reconcileJobsL S T σ jobs with
-          watermark := (reconcileJobsL S T σ jobs).maxOutboxId } := by
-  unfold runCascade
-  refine if_pos ?_
-  rw [List.all_eq_true]
-  intro d hd
-  obtain ⟨hdmem, hdgt⟩ := List.mem_filter.mp hd
-  have hdgt' : max σ.maxOutboxId σ.watermark < d.id := of_decide_eq_true hdgt
-  rcases reconcileJobsL_outbox_sound S T jobs σ d hdmem
-    with hold | ⟨⟨j, hj, hnode, hrel, hleaf⟩, _⟩
-  · -- an original row sits at or below the frontier — it cannot be in the filter
-    exfalso
-    have := mem_outbox_le_maxOutboxId σ d hold
-    omega
-  · -- a pass-emitted row: maps to no keys
-    obtain ⟨hRne, _hcb, _hcS, _hnS, _huP, _huS, hder, _hlke, hon⟩ := hjv j hj
-    -- the reach cone of the R-node is empty
-    have hRns := reconcileJobsL_Rnode_not_source (on := j.on) hterm hRne hder h hjv
-    have hreach : ∀ v, (reconcileJobsL S T σ jobs).reach d.node v = false := by
-      intro v
-      by_contra hne
-      have htrue : (reconcileJobsL S T σ jobs).reach d.node v = true := by
-        revert hne
-        cases (reconcileJobsL S T σ jobs).reach d.node v <;> simp
-      obtain ⟨y, hy⟩ := nreaches_first_edge (reach_sound htrue)
-      rw [hnode] at hy
-      exact hRns y hy
-    have hobj : (reconcileJobsL S T σ jobs).affectedObjects d = [d.node] := by
-      unfold GraphState.affectedObjects
-      rw [List.filter_eq_nil_iff.mpr (fun v _ => by rw [hreach v]; exact Bool.false_ne_true)]
-    -- the single candidate object is the derived R-node: no derived def reads a
-    -- derived predicate as a computed operand (`hLU`), so no key is emitted
-    have htype : d.node.type = j.dt := by rw [hnode, objNode_type]
-    have hpred : d.node.pred = j.R := by rw [hnode, objNode_pred]
-    have hkeys : affectedKeys S (reconcileJobsL S T σ jobs) d = [] := by
-      unfold affectedKeys
-      rw [hobj]
-      -- **(alpha)**: the own-key guard lost its `isDerived` conjunct; `d.leaf = false`
-      -- still kills it, which is the quiescence fence.
-      have hleaf_ne : ¬(d.leaf = true ∧ d.node.name ≠ STAR) := by rw [hleaf]; simp
-      rw [if_neg hleaf_ne, List.nil_append]
-      simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
-      by_cases hst : d.node.name = STAR
-      · rw [if_pos hst]
-      · rw [if_neg hst]
-        rw [List.filterMap_eq_nil_iff]
-        intro k hk
-        have hcond : ¬(k.1 = d.node.type ∧ isDerived S k = true ∧
-            ((S.lookup k).map
-              (fun e => (computedRefs e).contains d.node.pred)).getD false = true) := by
-          rintro ⟨hk1, hkder, hkref⟩
-          cases hlk : S.lookup k with
-          | none => rw [hlk] at hkref; simp at hkref
-          | some e =>
-            rw [hlk] at hkref
-            simp only [Option.map_some, Option.getD_some] at hkref
-            have hmem : d.node.pred ∈ computedRefs e := by
-              rw [List.contains_eq_mem] at hkref
-              exact of_decide_eq_true hkref
-            have hfalse := hLU k.1 k.2 e hlk hkder _ hmem
-            rw [hk1, htype, hpred] at hfalse
-            cases hder.symm.trans hfalse
-        rw [if_neg hcond]
-    rw [hkeys]
-    rfl
-
-/-- **`cascade_drains` (T5 half b).** After a cascade run on the fragment the state
-    is `Quiescent` — every outbox row sits at or below the advanced watermark.
-    Contentful: a non-empty pre-cascade frontier (un-drained user-write rows) IS
-    drained, and the watermark advance is JUSTIFIED by `runCascade_no_abort` (the
-    skipped rows provably map to no keys), never asserted — the fix for the old
-    vacuous `cascade_converges` shape. -/
-theorem cascade_drains {σ : GraphState} {S : Schema} {T : Store} {jobs : List W3cJob}
-    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
-      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
-    (hjv : ∀ j ∈ jobs, W3cJobValid S j) (h : ReachedByW3d σ S T) :
-    Quiescent (runCascade S T σ jobs) := by
-  rw [runCascade_no_abort hterm hLU hjv h]
-  intro d hd
-  exact mem_outbox_le_maxOutboxId _ d hd
-
 /-! ## ★ `FoldAdmitsBridged` — the honest fold-admission predicate (`P6` step 14, additive half)
 
 **The obligation.** Once step 3 re-points `LeafRules.lean::GraphState.writeRulesRaw` (and with
@@ -1843,6 +2000,344 @@ theorem foldAdmitsBridgedB_iff (us : List Tuple) :
     intro σ
     simp [foldAdmitsBridgedB, FoldAdmitsBridged, Bool.and_eq_true, ih]
 
+/-- ★★ **THE BRIDGED FOLD'S EDGE-COMPLETENESS — and it can only be stated over
+    `FoldAdmitsBridged`.** Every member of an admitted bridged fold contributes its grant
+    edge to the final state.
+
+    ⚠ **This is the theorem that turns step 14 from an honesty obligation into a
+    CORRECTNESS one.** The obvious move — restate `RulesComplete.lean::
+    foldl_writeDirect_edge_complete` with `writeDirect` swapped for `writeBridgedOne` and
+    the `FoldAdmits` binder left alone — is **FALSE**, kernel-refuted in this file at
+    `FoldAdmitsHonestyWitness.foldl_edge_complete_is_false_for_the_bridged_fold`. The reason
+    is not incidental: `GraphState.admitEdge` is anti-monotone in edges and
+    `GraphState.bridgePre` only ADDS edges, so a stale `FoldAdmits` hypothesis is strictly
+    WEAKER than the fold's real precondition — it keeps type-checking while describing a
+    fold nobody runs, and at a cycle through a fresh bridge it is satisfied where the actual
+    write is refused. So there is no version of this lemma that lets a caller hold the old
+    binder.
+
+    Landed here rather than in `UsStarWrite.lean` for the recorded import reason:
+    `FoldAdmitsBridged` needs `RulesComplete`, which imports `UsStarWrite`, so `Cascade` is
+    the first module that sees both. The proof is character-for-character
+    `foldl_writeDirect_edge_complete`'s with the bridged twins substituted — the difficulty
+    was never the proof, it was the binder. -/
+theorem foldl_writeBridgedOne_edge_complete (us : List Tuple) :
+    ∀ {σ : GraphState}, FoldAdmitsBridged σ us →
+      ∀ u ∈ us, (subjNode u.subject, objNode u.object u.relation) ∈
+        (us.foldl (fun acc u => acc.writeBridgedOne u) σ).edges := by
+  induction us with
+  | nil => intro σ _ u hu; simp at hu
+  | cons t rest ih =>
+    intro σ hfa u hu
+    obtain ⟨hadm, hrest⟩ := hfa
+    rcases List.mem_cons.mp hu with rfl | hmem
+    · have hstep : (subjNode u.subject, objNode u.object u.relation)
+          ∈ (σ.writeBridgedOne u).edges := by
+        unfold GraphState.writeBridgedOne
+        rw [if_pos hadm, addEdge_edges]
+        exact List.mem_cons_self
+      exact foldl_writeBridgedOne_edges_mono rest _ hstep
+    · exact ih hrest u hmem
+
+/-- **`ReachedByW3d σ S T`** — the interleaved scheduler closure: admitted logged
+    rule-routed writes and cascade runs, in ANY order (Python: each write
+    transaction runs its own in-transaction cascade; `build_index` batches many
+    writes before one backfill). The jobs of a cascade leg must cover exactly the
+    frontier's affected keys (`_map_deltas_to_keys` + the per-key reconcile loop):
+    every cascade key has a job, every job settles a cascade key. -/
+inductive ReachedByW3d : GraphState → Schema → Store → Prop where
+  | empty (S : Schema) : ReachedByW3d (emptyState S) S []
+  /-- ★★ **`hadm` MOVED to `FoldAdmitsBridged` by `P6` step 3b step 14 (2026-09-14).** It was
+      `FoldAdmits σ (rewriteClosureL S (rawWriteTuples S t))` — a predicate about the
+      `writeDirect` fold, i.e. about a fold this constructor's own conclusion no longer runs.
+      That was not merely dishonest: `FoldAdmitsBridged` is STRICTLY STRONGER (`admitEdge` is
+      anti-monotone in edges, `bridgePre` only adds edges), so keeping the old binder
+      entitled every downstream write-leg argument to a FALSE conclusion — kernel-refuted at
+      `FoldAdmitsHonestyWitness.foldl_edge_complete_is_false_for_the_bridged_fold`. -/
+  | write {σ : GraphState} {S : Schema} {T : Store} (t : Tuple)
+      (hadm : FoldAdmitsBridged σ (rewriteClosureL S (rawWriteTuples S t)))
+      (hprev : ReachedByW3d σ S T) :
+      ReachedByW3d (σ.writeLoggedRules S t) S (t :: T)
+  | cascade {σ : GraphState} {S : Schema} {T : Store} (jobs : List W3cJob)
+      (hjv : ∀ j ∈ jobs, W3cJobValid S j)
+      (hcover : ∀ k ∈ cascadeKeys S σ, ∃ j ∈ jobs, j.key = k)
+      (hscope : ∀ j ∈ jobs, j.key ∈ cascadeKeys S σ)
+      (hprev : ReachedByW3d σ S T) :
+      ReachedByW3d (runCascade S T σ jobs) S T
+
+/-- **Every W3d state carries its own schema** — the read's `isDerived` routing reads
+    the right `S`.
+
+    (Lives here since `P6` step 3b, 2026-09-13g; it was `CascadeSettle.lean`'s — pure
+    relocation, name/statement/proof unchanged, and the name is audited
+    (`formal/audited_theorems.txt`) so it had to stay exactly that. `Cascade.lean` needs it
+    and imports that file's consumers, not the other way round: the `P6` R-node
+    restatement must convert `σ.schema.isSubjectWildcardUserset …` into a claim about `S`,
+    because bridging is keyed on the STATE's schema.) -/
+theorem reachedByW3d_schema {σ : GraphState} {S : Schema} {T : Store}
+    (h : ReachedByW3d σ S T) : σ.schema = S := by
+  induction h with
+  | empty S => rfl
+  | @write σp S T t hadm hprev ih =>
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).schema]
+    -- `P6` step 3b (2026-09-14): the unlogged twin now folds `writeBridgedOne`, so the
+    -- discharger is `UsStarWrite.lean::schema_foldl_writeBridgedOne`, not
+    -- `foldl_writeDirect_schema`. Statement unchanged; this is the whole repair.
+    show ((rewriteClosureL S (rawWriteTuples S t)).foldl
+      (fun acc u => acc.writeBridgedOne u) σp).schema = S
+    rw [schema_foldl_writeBridgedOne]
+    exact ih
+  | @cascade σp S T jobs hjv hcover hscope hprev ih =>
+    rcases runCascade_cases S T σp jobs with hrc | hrc
+    · rw [hrc]
+      show (reconcileJobsL S T σp jobs).schema = S
+      rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).schema, reconcileJobsD_schema]
+      exact ih
+    · rw [hrc]
+      exact ih
+
+/-! ## Edge soundness and R-node terminality over the interleaved closure -/
+
+/-- Every edge of an unlogged diffing batch is an old edge or a candidate's derived
+    edge onto the job's own R-node (removal only shrinks; NB old edges need NOT
+    survive — the stale-edge retraction). -/
+theorem reconcileJobsD_edge_sound {S : Schema} {T : Store} :
+    ∀ (jobs : List W3cJob) (σ : GraphState) (a b : NodeKey),
+      (a, b) ∈ (reconcileJobsD S T σ jobs).edges →
+      (a, b) ∈ σ.edges ∨
+        ∃ j ∈ jobs, ∃ c ∈ j.cands, a = subjNode c ∧ b = objNode ⟨j.dt, j.on⟩ j.R := by
+  intro jobs
+  induction jobs with
+  | nil => intro σ a b h; exact Or.inl h
+  | cons j rest ih =>
+    intro σ a b h
+    have hfold : reconcileJobsD S T σ (j :: rest)
+        = reconcileJobsD S T (j.applyD S T σ) rest := by
+      unfold reconcileJobsD
+      rw [List.foldl_cons]
+    rw [hfold] at h
+    rcases ih _ a b h with hin | ⟨j', hj', c, hc, h1, h2⟩
+    · unfold W3cJob.applyD at hin
+      rcases reconcileStarsKeyD_edge_sound T j.dt j.on j.R j.e (wildcardShapes S)
+        j.cands j.negCands j.uposCands σ a b hin with hold | ⟨c, hc, h1, h2⟩
+      · exact Or.inl hold
+      · exact Or.inr ⟨j, List.mem_cons_self, c, hc, h1, h2⟩
+    · exact Or.inr ⟨j', List.mem_cons_of_mem _ hj', c, hc, h1, h2⟩
+
+/-- **No W3d edge sourced at a node of the derived SHAPE `(dt, R)`** (the interleaved analog
+    of `reachedByW3a_edge_source_ne_R`): a logged write's routed edge sources are rewrite-
+    closure subjects (predicate ≠ `R` by `NoTtuTarget` + `NoStoreSubjectR`), a
+    cascade's edge sources are bare candidates (`BARE ≠ R`), and a write's BRIDGE edge
+    sources are of a bridged-in shape, which `NoBridgedDerived` forbids at a derived key.
+    The store hypothesis is taken at the chain's own store and weakens along the prefix.
+
+    ★★ **RESTATED by `P6` step 3b (2026-09-14), and the restatement is FORCED.** Until the
+    re-point the conclusion was the shape-free `∀ a b, (a, b) ∈ σ.edges → a.pred ≠ R`. That
+    is **FALSE** once the write leg bridges, and false for a reason that no premise about
+    `R` alone can repair: a bridge edge is sourced at its CONCRETE endpoint, and
+    `Schema.isSubjectWildcardUserset` is keyed on `(type, relation)`, so a literal
+    `[x:*#R]` restriction at an UNTAINTED key `(x, R)` is legal Python and bridges a node
+    whose `pred` IS `R`. Two changes answer it, and they are different in kind:
+      * the CONCLUSION gains `a.type = dt`, making the claim shape-level rather than
+        predicate-level — this is `TK68`'s type-index trap, and dropping the type is what
+        makes the old reading false;
+      * the HYPOTHESES gain `(hNBD : NoBridgedDerived S)`, which is exactly "no derived key
+        is bridged in" and is precisely what kills the new third disjunct.
+
+    ⚠ **`NoBridgedDerived S` mentions no `Store`, and that is why it was chosen.** It rides
+    through a `write` leg (`t :: T`) or a `remove` leg (`T.erase t`) VERBATIM, with no
+    weakening lambda anywhere — unlike the store-indexed `W4Fragment.term`, which is spelled
+    out at 134 declarations and needs a two-line store-weakening lambda at 22 of them. Do
+    NOT answer a later obligation by widening `term` instead; put the carry immediately
+    after `hRne` at every threading site so the argument position stays uniform. -/
+theorem reachedByW3d_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
+    {dt R : String} (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S)
+    (h : ReachedByW3d σ S T) :
+    isDerived S (dt, R) = true → NoTtuTarget S R → NoStoreSubjectR T R →
+      ∀ a b, (a, b) ∈ σ.edges → a.type = dt → a.pred ≠ R := by
+  induction h with
+  | empty S =>
+    intro _ _ _ a b hab
+    simp [emptyState] at hab
+  | @write σp S T t hadm hprev ih =>
+    intro hder hnt hns a b hab hty
+    rw [(writeLoggedRules_evalEq (EvalEq.refl σp) S t).edges] at hab
+    unfold GraphState.writeRulesRaw at hab
+    rcases foldl_writeBridgedOne_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
+      with hin | ⟨u, hu, h1, _⟩ | ⟨hsw, _⟩
+    · exact ih hNBD hder hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin hty
+    · rw [h1, subjNode_pred]
+      exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder
+        (hns t List.mem_cons_self) hu
+    · -- THE NEW DISJUNCT: `a` is a bridged-in concrete, so its SHAPE is a declared
+      -- subject-wildcard userset shape. Under `a.type = dt` and `a.pred = R` that shape is
+      -- `(dt, R)`, which `hNBD` un-bridges at every derived key. The conversion from the
+      -- state's schema to `S` is `reachedByW3d_schema` — the reason step 4 had to relocate
+      -- it up into this file.
+      intro hpr
+      have hshape := (bridgedInConcrete_elim hsw).2.2.2
+      rw [reachedByW3d_schema hprev, hty, hpr] at hshape
+      rw [hNBD dt R hder] at hshape
+      exact Bool.noConfusion hshape
+  | @cascade σp S T jobs hjv hcover hscope hprev ih =>
+    intro hder hnt hns a b hab hty
+    unfold runCascade at hab
+    split at hab
+    · have hab' : (a, b) ∈ (reconcileJobsL S T σp jobs).edges := hab
+      rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).edges] at hab'
+      rcases reconcileJobsD_edge_sound jobs σp a b hab' with hold | ⟨j, hj, c, hc, h1, _⟩
+      · exact ih hNBD hder hnt hns a b hold hty
+      · rw [h1, subjNode_pred]
+        obtain ⟨_, hcb, _⟩ := hjv j hj
+        rw [hcb c hc]
+        exact Ne.symm hRne
+    · exact ih hNBD hder hnt hns a b hab hty
+
+/-- **The derived R-node is never an edge source on a W3d state.**
+
+    ★ **STATEMENT UNCHANGED by `P6` step 3b — it gains a HYPOTHESIS only** (2026-09-14),
+    and that is the material correction to the `P6` row's forecast: this theorem does NOT
+    go false, so 10 of the restatement's 12 application sites consume an unchanged
+    conclusion. **Why it survives**: its node is `objNode ⟨dt, on⟩ R`, whose `.type` is
+    `dt` (`State.lean::objNode_type`) and whose `.pred` is `R` (`::objNode_pred`) — i.e.
+    exactly the key `hder` says is derived, which is exactly the key `NoBridgedDerived`
+    un-bridges. The type-index escape hatch that forced the restatement above cannot reach
+    a node whose type is pinned to `dt`, so the new `a.type = dt` premise is discharged
+    here by `objNode_type` and nothing else moves. -/
+theorem reachedByW3d_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
+    {dt on R : String}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hder : isDerived S (dt, R) = true)
+    (h : ReachedByW3d σ S T) :
+    ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges := by
+  obtain ⟨hnt, hns⟩ := hterm dt R hder
+  intro y hy
+  exact reachedByW3d_edge_source_ne_R hRne hNBD h hder hnt hns _ y hy
+    (objNode_type ⟨dt, on⟩ R) (objNode_pred ⟨dt, on⟩ R)
+
+/-- R-node terminality survives the batch itself (the mid-cascade state the leftover
+    check reads): a batch edge's source is a bare candidate, never an R-node.
+
+    ★ `P6` step 3b (2026-09-14): statement unchanged, gains and FORWARDS the
+    `NoBridgedDerived` carry. Its own cascade-edge arm is untouched — a reconcile batch adds
+    no bridges. (Not on the `P6` row's fallout list; it is a consumer of the restatement
+    above, which is how it joined.) -/
+theorem reconcileJobsL_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
+    {jobs : List W3cJob} {dt on R : String}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hder : isDerived S (dt, R) = true)
+    (h : ReachedByW3d σ S T) (hjv : ∀ j ∈ jobs, W3cJobValid S j) :
+    ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ (reconcileJobsL S T σ jobs).edges := by
+  intro y hy
+  rw [(reconcileJobsL_evalEq (EvalEq.refl σ) S T jobs).edges] at hy
+  rcases reconcileJobsD_edge_sound jobs σ _ y hy with hold | ⟨j, hj, c, hc, h1, _⟩
+  · exact reachedByW3d_Rnode_not_source hterm hRne hNBD hder h y hold
+  · obtain ⟨_, hcb, _⟩ := hjv j hj
+    have hpred : (objNode ⟨dt, on⟩ R).pred = BARE := by
+      rw [h1, subjNode_pred, hcb c hc]
+    rw [objNode_pred] at hpred
+    exact hRne hpred
+
+/-! ## T5 — the reject branch never fires; the drain is justified -/
+
+/-- **`runCascade_no_abort` (T5 half a).** On the fragment the leftover check always
+    passes: every row above the round frontier is a pass-emitted row at a derived
+    R-node, whose reach cone is empty (terminality) and whose own predicate is
+    derived — hence not a computed operand of any derived def (`hLU`) — so it maps
+    to no keys. Python's leftover `raise InvariantViolation` (the tail of
+    `index_v4/processor.py::DeltaProcessor._run_cascade`) is dead code
+    at one stratum. -/
+theorem runCascade_no_abort {σ : GraphState} {S : Schema} {T : Store}
+    {jobs : List W3cJob}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hNBD : NoBridgedDerived S)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hjv : ∀ j ∈ jobs, W3cJobValid S j) (h : ReachedByW3d σ S T) :
+    runCascade S T σ jobs
+      = { reconcileJobsL S T σ jobs with
+          watermark := (reconcileJobsL S T σ jobs).maxOutboxId } := by
+  unfold runCascade
+  refine if_pos ?_
+  rw [List.all_eq_true]
+  intro d hd
+  obtain ⟨hdmem, hdgt⟩ := List.mem_filter.mp hd
+  have hdgt' : max σ.maxOutboxId σ.watermark < d.id := of_decide_eq_true hdgt
+  rcases reconcileJobsL_outbox_sound S T jobs σ d hdmem
+    with hold | ⟨⟨j, hj, hnode, hrel, hleaf⟩, _⟩
+  · -- an original row sits at or below the frontier — it cannot be in the filter
+    exfalso
+    have := mem_outbox_le_maxOutboxId σ d hold
+    omega
+  · -- a pass-emitted row: maps to no keys
+    obtain ⟨hRne, _hcb, _hcS, _hnS, _huP, _huS, hder, _hlke, hon⟩ := hjv j hj
+    -- the reach cone of the R-node is empty
+    have hRns := reconcileJobsL_Rnode_not_source (on := j.on) hterm hRne hNBD hder h hjv
+    have hreach : ∀ v, (reconcileJobsL S T σ jobs).reach d.node v = false := by
+      intro v
+      by_contra hne
+      have htrue : (reconcileJobsL S T σ jobs).reach d.node v = true := by
+        revert hne
+        cases (reconcileJobsL S T σ jobs).reach d.node v <;> simp
+      obtain ⟨y, hy⟩ := nreaches_first_edge (reach_sound htrue)
+      rw [hnode] at hy
+      exact hRns y hy
+    have hobj : (reconcileJobsL S T σ jobs).affectedObjects d = [d.node] := by
+      unfold GraphState.affectedObjects
+      rw [List.filter_eq_nil_iff.mpr (fun v _ => by rw [hreach v]; exact Bool.false_ne_true)]
+    -- the single candidate object is the derived R-node: no derived def reads a
+    -- derived predicate as a computed operand (`hLU`), so no key is emitted
+    have htype : d.node.type = j.dt := by rw [hnode, objNode_type]
+    have hpred : d.node.pred = j.R := by rw [hnode, objNode_pred]
+    have hkeys : affectedKeys S (reconcileJobsL S T σ jobs) d = [] := by
+      unfold affectedKeys
+      rw [hobj]
+      -- **(alpha)**: the own-key guard lost its `isDerived` conjunct; `d.leaf = false`
+      -- still kills it, which is the quiescence fence.
+      have hleaf_ne : ¬(d.leaf = true ∧ d.node.name ≠ STAR) := by rw [hleaf]; simp
+      rw [if_neg hleaf_ne, List.nil_append]
+      simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+      by_cases hst : d.node.name = STAR
+      · rw [if_pos hst]
+      · rw [if_neg hst]
+        rw [List.filterMap_eq_nil_iff]
+        intro k hk
+        have hcond : ¬(k.1 = d.node.type ∧ isDerived S k = true ∧
+            ((S.lookup k).map
+              (fun e => (computedRefs e).contains d.node.pred)).getD false = true) := by
+          rintro ⟨hk1, hkder, hkref⟩
+          cases hlk : S.lookup k with
+          | none => rw [hlk] at hkref; simp at hkref
+          | some e =>
+            rw [hlk] at hkref
+            simp only [Option.map_some, Option.getD_some] at hkref
+            have hmem : d.node.pred ∈ computedRefs e := by
+              rw [List.contains_eq_mem] at hkref
+              exact of_decide_eq_true hkref
+            have hfalse := hLU k.1 k.2 e hlk hkder _ hmem
+            rw [hk1, htype, hpred] at hfalse
+            cases hder.symm.trans hfalse
+        rw [if_neg hcond]
+    rw [hkeys]
+    rfl
+
+/-- **`cascade_drains` (T5 half b).** After a cascade run on the fragment the state
+    is `Quiescent` — every outbox row sits at or below the advanced watermark.
+    Contentful: a non-empty pre-cascade frontier (un-drained user-write rows) IS
+    drained, and the watermark advance is JUSTIFIED by `runCascade_no_abort` (the
+    skipped rows provably map to no keys), never asserted — the fix for the old
+    vacuous `cascade_converges` shape. -/
+theorem cascade_drains {σ : GraphState} {S : Schema} {T : Store} {jobs : List W3cJob}
+    (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
+    (hNBD : NoBridgedDerived S)
+    (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
+    (hjv : ∀ j ∈ jobs, W3cJobValid S j) (h : ReachedByW3d σ S T) :
+    Quiescent (runCascade S T σ jobs) := by
+  rw [runCascade_no_abort hterm hNBD hLU hjv h]
+  intro d hd
+  exact mem_outbox_le_maxOutboxId _ d hd
+
 /-! ### ★ The two predicates PROVABLY disagree — the evidence step 14 exists for
 
 Without this namespace the section above is a definition nobody calls, and "the stale `hadm`
@@ -1876,6 +2371,15 @@ theorem cycle_closure_is_the_member :
     rewriteClosureL ThroughShapeWitness.Sthru
         (rawWriteTuples ThroughShapeWitness.Sthru BridgedWriteWitness.tCycle)
       = [BridgedWriteWitness.tCycle] := by decide
+
+/-- The same measurement at the ADMITTED fixture, which the post-step-14 constructor pin
+    (`w3d_write_applies_with_the_bridged_hypothesis`) is phrased through. Same reason: the
+    pin is derived at the closure the constructor quantifies over, never at a hand-written
+    list that happens to look like it. -/
+theorem thru_closure_is_the_member :
+    rewriteClosureL ThroughShapeWitness.Sthru
+        (rawWriteTuples ThroughShapeWitness.Sthru BridgedWriteWitness.tThru)
+      = [BridgedWriteWitness.tThru] := by decide
 
 /-- **The stale predicate ADMITS the fold** — `RulesComplete.lean::FoldAdmits` probes the
     unbridged state, which does not yet hold the bridge the cycle runs through. -/
@@ -1964,22 +2468,50 @@ theorem foldl_edge_complete_is_false_for_the_bridged_fold :
   revert hc
   decide
 
-/-- ★ **The stale hypothesis is CONSTRUCTIBLE at this fixture**, on the live inductive: the
-    `ReachedByW3d.write` constructor applies at `(emptyState Sthru, Sthru, tCycle)` today, and
-    its `hadm` is `unbridged_fold_admits`. Together with `bridged_fold_refuses` that is the
-    whole of step 14 in one line — after the re-point this step is still admitted by the
-    constructor while the fold it names refuses the grant.
+/-- ★★ **THE TRIPWIRE FIRED, 2026-09-14, AND THIS IS THE RECORDED FLIP.**
 
-    ⚠ **This declaration is a TRIPWIRE and is meant to go RED when step 14 lands.** When the
-    constructor's `hadm` is re-pointed to `FoldAdmitsBridged`, no term can inhabit it at this
-    fixture — `bridged_fold_refuses` says so. The correct response is then to move the pin to
-    an admitted fixture (e.g. `BridgedWriteWitness.tThru`, by `control_bridged_grant_agrees`)
-    and record the flip; NOT to weaken the constructor back. -/
-theorem w3d_write_applies_with_the_stale_hypothesis :
-    ReachedByW3d (base.writeLoggedRules ThroughShapeWitness.Sthru BridgedWriteWitness.tCycle)
-      ThroughShapeWitness.Sthru [BridgedWriteWitness.tCycle] :=
-  .write BridgedWriteWitness.tCycle
-    (by rw [cycle_closure_is_the_member]; exact unbridged_fold_admits)
+    Until step 14 landed, this declaration read
+
+    ```
+    theorem w3d_write_applies_with_the_stale_hypothesis :
+        ReachedByW3d (base.writeLoggedRules …Sthru …tCycle) …Sthru [BridgedWriteWitness.tCycle] :=
+      .write BridgedWriteWitness.tCycle
+        (by rw [cycle_closure_is_the_member]; exact unbridged_fold_admits)
+        (.empty ThroughShapeWitness.Sthru)
+    ```
+
+    — the live `ReachedByW3d.write` constructor inhabited AT THE CYCLE FIXTURE, which is the
+    whole of step 14 in one line: the chain admitted a step whose own fold refuses the grant.
+    It was placed deliberately so the honesty fix could not land silently. When `hadm` moved
+    to `FoldAdmitsBridged` the build produced EXACTLY ONE error, and it was this one:
+
+    ```
+    error: Cascade.lean:2428:42: Type mismatch
+      unbridged_fold_admits
+    has type
+      FoldAdmits base [BridgedWriteWitness.tCycle]
+    but is expected to have type
+      FoldAdmitsBridged base [BridgedWriteWitness.tCycle]
+    ```
+
+    That single-declaration attribution is itself the evidence the tripwire was aimed right:
+    a trap that reddened the module would not have distinguished "the constructor moved" from
+    "the file broke". `bridged_fold_refuses` proves no term can inhabit it there, so the
+    prescribed response — move the pin to an ADMITTED fixture, do not weaken the constructor —
+    is what is applied below.
+
+    ⚠ **The pin now runs at `BridgedWriteWitness.tThru`**, where `control_bridged_grant_agrees`
+    machine-checks that BOTH predicates hold. That control is what keeps this from being a
+    retreat to a fixture where the question cannot be asked: the subject at `tThru` IS bridged
+    in (`::subject_is_bridged_in`), so the constructor is still exercised on a bridging write —
+    only not on the cycle that the honest predicate is there to refuse. The cycle case is not
+    lost either; it lives on in `bridged_fold_refuses` and `bridged_fold_drops_the_grant`,
+    which say the thing this declaration used to say, from the other side. -/
+theorem w3d_write_applies_with_the_bridged_hypothesis :
+    ReachedByW3d (base.writeLoggedRules ThroughShapeWitness.Sthru BridgedWriteWitness.tThru)
+      ThroughShapeWitness.Sthru [BridgedWriteWitness.tThru] :=
+  .write BridgedWriteWitness.tThru
+    (by rw [thru_closure_is_the_member]; exact control_bridged_grant_agrees.2)
     (.empty ThroughShapeWitness.Sthru)
 
 end FoldAdmitsHonestyWitness

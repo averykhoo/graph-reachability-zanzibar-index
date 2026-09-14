@@ -309,7 +309,7 @@ Python runs. The omissions are now listed in §7 rather than left implicit.
 | **`GraphIndex/ObjStarWrite.lean::GraphState.bridgedConcrete` / `::GraphState.ensureBridges` / `::GraphState.writeWild`** | **object-wildcard (out-)bridge materialization — an EXISTING Lean model that this file never listed** | `index_v4/wildcard.py::WildcardIndex._ensure_bridges` (out-bridge half), `::WildcardIndex._bridge_degree`, `::WildcardIndex._concrete_nodes_of_shape`; shapes from `zanzibar_utils_v1.py::SchemaInfo.bridged_out_shapes` |
 | **`GraphIndex/UsStarWrite.lean::GraphState.bridgedInConcrete` / `::GraphState.ensureInBridges` / `::GraphState.writeUsStar`, `::Schema.isSubjectWildcardUserset`** | **wildcard-userset (in-)bridge materialization — likewise previously unlisted** | `index_v4/wildcard.py::WildcardIndex._ensure_bridges` (in-bridge half), teardown via `::WildcardIndex._strip_bridges` / `::WildcardIndex._maybe_remove_bridges`; shapes from `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes` and `::SchemaInfo.subject_wildcard_shapes` |
 | **`GraphIndex/UsStarWrite.lean::Schema.isStarTuplesetThrough`** (added 2026-08-14, part (i) of the `ttuStarFree` lift) | the star-tupleset TTU **through-shape** half of the bridged-in set: a TTU `p from ts` whose tupleset relation carries a bare wildcard `[t:*]` derives the subject shape `(t, p)`. Previously declared out of scope, and that declaration WAS the hole that made `graph_correct` FALSE without `W4Fragment.ttuStarFree` | `zanzibar_utils_v1.py::derive_schema_info`'s SECOND loop (`::_iter_ttus` + `::_iter_directs`, `r.wildcard and r.predicate == '...'`), feeding `::SchemaInfo.subject_wildcard_shapes` |
-| **`GraphIndex/TtuStarWide.lean::TtuStarFreeW` / `::ttuStarFreeWB` / `::removeGateBW`** (2026-08-16, part (iv) groundwork — **NOT WIRED**) | the WIDENED `ttuStarFree`: a stored star-subject tuple matching a TTU arm is admitted **iff the through-shape it produces is bridged in**. `GraphIndex/TtuStarWide.lean::ttuStarFreeWB_iff` is the machine-checked answer to part (iv)'s standing blocking question — the widened predicate IS decidable by a `Bool` function, because `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset` already is | Python declares that shape in `zanzibar_utils_v1.py::derive_schema_info` and `index_v4/wildcard.py::WildcardIndex._ensure_bridges` builds the in-bridge, so the widened condition says "Python would bridge this". ⚠ `FullScope.lean::W4Fragment`'s `ttuStarFree` field is UNCHANGED and must stay so until part (ii) composes `GraphIndex/UsStarWrite.lean::GraphState.ensureInBridges` into the rule-routed write path — the 2026-08-10 refutation stands until it does |
+| **`GraphIndex/TtuStarWide.lean::TtuStarFreeW` / `::ttuStarFreeWB` / `::removeGateBW`** (2026-08-16, part (iv) groundwork — **NOT WIRED**) | the WIDENED `ttuStarFree`: a stored star-subject tuple matching a TTU arm is admitted **iff the through-shape it produces is bridged in**. `GraphIndex/TtuStarWide.lean::ttuStarFreeWB_iff` is the machine-checked answer to part (iv)'s standing blocking question — the widened predicate IS decidable by a `Bool` function, because `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset` already is | Python declares that shape in `zanzibar_utils_v1.py::derive_schema_info` and `index_v4/wildcard.py::WildcardIndex._ensure_bridges` builds the in-bridge, so the widened condition says "Python would bridge this". ⚠ `FullScope.lean::W4Fragment`'s `ttuStarFree` field is UNCHANGED and must stay so until part (ii) composes `GraphIndex/UsStarWrite.lean::GraphState.ensureInBridges` into the rule-routed write path — the 2026-08-10 refutation stands until it does. ★ **UPDATE 2026-09-14: part (ii) has now composed it** (`P6` step 3b — `GraphIndex/LeafRules.lean::GraphState.writeRulesRaw` folds `GraphIndex/UsStarWrite.lean::GraphState.writeBridgedOne`), so the PRECONDITION is met and the 2026-08-10 refutation no longer blocks the widening. The field is still UNCHANGED: widening it is part (iv), a separate owed step, and nothing in step 3b touched `TtuStarFreeW` |
 | `GraphIndex/RulesWrite.lean::RRule` / `::exprArms` / `::schemaRewrites` (**taint-filtered** — derived keys emit no arms; the LEAF half is `GraphIndex/LeafRules.lean::leafRewrites`, leg 7 step 4c-i) | compiled Computed/TTU rewrite rules, fanned out ONLY for untainted keys | `zanzibar_utils_v1.py::_rewrite_rule`, `::_emit_expr`; the taint routing is the `if (object_type, relation_name) not in tainted: _emit_expr(...)` loop in `::compile_ruleset`, mirrored by `S.defs.filter (!isDerived …)` in `schemaRewrites` (added 2026-07-17 — see §7) |
 | `GraphIndex/RulesWrite.lean::rewriteClosureRaw` | the write fan-out worklist, before dedup | `zanzibar_utils_v1.py::RuleSet.apply`'s expansion (dispatch built by `::RuleSet._build_dispatch`, candidates by `::RuleSet._candidates`) |
 | `GraphIndex/RulesWrite.lean::rewriteClosure` | the write fan-out worklist **incl. the dedup** (2026-08-08, §7.2 item 6) | `zanzibar_utils_v1.py::RuleSet.apply` in full — its `processed` set is the dedup AND the termination mechanism, so this is not an optional mirror |
@@ -951,11 +951,40 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   `Schema.isSubjectWildcardUserset` is now the disjunction of both loops — the same two
   loops Python has. The star-tupleset arm therefore **does** have a Lean counterpart now.
   Two things the closure does NOT yet buy, stated so nobody over-reads it:
-  * **It is inert on a live chain.** `GraphIndex/RulesWrite.lean::GraphState.writeRules`
-    and `GraphIndex/Cascade.lean::GraphState.writeLoggedRules` are bridge-free folds that
-    never call `GraphIndex/UsStarWrite.lean::GraphState.ensureInBridges`, so no edge is
-    materialized until part (ii).
-    The predicate is right; nothing consumes it yet.
+  * ~~**It is inert on a live chain.**~~ ★ **NO LONGER TRUE — part (ii) LANDED 2026-09-14
+    (`P6` step 3b).** This bullet read: *"`GraphState.writeRules` and
+    `GraphState.writeLoggedRules` are bridge-free folds that never call
+    `GraphState.ensureInBridges`, so no edge is materialized until part (ii). The predicate
+    is right; nothing consumes it yet."* Half of that is now false and the surviving half is
+    the DELIBERATE asymmetry, so read the replacement rather than the strikethrough:
+    - `GraphIndex/LeafRules.lean::GraphState.writeRulesRaw` and, through it,
+      `GraphIndex/Cascade.lean::GraphState.writeLoggedRules` now fold
+      `GraphIndex/UsStarWrite.lean::GraphState.writeBridgedOne`, which runs
+      `::GraphState.bridgePre` (hence `::GraphState.ensureInBridges`) before the guarded
+      grant — Python's bridge-before-grant order in
+      `index_v4/wildcard.py::WildcardIndex._add_tuple_trusted`. **Edges are materialized on
+      the live path.** Red-to-green evidence, not assertion:
+      `GraphIndex/LeafRules.lean::SlBridgeWitness.writeRulesRaw_creates_the_bridge` (with
+      `::plain_fold_misses_the_bridge` spelling out the pre-re-point definition) and
+      `GraphIndex/Cascade.lean::BridgedLegWitness.writeLoggedOne_creates_the_bridge`.
+    - `GraphIndex/Cascade.lean::GraphState.removeLoggedOne` gained the matching release
+      epilogue (`::GraphState.releasePostLogged`), mirroring
+      `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted`'s
+      `remove_edge_by_id` → `_maybe_remove_bridges` order. Round-trip pin:
+      `GraphIndex/Cascade.lean::BridgedLegWitness.round_trip_returns_to_base`.
+    - ⚠ **`GraphIndex/RulesWrite.lean::GraphState.writeRules` is STILL bridge-free, on
+      purpose.** It is the PLAIN shadow rebuild `ReachedByRulesAdmitted` folds; its reverse
+      cone is 40 modules against `writeBridgedOne`'s 24, and bridging it would re-open
+      `checkFn_eq_sem_bs`. The asymmetry is what the whole `ShadowOver` layer exists to
+      absorb, and it is why `GraphIndex/CascadeStable.lean::UntaintedShadow` had to gain a
+      third extras disjunct (`::BridgeNode`). The consequence to carry: on the σ0 side a
+      `wAny`-targeted edge cannot occur at all
+      (`GraphIndex/CascadeStrataSettle.lean::reachedByRulesAdmitted_edge_target_ne_wAny`), which is
+      exactly what pays for the `b.variant ≠ Variant.wAny` scope the R3 occurrence-count
+      family now carries.
+    - The `W4Fragment.ttuStarFree` widening (part (iv)) is a SEPARATE, still-owed step: the
+      precondition it waited on — *"until part (ii) composes `ensureInBridges` into the
+      rule-routed write path"* — is now MET, but the field itself is untouched.
   * **The blockquote's "crossable set is EMPTY" conclusion still holds on W1c**, but via
     `GraphIndex/UsStarClosure.lean::isStarTuplesetThrough_of_pureDirect` (the fragment has
     no TTU arms) rather than via the definition scoping the shape out. See the `ZT-P5-NEW`

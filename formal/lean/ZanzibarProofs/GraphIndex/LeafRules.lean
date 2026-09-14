@@ -8,6 +8,18 @@ import ZanzibarProofs.GraphIndex.Leaf
 -- `LeafRules` is imported only by `Audit`, `CascadeStable` and `Scratch4cii` — none of which
 -- is in that cone. No new module is added, so the job count is unchanged.
 import ZanzibarProofs.GraphIndex.RulesSound
+-- **`P6` step 3b, re-point #2 (2026-09-14).** `GraphState.writeRulesRaw` below folds
+-- `UsStarWrite.lean::GraphState.writeBridgedOne`, so that module must be in scope; without
+-- this line the re-point does not even elaborate. **Cycle-checked first-hand 2026-09-14, by
+-- transitive closure over `^import ZanzibarProofs`, not by eye**: `UsStarWrite`'s import cone
+-- is 9 modules (`Core.Ident/Refs/Schema/Store`, `Spec.Stratify`,
+-- `GraphIndex.Closure/State/Write/ObjStarWrite`) and contains neither `GraphIndex.Leaf` nor
+-- `GraphIndex.LeafRules`; `LeafRules`' own cone is 18 modules and does not contain
+-- `UsStarWrite`, which is why the edge is new rather than redundant. ⚠ The 2026-09-05 note
+-- above is STALE on one point, corrected here rather than edited there: `LeafRules` is now
+-- imported by FOUR modules, not three — `Cascade` joined `Audit`, `CascadeStable` and
+-- `Scratch4cii`. None of the four is in `UsStarWrite`'s cone, so the conclusion is unchanged.
+import ZanzibarProofs.GraphIndex.UsStarWrite
 
 /-!
 # Leaf-provenance rewrite rules — leg 7 step **4c-i**
@@ -308,7 +320,17 @@ theorem mem_rawWriteTuples_self {S : Schema} {t : Tuple}
 /-- **`RuleSet.apply` + per-triple `add_tuple`, both stages.** Stage 1 re-addresses the
     raw write onto its storage leaves (`rawWriteTuples`, the measured fan-out); stage 2
     closes the result under the full rule set including the leaf targets; each surviving
-    triple is materialized by today's `writeDirect`.
+    triple is materialized by `UsStarWrite.lean::GraphState.writeBridgedOne`.
+
+    ★ **`P6` step 3b RE-POINT #2 LANDED 2026-09-14.** This fold was `acc.writeDirect u`
+    until this edit; it is now `acc.writeBridgedOne u`, i.e. Python's bridge-before-grant
+    prologue (`index_v4/wildcard.py::_maybe_add_bridges` ahead of the per-triple grant)
+    runs on the LEAF-ROUTED write path. `writeBridgedOne` has the same arity and
+    explicitness as `writeDirect` (`UsStarWrite.lean` vs `Write.lean::GraphState.writeDirect`),
+    so this is a two-token change at the definition and every `∀ (ts : List Tuple)` fold
+    lemma below re-points by swapping ONE lemma name — see the `structInv_`/`residueEmpty_`/
+    `inv_`/`quiescent_`/`_schema` block. What it is NOT is free downstream: the widened
+    star-freeness predicate becomes inhabited here, which is the whole point of the step.
 
     ⚠ **CALLERS, as of R5 + (alpha) — this docstring said "No caller yet" and was wrong on
     the tree it sat in.** `Cascade.lean::GraphState.writeLoggedRules` has folded this list
@@ -318,11 +340,13 @@ theorem mem_rawWriteTuples_self {S : Schema} {t : Tuple}
     `RulesWrite.lean::GraphState.writeRules` — the PLAIN shadow rebuild that
     `ReachedByRulesAdmitted` folds, deliberately kept on `rewriteClosure` so the
     `RulesComplete`/`RulesWrite` development stands; the bridge between the two is
-    `CascadeStrataSettle.lean::untOccCount_eq_plainOcc_of_notLeaf`. ★ **Step 7 RETIRED P6
+    `CascadeStrataSettle.lean::untOccCount_eq_plainOcc_of_notLeaf`. **Measured 2026-09-13d,
+    and it is why the asymmetry is deliberate rather than lazy**: `writeRules`' reverse cone
+    is 40 modules against `writeBridgedOne`'s 24. ★ **Step 7 RETIRED P6
     2026-09-05** (P3 landed (α)+(R5); the branch is deleted from
     `formal/conformance/extractor.py`, ledger key and all) — nothing on this leg is owed. -/
 def GraphState.writeRulesRaw (σ : GraphState) (S : Schema) (t : Tuple) : GraphState :=
-  (rewriteClosureL S (rawWriteTuples S t)).foldl (fun acc u => acc.writeDirect u) σ
+  (rewriteClosureL S (rawWriteTuples S t)).foldl (fun acc u => acc.writeBridgedOne u) σ
 
 /-- **The subsumption theorem's LIST half** — extracted by `P6` step 3 from
     `writeRulesRaw_untaintedSchema` below, because after the bridge composition the list
@@ -345,57 +369,84 @@ theorem rewriteClosureL_rawWriteTuples_untaintedSchema {S : Schema} {t : Tuple}
   unfold rewriteClosureL rewriteClosure
   rw [rewriteClosureRawL_singleton h]
 
-/-- **The subsumption theorem the leg's honesty rests on**: on a schema with no derived
-    keys, the leaf-routed write IS today's rule-routed write. Not "we checked the tests
-    still pass" — the two definitions are equal.
+/-- **The subsumption theorem the leg's honesty rests on**, RESTATED by `P6` step 3b on
+    2026-09-14: on a schema with no derived keys, the leaf-routed write folds exactly the
+    PLAIN rewrite closure — the routing is the identity there. Not "we checked the tests
+    still pass"; the two expressions are equal as definitions.
 
-    ⚠ **`P6` step 3b will restate this, and the restatement is already decided**
-    (measured 2026-09-13d). Once `writeRulesRaw` folds
-    `UsStarWrite.lean::GraphState.writeBridgedOne` — Python's bridge-before-grant
-    prologue — while `RulesWrite.lean::GraphState.writeRules` keeps folding the bare
-    `writeDirect`, this equation is FALSE: the two differ at any `bridged_in_shapes`
-    endpoint, and because the admission probe then reads the post-`addNode` bridged state
-    they are not definitionally equal even where nothing is bridged. The honest
-    restatement is the LIST half, `rewriteClosureL_rawWriteTuples_untaintedSchema` above,
-    which is why that half was extracted here rather than at the flip. **Not bridging
-    `writeRules` too is the recorded decision**: it is the PLAIN shadow rebuild
-    `ReachedByRulesAdmitted` folds (see the caller note on `writeRulesRaw`), its reverse
-    cone is 40 modules against `UsStarWrite`'s 24, and the live chain reaches it only
-    through `CascadeStrataSettle.lean::untOccCount_eq_plainOcc_of_notLeaf`. The cost of
-    restating is bounded and MEASURED: this theorem has **no consumer anywhere in the Lean
-    development** — grep 2026-09-13d found only `Audit.lean`'s `#print axioms` row and two
-    prose citations. -/
+    ★ **WHAT MOVED, AND WHY THE OLD STATEMENT IS NOW FALSE RATHER THAN MERELY UNPROVEN.**
+    Until 2026-09-14 this read `σ.writeRulesRaw S t = σ.writeRules S t`. Re-point #2 makes
+    `writeRulesRaw` fold `GraphState.writeBridgedOne` while `RulesWrite.lean::
+    GraphState.writeRules` keeps folding the bare `writeDirect`, so the two differ at any
+    `bridged_in_shapes` endpoint — and, critically, they are **not definitionally equal
+    even where nothing is bridged**, for the FUEL reason and not the bridging reason:
+    `GraphState.bridgePre`'s two unconditional `addNode`s shift `GraphState.reach`'s fuel
+    (`State.lean::GraphState.reach`, `nodes.length + 1`), so the admission probe reads a
+    different state on every write. Do NOT try to recover `= σ.writeRules S t` under an
+    added premise; there is no premise that repairs a fuel difference.
+
+    ⚠ **THE NAME IS GATE-PINNED AND MUST NOT BE DELETED** — it is in
+    `formal/audited_theorems.txt` and carries a `#print axioms` row in `Audit.lean`, so
+    `verify.sh` step 4a reds if it disappears. Only the STATEMENT moves. That the move is
+    affordable is MEASURED (2026-09-13d, re-confirmed 2026-09-14): this theorem has **no
+    consumer anywhere in the Lean development** — the only tree-wide hits are the audit row
+    and prose citations, so restating it costs zero call sites.
+
+    **Not bridging `writeRules` too is the recorded decision**: it is the PLAIN shadow
+    rebuild `ReachedByRulesAdmitted` folds (see the caller note on `writeRulesRaw`), its
+    reverse cone is 40 modules against `writeBridgedOne`'s 24, and the live chain reaches it
+    only through `CascadeStrataSettle.lean::untOccCount_eq_plainOcc_of_notLeaf`. The
+    surviving mathematical content of the old statement is the LIST half,
+    `rewriteClosureL_rawWriteTuples_untaintedSchema` above — a pure list equation naming no
+    `GraphState`, which is why that half was extracted at step 3 rather than here, and which
+    needs no edit at all under the re-point. -/
 theorem writeRulesRaw_untaintedSchema {σ : GraphState} {S : Schema} {t : Tuple}
     (h : ∀ d ∈ S.defs, isDerived S d.1 = false) :
-    σ.writeRulesRaw S t = σ.writeRules S t := by
-  unfold GraphState.writeRulesRaw GraphState.writeRules
+    σ.writeRulesRaw S t
+      = (rewriteClosure S t).foldl (fun acc u => acc.writeBridgedOne u) σ := by
+  unfold GraphState.writeRulesRaw
   rw [rewriteClosureL_rawWriteTuples_untaintedSchema h]
 
-/-! ## Invariant preservation — free, via `RulesWrite`'s list-generic fold family
+/-! ## Invariant preservation — free, via the list-generic fold family
 
-The whole point of scope doc §11.1's "fork the TUPLE, not the write path": `writeDirect`
-is byte-identical, so every `∀ (ts : List Tuple)` fold lemma applies to the leaf-routed
-expansion verbatim, with no clone. -/
+The whole point of scope doc §11.1's "fork the TUPLE, not the write path": the per-triple
+materializer is list-generic, so every `∀ (ts : List Tuple)` fold lemma applies to the
+leaf-routed expansion verbatim, with no clone.
+
+★ **`P6` step 3b, 2026-09-14 — the five below are the RE-POINT'S MECHANICAL HALF, and the
+fact that they are mechanical is the load-bearing claim.** Each was
+`*_foldl_writeDirect` (`RulesWrite.lean`) and is now `*_foldl_writeBridgedOne`
+(`UsStarWrite.lean`'s fold family, landed by step 2). Every STATEMENT here is unchanged and
+every proof is a one-name swap, because the five bridged twins were written with
+binder shapes byte-identical to the `writeDirect` originals and carry **no extra premise**
+— in particular `structInv_foldl_writeBridgedOne` needs no `edgesClosed` side condition and
+`inv_foldl_writeBridgedOne` still takes exactly `(h : Inv S σ) (hre : ResidueEmpty σ)`. If a
+future edit makes one of these need a premise, that is a real widening and the consumers
+below it must be re-examined, not `_`-filled. -/
 
 theorem structInv_writeRulesRaw {S S' : Schema} {σ : GraphState} (h : StructInv S' σ)
     (t : Tuple) : StructInv S' (σ.writeRulesRaw S t) :=
-  structInv_foldl_writeDirect _ h
+  structInv_foldl_writeBridgedOne _ h
 
 theorem residueEmpty_writeRulesRaw {S : Schema} {σ : GraphState} (t : Tuple)
     (h : ResidueEmpty σ) : ResidueEmpty (σ.writeRulesRaw S t) :=
-  residueEmpty_foldl_writeDirect _ h
+  residueEmpty_foldl_writeBridgedOne _ h
 
 theorem inv_writeRulesRaw {S S' : Schema} {σ : GraphState} (h : Inv S' σ)
     (hre : ResidueEmpty σ) (t : Tuple) : Inv S' (σ.writeRulesRaw S t) :=
-  inv_foldl_writeDirect _ h hre
+  inv_foldl_writeBridgedOne _ h hre
 
 theorem quiescent_writeRulesRaw {S : Schema} {σ : GraphState} (t : Tuple)
     (h : Quiescent σ) : Quiescent (σ.writeRulesRaw S t) :=
-  quiescent_foldl_writeDirect _ h
+  quiescent_foldl_writeBridgedOne _ h
 
+/-- ⚠ **SUFFIX form — `writeRulesRaw_schema`, not `schema_writeRulesRaw`.** Its four
+    downstream consumers (`CascadeStrata.lean`, `CascadeStrataAssemble.lean`,
+    `CascadeStrataSettle.lean` ×2) stay green across re-point #2 because the statement does
+    not move; only the discharger name does. -/
 theorem writeRulesRaw_schema (σ : GraphState) (S : Schema) (t : Tuple) :
     (σ.writeRulesRaw S t).schema = σ.schema :=
-  schema_foldl_writeDirect _
+  schema_foldl_writeBridgedOne _
 
 /-! ## Step 4c-ii, step 2 — the superset EXTRAS are all leaf nodes
 
@@ -1930,10 +1981,207 @@ theorem lrV_closure_today_misses_leaf :
 
 /-- **The forked write is contentful at STATE level**, not merely at list level: from
     the empty state the leaf-routed write and today's rule-routed write produce
-    different edge lists. The `writeDirectRaw_edges_ne` analogue for 4c-i. -/
+    different edge lists. The `writeDirectRaw_edges_ne` analogue for 4c-i.
+
+    ⚠ **THIS PIN NOW HAS TWO CAUSES AND THEREFORE ATTRIBUTES NEITHER** (`P6` step 3b
+    re-point #2, 2026-09-14). Until the re-point the only difference between the two sides
+    was the leaf ROUTING; now `writeRulesRaw` also folds `writeBridgedOne` while
+    `writeRules` folds `writeDirect`, so the inequality would survive even if routing were
+    the identity. It is kept because the audit pins its name, but the routing-only evidence
+    is the LIST pair `lrV_closure_reaches_leaf` / `lrV_closure_today_misses_leaf` above,
+    which names no `GraphState` and is untouched by bridging; the bridging-only evidence is
+    `SlBridgeWitness` below, whose control holds routing fixed. Do not cite this theorem
+    for either half on its own. -/
 theorem lrV_writeRulesRaw_edges_ne :
     ((emptyState SlV).writeRulesRaw SlV tlEditor).edges
       ≠ ((emptyState SlV).writeRules SlV tlEditor).edges := by decide
+
+/-! ### ★★ `P6` step 3b RE-POINT #2 — the COMPOSITION's red-to-green arm (2026-09-14)
+
+The plan's ASSURANCE BLOCKER, discharged here rather than deferred: every step-3a `decide`
+witness (`UsStarWrite.lean::BridgedWriteWitness`, `Cascade.lean::InBridgeLegWitness`,
+`::BridgedLegWitness`) is stated on `bridgePre` / `writeBridgedOne` / `releasePostLogged`
+**directly**, never through `writeRulesRaw`. So re-point #2 cannot flip any of them and the
+composition would otherwise land with ZERO red-to-green evidence — the exact shape
+`docs/sabotage-procedure.md` calls an assurance step that fails by passing.
+
+`writeRulesRaw_creates_the_bridge` below is the arm that was FALSE on 2026-09-13 and is TRUE
+on 2026-09-14, and `plain_fold_misses_the_bridge` spells the pre-re-point definition out
+IN FULL so the delta is exhibited in the file rather than described in a docstring. The
+control (`control_agrees_where_nothing_bridges`) holds the routing fixed and shows the two
+folds AGREE at `SlV` — without it the payoff would be satisfied by a `writeBridgedOne` that
+differs from `writeDirect` everywhere, which would say nothing about the bridge.
+
+⚠ **What this block deliberately does NOT claim.** It does not show the widened
+`TtuStarFreeW` predicate inhabited (that is step 4's obligation, over `schemaRewrites`) and
+it does not touch the `leafRewrites` ttu arm, which sits outside `TtuStarFree`'s quantifier
+entirely — see `CascadeStable.lean::StarBareWitness.slStP_leaf_ttu_breaks_star_bare`.
+
+##### CONTROLLED — MUTATION SWEEP (2026-09-14)
+
+Four mutations, one whole-module `lake build` each, file restored byte-clean between runs
+(`md5 7633435b9777510d06b11b2369c3a9f0` before and after the sweep). **The GREEN column was
+written down BEFORE each run**, which is the only way a table like this distinguishes "the
+pin is load-bearing" from "the module is broken". Literal `lake` output, elided only where
+a line repeats:
+
+```
+M0  INSTRUMENT CONTROL -- flip `slBridge_derived`'s own claim, `= true` -> `= false`.
+    RED: exactly 1 declaration, and the attribution names it.
+      error: LeafRules.lean:2037:78: Tactic `decide` proved that the proposition
+        isDerived SlBridge ("doc", "viewer") = false
+      is false
+    -> the harness attributes a single-declaration red. Without this row every table
+       below could be a broken module reading as a discovery (`P6` step 0, 2026-09-13).
+
+M1  THE DELIVERABLE -- revert the fold in `GraphState.writeRulesRaw`,
+    `acc.writeBridgedOne u` -> `acc.writeDirect u` (i.e. undo re-point #2 and nothing else).
+    RED: 8 declarations = `writeRulesRaw_untaintedSchema` (:406, unsolved goals), the five
+    mechanical corollaries (:429/:433/:437/:441/:449, Type mismatch), and TWO KERNEL
+    REFUTATIONS:
+      error: LeafRules.lean:2073:73: Tactic `decide` proved that the proposition
+        (subjNode tlGrp.subject, wGrp) ∈ ((emptyState SlBridge).writeRulesRaw SlBridge tlGrp).edges
+      is false
+      error: LeafRules.lean:2102:48: Tactic `decide` proved that the proposition
+        List.count (subjNode tlGrp.subject, wGrp) ((emptyState SlBridge).writeRulesRaw SlBridge tlGrp).edges = 1
+      is false
+    GREEN as predicted: `plain_fold_misses_the_bridge`, `control_agrees_where_nothing_bridges`,
+    all five `slBridge_*` non-vacuity pins, both grant pins, `lrV_writeRulesRaw_edges_ne`.
+    -> the payoff pins are FALSE without the re-point, and they fail as `decide`
+       REFUTATIONS rather than as incomplete proofs. That matters: a red on a helper
+       lemma does NOT propagate (Lean admits a failed declaration at its stated type --
+       `TK68` 2026-09-13e, and again on the T2 sweep 2026-09-14), so a pin routed through
+       a helper could never have shown this. These sit on the primitive.
+
+M2  ATTRIBUTION -- drop the wildcard flag from the witness schema alone,
+    `("group", "member", true)` -> `("group", "member", false)`. Source untouched.
+    RED: exactly 3 = `slBridge_subject_is_bridged_in` (:2059) plus the SAME two payoff
+    refutations (:2073, :2102).
+    GREEN: `slBridge_derived`, `slBridge_rules`, `slBridge_closure_length`,
+    `slBridge_closure_shares_the_subject` -- i.e. the ROUTING is provably unmoved by this
+    mutation.
+    -> the bridge is driven by the wildcard flag and by nothing else in the schema. This is
+       the row that separates re-point #2's effect from leaf routing's.
+
+M3  NON-VACUITY OF THE NEGATIVE PIN -- retarget `plain_fold_misses_the_bridge`'s own
+    statement from `acc.writeDirect u` to `acc.writeBridgedOne u`.
+    RED: exactly 1.
+      error: LeafRules.lean:2084:82: Tactic `decide` proved that the proposition
+        (subjNode tlGrp.subject, wGrp) ∉ (List.foldl (fun acc u => acc.writeBridgedOne u) …).edges
+      is false
+    -> the `∉` is observing the MATERIALISER, not an unreachable `wGrp`. A mis-shaped
+       bridge target would have left this green while reddening the payoff; it does the
+       opposite, which is the discriminating outcome. (`P6` step 2, 2026-09-13c: a mutation
+       that does not move the property under test reports INERT and reads exactly like a
+       clean pin — so say what the edit was supposed to move, and check it moved.)
+```
+
+⚠ **Honest limit of this sweep.** It is a MODULE sweep, not a tree sweep: a mutation here
+stops the build at `LeafRules`, so every downstream consumer is un-elaborated and the RED
+lists mean *"at least these"*, never *"only these"*.
+
+⚠ **The line numbers inside the fenced block are the swept file's, `md5
+7633435b9777510d06b11b2369c3a9f0`, and DO NOT resolve in the file you are reading** —
+appending this note pushed everything below it down. They are kept because they are part of
+the literal observed output and editing them would make the quotation a paraphrase. Resolve
+by SYMBOL; every declaration named above is in this namespace. -/
+namespace SlBridgeWitness
+
+/-- `SlV` plus ONE restriction: `doc#editor` additionally accepts `[group:*#member]`.
+    Everything else is character-for-character `SlV`, so the boolean shape, the taint and
+    the leaf allocation are all unchanged and the delta is the wildcard flag alone. -/
+def SlBridge : Schema :=
+  ⟨[(("doc", "editor"), .direct [("user", BARE, false), ("group", "member", true)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "viewer"), .excl (.computed "editor") (.computed "banned"))], []⟩
+
+/-- A raw `editor` write whose SUBJECT is a concrete of the bridged-in shape. -/
+def tlGrp : Tuple := ⟨⟨"group", "g1", "member"⟩, "editor", ⟨"doc", "d1"⟩⟩
+
+/-- The bridge target of `tlGrp`'s subject. -/
+def wGrp : NodeKey := wAnyNode ("group", "member")
+
+/-- **NON-VACUITY (routing).** The schema is genuinely derived, so the leaf layer is live
+    and this is the LEAF-routed path, not a plain write wearing its name. -/
+theorem slBridge_derived : isDerived SlBridge ("doc", "viewer") = true := by decide
+
+/-- **NON-VACUITY (routing), measured not assumed** — the same two-leaf allocation `SlV`
+    gets, so the control below differs from this witness in the wildcard flag ONLY. -/
+theorem slBridge_rules :
+    leafRewrites SlBridge =
+      [⟨"doc", "editor", leafPred "viewer" 0, .computed⟩,
+       ⟨"doc", "banned", leafPred "viewer" 1, .computed⟩] := by decide
+
+/-- **NON-VACUITY (multiplicity).** The fold runs over TWO members — the raw write and its
+    `viewer.0` leaf copy — which is what makes `keeps_one_bridge_copy` a claim about the
+    presence guard rather than about a one-element fold. -/
+theorem slBridge_closure_length :
+    (rewriteClosureL SlBridge (rawWriteTuples SlBridge tlGrp)).length = 2 := by decide
+
+/-- …and BOTH members share the subject, so both would bridge. -/
+theorem slBridge_closure_shares_the_subject :
+    (rewriteClosureL SlBridge (rawWriteTuples SlBridge tlGrp)).all
+      (fun u => u.subject == tlGrp.subject) = true := by decide
+
+/-- **NON-VACUITY (bridging).** The subject endpoint really is bridge-eligible here… -/
+theorem slBridge_subject_is_bridged_in :
+    (emptyState SlBridge).bridgedInConcrete (subjNode tlGrp.subject) = true := by decide
+
+/-- …and the OBJECT endpoint is not, so every pin below is the SUBJECT-side
+    `ensureInBridges` call and cannot be passed off as the object-side one. -/
+theorem slBridge_object_is_not_bridged_in :
+    (emptyState SlBridge).bridgedInConcrete
+      (objNode tlGrp.object tlGrp.relation) = false := by decide
+
+/-- ★★ **THE PAYOFF — re-point #2, observed at the composition.** The leaf-routed write
+    materialises the in-bridge. **This proposition was FALSE on 2026-09-13** (literal
+    `writeRulesRaw` of that date is `plain_fold_misses_the_bridge` below) and is TRUE on
+    2026-09-14; nothing else in the tree pins it. -/
+theorem writeRulesRaw_creates_the_bridge :
+    (subjNode tlGrp.subject, wGrp)
+      ∈ ((emptyState SlBridge).writeRulesRaw SlBridge tlGrp).edges := by decide
+
+/-- ★★ **…and the PRE-RE-POINT definition, spelled out in full, does not.** This is the
+    body `GraphState.writeRulesRaw` had until 2026-09-14 with `writeDirect` in the fold —
+    written out rather than cited, so the red-to-green delta survives in the file even after
+    the definition it names has moved on. ⚠ Do NOT "simplify" this to
+    `σ.writeRules SlBridge tlGrp`: that would change the LIST as well as the materialiser
+    and stop attributing anything. -/
+theorem plain_fold_misses_the_bridge :
+    (subjNode tlGrp.subject, wGrp)
+      ∉ ((rewriteClosureL SlBridge (rawWriteTuples SlBridge tlGrp)).foldl
+          (fun acc u => acc.writeDirect u) (emptyState SlBridge)).edges := by decide
+
+/-- ★ **ATTRIBUTION CONTROL — routing held fixed.** At `SlV`, which differs from
+    `SlBridge` by the single wildcard flag and therefore has the identical leaf routing, the
+    bridged fold and the plain fold produce the SAME edges. So the two pins above are the
+    BRIDGE's doing and not "the two folds differ everywhere". -/
+theorem control_agrees_where_nothing_bridges :
+    ((emptyState SlV).writeRulesRaw SlV tlEditor).edges
+      = ((rewriteClosureL SlV (rawWriteTuples SlV tlEditor)).foldl
+          (fun acc u => acc.writeDirect u) (emptyState SlV)).edges := by decide
+
+/-- ★ **The presence guard survives the LEAF-ROUTED composition** — `P6` step 2's
+    `ensureInBridges_count_le_one` observed through `writeRulesRaw`, where the fold really
+    does call `ensureInBridges` once per closure member. Two members share the subject;
+    exactly one bridge copy results. Before the step-2 guard this would read `2`, and the
+    per-write accumulation is the `_leak_accumulates` shape. -/
+theorem writeRulesRaw_keeps_one_bridge_copy :
+    (((emptyState SlBridge).writeRulesRaw SlBridge tlGrp).edges.count
+      (subjNode tlGrp.subject, wGrp)) = 1 := by decide
+
+/-- ★ **Bridging does not cost the grant the write was for.** -/
+theorem writeRulesRaw_keeps_the_raw_grant :
+    (subjNode tlGrp.subject, objNode tlGrp.object tlGrp.relation)
+      ∈ ((emptyState SlBridge).writeRulesRaw SlBridge tlGrp).edges := by decide
+
+/-- ★ **…nor the LEAF copy's grant**, which is the half re-point #2 composes with: routing
+    and bridging are both live in the same fold, at the same store. -/
+theorem writeRulesRaw_keeps_the_leaf_grant :
+    (subjNode tlGrp.subject, objNode tlGrp.object (leafPred "viewer" 0))
+      ∈ ((emptyState SlBridge).writeRulesRaw SlBridge tlGrp).edges := by decide
+
+end SlBridgeWitness
 
 /-! ### Non-vacuity of the superset-extras lemma (4c-ii step 2)
 

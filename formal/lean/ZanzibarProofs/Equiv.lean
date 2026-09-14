@@ -510,6 +510,7 @@ theorem backend_equivalence_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -521,7 +522,7 @@ theorem backend_equivalence_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hql : publicOfLeaf S q.object.type q.relation = none) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
   rw [setEngine_correct S T q,
-      graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCO hLU
+      graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hNBD hterm hCO hLU
         hWSbare h hq hqs hqo hql]
 
 /-- **Historical milestone (W3d-1; see the `backend_equivalence_w3d` tag).**
@@ -538,6 +539,7 @@ theorem exclusion_effective_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -551,7 +553,7 @@ theorem exclusion_effective_w3d (S : Schema) (T : Store) (σ : GraphState) (q : 
     SetEngineModel.check S T q = false ∧ GraphModel.check σ q = false := by
   refine ⟨?_, ?_⟩
   · rw [setEngine_correct S T q]; exact hDeny
-  · rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCO hLU
+  · rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hNBD hterm hCO hLU
       hWSbare h hq hqs hqo hql]
     exact hDeny
 
@@ -568,6 +570,7 @@ theorem no_ghost_grant_w3d (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -579,7 +582,7 @@ theorem no_ghost_grant_w3d (S : Schema) (T' : Store) (σ' : GraphState) (q : Que
     (hql : publicOfLeaf S q.object.type q.relation = none)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
-  rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCO hLU
+  rw [graph_correct_w3d q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hNBD hterm hCO hLU
     hWSbare h hq hqs hqo hql]
   exact hDeny
 
@@ -605,6 +608,7 @@ theorem backend_equivalence_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -618,7 +622,7 @@ theorem backend_equivalence_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
     (hql : publicOfLeaf S q.object.type q.relation = none) :
     SetEngineModel.check S T q = GraphModel.check σ q := by
   rw [setEngine_correct S T q,
-      graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCO
+      graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hNBD hterm hCO
         hLU2 hWSbare h hq hqs hqo hql]
 
 /-- **Historical milestone (W3d-2; see the `backend_equivalence_w3d2` tag).**
@@ -634,6 +638,7 @@ theorem exclusion_effective_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -650,7 +655,7 @@ theorem exclusion_effective_w3d2 (S : Schema) (T : Store) (σ : GraphState) (q :
   refine ⟨?_, ?_⟩
   · rw [setEngine_correct S T q]
     exact hDeny
-  · rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCO
+  · rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hNBD hterm hCO
       hLU2 hWSbare h hq hqs hqo hql]
     exact hDeny
 
@@ -667,6 +672,7 @@ theorem no_ghost_grant_w3d2 (S : Schema) (T' : Store) (σ' : GraphState) (q : Qu
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T' R)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -680,7 +686,7 @@ theorem no_ghost_grant_w3d2 (S : Schema) (T' : Store) (σ' : GraphState) (q : Qu
     (hql : publicOfLeaf S q.object.type q.relation = none)
     (hDeny : sem S T' q = false) :
     GraphModel.check σ' q = false := by
-  rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hterm hCO
+  rw [graph_correct_w3d2 q hWF hTT hNK hR hSV hBS hTS hMatch hStrat hQ hDR hLS hcr hNBD hterm hCO
     hLU2 hWSbare h hq hqs hqo hql]
   exact hDeny
 

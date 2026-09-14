@@ -241,6 +241,7 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
     TtuTargetsSat S NotLeafName → DirectRestrictionsNotLeaf S →
     LeafScope S →
     ComputedRefsNotLeaf S →
+    NoBridgedDerived S →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) →
     (∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
@@ -252,10 +253,10 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
     EdgeHyg1 σ := by
   induction h with
   | empty S =>
-    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
     exact edgeHyg1_empty S
   | @write σp S T t hadm hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU2 hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU2 hWSbare hSV hBS hTS hterm
     have hSVw : StoreValidRules S T := fun t' ht' => hSV t' (List.mem_cons_of_mem _ ht')
     have hBSw : BareStarStore T := fun t' ht' => hBS t' (List.mem_cons_of_mem _ ht')
     have hTSw : TtuStarFree S T := fun t' ht' => hTS t' (List.mem_cons_of_mem _ ht')
@@ -264,7 +265,7 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
       fun dt R hd => ⟨(hterm dt R hd).1,
         fun t' ht' => (hterm dt R hd).2 t' (List.mem_cons_of_mem _ ht')⟩
     have hEHp : EdgeHyg1 σp :=
-      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU2 hWSbare hSVw hBSw hTSw htermw
+      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU2 hWSbare hSVw hBSw hTSw htermw
     intro k r res hrow
     rw [writeLoggedRules_residue] at hrow
     obtain ⟨dt, on, R, e, hk, hr, hlk, hder, hon⟩ :=
@@ -277,9 +278,9 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
     · rw [writeLeg_derived_inedges_eq hWF hSV hlk hder hco (subjNode n)] at hedge
       exact (hEHp _ _ _ hrow).2 n hn hedge
   | @remove σp S T t hadm hdrain hSVT hBST hTST htermT hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU2 hWSbare _hSV _hBS _hTS _hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU2 hWSbare _hSV _hBS _hTS _hterm
     have hEHp : EdgeHyg1 σp :=
-      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU2 hWSbare hSVT hBST hTST htermT
+      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU2 hWSbare hSVT hBST hTST htermT
     intro k r res hrow
     rw [removeLoggedRules_residue] at hrow
     obtain ⟨dt, on, R, e, hk, hr, hlk, hder, hon⟩ :=
@@ -292,19 +293,19 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
     · rw [removeLeg_derived_inedges_eq hWF hSVT hadm hlk hder hco (subjNode n)] at hedge
       exact (hEHp _ _ _ hrow).2 n hn hedge
   | @cascade σp S T hprev ih =>
-    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU2 hWSbare hSV hBS hTS hterm
+    intro hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU2 hWSbare hSV hBS hTS hterm
     have hEHp : EdgeHyg1 σp :=
-      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU2 hWSbare hSV hBS hTS hterm
+      ih hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU2 hWSbare hSV hBS hTS hterm
     have hW3d2 : ReachedByW3d2 σp S T :=
       reachedByW3d2C_toW3d2 (reachedByW3d2E_toC hprev hWF hTT hNK hR hMatch
-        hStrat hQ hDR hLS hcr hCO hLU2 hWSbare hSV hBS hTS hterm)
+        hStrat hQ hDR hLS hcr hNBD hCO hLU2 hWSbare hSV hBS hTS hterm)
     -- σp facts
     have hσS : σp.schema = S := reachedByW3d2_schema hW3d2
     have hStruct : StructInv S σp := reachedByW3d2E_structInv hprev
     have hRD : ResidueDeclared S σp := reachedByW3d2E_residueDeclared hprev
     have hRns : RnodeTerminalAll S σp := by
       intro dt on R hder hRne y hy
-      exact reachedByW3d2_Rnode_not_source hterm hRne hder hW3d2 y hy
+      exact reachedByW3d2_Rnode_not_source hterm hRne hNBD hder hW3d2 y hy
     have hsb : RnodeSourceBareAll S σp := by
       intro dt on R hder hRne x hx
       obtain ⟨e', hlk'⟩ := isDerived_declared hder
@@ -353,6 +354,7 @@ theorem reachedByW3d2E_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOnly e)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -365,10 +367,10 @@ theorem reachedByW3d2E_edgeHygienic {σ : GraphState} {S : Schema} {T : Store}
       NoTtuTarget S R ∧ NoStoreSubjectR T R) :
     EdgeHygienic σ := by
   have hW3d2 : ReachedByW3d2 σ S T :=
-    reachedByW3d2C_toW3d2 (reachedByW3d2E_toC h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr
+    reachedByW3d2C_toW3d2 (reachedByW3d2E_toC h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD
       hCO hLU2 hWSbare hSV hBS hTS hterm)
   have hEH : EdgeHyg1 σ :=
-    reachedByW3d2E_edgeHyg1 h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO hLU2 hWSbare
+    reachedByW3d2E_edgeHyg1 h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO hLU2 hWSbare
       hSV hBS hTS hterm
   have hRD : ResidueDeclared S σ := reachedByW3d2E_residueDeclared h
   intro k r res hrow
@@ -397,6 +399,7 @@ theorem reachedByW3d2E_inv {σ : GraphState} {S : Schema} {T : Store}
     (hQ : TtuTargetsSat S NotLeafName) (hDR : DirectRestrictionsNotLeaf S)
     (hLS : LeafScope S)
     (hcr : ComputedRefsNotLeaf S)
+    (hNBD : NoBridgedDerived S)
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ComputedOnly e)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
@@ -410,7 +413,7 @@ theorem reachedByW3d2E_inv {σ : GraphState} {S : Schema} {T : Store}
     Inv S σ := by
   have hst := reachedByW3d2E_structInv h
   have hhy := reachedByW3d2E_residueHygienic h
-  have heh := reachedByW3d2E_edgeHygienic h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hCO
+  have heh := reachedByW3d2E_edgeHygienic h hWF hTT hNK hR hMatch hStrat hQ hDR hLS hcr hNBD hCO
     hLU2 hWSbare hSV hBS hTS hterm
   exact
     { schemaEq := hst.schemaEq
