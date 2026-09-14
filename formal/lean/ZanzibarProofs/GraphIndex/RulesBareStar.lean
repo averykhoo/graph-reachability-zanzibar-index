@@ -1,5 +1,10 @@
 import ZanzibarProofs.GraphIndex.RulesComplete
 import ZanzibarProofs.GraphIndex.BareStarCorrect
+-- `TtuStarFreeW` (below) needs `Schema.isSubjectWildcardUserset`. Acyclic: `UsStarWrite`'s
+-- transitive `ZanzibarProofs` cone is 9 modules (`Core.{Ident,Refs,Schema,Store}`,
+-- `GraphIndex.{Closure,ObjStarWrite,State,Write}`, `Spec.Stratify`) and contains neither
+-- this module nor `RulesComplete` nor `BareStarCorrect` — re-measured 2026-09-14i.
+import ZanzibarProofs.GraphIndex.UsStarWrite
 
 /-!
 # The untainted rule-routing correspondence over BARE-STAR stores (ROADMAP W3c read half, step 1)
@@ -44,6 +49,27 @@ def TtuStarFree (S : Schema) (T : Store) : Prop :=
   ∀ t ∈ T, t.subject.name = STAR →
     ∀ a ∈ schemaRewrites S, ∀ tr, a.kind = RuleKind.ttu tr →
       ¬(t.relation = a.matchRel ∧ t.object.type = a.objectType)
+
+/-- **`TtuStarFreeW S T`** — the WIDENED fragment condition (`P6` part (iv)). A stored
+    star-subject tuple matching a TTU rewrite arm is no longer forbidden outright; it is
+    admitted **provided the through-shape it produces is bridged in**, i.e. the subject
+    shape the TTU rule rewrites it to — `(t.subject.type, tr)` — is a declared
+    subject-wildcard userset shape, which is what `Schema.isSubjectWildcardUserset`
+    decides.
+
+    ⚠ **This definition lives HERE, upstream, rather than in `TtuStarWide.lean` where it
+    was introduced** (moved 2026-09-14i, body byte-unchanged). Part (iv) flips
+    `FullScope.lean::W4Fragment.ttuStarFree` to it, and every site that eliminates the
+    hypothesis — `::starSeed_step`, `::evalE_lift_bs`, `CascadeStable`, `RestrictBase` —
+    is upstream of `TtuStarWide.lean` (which imports `Exec`, which imports `FullScope`).
+    The decision procedure `ttuStarFreeWB`, its `_iff`, and the two audited transport
+    lemmas stay in `TtuStarWide.lean`: they are pinned at
+    `formal/audited_theorems.txt` by NAME, and moving the predicate moves none of them. -/
+def TtuStarFreeW (S : Schema) (T : Store) : Prop :=
+  ∀ t ∈ T, t.subject.name = STAR →
+    ∀ a ∈ schemaRewrites S, ∀ tr, a.kind = RuleKind.ttu tr →
+      (t.relation = a.matchRel ∧ t.object.type = a.objectType) →
+        S.isSubjectWildcardUserset t.subject.type tr = true
 
 /-! ## `ttuLeaf` elimination — the star branch dead by `TtuStarFree` -/
 

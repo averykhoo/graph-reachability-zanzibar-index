@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: stage 1 of D1-split LANDED + gated + sabotage-verified 2026-09-14h; next is stage 2 (widen ttuStarFree)
+brief: stage 2 steps 1-2 DONE 2026-09-14i; ttuLeaf_elim_nss must restate BOTH sides; next is step 3
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-14h
-updated: 2026-09-14h
+moved: 2026-09-14i
+updated: 2026-09-14i
 closed:
 ---
 
@@ -2004,3 +2004,21 @@ STAGE 1 OF `D1-split` IS LANDED, GATED AND SABOTAGE-VERIFIED. Read `docs/p6-part
 **MEASURED AGAINST THE SHIPPED PYTHON, not argued in Lean** -- `formal/probes/p6_stage1_python_shapes_2026-09-14.py` (rc=0): `derive_schema_info` returns `[('folder','...'), ('folder','viewer')]` at BOTH witness schemas, and `parse_openfga_schema` ADMITS `SxThruPlain`. So a schema the index compiles and RUNS carries a non-BARE wildcard shape -- that is what makes re-pointing `wsBare` mandatory rather than tidy.
 
 -> NEXT: **stage 2, part (iv) proper** -- widen `W4Fragment.ttuStarFree` to `TtuStarFreeW`, now unblocked. NOT ESTABLISHED: the dedup/order divergences from Python's `sorted(frozenset(...))` remain, deliberately, recorded on `::wildcardShapes` and `CORRESPONDENCE.md` sec 7; no order- or multiplicity-sensitive consumer has been checked against them.
+
+### 2026-09-14i
+
+STAGE 2 STEPS 1 AND 2 ARE DONE, `§ Blockers` 2 IS ANSWERED NO, AND THE TWO REPRESENTATION DIVERGENCES ARE MEASURED INERT. Read `docs/p6-part-iv-plan-2026-09-14.md` § "Corrections appended 2026-09-14i (seventh)" FIRST. Tree GREEN (`lake build` rc=0, 1089/1089).
+
+**STEP 1 LANDED.** `TtuStarFreeW` moved UPSTREAM to `GraphIndex/RulesBareStar.lean::TtuStarFreeW`, body byte-unchanged, beside `::TtuStarFree`; `TtuStarWide.lean` keeps `ttuStarFreeWB`, `::ttuStarFreeWB_iff` and both audited transport lemmas, so `audited_theorems.txt` (pins by NAME) is undisturbed. (!) The layering claim was RE-MEASURED before being trusted, because stage 1 had relocated four lemmas: `GraphIndex.UsStarWrite`'s transitive cone is `9` modules and contains none of `RulesBareStar` / `RulesComplete` / `BareStarCorrect`.
+
+**STEP 2 ANSWERED — the ONE P6 forecast the kernel CONFIRMS rather than corrects.** `formal/probes/p6_partiv_step2_ttuleaf_2026-09-14.lean` (rc=0, 17 lines, verbatim transcript in its header). (8): at the in-scope widened store the leaf FIRES (7) and the witness list for today's `::ttuLeaf_elim_nss` conclusion is `0` -- widening `hnostar` alone does NOT work, so step 3 restates the lemma on BOTH sides. The repair is `Spec/Semantics.lean::ttuLeaf`'s own star branch made explicit, guarded by `isSubjectWildcardUserset`: inhabited (10: `1`), falsifiable (11: `0` at CONTROL a), back-compatible (12: `1` at CONTROL b). (!) GUARD IT ON THE RULE'S TARGET `tr`, NOT on `tup.subject.predicate` -- the witness line (10) returns is `folder,*,BARE`, whose own predicate is BARE, so the wrong phrasing passes by accident.
+
+**`§ Blockers` 2 = NO, so step 6 drops no premise.** `RewriteMatchDeclared` does not imply `NoTtuTarget`; `::ttuStarFreeW_through_untainted` keeps `hterm`. New witness `Sdt` (probe §7): `RewriteMatchDeclared` true, `noTtuTargetB` false, `htermB` false. The gap is the cross-TYPE quantification in `hterm` -- `exprRefs` taints only the parent types a tupleset DECLARES, while `hterm` ranges over all `dt` -- and no match-key condition can close it. `TermNonvacuityWitness.Sund` could never have settled it: it fails `RewriteMatchDeclared` itself (line 16), which is the hole `TtuStarWide.lean`'s own warning flagged on 2026-09-13.
+
+**THE DEDUP/ORDER DIVERGENCES: CHECKED, AND THE CHECK IS MECHANICAL.** (!) First a premise correction, found by a census (AGENT) and then read first-hand: `wildcardShapes` is NOT a plain append -- `ReconcileStars.lean:152-154` already filters CROSS-pass repeats. Intra-pass duplicates are what remain, and they are REACHABLE in BOTH passes on a schema `parse_openfga_schema` ADMITS: `ReconcileStars.lean::ShapeRepresentationWitness.Sdup` pins FIVE Lean entries against Python's THREE by `decide`, with `::Sctl` as the agreeing control, and `formal/probes/p6_shape_representation_2026-09-14.py` (rc=0) measures the Python side of the same witness. CONTENT agrees at both; only the representation differs. **INERT BY KERNEL, NOT BY CENSUS:** sabotage scope arms `S-A2` (`dedup`) and `S-B2` (`reverse`) each rebuild all 1089 modules GREEN once the three membership lemmas are re-proved, so NO consumer in the development is multiplicity- or order-sensitive. With the pins IN, `S-A`/`S-B` give `decide`-level CLAIM reds (`::wildcardShapes_diverges` on both arms, plus `::wildcardShapes_agrees` on the reverse arm).
+
+(!) TWO INSTRUMENT LESSONS. `S-A` alone could NOT have answered the scope question and read exactly as though it had -- its build stops AT `ReconcileStars`, so the 1080 downstream modules are never elaborated (step 3a's "at least these, never only these", recurring). And the `wildcardShapes` docstring's stated REASON was wrong in letter: "read only through mem / filter / any" is false at `FullScope.lean::sxThruPlain_gains_same_through_shape`, a structural list equality the 2026-09-14h session added itself. It is safe for a DIFFERENT reason (closed terms under `decide`, so it fails loudly). The docstring and `CORRESPONDENCE.md` §7 now name the four conditions that actually carry the inertness.
+
+ALSO CLOSED, not re-owed: the carried worry that the `Inv` clauses might pin bareness of persisted `stars` rows. `State.lean::Inv.negStarCovered` is `res.stars.contains n.shape` -- membership-shaped, read first-hand, and both scope arms confirm it.
+
+-> NEXT, single action: **step 3** -- restate `RulesBareStar.lean::ttuLeaf_elim_nss` per the probe's (A)+(B), then repair its `3` Shape-B call sites (`::evalE_lift_bs`, the second `RulesBareStar` site, `RestrictBase.lean`). Steps 3-6 leave the tree RED by construction; this line is clean and committed.

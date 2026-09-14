@@ -309,7 +309,7 @@ Python runs. The omissions are now listed in §7 rather than left implicit.
 | **`GraphIndex/ObjStarWrite.lean::GraphState.bridgedConcrete` / `::GraphState.ensureBridges` / `::GraphState.writeWild`** | **object-wildcard (out-)bridge materialization — an EXISTING Lean model that this file never listed** | `index_v4/wildcard.py::WildcardIndex._ensure_bridges` (out-bridge half), `::WildcardIndex._bridge_degree`, `::WildcardIndex._concrete_nodes_of_shape`; shapes from `zanzibar_utils_v1.py::SchemaInfo.bridged_out_shapes` |
 | **`GraphIndex/UsStarWrite.lean::GraphState.bridgedInConcrete` / `::GraphState.ensureInBridges` / `::GraphState.writeUsStar`, `::Schema.isSubjectWildcardUserset`** | **wildcard-userset (in-)bridge materialization — likewise previously unlisted** | `index_v4/wildcard.py::WildcardIndex._ensure_bridges` (in-bridge half), teardown via `::WildcardIndex._strip_bridges` / `::WildcardIndex._maybe_remove_bridges`; shapes from `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes` and `::SchemaInfo.subject_wildcard_shapes` |
 | **`GraphIndex/UsStarWrite.lean::Schema.isStarTuplesetThrough`** (added 2026-08-14, part (i) of the `ttuStarFree` lift) | the star-tupleset TTU **through-shape** half of the bridged-in set: a TTU `p from ts` whose tupleset relation carries a bare wildcard `[t:*]` derives the subject shape `(t, p)`. Previously declared out of scope, and that declaration WAS the hole that made `graph_correct` FALSE without `W4Fragment.ttuStarFree` | `zanzibar_utils_v1.py::derive_schema_info`'s SECOND loop (`::_iter_ttus` + `::_iter_directs`, `r.wildcard and r.predicate == '...'`), feeding `::SchemaInfo.subject_wildcard_shapes` |
-| **`GraphIndex/TtuStarWide.lean::TtuStarFreeW` / `::ttuStarFreeWB` / `::removeGateBW`** (2026-08-16, part (iv) groundwork — **NOT WIRED**) | the WIDENED `ttuStarFree`: a stored star-subject tuple matching a TTU arm is admitted **iff the through-shape it produces is bridged in**. `GraphIndex/TtuStarWide.lean::ttuStarFreeWB_iff` is the machine-checked answer to part (iv)'s standing blocking question — the widened predicate IS decidable by a `Bool` function, because `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset` already is | Python declares that shape in `zanzibar_utils_v1.py::derive_schema_info` and `index_v4/wildcard.py::WildcardIndex._ensure_bridges` builds the in-bridge, so the widened condition says "Python would bridge this". ⚠ `FullScope.lean::W4Fragment`'s `ttuStarFree` field is UNCHANGED and must stay so until part (ii) composes `GraphIndex/UsStarWrite.lean::GraphState.ensureInBridges` into the rule-routed write path — the 2026-08-10 refutation stands until it does. ★ **UPDATE 2026-09-14: part (ii) has now composed it** (`P6` step 3b — `GraphIndex/LeafRules.lean::GraphState.writeRulesRaw` folds `GraphIndex/UsStarWrite.lean::GraphState.writeBridgedOne`), so the PRECONDITION is met and the 2026-08-10 refutation no longer blocks the widening. The field is still UNCHANGED: widening it is part (iv), a separate owed step, and nothing in step 3b touched `TtuStarFreeW` |
+| **`GraphIndex/RulesBareStar.lean::TtuStarFreeW`** (MOVED there 2026-09-14i, body byte-unchanged — the elimination sites are all upstream of `TtuStarWide.lean`, which imports `GraphIndex/Exec.lean` and so `FullScope.lean`) **/ `GraphIndex/TtuStarWide.lean::ttuStarFreeWB` / `::removeGateBW`** (2026-08-16, part (iv) groundwork — **NOT WIRED**) | the WIDENED `ttuStarFree`: a stored star-subject tuple matching a TTU arm is admitted **iff the through-shape it produces is bridged in**. `GraphIndex/TtuStarWide.lean::ttuStarFreeWB_iff` is the machine-checked answer to part (iv)'s standing blocking question — the widened predicate IS decidable by a `Bool` function, because `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset` already is | Python declares that shape in `zanzibar_utils_v1.py::derive_schema_info` and `index_v4/wildcard.py::WildcardIndex._ensure_bridges` builds the in-bridge, so the widened condition says "Python would bridge this". ⚠ `FullScope.lean::W4Fragment`'s `ttuStarFree` field is UNCHANGED and must stay so until part (ii) composes `GraphIndex/UsStarWrite.lean::GraphState.ensureInBridges` into the rule-routed write path — the 2026-08-10 refutation stands until it does. ★ **UPDATE 2026-09-14: part (ii) has now composed it** (`P6` step 3b — `GraphIndex/LeafRules.lean::GraphState.writeRulesRaw` folds `GraphIndex/UsStarWrite.lean::GraphState.writeBridgedOne`), so the PRECONDITION is met and the 2026-08-10 refutation no longer blocks the widening. The field is still UNCHANGED: widening it is part (iv), a separate owed step, and nothing in step 3b touched `TtuStarFreeW` |
 | `GraphIndex/RulesWrite.lean::RRule` / `::exprArms` / `::schemaRewrites` (**taint-filtered** — derived keys emit no arms; the LEAF half is `GraphIndex/LeafRules.lean::leafRewrites`, leg 7 step 4c-i) | compiled Computed/TTU rewrite rules, fanned out ONLY for untainted keys | `zanzibar_utils_v1.py::_rewrite_rule`, `::_emit_expr`; the taint routing is the `if (object_type, relation_name) not in tainted: _emit_expr(...)` loop in `::compile_ruleset`, mirrored by `S.defs.filter (!isDerived …)` in `schemaRewrites` (added 2026-07-17 — see §7) |
 | `GraphIndex/RulesWrite.lean::rewriteClosureRaw` | the write fan-out worklist, before dedup | `zanzibar_utils_v1.py::RuleSet.apply`'s expansion (dispatch built by `::RuleSet._build_dispatch`, candidates by `::RuleSet._candidates`) |
 | `GraphIndex/RulesWrite.lean::rewriteClosure` | the write fan-out worklist **incl. the dedup** (2026-08-08, §7.2 item 6) | `zanzibar_utils_v1.py::RuleSet.apply` in full — its `processed` set is the dedup AND the termination mechanism, so this is not an optional mirror |
@@ -1137,7 +1137,7 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   own owner key, because `Spec/Stratify.lean::exprRefs`'s `.ttu` case adds the target ref
   via the tupleset's parent types. So the arm is never in `schemaRewrites`, and every
   predicate quantified over it — `GraphIndex/RulesBareStar.lean::TtuStarFree`,
-  `GraphIndex/TtuStarWide.lean::TtuStarFreeW`,
+  `GraphIndex/RulesBareStar.lean::TtuStarFreeW`,
   `GraphIndex/ReconcileCorrect.lean::NoTtuTarget` — is **vacuous** there. Machine-checked
   at the shape the 2026-09-12 probe measured:
   `GraphIndex/TtuStarWide.lean::Zanzibar.RoutingArmWitness.no_rewrite_arms`,
@@ -1235,13 +1235,38 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   does) and unblocks part (iv); it changes no answer at any schema/store pair inside the
   present fragment. The divergence store that produced this entry was always outside it.
 
-  ⚠ Two representation divergences from Python are still open and are recorded on
-  `GraphIndex/ReconcileStars.lean::wildcardShapes` itself: Python's shape set is a
-  `frozenset` rendered `sorted(...)` at
-  `index_v4/processor.py::DeltaProcessor.__init__`, so a shape produced twice by pass 2
-  appears twice in the Lean list, and the two orders differ. Inert for every consumer today —
-  the list is read only through `∈` / `filter` / `any` — and **unchecked** against any future
-  order- or multiplicity-sensitive consumer.
+  ⚠ Two representation divergences from Python remain, and as of **2026-09-14i they are
+  MEASURED rather than asserted** (the line here previously said "unchecked"). Python's shape
+  set is a `frozenset` rendered `sorted(...)` at
+  `index_v4/processor.py::DeltaProcessor.__init__`, so (a) a shape produced twice appears
+  twice in the Lean list and once in Python's, and (b) the two orders differ.
+
+  * **Both are REACHABLE on a schema the compiler ADMITS**, which is what makes them
+    divergences rather than a docstring. `GraphIndex/ReconcileStars.lean::ShapeRepresentationWitness.Sdup`
+    — two relations restricted to the same type, one permission reached through two parents —
+    has FIVE entries in the Lean enumeration where Python returns three, starting with a
+    different one; pass 1 duplicates on its own, so `wildcardShapes`' cross-pass `filter`
+    removes only cross-pass repeats. Pinned by `decide`
+    (`::ShapeRepresentationWitness.wildcardShapes_diverges`), and the Python side of the same
+    witness is `formal/probes/p6_shape_representation_2026-09-14.py` (rc=0). The CONTENT
+    agrees at both witnesses — it is only the representation that differs.
+  * **Both are INERT, and that is now a kernel result, not a census.** Two sabotage arms,
+    each rebuilding the full 1089-module development: `wildcardShapes := (declared ++
+    through).dedup` and `wildcardShapes := (…).reverse` both build **GREEN** once the three
+    membership lemmas are re-proved. So no consumer anywhere in the development is sensitive
+    to multiplicity or to order. (With the witness pins IN, each arm gives `decide`-level
+    CLAIM reds — `GraphIndex/ReconcileStars.lean::ShapeRepresentationWitness.wildcardShapes_diverges`
+    on both, plus its control
+    `GraphIndex/ReconcileStars.lean::ShapeRepresentationWitness.wildcardShapes_agrees` on the
+    reverse arm — so the pins catch the change that the rest
+    of the tree cannot see.)
+  * ⚠ **The old stated REASON was wrong in letter and is corrected on the definition**: "the
+    list is read only through `∈` / `filter` / `any`" is false at
+    `FullScope.lean::sxThruPlain_gains_same_through_shape`, which compares two `throughShapes`
+    lists by structural `=`. That site is safe for a different reason — closed terms
+    discharged by `decide`, so it fails loudly. The four conditions that actually carry the
+    inertness are listed on `GraphIndex/ReconcileStars.lean::wildcardShapes`; a consumer breaking any of them must
+    canonicalise at the source.
 
   ★ **The durable half of the fix is not the enumeration, which was one line, but that
   nothing in the tree could previously SEE it wrong.** Python's second loop had two
