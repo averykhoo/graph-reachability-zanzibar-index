@@ -488,10 +488,10 @@ not widen — see the caveat at the top of this file and the scope carry below.
 optional:** without the clause `graph_correct`/`backend_equivalence` are machine-checked FALSE
 (2026-08-10 kill); `W4Fragment.ttuStarFree` stays unchanged until (ii) is in; Python does not
 enforce it either (2026-08-31b: `folder:* parent doc:d1` on a TTU tupleset **ADMITTED**).
-⚠ **2026-09-12: "(ii) materialises the edge" is KNOWN FALSE as stated, and (iv)'s premise is
-what is in question** — `TtuStarFreeW` (`TtuStarWide.lean:72-76`) lacks an `isDerived = false`
-conjunct, so it admits a DERIVED through-shape with NO bridgeable leaf-routed node; the remove
-leg cannot retract a bridge either. Blocked on a user scope call: `task.py show P6` + `formal/probes/p6_inbridge_stability_2026-09-12.lean`.
+⚠ **The 2026-09-12 framing here is RETIRED (2026-09-14f)** — all three clauses superseded, nothing blocked on the user. **(iv) is OPEN and sized**: map, cone and step order in
+[`docs/p6-part-iv-plan-2026-09-14.md`](../docs/p6-part-iv-plan-2026-09-14.md) (ACTIVE-PLAN — read its dated corrections first).
+⚠ **The flip is not a type edit, and step 0 BLOCKS it**: both closure theorems are machine-refuted under `TtuStarFreeW`, and the live post-(ii) leg still
+measures `2` divergences at an UNMATERIALISED userset subject. Probes: `formal/probes/p6_partiv_{closure_star,live_leg_payoff}_2026-09-14.lean`.
 
 **Scope honesty — the `W4Fragment` field classification (2026-08-31b).** `graph_correct`'s
 scope is exactly `W4Fragment`, and its ten fields now carry a gated, hand-maintained
