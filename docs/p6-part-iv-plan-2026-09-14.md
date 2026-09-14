@@ -15,6 +15,61 @@ in a tracked file), **AGENT** (a subagent's report, reconciled but not re-derive
 
 ---
 
+## Corrections appended 2026-09-14g (second) — the A/A2/B/C MENU IS REFUTED; the gap is write-side
+
+*supersedes:* the route table in the first `2026-09-14g` correction below, and
+`formal/CORRESPONDENCE.md:1184`'s *"a project, not a step"* cost note.
+
+The user's steer on the fork (verbatim, recorded on the row): *"i feel like i'd rather keep
+things accurate but i'm not the expert. measure the cone first, then if the decision isn't
+glaringly obvious pass the decision off to fable"*. Measuring first is what refuted the menu.
+
+**READ, first-hand: `State.lean:589::GraphModel.probeDerived`'s userset-subject arm is
+EDGE-FREE.** It contains no `σ.reach`; it answers from `res.upos` / `res.stars` / `res.neg`
+symbolically. Its own docstring says *"A userset subject is edge-free"*. Routes **A** and
+**A2** were both phrased as *"give the Lean model the symbolic residue read Python has"* —
+**the model already has it**, so both were priced against a mechanism that is not real.
+
+**PROBE, `formal/probes/p6_partiv_residue_locus_2026-09-14.lean` (rc=0, verbatim transcript
+in its header).** At the divergent state:
+
+| measurement | result |
+|---|---|
+| `(1)` `isDerived` at `access` / `admin` / `gate` | `false` / `true` / `true` |
+| `(3)` residue at `(doc:d1, admin)` | `stars := []`, `neg := []`, `upos := [f2#viewer, f1#viewer]` |
+| `(2)` shape of phantom vs control | both `("folder","viewer")` — **identical** |
+| `(6)` `upos` phantom / `upos` control / `stars` has shape | `false` / `true` / `false` |
+| `(I)` INSTRUMENT CONTROL — residue nonempty somewhere | **PASSED** (`admin`, `gate`) |
+
+Since the two subjects **share a shape**, `res.stars.contains s.shape` is `false` for both
+and could never have separated them; `upos` is what separates them. So the read path behaved
+correctly on its input — **the CASCADE never folded the star shape into the derived residue's
+`stars`.** The gap is write-side.
+
+`(1)` also re-explains the headline asymmetry, more cheaply than the star-bridge story: the
+"plain agrees, derived diverges" split is simply **two different read paths**. `access` is not
+derived, so it takes `probeNonDerived`'s edge probe, which the star bridge serves; `admin` and
+`gate` are derived, so they take the residue path, which is under-populated. `(8)` confirms
+`(doc:d1, access)` has no residue at all.
+
+### What this changes
+
+* **Do not pick from the A/A2/B/C table below.** A and A2 do not describe real work; B and C
+  were already weighed against the user's accuracy steer and lose.
+* **The live route is new — call it `D`: make the cascade's star fold cover the
+  star-tupleset through-shape at a derived relation**, so `stars` at `(doc:d1, admin)`
+  contains `("folder","viewer")`. Coherence check (REASONED): `access(folder:*#viewer, d1)`
+  holds via the `folder:*` parent and `banned` is empty there, so `admin` at the star subject
+  is genuinely true — the shape *should* be in `stars`. Adding it also answers `f1`/`f2`
+  true, which `upos` already does, so it does not over-grant at this store.
+* ⚠ **`D`'s cone is UNMEASURED, and that is the next action.** This probe locates the gap; it
+  does not price the fix, does not establish that the star fold *can* produce the shape here,
+  and does not open `index_v4/wildcard.py::WildcardIndex._check_derived` to say which arm
+  makes Python answer true. Per the user's procedure, measure that cone before deciding; hand
+  the decision to `claude-fable-5` only if it is still not obvious afterwards.
+
+---
+
 ## Corrections appended 2026-09-14g — STEP 0 IS ANSWERED, and the answer is none of its three options
 
 *supersedes:* the `2026-09-14f` correction's *"the residue … is unexplained"* and its
