@@ -30,6 +30,62 @@ from here.
 
 ---
 
+## 2026-09-14g — `P6` step 0 answered: the residual is the KNOWN phantom-subject MODEL gap
+
+rows: `P6` (Log `2026-09-14g`; brief updated). Nothing re-ranked — `P6` stays `NOW`.
+
+task lint: clean (13 checks, 183 task file(s) parsed), 26 warning(s)
+read: board only
+
+**No Lean source changed.** One dated correction to the ACTIVE-PLAN doc
+([`docs/p6-part-iv-plan-2026-09-14.md`](../p6-part-iv-plan-2026-09-14.md), section
+`## Corrections appended 2026-09-14g` — read it BEFORE the `…f` section, which it supersedes)
+and one re-run of an existing Python probe.
+
+**Step 0 is answered, and the answer is none of its three options.** The residual `2`
+divergences that `2026-09-14f` filed as a new blocker are the **already-adjudicated PHANTOM
+USERSET SUBJECT model gap** — [`formal/CORRESPONDENCE.md`](../../formal/CORRESPONDENCE.md)`:1162`
+§7, added `2026-09-13b` by this item's own step 2. Same subject `folder:f9#viewer`, same
+derived relations `admin`/`gate`, same asymmetry (plain agrees, derived diverges), already
+measured **not a Python bug**, already pinned by `tests/test_p6_phantom_subject.py`.
+
+* **(2) refuted, first-hand**: `formal/headline_statements.txt:30-36` — all six headline
+  theorems carry exactly two query hypotheses, `hqs` and `hqo`. The divergent queries satisfy
+  both. Nothing scopes a query to a materialised subject.
+* **(1) refuted without paying for deciders**: only 3 of `W4Fragment`'s 10 fields are
+  store-dependent and two were already measured true; a schema-side field cannot separate this
+  store from one that agrees, since `(10)` materialises `folder:f9` and the same schema goes to
+  `0`. (!) The one live candidate, `wsBare`, was **checked and is false before being written
+  down** — `ReconcileStars.lean:97::wildcardShapes` collects only flagged-wildcard restrictions,
+  so `wildcardShapes Sp = [("folder", BARE)]` and `wsBare` holds. A decider census (AGENT) found
+  **no** Bool decider for any of the seven schema-side fields; it is recorded in the doc so the
+  next session does not re-commission it.
+* **Verified the two situations are the same rather than assuming it**: the schemas agree
+  relation-for-relation, and the Lean store is `To = tObj :: T0` — `tDom` feeds only the query
+  GRID, never the store — so `folder:f9` is named by no stored tuple on either side. Re-ran
+  `formal/probes/p6_phantom_subject_2026-09-13.py` on today's tree: **UNANIMOUS `True`** on all
+  seven queries.
+* **Explains the asymmetry `…f` left open**: CONTROL 2 `(15)` is not a counterexample — there
+  the derived grant arrives through a bridge that *materialises*. The gap needs star-TUPLESET +
+  derived-above + phantom subject together, which is why the proved fragment is not already false.
+
+(!) **The fourth outcome.** `TtuStarFreeW` does **not** need a conjunct: the store is
+legitimate and the shipped system answers it correctly, so a store-side conjunct would reject
+stores the Python handles fine. What is wrong is the Lean model's derived read. **But the flip
+is still blocked** — widened, the fragment admits `Sp`/`To`, and at it `checkPublic ≠ sem` for
+two in-scope queries, so `graphRun_check_eq_sem` would be **false**, not merely unproven. A
+correct Python does not rescue a theorem about the model.
+
+**Still owed:** the choice between **A** (give `State.lean::GraphModel.check` the symbolic
+residue read — `CORRESPONDENCE.md:1184` calls it *"a project, not a step"*), **A2** (that read
+on the star-bridge path only; cost UNMEASURED), **B** (conjunct on `TtuStarFreeW`; moves the
+four audited names at `audited_theorems.txt:537-540`), or **C** (a query-scoping hypothesis on
+the headlines; weakens all six). This is an executive decision, not a measurement — the
+`CLAUDE.md` §"Who decides" case for a `claude-fable-5` subagent, offered to the user and not
+yet spawned. Do not pay the part (iv) cone until it is chosen.
+
+---
+
 ## 2026-09-14f — `P6` part (iv) scouted: the flip is a PROOF LEG, and a new step 0 blocks it
 
 rows: `P6` (Log `2026-09-14f`; brief updated). Nothing re-ranked — `P6` stays `NOW`.
