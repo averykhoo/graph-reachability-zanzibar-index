@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: STEP 3b COMPLETE 2026-09-14e -- steps 3-15 landed, tree GREEN, pins regenerated. Next: part (iv)
+brief: part (iv) SCOUTED 2026-09-14f -- the flip is a PROOF LEG (two theorems refuted); STEP 0 blocks it
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-14e
-updated: 2026-09-14e
+moved: 2026-09-14f
+updated: 2026-09-14f
 closed:
 ---
 
@@ -1621,3 +1621,75 @@ NEXT: `P6` (ii) is DONE. The still-owed follow-on is part (iv) -- widening
 precondition ("until part (ii) composes `ensureInBridges` into the rule-routed write path")
 is now MET and `CORRESPONDENCE.md` sec 7 records that; the field itself is UNTOUCHED and the
 2026-08-10 refutation no longer blocks it.
+
+### 2026-09-14f
+
+PART (iv) IS SCOUTED AND STEP 0 BLOCKS THE FLIP. No Lean source changed this session; two
+tracked probes and an ACTIVE-PLAN doc landed. Map: `docs/p6-part-iv-plan-2026-09-14.md` --
+read its `## Corrections appended 2026-09-14f` section FIRST, then the body.
+
+(!) THE FLIP IS NOT A TYPE EDIT. Attack-first (house rule 2) REFUTED both theorems the
+widening would have to leave standing:
+`RulesBareStar.lean:142::rewriteClosure_star_subject` and `:168::rewriteClosure_star_bare`
+each have ONE violator at the in-scope widened store -- the seed's subject rewritten onto the
+through-shape, `folder:*#viewer`, whose predicate is `viewer` and not BARE. Evidence and the
+verbatim transcript: `formal/probes/p6_partiv_closure_star_2026-09-14.lean`. The repair is a
+DISJUNCTION (seed's subject, or a declared bridged through-shape); the probe shows it is
+EXHAUSTIVE at the store (0 unexplained) and FALSIFIABLE (explains nothing at the undeclared
+control), so it is a scope result and not a tautology.
+
+(!) STEP 0, NEW, AND IT BLOCKS THE FLIP. The payoff was UNMEASURED on the live leg; it is now
+measured (`formal/probes/p6_partiv_live_leg_payoff_2026-09-14.lean`). On a grid of 546 the
+LIVE post-(ii) leg mismatches `sem` at 2 queries, against 14 for the same expression on
+2026-09-13b and 9 for that date's candidate routing -- so part (ii) did most of that work on
+the shipped leg. The instrument is live (`ctlNoWrite := 8`, `semTrue := 25`). Attribution is
+clean: the store fails EXACTLY `ttuStarFree` among the four measured deciders, both
+divergences sit at the UNMATERIALISED userset subject `folder:f9#viewer` at `admin`/`gate`,
+and materialising `folder:f9` takes the count to 0. THE BRIDGE WORKS -- at that same subject
+`access`, the TTU relation the star bridge serves, is `check = sem = true`; an incomplete
+bridge fails at `access` first. So widening `W4Fragment` today would re-admit a `check != sem`
+store; establish what excludes it BEFORE paying the cone.
+
+(!) THE OBVIOUS EXPLANATION IS REFUTED -- do not write it down. "Derived relations over a
+never-written node are always empty" is killed by the probe's control 2: a derived relation
+above a star USERSET grant, no ttu arm anywhere, same question at the same unmaterialised
+subject, mismatch 0 with `semTrue := 16`. The residue is specific to the star-TUPLESET
+through-shape with a derived relation above it, and that asymmetry is unexplained.
+
+(!) TWO OF MY OWN CONTROLS FAILED, both kept and labelled in the probe because each reads
+exactly like a clean result: one INVALID (the concrete-parent store fails `storeValidRules`,
+so its 2 divergences are a different phenomenon at different queries) and one INERT
+(`semTrue := 2` -- a DIRECT restriction only grants where a tuple exists, so the edit never
+built the situation). The INERT one is the `M12` failure mode from step 2.
+
+CENSUS (as-of 2026-09-14, two units -- quote neither without its unit): `195` raw grep hits
+for `TtuStarFree` outside `TtuStarWide.lean` across `19` files INCLUDING comments
+(re-measured first-hand); `145` classified sites (subagent) = THREAD `104` / RESTRICT-DERIVE
+`24` / PROVIDE `12` / ELIMINATE `5`. All five ELIMINATE sites verified first-hand:
+`RulesBareStar.lean:126` and `CascadeStable.lean:2319` (apply `hTS` for `False`);
+`RulesBareStar.lean:340`, `:694` and `RestrictBase.lean:900` (reindex into a per-leaf
+`hnostar`). `RulesBareStar.lean:54::ttuLeaf_elim_nss` is the SINGLE lemma whose statement must
+change -- shape B is three call sites of one lemma, not three problems.
+
+LAYERING, DECIDED (Lean-shaped, per `CLAUDE.md` "Who decides"). `TtuStarFreeW` currently sits
+DOWNSTREAM of `FullScope` (`TtuStarWide` -> `Exec` -> `FullScope`), so the flip is not
+expressible as it stands. Decision: define it in `RulesBareStar.lean` beside `TtuStarFree`,
+adding one import of `GraphIndex.UsStarWrite`; keep `TtuStarWide.lean` downstream for the
+`Bool` decider, the gate half and the four audited names. VERIFIED first-hand by walking the
+import graph: the `ZanzibarProofs` cone of `UsStarWrite` is 9 modules and contains neither
+`RulesBareStar` nor `RulesComplete` nor `BareStarCorrect`, so no cycle is possible.
+
+ALSO FIXED: `formal/HANDOFF.md`'s in-flight paragraph was STALE and contradicted the tree --
+it still said "(ii) materialises the edge is KNOWN FALSE", "lacks an `isDerived = false`
+conjunct" and "Blocked on a user scope call", all three superseded (Wall 1 decided by lemma
+2026-09-12b/c; its reason re-measured 2026-09-13; (ii) landed 2026-09-14e). Rewritten to
+point at the plan and to carry step 0.
+
+STILL OPEN, cheap, unmeasured since 2026-09-13: is `term`'s `NoTtuTarget` half implied by
+`RewriteMatchDeclared` (`FullScope.lean:1350`)? If yes,
+`TtuStarWide.lean::ttuStarFreeW_through_untainted` becomes hypothesis-free.
+
+NEXT ACTION, single: answer step 0 -- which of (1) another `W4Fragment`/`GraphAdmission` field
+excludes the unmaterialised-subject store, (2) a query-subject scoping hypothesis on the
+headlines excludes it, or (3) neither, in which case `TtuStarFreeW` needs a conjunct and the
+four audited names DO move.

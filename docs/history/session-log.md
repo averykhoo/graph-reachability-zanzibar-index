@@ -30,6 +30,58 @@ from here.
 
 ---
 
+## 2026-09-14f — `P6` part (iv) scouted: the flip is a PROOF LEG, and a new step 0 blocks it
+
+rows: `P6` (Log `2026-09-14f`; brief updated). Nothing re-ranked — `P6` stays `NOW`.
+
+task lint: clean (13 checks, 183 task file(s) parsed), 26 warning(s)
+read: board + note
+
+**No Lean source changed.** Two tracked probes, one ACTIVE-PLAN doc, and a stale-paragraph
+fix in `formal/HANDOFF.md`. The map is
+[`docs/p6-part-iv-plan-2026-09-14.md`](../p6-part-iv-plan-2026-09-14.md) — read its
+`## Corrections appended 2026-09-14f` section first.
+
+**Part (iv) is not the type edit the `2026-09-14e` close implied.** Attack-first (house rule
+2) refuted both theorems the widening would have to leave standing:
+`RulesBareStar.lean:142::rewriteClosure_star_subject` and `:168::rewriteClosure_star_bare`
+each have one violator at the in-scope widened store — the seed's subject rewritten onto the
+through-shape, `folder:*#viewer`, predicate `viewer` rather than `BARE`
+([`formal/probes/p6_partiv_closure_star_2026-09-14.lean`](../../formal/probes/p6_partiv_closure_star_2026-09-14.lean)).
+The repair is a disjunction, and the probe shows it exhaustive at the store and falsifiable
+at the undeclared control — a scope result, not a tautology.
+
+**The payoff is measured for the first time on the live leg, and it is good news with a
+catch.** `14 → 2` divergences on a grid of `546`
+([`…live_leg_payoff…`](../../formal/probes/p6_partiv_live_leg_payoff_2026-09-14.lean));
+`2026-09-13b`'s candidate routing reached `9`, so part (ii) did most of that work on the
+shipped leg. The bridge demonstrably WORKS — at the divergent subject, `access` (the TTU the
+star bridge serves) is `check = sem = true`. But the residual `2` sits at an unmaterialised
+userset subject over a star-tupleset through-shape, so **widening `W4Fragment` today would
+re-admit a `check ≠ sem` store**. That is the new step 0, and it blocks the flip.
+
+⚠ **The obvious explanation is refuted — do not write it down.** "Derived relations over a
+never-written node are always empty" is killed by the probe's control 2 (`mismatch := 0`,
+`semTrue := 16`). The asymmetry is unexplained and is what step 0 owes.
+
+⚠ **Two of the session's own controls failed and are kept, labelled, in the probe** — one
+INVALID (the concrete-parent store fails `storeValidRules`; its `2` is a different phenomenon
+at different queries) and one INERT (`semTrue := 2`, the edit never built the situation). Both
+read exactly like clean results. This is the `M12` failure mode, recurring.
+
+**Decided (Lean-shaped, per `CLAUDE.md` § "Who decides"):** `TtuStarFreeW` moves to
+`RulesBareStar.lean` behind one new `UsStarWrite` import, rather than moving
+`isSubjectWildcardUserset` upstream. Verified first-hand by walking the import graph — the
+`ZanzibarProofs` cone of `UsStarWrite` is `9` modules and contains none of `RulesBareStar`'s
+cone, so no cycle is possible.
+
+Still owed: **step 0** (which of three things excludes the unmaterialised-subject store — see
+the plan's corrections section); the unmeasured `NoTtuTarget`-vs-`RewriteMatchDeclared`
+question carried from 2026-09-13; and the census's THREAD/RESTRICT split is subagent work,
+spot-checked only at the `5` ELIMINATE sites and the layering claim.
+
+---
+
 ## 2026-09-14e — `P6` STEP 3b COMPLETE: all three re-points landed, tree GREEN, pins regenerated
 
 rows: `P6` (Log `2026-09-14e`; brief updated). Nothing re-ranked — `P6` stays `NOW` for part (iv).
