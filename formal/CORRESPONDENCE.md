@@ -1195,8 +1195,31 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   path failing at a missing node.
 
   ⚠ So *"closing it would mean giving the Lean model a symbolic derived read, which is a
-  project, not a step"* (below) prices work that does not need doing. What closing it
-  actually needs is unmeasured as of 2026-09-14g.
+  project, not a step"* (below) prices work that does not need doing.
+
+  **★ THE ROOT CAUSE, MEASURED (2026-09-14g, same session).** `zanzibar_utils_v1.py` builds
+  `SchemaInfo.subject_wildcard_shapes` in **two** passes — declared wildcard restrictions
+  (`:993-995`), plus a star-tupleset through-shape pass (`:1001-1008`) that, for each TTU
+  whose tupleset relation carries a bare wildcard restriction, adds `(r.type,
+  ttu.target_rel)`. **`GraphIndex/ReconcileStars.lean::wildcardShapes` implements only the
+  first**, while its docstring names that Python function as its correspondent. Measured:
+  shipped returns `[('folder','...'), ('folder','viewer')]`, Lean returns `[("folder",
+  BARE)]` (`formal/probes/p6_partiv_shapes_gap_2026-09-14.lean`,
+  `formal/probes/p6_partiv_python_residue_2026-09-14.py`). The live fold
+  `GraphIndex/CascadeStrata.lean::GraphState.reconcileResidueKeyR` is
+  `stars := shapes.filter …`, and a filter cannot mint a shape its input never held — so the
+  derived residue's `stars` stays empty and a phantom userset subject answers wrongly.
+
+  **The fix closes it.** `formal/probes/p6_partiv_stage0_killcheck_2026-09-14.lean` simulates
+  the fold over the corrected list in stratum order: both divergent queries reach
+  `check = sem`, with the materialised control unregressed. The decision recorded on task
+  `P6` is `D1-split` — correct the enumeration and re-point `FullScope.lean::W4Fragment`'s
+  `wsBare` at a `declaredWildcardShapes`, because the corrected list otherwise falsifies the
+  audited `FullScope.lean::sxThruDerived_wsBare_holds_but_usWild_fails`.
+
+  ⚠ This boundary is therefore **diagnosed, not yet closed** — the shipped Lean definitions
+  are untouched and the kill-check is a simulation at one store. Do not read the diagnosis as
+  a landed fix; `P6` stage 1 is what lands it.
 
   **Not a Python bug, and that was checked first-hand rather than argued**: the same
   schema, store and seven queries run through `tests/parity.py::ParityEngine` (graph index

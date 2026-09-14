@@ -30,7 +30,7 @@ from here.
 
 ---
 
-## 2026-09-14g — `P6` step 0 answered, then the A/A2/B/C menu refuted: the gap is WRITE-side
+## 2026-09-14g — `P6`: step 0 answered, the menu refuted, and route `D`'s root cause found
 
 rows: `P6` (Log `2026-09-14g`; brief updated). Nothing re-ranked — `P6` stays `NOW`.
 
@@ -108,12 +108,69 @@ original kept above the correction). The divergence and the boundary stand; only
 cause was false. It was load-bearing for the step-0 cost estimate, so it is fixed rather than
 left for the next session.
 
-**Still owed:** measure route **D**'s cone — make the cascade's star fold cover the
-star-tupleset through-shape at a derived relation. Can the fold produce `("folder","viewer")`
-here, what does changing it touch, and which arm of `index_v4/wildcard.py::WildcardIndex._check_derived`
-makes Python answer true? (!) The probe **locates** the gap and does not **price** the fix — do
-not read `D` as costed. Only if the decision is still unclear after that cone does it go to a
-`claude-fable-5` subagent, which the user has now explicitly authorised for this fork.
+### Then route `D`'s cone was measured — root cause found, and the honest fix defeats the widening
+
+Three more probes, all `rc=0` with verbatim transcripts and **passing instrument controls**:
+[`p6_partiv_python_residue_2026-09-14.py`](../../formal/probes/p6_partiv_python_residue_2026-09-14.py),
+[`p6_partiv_starfold_cause_2026-09-14.lean`](../../formal/probes/p6_partiv_starfold_cause_2026-09-14.lean),
+[`p6_partiv_shapes_gap_2026-09-14.lean`](../../formal/probes/p6_partiv_shapes_gap_2026-09-14.lean).
+
+The shipped residue at `(doc:d1, admin)` is `stars := [('folder','viewer')]`, `upos := []`;
+the Lean one is the mirror image. `coveredFn` already returns **true** for that shape, so the
+coverage test is innocent too — and since the live fold is
+`CascadeStrata.lean:187::reconcileResidueKeyR`'s `stars := shapes.filter (coveredFnR ...)`, a
+`filter` that cannot mint a shape its input never held forces the conclusion that the shape
+was never in `shapes`.
+
+(!) **Root cause:** `zanzibar_utils_v1.py` builds `SchemaInfo.subject_wildcard_shapes` in
+**two** passes — declared wildcard restrictions (`:993-995`) plus a star-tupleset
+through-shape pass (`:1001-1008`). `ReconcileStars.lean:97::wildcardShapes` implements **only
+the first**, while its docstring names that Python function as its correspondent.
+
+(!) **The trap, measured:** `W4Fragment.wsBare` demands every wildcard shape be `BARE`, and
+the through-shape's predicate is `"viewer"` — so correcting the enumeration flips `wsBare`
+`true → false`. The fragment would reject the store via `wsBare` instead, making the widening
+admit nothing new at exactly the schemas part (iv) exists to admit. **Accuracy and the part
+(iv) goal are in tension.**
+
+Cone: **235 references across 18 files**; not a one-liner.
+
+### The decision: `D1-split`, and the kill-check passes
+
+Per the user's procedure the cone was measured first and the choice was not glaring, so it
+went to a `claude-fable-5` subagent. Adopted — **split the enumeration** rather than weaken
+`wsBare` with a disjunct: `declaredWildcardShapes` (today's one-pass body, renamed) +
+`throughShapes` (Python's pass 2), with `wsBare` re-pointed at the former so it stays
+extensionally identical at every schema and the fragment does not shrink.
+
+⚠ **The split is mandatory, not tidy — verified first-hand** rather than taken on the
+subagent's word: at `W4Witness.SxThruDerived` the corrected enumeration flips `wsBare`
+`true → false`, **falsifying the audited** `FullScope.lean:1113::sxThruDerived_wsBare_holds_but_usWild_fails`
+(`audited_theorems.txt:91`). So "fix the enumeration only" was an underprice for *any*
+route.
+
+**Stage 0, the kill-check, PASSES**
+([`p6_partiv_stage0_killcheck_2026-09-14.lean`](../../formal/probes/p6_partiv_stage0_killcheck_2026-09-14.lean)):
+simulating the fold over the corrected list in stratum order, **both** divergent queries
+reach `check = sem`, with the materialised control unregressed. The subagent's "biggest
+risk" — `gate` surviving and the cone buying nothing — does not materialise. Stage 2 is
+unblocked.
+
+(!) **Two of this session's own claims were refuted by that probe, and one would have been
+recorded as a finding without its control.** "Two defects, not one" rested on the **unrouted**
+`coveredFn`; the live fold uses the **routed** `coveredFnR`, which consults the residue, and
+with the strata in order it reads `true` — **one defect**. And the kill-check's first form
+reported the opposite answer on two errors of mine (unrouted readers; computing `admin` and
+`gate` from the same pre-patch state, denying `gate` the input the fix exists to give it).
+Control `(4)` caught it. **A simulation with the wrong reader reads exactly like a correct
+one.** Both forms are kept and labelled.
+
+**Still owed:** **stage 1** — the split definitions, `wsBare` re-pointed, the Tier-1
+coverage-false lemma, the bridge-site through-shape cases, restating the audited theorem over
+`declaredWildcardShapes`, RED-first pin regeneration. It is a commit point and lands the
+accuracy fix unconditionally. Not established: the kill-check is a **simulation** at one
+store; Tier-1's lemma is REASONED only; and the `Inv` clauses (e.g. `negStarCovered`) may pin
+bareness of persisted `stars` rows — **unchecked**, walk them in stage 1's red-site pass.
 
 ---
 
