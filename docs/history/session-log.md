@@ -30,7 +30,7 @@ from here.
 
 ---
 
-## 2026-09-14g — `P6` step 0 answered: the residual is the KNOWN phantom-subject MODEL gap
+## 2026-09-14g — `P6` step 0 answered, then the A/A2/B/C menu refuted: the gap is WRITE-side
 
 rows: `P6` (Log `2026-09-14g`; brief updated). Nothing re-ranked — `P6` stays `NOW`.
 
@@ -76,13 +76,44 @@ is still blocked** — widened, the fragment admits `Sp`/`To`, and at it `checkP
 two in-scope queries, so `graphRun_check_eq_sem` would be **false**, not merely unproven. A
 correct Python does not rescue a theorem about the model.
 
-**Still owed:** the choice between **A** (give `State.lean::GraphModel.check` the symbolic
-residue read — `CORRESPONDENCE.md:1184` calls it *"a project, not a step"*), **A2** (that read
-on the star-bridge path only; cost UNMEASURED), **B** (conjunct on `TtuStarFreeW`; moves the
-four audited names at `audited_theorems.txt:537-540`), or **C** (a query-scoping hypothesis on
-the headlines; weakens all six). This is an executive decision, not a measurement — the
-`CLAUDE.md` §"Who decides" case for a `claude-fable-5` subagent, offered to the user and not
-yet spawned. Do not pay the part (iv) cone until it is chosen.
+### Then the user steered, and measuring first refuted the menu
+
+User steer on the A/A2/B/C fork (verbatim): *"i feel like i'd rather keep things accurate but
+i'm not the expert. measure the cone first, then if the decision isn't glaringly obvious pass
+the decision off to fable"* — read as a goal statement (accuracy outranks cheapness), which
+weighs against **B** and **C** since both make the proved claim smaller than the system it
+describes. Recorded on the row as a steer, not a decision.
+
+**Measuring first killed the menu.** READ: `State.lean:589::GraphModel.probeDerived`'s
+userset-subject arm is **edge-free** — no `σ.reach` at all, answering from `upos`/`stars`/`neg`
+symbolically, exactly as its own docstring says. **A** and **A2** were both phrased as *"give
+the Lean model the symbolic derived read Python has"*; the model already has one, so both were
+priced against a mechanism that is not real — and so was `CORRESPONDENCE.md:1184`'s *"a
+project, not a step"*.
+
+New probe [`formal/probes/p6_partiv_residue_locus_2026-09-14.lean`](../../formal/probes/p6_partiv_residue_locus_2026-09-14.lean)
+(rc=0, verbatim transcript in its header, instrument control **passed**): the residue at
+`(doc:d1, admin)` is `stars := []`, `neg := []`, `upos := [f2#viewer, f1#viewer]`. The phantom
+and the **agreeing** control share the shape `("folder","viewer")`, so `stars.contains s.shape`
+is false for both and could never have separated them — `upos` is what does. The read path
+behaved correctly on its input: **the cascade never folded the star shape into the derived
+residue's `stars`.** Write-side gap, not read-side.
+
+`(1)` also re-explains the asymmetry more cheaply than the star-bridge story — `access` is
+**not** derived and `admin`/`gate` are, so "plain agrees, derived diverges" is just two
+different read paths.
+
+(!) **`formal/CORRESPONDENCE.md:1170-1174` was wrong and is corrected in place** (dated,
+original kept above the correction). The divergence and the boundary stand; only the stated
+cause was false. It was load-bearing for the step-0 cost estimate, so it is fixed rather than
+left for the next session.
+
+**Still owed:** measure route **D**'s cone — make the cascade's star fold cover the
+star-tupleset through-shape at a derived relation. Can the fold produce `("folder","viewer")`
+here, what does changing it touch, and which arm of `index_v4/wildcard.py::WildcardIndex._check_derived`
+makes Python answer true? (!) The probe **locates** the gap and does not **price** the fix — do
+not read `D` as costed. Only if the decision is still unclear after that cone does it go to a
+`claude-fable-5` subagent, which the user has now explicitly authorised for this fork.
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: step 0 ANSWERED 2026-09-14g -- residual is the KNOWN phantom-subject MODEL gap, not a fragment hole
+brief: step 0 ANSWERED + the A/A2/B/C menu REFUTED 2026-09-14g -- the gap is WRITE-side (cascade star fold)
 pri: NOW
 size: L
 deps: []
@@ -1759,3 +1759,69 @@ U+2260, so a banner carrying either prints `\uXXXX` escapes at the top of the
 session-start view. Renamed to `A2` in `HANDOFF.md`, `docs/p6-part-iv-plan-2026-09-14.md`
 and `docs/history/session-log.md` so the citation key is one string in all four homes.
 (!) Worth carrying: the banner is free prose but NOT free of charset -- the gate checks it.
+
+USER STEER ON THE A/A2/B/C FORK (2026-09-14g, verbatim): *"i feel like i'd rather keep
+things accurate but i'm not the expert. measure the cone first, then if the decision isn't
+glaringly obvious pass the decision off to fable"*.
+
+Read as a GOAL statement, which is the half `CLAUDE.md` section "Who decides" reserves for the
+user: ACCURACY -- the Lean model should match the shipped system -- outranks cheapness.
+That weighs against B and C on principle, since both buy their savings by making the
+proved claim SMALLER than the system it describes (B rejects stores the Python answers
+correctly; C weakens all six headline theorems for every store, not just this one). It
+weighs FOR A / A2, which close the gap by making the model honest.
+
+(!) It is a steer, NOT a decision -- A is already recorded as "a project, not a step"
+(`CORRESPONDENCE.md:1184`), so accuracy-at-any-price is not automatically affordable. The
+ordered procedure the user set, and which this row now owes:
+  1. MEASURE the A2 cone (the only unmeasured cell in the table).
+  2. If the choice is then glaringly obvious, take it and record the reasoning here.
+  3. If it is NOT obvious, hand the decision to a `claude-fable-5` subagent -- now
+     explicitly authorised for this fork by the user, in addition to the standing
+     `CLAUDE.md` permission.
+
+THE A/A2/B/C MENU IS REFUTED -- measuring the cone first is what killed it, which is
+exactly what the user's steer asked for. New probe:
+`formal/probes/p6_partiv_residue_locus_2026-09-14.lean` (rc=0, verbatim transcript in its
+header, instrument control PASSED). Map: `docs/p6-part-iv-plan-2026-09-14.md` section
+`## Corrections appended 2026-09-14g (second)` -- read it FIRST.
+
+(!) `State.lean:589::GraphModel.probeDerived`'s userset-subject arm is EDGE-FREE (READ).
+It contains no `reach` call and answers from `upos`/`stars`/`neg` symbolically; its own
+docstring says "A userset subject is edge-free". Routes A and A2 were both phrased as
+"give the Lean model the symbolic derived read Python has" -- THE MODEL ALREADY HAS ONE.
+Both were priced against a mechanism that is not real, and so was
+`CORRESPONDENCE.md:1184`'s "a project, not a step".
+
+(!) `CORRESPONDENCE.md:1170-1174` IS WRONG AND IS NOW CORRECTED IN PLACE (dated, original
+kept above the correction). Its claim -- "the Lean model resolves a derived key through
+materialised edges, so it needs a node where Python needs none" -- is false for the branch
+in question. The DIVERGENCE is real and the boundary stands; only its stated CAUSE was
+wrong. It was load-bearing for the step-0 cost estimate, which is why it is corrected
+rather than left for the next session to trip over.
+
+WHERE THE GAP ACTUALLY IS. Residue at `(doc:d1, admin)` = `stars := []`, `neg := []`,
+`upos := [f2#viewer, f1#viewer]`. The phantom `folder:f9#viewer` and the AGREEING control
+`folder:f1#viewer` SHARE the shape `("folder","viewer")`, so `stars.contains s.shape` is
+false for BOTH and could never have separated them -- `upos` is what separates them. The
+read path behaved correctly on its input; THE CASCADE NEVER FOLDED THE STAR SHAPE INTO THE
+DERIVED RESIDUE'S `stars`. Write-side gap, not read-side.
+
+ALSO re-explains the headline asymmetry more cheaply than the star-bridge story: `(1)`
+says `access` is NOT derived and `admin`/`gate` ARE, so "plain agrees, derived diverges"
+is just TWO READ PATHS -- the edge probe the star bridge serves, versus the
+under-populated residue path. `(8)`: `(doc:d1, access)` has no residue at all.
+
+NEW ROUTE `D`, and it is the only live one: make the cascade's star fold cover the
+star-tupleset through-shape at a derived relation. Coherence check (REASONED, not
+measured): `access(folder:*#viewer, d1)` holds via the `folder:*` parent and `banned` is
+empty there, so `admin` at the star subject is genuinely true and the shape SHOULD be in
+`stars`; adding it also answers f1/f2 true, which `upos` already does, so it does not
+over-grant at this store.
+
+NEXT ACTION, single: MEASURE `D`'s cone -- can the star fold produce `("folder","viewer")`
+here, what does changing it touch, and which arm of
+`index_v4/wildcard.py::WildcardIndex._check_derived` makes Python answer true. Only if the
+decision is still not obvious after that does it go to `claude-fable-5` (user-authorised
+above). (!) This probe LOCATES the gap and does not PRICE the fix -- do not read `D` as
+costed.

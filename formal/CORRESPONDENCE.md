@@ -1173,6 +1173,31 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   > symbolically, and its "a phantom subject has no node and thus cannot be in `neg`"
   > reading is what makes the star coverage answer alone.
 
+  ⚠ **THE QUOTED MECHANISM IS REFUTED (2026-09-14g). The DIVERGENCE is real and the
+  boundary stands; its stated CAUSE does not.** Kept above, struck here, because it was
+  load-bearing for the `P6` part (iv) step-0 cost estimate and is quoted on the task row.
+  `GraphIndex/State.lean::GraphModel.probeDerived`'s userset-subject arm
+  (`s.predicate != BARE`) is **edge-free** — it contains no `σ.reach` at all and answers
+  from `upos`/`stars`/`neg` symbolically, which is precisely what the quote attributes to
+  Python alone. Its own docstring says *"A userset subject is edge-free"*. The Lean model
+  is not missing a symbolic derived read; it has one.
+
+  **Where the gap actually is — MEASURED, `formal/probes/p6_partiv_residue_locus_2026-09-14.lean`
+  (rc=0, literal transcript in its header, instrument control `(I)` passed).** At the
+  divergent state the residue at `(doc:d1, admin)` is `stars := []`, `neg := []`,
+  `upos := [folder:f2#viewer, folder:f1#viewer]`. The phantom and the agreeing control
+  share the shape `("folder","viewer")`, so `res.stars.contains s.shape` is `false` for
+  BOTH and cannot be what separates them — `upos` is. The read path behaved correctly on
+  the input it was given; **the CASCADE never folded the star shape into the derived
+  residue's `stars`.** This is a write-side gap, and `access` agrees only because it is
+  not derived (`(1)`) and so takes the edge probe the star bridge serves, rather than the
+  residue path — the "plain agrees, derived diverges" asymmetry is two read paths, not one
+  path failing at a missing node.
+
+  ⚠ So *"closing it would mean giving the Lean model a symbolic derived read, which is a
+  project, not a step"* (below) prices work that does not need doing. What closing it
+  actually needs is unmeasured as of 2026-09-14g.
+
   **Not a Python bug, and that was checked first-hand rather than argued**: the same
   schema, store and seven queries run through `tests/parity.py::ParityEngine` (graph index
   + both `SetOps` + the independent oracle, unanimity asserted internally) came back
