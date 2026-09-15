@@ -30,6 +30,82 @@ from here.
 
 ---
 
+## 2026-09-15d — a CONFIRMED equivalence break: the set engine accepts a cyclic write the graph refuses
+
+rows: `TK69` (NEW, `NOW`), `P6` (`NOW` → `LATER`, parked by user decision), `P22` (`LATER` →
+`NEXT`, lead recorded), `R6` (`NEXT` → `LATER`, to make room). Re-ranked deliberately — see below.
+
+task lint: clean (13 checks, 184 task file(s) parsed), 26 warning(s)
+read: board only
+
+Map: [`docs/adversarial-audit-2026-09-15.md`](../adversarial-audit-2026-09-15.md) (new
+ACTIVE-PLAN). Tracked probe with its literal transcript:
+[`formal/probes/i14_admission_divergence_2026-09-15.py`](../../formal/probes/i14_admission_divergence_2026-09-15.py)
+(rc=0). No Python or Lean source changed — this session is measurement, one probe, and records.
+
+**WHAT THIS SESSION WAS.** It began as `P6` write-back and was redirected twice by the user:
+first to a cost question about the formal effort, then to *"what I'm looking for is edge cases
+and bugs — can you bring in fable for an opinion?"*. A `claude-fable-5` adversarial audit was
+run at their request. It returned eight ranked hypotheses; one is real.
+
+**(1) ★ THE FINDING — `TK69`, CONFIRMED FIRST-HAND.** Four adds; the graph index REFUSES the
+fourth, both `SetOps` backends ACCEPT it:
+
+    DIVERGES: add ('viewer','doc','d1','member','group','g')
+              -> graph=False set:py=True set:roaring=True
+
+Write 4 closes a userset cycle (`doc:d1#viewer` → `group:g#member` → `folder:*#viewer` →
+wildcard parent + `viewer from parent` → back). The set engine's cycle check walks a flow graph
+whose nodes are created per incident EDGE (`setengine/engine.py::SetEngine._shape_node_ref`)
+while the graph's entity middles exist per ENTITY
+(`index_v4/wildcard.py::WildcardIndex._ensure_entity_middles`); entity existence strictly
+contains flow-node existence, so the crossing is invisible to `::SetEngine._would_cycle`.
+
+**(2) ⚠ AND THE AUDIT'S CHARACTERISATION OF IT WAS WRONG.** It reported a corruption-class
+error. Bringing in the independent oracle — which the agent never did, it compared the two
+backends only to each other — reframes it: the oracle evaluates the 4-tuple store fine, and
+**every backend matches the oracle on the store it holds**, 0 of 12 grid queries disagreeing.
+So it is **not** a ghost grant and **not** a wrong answer. It is an **admission-contract
+divergence**: the backends disagree about which stores may EXIST, then hold different data (3
+tuples vs 4) and fork on 4 of 12 queries. Equivalence breaking at the ADMISSION layer, not the
+evaluation layer. **Severity is still unmeasured** — the audit's "wedged multi-instance cursor"
+clause is AGENT-READ for the error promotion and REASONED for the wedge, and is the first
+action on `TK69`.
+
+**(3) THE AUDIT'S OTHER SEVEN, honestly graded.** Item 2 makes `P22` actionable (an input that
+REACHES the unpinned `bulk_build` I14 loop; sabotage goes red) — AGENT-PROBED, recorded on the
+row as requiring first-hand re-verification before close. Item 6 was the agent's own headline
+hypothesis (batched-cascade under-invalidation) and it **self-refuted**: 0 divergences in 700
+trials. The remaining five are assurance gaps — *nothing is watching this*, not *this is
+broken* — filed as a table in the audit doc rather than as five unverified rows.
+
+**(4) TWO CLAIMS I PUSHED BACK ON, one before landing and one after.** The agent's
+"batched schedule structurally under-tested" is FALSE as stated — 12 modules drive it. The
+defensible claim is narrower and I verified it: `ConnectedStore`, `catch_up` and `sync=False`
+appear **zero** times in `tests/parity.py` and `tests/test_hypothesis.py`, so no *randomized*
+harness reaches the batched path. And its severity framing for item 1, above. Both corrections
+are recorded in the audit doc's § *What the reconciliation changed*, as the argument for the
+standing rule that a subagent report is evidence rather than a finding.
+
+**(5) THE RE-RANK, and it is the user's call not mine.** `P6` was parked at `LATER` on an
+explicit user decision after they were shown the cost picture — in particular that the
+fragment-widening queue behind it (`P25`, `P15`, `P16`, `P4`, `P21`) means part (iv) finishing
+does not end that strand. It stops cleanly BEFORE step 1 of the ten-step plan, green and
+committed at `909527c`, with blockers 1 and 4 kernel-settled, so nothing is half-done. One
+thing is deliberately owed and recorded on the row: a `formal/CORRESPONDENCE.md` §7 entry
+declaring the un-widened `W4Fragment.ttuStarFree` a standing model-scope limit. `R6` moved down
+to make room for `P22`; correctness outranks perf under the session's instruction.
+
+⚠ `.scratch/` note, the repo's own footgun firing again: the audit wrote three probes there and
+it is gitignored. Item 1's is transcribed to `formal/probes/`; **items 2 and 3's are still only
+in `.scratch/`** and are listed as owed in the audit doc.
+
+Still owed: measure `TK69`'s severity through `ConnectedStore`; write `TK69`'s reproduction as
+a permanent test; re-verify `P22`'s input first-hand and add the `_CORPORA` entry; transcribe
+the two surviving `.scratch/` probes.
+
+---
+
 ## 2026-09-15c — `P6`: blocker 1 KERNEL-settled — 4 verdicts confirmed, a 5th added, blocker 4 was the wrong ask
 
 rows: `P6` (Log `2026-09-15c`; brief updated). Nothing re-ranked — `P6` stays `NOW`.

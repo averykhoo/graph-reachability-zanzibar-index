@@ -2,7 +2,7 @@
 id: R6
 title: perf round 6 -- R6-10 (2.54x) and R6-6 landed; counts derived from the children, never typed here
 brief: Batch THROUGH the N15 cache (R6-6 is the pattern); NOT parallel-safe with P6 on the cascade read path
-pri: NEXT
+pri: LATER
 size: L
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [perf]
 source: board
 source_hash: b895d453a044
 created: 2026-08-21
-moved: 2026-09-07b
-updated: 2026-09-07b
+moved: 2026-09-15d
+updated: 2026-09-15d
 closed:
 ---
 
@@ -116,3 +116,9 @@ Block edited again in 2026-08-29c: the Read-first now names the audit's new 2026
 ### 2026-09-06b
 
 Board row + block rewritten 2026-08-31b (restored to NEXT after P20 closed; N15-cache trap and the new 'not parallel-safe with P6 on the cascade read path' trap moved into the block; declines/unreachable reduced to a pointer at the audit). Task body reconciled 2026-09-06b: restoration paragraph added, both traps added to Traps, brief carries the P6 collision; children re-counted 10 LATER / 3 HOLD / 6 closed, title unchanged. Diff source: git 50af00e -> HEAD.
+
+### 2026-09-15d
+
+`NEXT` -> `LATER`, to make room for `P22`. Not a judgement on this row: the 2026-09-15d session was redirected by the user to edge cases and bugs, which produced a CONFIRMED equivalence break (`TK69`) and made `P22` actionable with a concrete candidate input. Correctness work outranks perf work under that instruction. Nothing here is stale, blocked or wrong -- the `R6-*` children are untouched and this row resumes as it stood.
+
+(!) The standing note still holds and matters more now, not less: this row is NOT parallel-safe with `P6` on the cascade read path. `P6` is parked at `LATER` as of the same session, so that collision is dormant rather than resolved -- re-check it if `P6` restarts.

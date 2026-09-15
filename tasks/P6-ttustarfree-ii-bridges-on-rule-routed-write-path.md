@@ -1,8 +1,8 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: R1 CONFIRMED 2026-09-15b: Python DOES bridge, Lean does not; 4-prime site is RulesComplete, not CascadeStable:3735
-pri: NOW
+brief: PARKED 2026-09-15d by user decision; green + fully scouted, stops before step 1; owed: a CORRESPONDENCE sec 7 entry
+pri: LATER
 size: L
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-15c
-updated: 2026-09-15c
+moved: 2026-09-15d
+updated: 2026-09-15d
 closed:
 ---
 
@@ -2074,3 +2074,15 @@ BLOCKER 1 IS KERNEL-SETTLED -- all four REASONED "becomes FALSE" verdicts CONFIR
 **(!) TWO INSTRUMENT FAILURES, both caught and both recorded.** `TK68` fired INSIDE the probe: mutation arm M1 first showed only 2 reds because the four refutations consumed a NAMED helper for their witness and Lean admits a failed declaration at its stated type -- a mutation that DESTROYED the witness left the claims looking green. Every refutation now proves its membership inline off the primitive; the re-run gives 6 reds, each at its own witness. And a Windows path trap: `/tmp/x` in the Bash tool is `%LOCALAPPDATA%\Temp\x`, but a Windows `python` invoked from that shell reads it as `C:\tmp\x` -- a sweep that writes the mutation with python and builds with lake mutates one file and builds another, giving an all-green sweep of an unmutated file. Use the Windows path in the python half and assert the anchor matched. Green controls added too (C8): with no bridging, V1's and V3's conclusions HOLD, so the refutations are the bridge's doing rather than "these lemmas were always false of writeRulesRaw".
 
 -> NEXT, single action: **scouting-doc sub-step 1** -- relocate `Cascade.lean::FoldAdmitsBridged` (+ its 4 companions) into `UsStarWrite.lean` after `::writeBridgedOne`, overriding the in-tree "do not tidy this up" note at `Cascade.lean:1942-1946` (reasoning: that note's stated reason is about the WITNESSES seeing both predicates, which stay put). Additive, expected breakage none. Steps 2-7 follow; the tree stays green until step 8.
+
+### 2026-09-15d
+
+PARKED AT A DOCUMENTED BOUNDARY -- `NOW` -> `LATER`, by USER DECISION 2026-09-15d, not by a session's own re-ranking. The user was shown the cost picture (the fragment-widening queue behind this row -- `P25`, `P15`, `P16`, `P4`, `P21` -- and the fact that part (iv) finishing does not end it) and chose to park rather than push through. Then redirected the session to bug-hunting, which produced `TK69`.
+
+**NOTHING IS RED AND NOTHING IS HALF-DONE.** The tree is green and committed at `909527c`; no `formal/lean/` source was changed by the 2026-09-15b or 2026-09-15c sessions. Part (iv) stops cleanly BEFORE step 1 of the ten-step plan, i.e. before the first edit. The scouting is complete and current.
+
+**RESUME POINT, if and when this comes back:** `docs/p6-step4prime-scout-2026-09-15.md` sec "Corrections appended 2026-09-15c (first)" is the newest state; sec "Ordered sub-steps for 4'" is the ten-step map, and step 1 (relocate `Cascade.lean::FoldAdmitsBridged` + its 4 companions into `UsStarWrite.lean`, overriding the in-tree "do not tidy this up" note at `Cascade.lean:1942-1946`) is the single next action. Blockers 1 and 4 are KERNEL-SETTLED as of 2026-09-15c, so the next session does not re-derive them. The tree goes red at step 8 and stays red until 6' -- which is exactly why parking BEFORE step 1 is the cheap place to stop.
+
+**STILL OWED, and deliberately NOT done** (the "documented boundary" half of the decision): a `formal/CORRESPONDENCE.md` sec 7 entry declaring the un-widened `W4Fragment.ttuStarFree` as a standing model-scope limit, so the gap is ledgered where sec 7's other declared divergences live rather than only in a `docs/` plan. `Audit.lean:2105`'s warning already says `W4Fragment.ttuStarFree` IS NOT CHANGED, and that remains true and correct -- so nothing in the tree currently MISSTATES the position; what is missing is the positive ledger entry. Do that before this row is touched again, or as its own small task.
+
+(!) DO NOT read the parking as a verdict on the route. R1 is CONFIRMED on equivalence grounds (2026-09-15b) and the four "becomes FALSE" verdicts are kernel-confirmed (2026-09-15c). The work is well-understood and unstarted, not abandoned or doubtful.
