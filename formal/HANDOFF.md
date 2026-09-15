@@ -490,8 +490,8 @@ optional:** without the clause `graph_correct`/`backend_equivalence` are machine
 enforce it either (2026-08-31b: `folder:* parent doc:d1` on a TTU tupleset **ADMITTED**).
 ⚠ **The 2026-09-12 framing here is RETIRED (2026-09-14f)** — all three clauses superseded, nothing blocked on the user. **(iv) is OPEN and sized**: map, cone and step order in
 [`docs/p6-part-iv-plan-2026-09-14.md`](../docs/p6-part-iv-plan-2026-09-14.md) (ACTIVE-PLAN — read its dated corrections first).
-⚠ **The flip is not a type edit, and step 0 BLOCKS it**: both closure theorems are machine-refuted under `TtuStarFreeW`, and the live post-(ii) leg still
-measures `2` divergences at an UNMATERIALISED userset subject. Probes: `formal/probes/p6_partiv_{closure_star,live_leg_payoff}_2026-09-14.lean`.
+⚠ **The flip is not a type edit; both closure theorems are machine-refuted under `TtuStarFreeW`** (`formal/probes/p6_partiv_{closure_star,live_leg_payoff}_2026-09-14.lean`). ⚠ **2026-09-15 — it is a WRITE-MODEL change, not a proof sweep.** `RulesBareStar.lean::graph_correct_rulesBS` is **FALSE** under the widening (`sem` true / `check` false, every other hypothesis incl. `FoldAdmits` checked), and the W4 route to it is severed higher: `CascadeStable.lean::ShadowOver.term` demands a bridge node be TERMINAL and the widening sources an edge at it — `∀ σ0, ¬ UntaintedShadow …` is now a `decide` theorem, controlled at a concrete parent.
+The bridged `LeafRules.lean::writeRulesRaw` answers CORRECTLY on the same store, so the repair is to bridge the SHADOW (`CascadeStable.lean:3735`). Probe + controls: `formal/probes/p6_partiv_step3_rulerouted_2026-09-15.lean`; re-plan (R1 of four taken, R4 refuted): the plan doc's `(eighth)` correction.
 
 **Scope honesty — the `W4Fragment` field classification (2026-08-31b).** `graph_correct`'s
 scope is exactly `W4Fragment`, and its ten fields now carry a gated, hand-maintained

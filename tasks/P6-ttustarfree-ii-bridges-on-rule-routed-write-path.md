@@ -1,7 +1,7 @@
 ---
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
-brief: stage 2 steps 1-2 DONE 2026-09-14i; ttuLeaf_elim_nss must restate BOTH sides; next is step 3
+brief: step 3 MIS-SCOPED 2026-09-15: graph_correct_rulesBS is FALSE under the widening; bridge the SHADOW (R1, step 4')
 pri: NOW
 size: L
 deps: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-14i
-updated: 2026-09-14i
+moved: 2026-09-15
+updated: 2026-09-15
 closed:
 ---
 
@@ -2022,3 +2022,21 @@ STAGE 2 STEPS 1 AND 2 ARE DONE, `§ Blockers` 2 IS ANSWERED NO, AND THE TWO REPR
 ALSO CLOSED, not re-owed: the carried worry that the `Inv` clauses might pin bareness of persisted `stars` rows. `State.lean::Inv.negStarCovered` is `res.stars.contains n.shape` -- membership-shaped, read first-hand, and both scope arms confirm it.
 
 -> NEXT, single action: **step 3** -- restate `RulesBareStar.lean::ttuLeaf_elim_nss` per the probe's (A)+(B), then repair its `3` Shape-B call sites (`::evalE_lift_bs`, the second `RulesBareStar` site, `RestrictBase.lean`). Steps 3-6 leave the tree RED by construction; this line is clean and committed.
+
+### 2026-09-15
+
+STEP 3 IS MIS-SCOPED, AND THE KERNEL SAYS SO TWICE. Read `docs/p6-part-iv-plan-2026-09-14.md` sec "Corrections appended 2026-09-15 (eighth)" FIRST -- it supersedes `sec Ordered steps` rows 3/4/5 and gives the re-plan. One new artifact, rc=0, literal transcript in its header: `formal/probes/p6_partiv_step3_rulerouted_2026-09-15.lean` (18 `#eval` lines + TWO `by decide` theorems). Tree unchanged apart from docs + the probe; gate untouched by Lean edits.
+
+**(A) `RulesBareStar.lean::graph_correct_rulesBS` is FALSE under `TtuStarFreeW`, not merely unproved.** At `WideWitness.SwT` with store `[user:u -> folder:f1#viewer, folder:* -> doc:d1#parent]` and query `user:u in doc:d1#access`: `sem` = true, `GraphModel.check` = false (5). EVERY other hypothesis is checked at the witness -- `bareStarStoreB`/`storeValidRulesB` (2), `hqs`/`hqo` (4), and (!) `FoldAdmits` at EVERY `ReachedByRulesAdmitted.step` (3), so the refutation is not vacuous. CONTROL b (concrete parent) agrees at both sides (6). So step 3's second shape-B call site (`::nreaches_of_semAux_rulesBS`) is not a proof to repair -- its surrounding theorem stops being true.
+
+**(B) ATTRIBUTED: the missing in-bridge.** Adding the ONE edge `folder:f1#viewer -> w_any(folder,viewer)` by `UsStarWrite.lean::ensureInBridges` flips `check` to true (8). `RulesWrite.lean::writeRules` -- `ReachedByRulesAdmitted`'s step -- is a bridge-free `writeDirect` fold, and an AGENT census (reconciled first-hand) says it is now the ONLY admission predicate in the tree still on one: `ReachedByW3d2E` and all five other cascade predicates go through `Cascade.lean::writeLoggedRules` -> `bridgePreLogged` -> `ensureInBridges`.
+
+**(C) THE REPAIR ALREADY WORKS, and it answers `sec Blockers` item 3's payoff question.** The SAME store written through `LeafRules.lean::writeRulesRaw` (a `writeBridgedOne` fold = part (ii)) gives `check = sem = true` (12), control at the concrete parent still agrees (13). Mismatch at this witness: 0 bridged / 1 bridge-free. (!) One witness, not a grid -- the grid is still owed and is now cheap.
+
+**(D) ★ THE ARCHITECTURAL HALF -- the widening severs the route BEFORE that theorem is reached.** The W4 chain hands `graph_correct_rulesBS` a bridge-free SHADOW (`CascadeStable.lean:3735`) and transports the read by `::shadow_graphRec_agree`, whose hypothesis is `::UntaintedShadow = ShadowOver (DerNode or LeafNode or BridgeNode)`. `ShadowOver.term` demands an extras node have NO outgoing edge -- that is exactly what makes a bridge inert for an untainted read. The widening sources the star parent's rewrite output AT that node, so: `::no_untaintedShadow_at_widened_store` proves `forall s0, not UntaintedShadow SwT (buildW SwT T) s0` **by `decide`**, with `::control_edge_absent_at_concrete` (also `decide`) showing the same route FAILS at a concrete parent. The edge is present under all three write models (15). Chain to the refuted theorem, census-traced and reconciled: `FullScope::graph_correct` -> `CascadeStrataAssemble::graph_correct_w3d2E_d` -> `CascadeStrataResettle::graph_correct_w3d2_d` -> `RestrictBase::graphRec_base_eq_bs_unt:1295` -> `graph_correct_rulesBS`.
+
+**(E) NOT VACUOUS -- the store is INSIDE the widened fragment.** `FullScope.lean::w4Fragment_of_untainted` collapses the bundle to `wsBare` + `bareStar` + `ttuStarFree`; probe (17) gives untainted true and `wsBare` true (`declaredWildcardShapes = [(folder, BARE)]`), (2) gives `bareStar`, and `WideWitness.wide_admits` (gated) gives the third under the widening. State reachable: `ReachedByW3d2E.write`'s only side condition holds at both writes (18). (!) INSTRUMENT LIMIT, recorded: (18) is EVALUATOR evidence -- the reachability as a TERM times out at `whnf` on `decide` at 200000 AND 4000000 heartbeats, and `rfl` was killed at 10 min wall clock. `FoldAdmitsBridged`'s `admitEdge` -> `reachB` will not reduce in the kernel; `buildW` itself does (both `decide` theorems go through).
+
+**THE RE-PLAN (decided here per `CLAUDE.md` sec "Who decides"), route R1 of four.** 3' restate `ttuLeaf_elim_nss` ADDITIVELY as a widened twin (keeps the tree green; the narrow leg still consumes the narrow form); 4' bridge the SHADOW -- `CascadeStable.lean:3735`'s `writeRules` -> `writeRulesRaw`, plus a bridged twin of `ReachedByRulesAdmitted`; 5' drop `BridgeNode` from `ShadowOver`'s extras (revert 3b step 8's third disjunct) -- once the shadow bridges, a bridge edge is not an extra; 6' re-prove `graph_correct_rulesBS` and its shape-A/B interior over the bridged twin with `TtuStarFreeW` -- THE LEG, of which the old steps 3-5 are sub-steps; 7' = old row 6 (flip `FullScope.lean:340`), still last. REFUTED and recorded so it is not re-derived: R4 ("keep `graph_correct_rulesBS` narrow") is dead -- the field has exactly TWO projection sites and the first is the head of the (D) chain.
+
+-> NEXT, single action: **4'** -- measure `writeRules`' reverse cone first-hand before planning it (`LeafRules.lean:340-345` records 40 modules vs `writeBridgedOne`'s 24, AGENT, NOT re-measured). Also owed, both cheap: the grid for (C), and two stale assertions the census found (`Audit.lean:2012`/`:2106` "`writeLoggedRules` never calls `ensureInBridges`", stale since part (ii); `Cascade.lean:185` likewise) -- line numbers UNVERIFIED first-hand.
