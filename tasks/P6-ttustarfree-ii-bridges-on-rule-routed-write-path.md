@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-15b
-updated: 2026-09-15b
+moved: 2026-09-15c
+updated: 2026-09-15c
 closed:
 ---
 
@@ -2056,3 +2056,21 @@ ALL THREE MEASUREMENTS THE (eighth) OWED ARE IN, AND THEY CONFIRM R1 ON EQUIVALE
 ALSO CORRECTED first-hand: the 7' anchor is rotted -- `FullScope.lean:340` is `directArmsConcrete`; `W4Fragment` opens `:334` and the `ttuStarFree` field is `:352`. More rotted citations in the scouting doc's blocker 7.
 
 -> NEXT, single action: **the kernel probe named in the scouting doc's blocker 1.** The four "this lemma becomes FALSE under the twin" verdicts (incl. `CascadeStrataSettle.lean::reachedByRulesAdmitted_edge_target_ne_wAny`, which is NOT in `audited_theorems.txt` so weakening it costs no gate pin) are REASONED, never kernel -- no agent in the sweep was permitted to run `lake`. A ~10-line `decide` on the existing `LeafRules.lean::SlBridgeWitness` fixture settles all four at once by exhibiting the witness. Do that BEFORE writing any of steps 6-9.
+
+### 2026-09-15c
+
+BLOCKER 1 IS KERNEL-SETTLED -- all four REASONED "becomes FALSE" verdicts CONFIRMED, a FIFTH added, and blocker 4 turns out to be the wrong question. Read `docs/p6-step4prime-scout-2026-09-15.md` sec "Corrections appended 2026-09-15c (first)" FIRST. One new artifact, rc=0, literal transcript + a two-arm mutation sweep in its header: `formal/probes/p6_partiv_blocker1_kernel_2026-09-15.lean`. Tree: docs + probe only, NO Lean source under `formal/lean/` changed.
+
+**(1) ALL FOUR CONFIRMED, BY ONE EDGE.** `¬ (conclusion)` proved in the kernel for `reachedByRulesAdmitted_edge_target_ne_wAny`, `reachedByRules_edge_sound`, `reachedByRulesAdmitted_edges_plain` and `rulesAdmitted_edge_endpoints_bs`, at a state the twin's own `step` reaches (`FoldAdmitsBridged`, `by decide`). The refuting edge is the same in all four: `group:g1#member -> w_any(group,member)`.
+
+**(2) V2 SURVIVES NEITHER DOMAIN.** Swapping `rewriteClosure S t` for the twin's own `rewriteClosureL S (rawWriteTuples S t)` does NOT rescue `reachedByRules_edge_sound` -- the bridge edge is no closure member's grant edge. The shape that DOES cover it is the third disjunct `UsStarWrite.lean::foldl_writeBridgedOne_edges_sound` ALREADY CARRIES (pinned positively). So scouting-doc sub-step 6 is "lift the existing three-disjunct fold lemma", not new mathematics at the disjunct level.
+
+**(3) (!) THE `SlBridgeWitness` STORE IS NOT `StoreValidRules`-VALID** (measured false): the concrete subject `group:g1#member` matches no restriction, since the schema declares `group#member` WILDCARD-only -- the same trap the (ninth) grid hit at `SwT`. V1-V4 do not carry that premise so they stand, but `graph_correct_rulesBS` does, so the probe adds FIXTURE B (`SlBridgeSV` = the fixture plus one CONCRETE restriction, wildcard flag kept): every premise of all four lemmas true, all four still refuted. Do not cite `SlBridgeWitness` alone for a fragment-relevance claim.
+
+**(4) (!) BLOCKER 4 ASKS THE WRONG QUESTION.** Its own question answers YES (fixture C: `WF` constrains declared relation KEYS only, so a schema may declare `[doc:*#viewer.0]` at a minted `leafPred` name and `bridgePre`'s OBJECT-side call bridges to `w_any(doc,viewer.0)`). But `reachedByRulesAdmitted_edge_target_notLeaf` does not need it: it is ALREADY false at `SlBridgeWitness`, refuted by the ordinary LEAF GRANT edge `group:g1#member -> doc:d1#viewer.0`. The bridge edge does not refute it there at all. CONTROL: flag OFF, nothing bridged anywhere, `notLeaf` STILL false. So it dies of leaf ROUTING one fold step before bridging -- it is a cost part (ii) ALREADY PAID, not a 4-prime cost, and step 7's `¬ bridgedInConcrete` scope (right for `ne_wAny`) does not repair it.
+
+**GATE-PIN STATUS, grepped first-hand:** `reachedByRules_edge_sound` and `rulesAdmitted_edge_endpoints_bs` ARE in `audited_theorems.txt`; the other three are NOT. All five stay true of the plain inductive an additive twin does not touch, so the two pinned names cost 4-prime nothing -- the exposure is the three unpinned ones, two of which step 7 must restate.
+
+**(!) TWO INSTRUMENT FAILURES, both caught and both recorded.** `TK68` fired INSIDE the probe: mutation arm M1 first showed only 2 reds because the four refutations consumed a NAMED helper for their witness and Lean admits a failed declaration at its stated type -- a mutation that DESTROYED the witness left the claims looking green. Every refutation now proves its membership inline off the primitive; the re-run gives 6 reds, each at its own witness. And a Windows path trap: `/tmp/x` in the Bash tool is `%LOCALAPPDATA%\Temp\x`, but a Windows `python` invoked from that shell reads it as `C:\tmp\x` -- a sweep that writes the mutation with python and builds with lake mutates one file and builds another, giving an all-green sweep of an unmutated file. Use the Windows path in the python half and assert the anchor matched. Green controls added too (C8): with no bridging, V1's and V3's conclusions HOLD, so the refutations are the bridge's doing rather than "these lemmas were always false of writeRulesRaw".
+
+-> NEXT, single action: **scouting-doc sub-step 1** -- relocate `Cascade.lean::FoldAdmitsBridged` (+ its 4 companions) into `UsStarWrite.lean` after `::writeBridgedOne`, overriding the in-tree "do not tidy this up" note at `Cascade.lean:1942-1946` (reasoning: that note's stated reason is about the WITNESSES seeing both predicates, which stay put). Additive, expected breakage none. Steps 2-7 follow; the tree stays green until step 8.
