@@ -30,6 +30,114 @@ from here.
 
 ---
 
+## 2026-09-15b — `P6`: route R1 confirmed on EQUIVALENCE — the shipped Python bridges, Lean's `writeRules` does not
+
+rows: `P6` (Log `2026-09-15b`; brief updated). Nothing re-ranked — `P6` stays `NOW`.
+
+task lint: clean (13 checks, 183 task file(s) parsed), 26 warning(s)
+read: board only
+
+Map, every figure, and the ten-step execution plan:
+[`docs/p6-step4prime-scout-2026-09-15.md`](../p6-step4prime-scout-2026-09-15.md) (new
+ACTIVE-PLAN), plus
+[`docs/p6-part-iv-plan-2026-09-14.md`](../p6-part-iv-plan-2026-09-14.md) § "Corrections
+appended 2026-09-15b (ninth)". **No Lean source under `formal/lean/` changed** — this session
+is measurement, four new rc=0 probes, and records.
+
+**WHAT THIS SESSION WAS.** The 2026-09-15 (eighth) correction closed with three explicitly
+owed measurements and a route (R1) that had not been tested against the shipped system. All
+three are now closed, and the route question turned out to be the important one.
+
+**(1) THE ROUTE IS DECIDED, AND THE DECIDING FACT IS ABOUT THE PYTHON.**
+[`formal/probes/p6_partiv_python_bridge_parity_2026-09-15.py`](../../formal/probes/p6_partiv_python_bridge_parity_2026-09-15.py)
+(rc=0). Written through the shipped analogue of the Lean fold — `ruleset.apply(triple)` →
+`WildcardIndex.add_tuple`, i.e. what `tests/test_matrix.py::GraphBackend._derived` does — the
+shipped index materialises the in-bridge `folder:f1#viewer -> w_any(folder,viewer)`, the very
+edge `p6_partiv_step3_rulerouted_2026-09-15.lean` line (8) had to add by hand with
+`ensureInBridges`. `check = True`; the independent oracle agrees. CONTROL b (concrete
+parent): `subject_wildcard_shapes` and `bridged_in_shapes` both empty, no `w_any` edge, still
+correct — so the bridge is attributable to the star parent, not to unconditional bridging.
+**`RulesWrite.lean::GraphState.writeRules` therefore models an algorithm the shipped code
+does not run**, and step 4' is a model repair rather than a model change. This also refutes
+*as a direction* the cheaper rival the sweep surfaced (a `FoldAdmitsBridged -> FoldAdmits`
+transfer lemma keeping the shadow unbridged): it leaves four currently-true lemmas true and
+is strictly less work, but it preserves the divergence, and `CLAUDE.md` is explicit that a
+proof describing something other than the shipped code is a proof of nothing. Decided here
+per § "Who decides".
+
+**(2) THE GRID.**
+[`p6_partiv_stepC_grid_2026-09-15.lean`](../../formal/probes/p6_partiv_stepC_grid_2026-09-15.lean)
+(rc=0) turns (C)'s single witness into a routing-independent sweep of `175` distinct queries
+(`182` raw; `semTrue = 25`): bridge-free leg `6`, bridged leg `0`, ceiling `0`, regression
+`[]`. The ceiling arm (`ensureInBridges` folded over every node) is what makes `0` mean
+"optimal" rather than "better", and the regression arm is what makes `6 -> 0` mean "repairs
+six, breaks none" rather than a net figure hiding a swap.
+
+**(!) ITS FIRST RUN HAD A FAILED CONTROL, and the cause is durable.** A CONCRETE parent tuple
+is **not store-valid** under `WideWitness.SwT`, which declares `doc#parent` as `[folder:*]` —
+the wildcard form only. `sem` refuses such a tuple while the graph writes it anyway, on both
+legs, so it reads as a divergence; it made CONTROL b report `4` instead of `0` and
+contaminated every arm equally.
+[`p6_partiv_stepC_diag_2026-09-15.lean`](../../formal/probes/p6_partiv_stepC_diag_2026-09-15.lean)
+(rc=0) isolates it. The concrete control belongs on `SwTn`.
+⚠ **`p6_partiv_step3_rulerouted_2026-09-15.lean::Tc` is such a store.** That probe is not
+wrong — it asks only the derived query, where all three agree (diag `(b3)`) — but its
+CONTROL b is weaker than it reads, and it is recorded rather than retro-edited.
+
+**(3) THE CONE, AND AN INSTRUMENT THAT FAILED THE SAME WAY THE BANNER WARNS ABOUT.**
+[`p6_partiv_cone_census_2026-09-15.py`](../../formal/probes/p6_partiv_cone_census_2026-09-15.py)
+(rc=0), a tracked re-runnable instrument written so the figure stops being an agent quote.
+Unit: transitive reverse import closure excl. self and root aggregator. `writeRules` **`40`**
+— the recorded figure reproduces exactly. `writeBridgedOne` **`32`**, not the recorded `24`:
+that was exact on `2026-09-13d` and went stale on `2026-09-14` when `RulesBareStar.lean`
+gained `import ZanzibarProofs.GraphIndex.UsStarWrite`. The asymmetry `LeafRules.lean`'s
+`writeRulesRaw` docstring cites to justify keeping `writeRules` bare has shrunk from ~`1.7x`
+to ~`1.25x`. ⚠ **The census' own first run reported ZERO code references for every
+`GraphState` method** — its word-boundary regex excluded a preceding `.`, killing every
+`sigma.writeRules` call, and "this symbol is only talked about, never used" reads exactly
+like a finding. It now carries an `M0`-style `check_instrument` control that refuses to print
+any number unless every symbol resolves in its own defining module and `writeRules` provably
+discriminates against `writeRulesRaw`/`writeLoggedRules`. That is the fourth time a sweep in
+this repo has had to control its instrument, and the first where the harness bug produced a
+*plausible* table rather than an obviously broken one.
+
+**(4) THE 4' SITE NAMED IN THE (eighth) DOES NOT EXIST AS AN EDIT.** At
+`CascadeStable.lean::reachedByW3d_shadow` the witness's first component `sigma0.writeRules S
+t` is forced by its second, `ReachedByRulesAdmitted.step`, whose conclusion is definitionally
+`ReachedByRulesAdmitted (sigma.writeRules S t) S (t :: T)` (`RulesComplete.lean:116`,
+2026-09-15 snapshot). The real site is `RulesComplete.lean::ReachedByRulesAdmitted`; the
+`hadm` binder moves with the fold (`FoldAdmits` cannot describe a bridged fold — kernel-refuted
+in-tree at `Cascade.lean::FoldAdmitsHonestyWitness.foldl_edge_complete_is_false_for_the_bridged_fold`);
+three witness sites must move together; and `FoldAdmitsBridged` lives in `Cascade.lean`,
+**downstream** of the module the twin must live in. The scouting doc carries a ten-step
+ordered map that keeps the tree green until its step 8.
+
+**HOW THE SWEEP WAS RUN.** Thirteen agents — six independent measurements, six dedicated
+adversarial verifiers, one reconciling synthesis; `1.64M` subagent tokens, `437` tool calls,
+`0` errors. **All six measurements came back `PARTLY_REFUTED`**: the verify layer corrected a
+load-bearing number or a dead citation in every one, which is the argument for paying for it.
+No agent was permitted to run `lake` (concurrent builds share one build directory), so every
+"this proof would break" verdict in the sweep is REASONED, never kernel — recorded in place,
+and it is what the next action exists to fix. The top-level session re-derived the cone
+figures with its own independent instrument and got the same `40` / `32`, the same `7`
+code-reference modules, and the same `13` modules / `86` declarations; that agreement is why
+those figures are labelled READ rather than AGENT.
+
+Still owed: **the kernel probe of the scouting doc's blocker 1** — the four "becomes FALSE
+under the twin" verdicts (incl. `CascadeStrataSettle.lean::reachedByRulesAdmitted_edge_target_ne_wAny`,
+which is NOT in `audited_theorems.txt`, so weakening it costs no gate pin) are reasoned only;
+a ~10-line `decide` on the existing `LeafRules.lean::SlBridgeWitness` fixture settles all four
+at once. Also owed, and deliberately NOT done here because it is an edit rather than a
+measurement: the prose-repair surface of **≥16 sites across 8 modules plus
+`formal/CORRESPONDENCE.md`** (highest priority `CORRESPONDENCE.md:1313-1320`, the
+gate-anchored living map, which self-contradicts `:956-985` in the same file). Corrected
+wording for the three originally-flagged assertions is drafted in the scouting doc §"Stale
+assertions to fix"; do not fix by sweep — `Cascade.lean::GraphState.releaseInBridges`
+genuinely still has no caller and four `bridge-free` lines are still correct. Nothing from
+this session's Rhythm was skipped.
+
+---
+
 ## 2026-09-15 — `P6` step 3 is MIS-SCOPED: `graph_correct_rulesBS` is FALSE under the widening
 
 rows: `P6` (Log `2026-09-15`; brief updated). Nothing re-ranked — `P6` stays `NOW`.

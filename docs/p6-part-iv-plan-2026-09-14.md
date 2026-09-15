@@ -15,6 +15,84 @@ in a tracked file), **AGENT** (a subagent's report, reconciled but not re-derive
 
 ---
 
+## Corrections appended 2026-09-15b (ninth) — ★ ALL THREE OWED MEASUREMENTS ARE IN, AND THEY CONFIRM ROUTE R1 ON EQUIVALENCE GROUNDS. Step 4′ has an ordered map; its site is NOT where this plan put it.
+
+*supersedes:* the (eighth)'s `§ Still not established at this line` **in full** — all three of
+its bullets are now measured. Everything else in the (eighth) stands, **except** its
+one-line description of the 4′ site, corrected below.
+
+**The map is its own document**, because it is too large for a correction block and because
+the next session should resume from it rather than re-scout:
+[`docs/p6-step4prime-scout-2026-09-15.md`](p6-step4prime-scout-2026-09-15.md) (ACTIVE-PLAN).
+Read its `§ The three things this session settled` first. Four new rc=0 artifacts:
+`formal/probes/p6_partiv_stepC_grid_2026-09-15.lean`, `::p6_partiv_stepC_diag_2026-09-15.lean`,
+`::p6_partiv_cone_census_2026-09-15.py`, `::p6_partiv_python_bridge_parity_2026-09-15.py`.
+
+**(1) THE ROUTE IS CONFIRMED, AND NOT ON COST — ON EQUIVALENCE.** The (eighth) left R1
+resting on an unexamined assumption: that the Lean model *should* bridge here. Measured
+against the shipped index (`p6_partiv_python_bridge_parity_2026-09-15.py`, rc=0): on the
+star-tupleset store, written through the shipped analogue of the Lean fold (`ruleset.apply`
+→ `WildcardIndex.add_tuple`), **Python materialises the in-bridge**
+`folder:f1#viewer → w_any(folder,viewer)` — the same edge the step-3 probe added by hand —
+answers `check = True`, and the independent oracle agrees. CONTROL b (concrete parent):
+`bridged_in_shapes` empty, no bridge, still correct. So `RulesWrite.lean::writeRules` is a
+model of an algorithm **the shipped code does not run**, and 4′ is a MODEL REPAIR.
+⚠ This also **REFUTES as a direction** the rival that the scouting sweep surfaced and
+recommended re-pricing (*"a `FoldAdmitsBridged → FoldAdmits` transfer lemma, keeping σ0
+unbridged"*): it is cheaper and it keeps four true lemmas true, but it preserves the
+divergence. Decided per `CLAUDE.md` § "Who decides"; do not re-litigate on cost.
+
+**(2) THE GRID IS IN: `6 → 0 of 175` DISTINCT QUERIES, with a CEILING of `0`.** `§ Blockers`
+item 3's payoff, previously one witness, holds over a routing-independent grid
+(`p6_partiv_stepC_grid_2026-09-15.lean`, rc=0): bridge-free leg **6** (the positive control —
+nonzero, so the grid sees the defect), bridged leg **0**, ceiling (`ensureInBridges` over
+every node) **0**, regression check `[]`. The six repaired queries are the corpus' entire
+star-tupleset surface. (!) Its first run had a FAILED control, and the cause is worth
+carrying: a CONCRETE parent tuple is **not store-valid under `SwT`**, which declares
+`doc#parent` as `[folder:*]` only — `sem` refuses it while the graph writes it, on both legs.
+The concrete control belongs on `SwTn`. **`p6_partiv_step3_rulerouted_2026-09-15.lean::Tc` is
+such a store**; that probe is not wrong (it asks only the derived query, where all three
+agree) but its CONTROL b is weaker than it reads.
+
+**(3) THE CONE: "40" REPRODUCES, "24" IS STALE — it is 32.** Re-measured first-hand with a
+tracked, re-runnable instrument (`p6_partiv_cone_census_2026-09-15.py`, rc=0) and
+independently corroborated by an adversarially-verified agent sweep. Unit: transitive reverse
+import closure, excl. self and the root aggregator. `writeRules` **40** ✓;
+`writeBridgedOne` **32** (the "24" was exact on 2026-09-13 and went stale 2026-09-14 when
+`RulesBareStar.lean` gained `import …UsStarWrite`). The asymmetry `LeafRules.lean`'s
+docstring cites has shrunk ~1.7× → ~1.25×. ⚠ **But the cone is the wrong metric**: 28 of the
+41 modules never mention the string; the governing figure is `ReachedByRulesAdmitted`'s
+**13 modules / 86 declarations** — which is **0** if the twin is declared ADDITIVELY.
+
+**(4) ⚠ THE 4′ SITE IN THE (eighth) IS WRONG, and this is the load-bearing correction.**
+The (eighth) row 4′ says *"`CascadeStable.lean:3735`'s `writeRules` → `writeRulesRaw`"*.
+**That edit does not exist.** At `CascadeStable.lean::reachedByW3d_shadow` the witness's first
+component `σ0.writeRules S t` is **forced by its second**,
+`ReachedByRulesAdmitted.step`, whose conclusion is definitionally
+`ReachedByRulesAdmitted (σ.writeRules S t) S (t :: T)` (`RulesComplete.lean:116`). The real
+4′ site is **`RulesComplete.lean::ReachedByRulesAdmitted`**, the `hadm` binder moves with the
+fold (`FoldAdmits` cannot describe a bridged fold — kernel-refuted in-tree at
+`Cascade.lean::FoldAdmitsHonestyWitness.foldl_edge_complete_is_false_for_the_bridged_fold`),
+and there are **three** witness sites in that shape which must move together, not one. A
+structural blocker the (eighth) does not mention: `FoldAdmitsBridged` lives in `Cascade.lean`,
+which is **downstream** of `RulesComplete`. The scouting doc's `§ Ordered sub-steps for 4′`
+is a ten-step map that keeps the tree green until step 8; its step 1 relocates
+`FoldAdmitsBridged` into `UsStarWrite.lean` and overrides an in-tree "do not move this" note,
+with the reasoning recorded there.
+
+**ALSO CORRECTED, first-hand: the 7′ anchor is rotted.** `FullScope.lean:340` is
+`directArmsConcrete`; `W4Fragment` opens at `:334` and the `ttuStarFree` field is at **`:352`**
+(2026-09-15 snapshot). Several more rotted citations are listed in the scouting doc's
+blocker 7.
+
+**STILL OWED, and now the top of the list:** the four *"this lemma becomes FALSE"* verdicts
+(incl. `CascadeStrataSettle.lean::reachedByRulesAdmitted_edge_target_ne_wAny`) are **REASONED,
+never kernel** — no agent in the sweep was allowed to run `lake`. The scouting doc's blocker 1
+names a ~10-line `decide` probe on the existing `LeafRules.lean::SlBridgeWitness` fixture that
+settles all four at once. Do that before writing any of steps 6–9.
+
+---
+
 ## Corrections appended 2026-09-15 (eighth) — ★ STEP 3 IS MIS-SCOPED: its second call site is not a proof to repair but a WRITE MODEL to compose, and the kernel says so twice
 
 *supersedes:* `§ Ordered steps` rows **3, 4 and 5** (rows 1–2 were already executed by the
