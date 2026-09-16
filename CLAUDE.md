@@ -131,6 +131,15 @@ IVM delta processor.
     reported exit 0), and again on 2026-08-11 and 2026-08-14. Run
     `cmd > "$(mktemp /tmp/gate-XXXXXX.log)" 2>&1; rc=$?`, branch on `$rc`, and **read the
     `PASSED` line**.
+    ⚠ **2026-09-16b generalises it past pipes: it is ANY trailing command in the chain,
+    and `rc=$?` does not save you if something runs after it.** A backgrounded
+    `pytest > "$L" 2>&1; rc=$?; echo "rc=$rc"; grep -E ... "$L"` was reported by the harness
+    as **"exit code 0"** while the log ended `1 failed, 29 passed` — the task's status was
+    GREP's (it matched nothing it considered an error), not pytest's. The captured `rc` was
+    correct and never looked at. So: **put the verdict where you will READ it, not only
+    where you compute it** — `echo` the branch (`[ $rc -eq 0 ] || echo RED`) rather than
+    trusting any exit status reported by a wrapper, and read the log's last line every time.
+    This is the fourth distinct mechanism for the same lie.
     The 2026-09-08b variant runs the OTHER way — `EXIT=0` under a log ending `25 failed`
     — because looping phases in one command lets the harness kill the shell while its
     `pytest` child survives, and the orphan then writes the next phase's log. **One phase
