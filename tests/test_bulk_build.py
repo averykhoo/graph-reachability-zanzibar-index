@@ -321,6 +321,115 @@ def _rc2_star_tupleset_grid() -> list[tuple]:
             for on in [f'd{i}' for i in range(1, 5)]]
 
 
+#  (g) OBJECT-WILDCARD GRANT CARRIED BY A STAR TUPLESET INTO A TTU -- the `owc_star_ttu`
+#      corpus, added 2026-09-16 to close `P22`. It exists for ONE reason: it is the first
+#      corpus in this module whose `schema_info.crossable_shapes` is NON-EMPTY, i.e. the
+#      first that reaches the I14 crossable-middle loop in `index_v4/bulk_build.py`.
+#
+#      ⚠ WHY IT HAD TO BE ADDED -- A GREEN SABOTAGE THAT STAYED GREEN FOR TEN DAYS.
+#      `P22` (filed 2026-09-06b by the `P17` sweep) deleted that loop OUTRIGHT and every
+#      `build_index` caller stayed GREEN: this module, `formal/conformance/
+#      test_conformance_bulk_state.py` over all 25 `GRAPH_FRAGMENT` corpora, and the
+#      validation matrix. The cause was corpus coverage, not a weak assertion -- every
+#      other `_CORPORA` entry has `crossable_shapes = frozenset()`, because
+#      `zanzibar_utils_v1.py::_reject_doubly_bridged_shapes` intersects only LITERAL
+#      `T:*#p` shapes, while a star-tupleset THROUGH-shape makes the set non-empty on a
+#      schema the compiler admits.
+#
+#      THE SHAPE, and why each of the three tuples is load-bearing: an object-wildcard
+#      grant (`u1 viewer folder:*`) creates `w_all(folder,viewer)`; a bare-star tupleset
+#      parent (`folder:* parent doc:d1`) carries it into `doc.viewer`'s `or viewer from
+#      parent`; and the WITNESS (`u1 editor folder:f1`) mentions `folder:f1` WITHOUT ever
+#      putting a `viewer` triple on it, so the middle `w_all(folder,viewer) ->
+#      folder:f1#viewer -> w_any(folder,viewer)` exists only if the I14 loop creates it.
+#      Drop any one of the three and the loop is not reached.
+#
+#      MEASURED (literal, 2026-09-16, `formal/probes/
+#      bulk_i14_crossable_middle_2026-09-16.py`, rc=0): on the shipped tree
+#      `inc=True bulk=True oracle=True` for all three probes; with the loop's only guard
+#      neutered (`SchemaInfo.crossable_shapes -> frozenset()`),
+#
+#          SABOTAGE-RED: q=(..., 'u1', 'viewer', 'doc', 'd1') bulk_no_i14=False oracle=True
+#
+#      i.e. a MISSING GRANT, while the two controls -- the object-wildcard leg
+#      (`folder:f1#viewer`) and the plain direct edge (`folder:f1#editor`) -- stayed
+#      green. One mechanism moved, not the whole build, which is what makes it evidence
+#      about this clause rather than a broken instrument
+#      (`docs/sabotage-procedure.md` §"Sweep the TEST MODULE with mutations").
+_OWC_STAR_TTU = """
+model
+  schema 1.1
+
+type user
+
+type group
+  relations
+    define member: [user, group#member]
+
+type folder
+  relations
+    define parent: [folder, folder:*]
+    define blocked: [user]
+    define editor: [user, group#member]
+    define viewer: [user, user:*, group#member] or viewer from parent
+    define restricted: editor but not blocked
+
+type doc
+  relations
+    define parent: [folder, folder:*]
+    define blocked: [user]
+    define editor: [user, group#member]
+    define viewer: [user, user:*, group#member] or viewer from parent
+    define restricted: editor but not blocked
+"""
+
+_OWC_STAR_TTU_WC = frozenset({('folder', 'viewer'), ('doc', 'viewer')})
+
+
+def _owc_star_ttu_tuples() -> list[tuple]:
+    # ⚠ All three are load-bearing (see the comment block above); do not "simplify".
+    out: list[tuple] = [
+        ('...', 'user', 'u1', 'editor', 'folder', 'f1'),   # witness: names f1, NOT via viewer
+        ('...', 'user', 'u1', 'viewer', 'folder', '*'),    # object-wildcard grant -> w_all
+        ('...', 'folder', '*', 'parent', 'doc', 'd1'),     # bare star tupleset parent
+    ]
+    # ⚠ NOTHING MAY BE ADDED HERE THAT GIVES ANY `folder` A CONCRETE `viewer`
+    #   GRANT OR A CONCRETE `parent` EDGE -- either one MASKS this corpus, and a
+    #   masked corpus is the exact failure `P22` was filed for. This is MEASURED, not
+    #   reasoned (2026-09-16, `.scratch` diag re-run in the probe's part (B) form;
+    #   the four candidates were the "extra coverage" this corpus shipped with for
+    #   one session before the sabotage caught it):
+    #
+    #       minimal 3 tuples               -> sabotage RED   (1 oracle mismatch)
+    #       + ('folder','f2','parent','doc','d2')  -> sabotage GREEN  (MASKS)
+    #       + ('user','u2','viewer','folder','f2') -> sabotage GREEN  (MASKS)
+    #       + ('user','u2','blocked','folder','f2')-> sabotage RED    (safe)
+    #       + ('user','u2','editor','folder','f2') -> sabotage RED    (safe)
+    #
+    #   Both maskers work the same way: they give the generic bridged-in/out loop a
+    #   CONCRETE `viewer(folder, _)` node to bridge, which completes the w_all ->
+    #   middle -> w_any crossing without the I14 loop, so every grid answer stays
+    #   right while the loop's own product is gone. The two safe tuples touch only
+    #   `editor`/`blocked`, so they add the `restricted: editor but not blocked`
+    #   boolean arm without ever interning a concrete `viewer` middle.
+    out += [
+        ('...', 'user', 'u2', 'blocked', 'folder', 'f2'),
+        ('...', 'user', 'u2', 'editor', 'folder', 'f2'),
+    ]
+    return list(dict.fromkeys(out))
+
+
+def _owc_star_ttu_grid() -> list[tuple]:
+    subjects = [('...', 'user', 'u1'), ('...', 'user', 'u2')]
+    out = [(sp, st, sn, rel, ot, on)
+           for (sp, st, sn) in subjects
+           for (rel, ot, on) in (('viewer', 'doc', 'd1'), ('viewer', 'doc', 'd2'),
+                                 ('viewer', 'folder', 'f1'), ('viewer', 'folder', 'f2'),
+                                 ('editor', 'folder', 'f1'), ('editor', 'folder', 'f2'),
+                                 ('restricted', 'folder', 'f2'))]
+    return out
+
+
 # (name, schema_text, object_wildcard_shapes, tuples, read-parity grid or None)
 _CORPORA = [
     ('wildcards', _WILDCARDS, OBJECT_WC, _wildcards_tuples(), _query_grid()),
@@ -332,6 +441,8 @@ _CORPORA = [
     ('demorgan1', _DEMORGAN1, frozenset(), _demorgan1_tuples(), None),
     ('rc2_star_tupleset', _RC2_STAR_TUPLESET, frozenset(),
      _rc2_star_tupleset_tuples(), _rc2_star_tupleset_grid()),
+    ('owc_star_ttu', _OWC_STAR_TTU, _OWC_STAR_TTU_WC,
+     _owc_star_ttu_tuples(), _owc_star_ttu_grid()),
 ]
 
 
@@ -493,6 +604,41 @@ def _assert_r4bf_features(name: str, compiled, nodes: dict, edges: dict,
                    for (stars, _neg, _upos, _v) in residues.values()), \
             '[rc2_star_tupleset] no residue carries the star shape (doc, viewer); the ' \
             'star-parent SHAPE rule is not being exercised'
+
+    if name == 'owc_star_ttu':
+        # (g) I14 CROSSABLE MIDDLE, bulk path. The grid alone is NOT enough here and that
+        #     is the whole lesson of `P22`: an extra tuple that grants some folder a
+        #     CONCRETE `viewer` lets the generic bridged-in/out loop build the crossing,
+        #     so every answer stays right while the I14 loop's own product is gone (the
+        #     measurement is in `_owc_star_ttu_tuples`). So pin the PRODUCT structurally.
+        #
+        #     `folder:f1` is named by an `editor` tuple ONLY -- it never holds a `viewer`
+        #     triple -- so its `viewer` middle and the two bridges around it can be
+        #     created by nothing but `bulk_build.py`'s crossable-shape loop (the
+        #     `WildcardIndex._ensure_entity_middles` mirror). DERIVED, not guessed: the
+        #     three keys below are the literal shipped state on this corpus, 2026-09-16.
+        w_all = ('viewer', 'folder', '*', 'all')
+        w_any = ('viewer', 'folder', '*', 'any')
+        mid = ('viewer', 'folder', 'f1', '')
+        assert mid in nodes, (
+            '[owc_star_ttu] no `viewer(folder, f1)` middle node -- `f1` holds no viewer '
+            'triple, so this node exists only if the I14 crossable-middle loop ran')
+        assert (w_all, mid) in edges and (mid, w_any) in edges, (
+            '[owc_star_ttu] the w_all -> viewer(folder, f1) -> w_any crossing is not '
+            f'bridged (have {(w_all, mid) in edges}/{(mid, w_any) in edges}); the I14 '
+            'crossable-middle loop did not run for this entity')
+        # ⚠ ANTI-MASK CONTROL. If some later edit gives a folder a concrete `viewer`
+        #   grant, the crossing above could be satisfied WITHOUT the loop and this clause
+        #   would silently stop testing it. Refuse that corpus mechanically rather than
+        #   warning about it in a comment.
+        concrete_viewer_folders = {b[2] for (_a, b), (direct, _ind, _d) in edges.items()
+                                   if b[0] == 'viewer' and b[1] == 'folder' and b[3] == ''
+                                   and _a[0] == '...' and direct > 0}
+        assert not concrete_viewer_folders, (
+            '[owc_star_ttu] a concrete `viewer` grant on folder(s) '
+            f'{sorted(concrete_viewer_folders)} MASKS the I14 loop (see '
+            '`_owc_star_ttu_tuples`) -- this corpus must keep `viewer` reachable on a '
+            'folder only through the object wildcard')
 
     if name == 'demorgan':
         # (b) X4b upos lift + (e) a from-chain node recorded in upos/neg that is itself

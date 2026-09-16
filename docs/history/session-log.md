@@ -30,6 +30,79 @@ from here.
 
 ---
 
+## 2026-09-16 — `P22` closes: the corpus that reached the I14 loop did not PIN it
+
+rows: `P22` (`NEXT` → CLOSED). `TK69` untouched and still `NOW` — its measurement runs in the
+same session and lands under its own key.
+
+task lint: clean (13 checks, 184 task file(s) parsed), 27 warning(s)
+read: board only
+
+Map: [`docs/p22-i14-corpus-masking-2026-09-16.md`](../p22-i14-corpus-masking-2026-09-16.md)
+(FROZEN, the scouting deliverable). Evidence:
+[`formal/probes/bulk_i14_crossable_middle_2026-09-16.py`](../../formal/probes/bulk_i14_crossable_middle_2026-09-16.py)
+(rc=0, re-run first-hand, header carries a dated correction). Code changed: `tests/` only.
+
+**WHAT WAS INHERITED.** An uncommitted tree from `2026-09-15d`: the tracked probe, plus an
+`owc_star_ttu` schema/tuples/grid in `tests/test_bulk_build.py` that was **defined and never
+added to `_CORPORA`**. As inherited it was dead code — the module collected exactly the cases
+it collected before. The probe itself reproduces first-hand, transcript identical to its
+header, so the `2026-09-15d` agent claim is CONFIRMED.
+
+**★ THE FINDING — the planned fix was not sufficient, and the metric that said it was is the
+interesting part.** Wiring the corpus in and re-running `P22`'s original deletion sabotage
+(`crossable = schema_info.crossable_shapes` → `frozenset()`) left the module **fully green**.
+The corpus had a non-empty `schema_info.crossable_shapes`, `{('folder','viewer')}`, where
+every other corpus has `frozenset()` — it reached the loop by the row's own metric and pinned
+nothing.
+
+Two of the four "extra coverage" tuples the corpus shipped with **mask the mechanism**: they
+give the generic bridged-in/out loop a concrete `viewer(folder, _)` node to bridge, which
+completes the `w_all → middle → w_any` crossing without the I14 loop ever running. Every grid
+answer stays correct; the loop's product is gone. Measured per tuple:
+
+    minimal 3 tuples                          -> sabotage RED   (1 oracle mismatch)
+    + ('folder','f2','parent','doc','d2')     -> sabotage GREEN (masks)
+    + ('user','u2','viewer','folder','f2')    -> sabotage GREEN (masks)
+    + ('user','u2','blocked','folder','f2')   -> sabotage RED   (safe)
+    + ('user','u2','editor','folder','f2')    -> sabotage RED   (safe)
+
+⚠ **The masking survived every single-tuple removal** — two independent maskers were present,
+so a bisect that drops one tuple at a time and re-runs answers "not this one" four times in a
+row. Add up from the minimal shape; do not subtract down from the full one.
+
+**LANDED.** The corpus keeps the minimal shape plus the two measured-safe tuples (the table is
+reproduced at the edit site, where the next person adding "one more tuple for coverage" will
+actually see it). A structural clause in `tests/test_bulk_build.py::_assert_r4bf_features` pins
+the loop's **product** rather than an answer — the `viewer(folder, f1)` middle and both bridges
+around it, `f1` being named by an `editor` tuple only and never holding a `viewer` triple — with
+the three keys DERIVED from the literal shipped state. Plus a mechanical anti-mask control that
+refuses the corpus outright if any folder gains a *direct* `viewer` grant.
+
+**THE THREE SABOTAGES** (`pytest tests/test_bulk_build.py -k owc_star_ttu`): S1 the original
+deletion → RED at `snapshot_rows differ`; S2 keep the loop but drop only the `w_all → mid`
+bridge, the narrowest plausible weakening → RED at the same site; S3 re-add the masking tuple
+→ RED at the anti-mask control, naming `f2`. ⚠ **S3 is the instrument control and is the only
+evidence the new clause can fire at all**, since S1 and S2 both redden earlier, at the
+bulk-vs-incremental state comparison. The corpus is the witness; the clause guards the witness
+against a future masking edit. Different jobs, both needed — and after the corpus fix it is the
+corpus, not the clause, that catches a deleted loop today.
+
+**THE LESSON, and it generalises past this row.** *"The corpus reaches the mechanism"* and
+*"the corpus pins the mechanism"* are different claims, and a configuration-level metric can
+only ever establish the first. Where the mechanism is a **redundant** path — one of several
+routes to the same answer — an answer-level grid is structurally incapable of pinning it,
+because redundancy is exactly what masking exploits. Pin the product, not the answer. The one
+check that distinguishes the two claims is the cheap one that was skipped: sabotage the
+mechanism and watch the corpus go red.
+
+Still owed: the second hole the `2026-09-15d` agent claimed in passing —
+`tests/test_zt_p5_readjudication.py` calling `check_invariants` WITHOUT `schema_info`, which
+would disable the I14 clause outright — is still UNVERIFIED and still owes its own row. And
+`TK69` itself: severity, contract decision, and audit item 4d's non-vacuity floor.
+
+---
+
 ## 2026-09-15d — a CONFIRMED equivalence break: the set engine accepts a cyclic write the graph refuses
 
 rows: `TK69` (NEW, `NOW`), `P6` (`NOW` → `LATER`, parked by user decision), `P22` (`LATER` →
