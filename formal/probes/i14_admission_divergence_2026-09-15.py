@@ -1,5 +1,30 @@
 """I14 ENTITY-MIDDLE ADMISSION DIVERGENCE -- set engine ACCEPTS, graph index REFUSES.
 
+-- CORRECTION APPENDED 2026-09-16b: THE DIVERGENCE THIS PROBE MEASURES IS FIXED ---------
+
+⚠ **THE TRANSCRIPT BELOW IS HISTORY, NOT CURRENT BEHAVIOUR.** `TK69` was fixed
+2026-09-16b and re-running this file now prints
+
+    ok: add ('viewer','doc','d1','member','group','g') -> graph=False set:py=False set:roaring=False
+    -> admission divergence: False
+
+i.e. every backend refuses the cycle-closing write and the stores no longer fork. The
+header's `graph=False set:py=True set:roaring=True` line was true on 2026-09-15 and is the
+record of the defect, which is why it is not edited.
+
+The fix: `setengine/engine.py::SetEngine._flow_reaches` now steps
+`w_all(T,p) -> w_any(T,p)` on a CROSSABLE shape when an entity of type `T` exists -- the
+I14 crossing middle added virtually, gated on entity existence. Ledger:
+`docs/spec-deviations.md` 2026-09-16. Map: `docs/tk69-admission-parity-2026-09-16.md`.
+
+⚠ **THIS FILE IS NO LONGER THE LIVE INSTRUMENT.** Use
+`formal/probes/tk69_admission_parity_2026-09-16.py`, which measures BOTH divergence
+families plus the over-reject control, and which still exits nonzero because family 2
+(`TK70`, the detonation) is open. A second family exists that this probe never saw: the
+same four writes in order B,C,D,A leave the graph refusing an ORDINARY grant. Do not read
+this file's "the divergence" as definite -- there were two.
+
+
   Run:  PYTHONPATH=. <env-python> formal/probes/i14_admission_divergence_2026-09-15.py
 
 Found 2026-09-15 by an adversarial audit; reproduced first-hand the same day. This file

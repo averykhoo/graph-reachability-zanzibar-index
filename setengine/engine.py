@@ -870,6 +870,8 @@ class SetEngine:
         self._ensure_flow_graph()
         bridged_in = self.schema_info.bridged_in_shapes
         bridged_out = self.schema_info.bridged_out_shapes
+        crossable = self.schema_info.crossable_shapes
+        entity_memo: dict[str, bool] = {}
         seen: set[NodeKey] = set()
         stack = [src]
         while stack:
@@ -903,6 +905,22 @@ class SetEngine:
                 # that it never fires. See the docstring + spec-deviations 2026-07-17.
                 if (t, p) in self.doubly_bridged:
                     self._ghost_hop_fired = True
+                    stack.append((t, '*', p, 'any'))
+                # I14 CROSSING MIDDLE (TK69, 2026-09-16). The OUT-bridge loops above step
+                # only to concretes the flow graph HOLDS, and it holds a node only once an
+                # edge is incident on it (``_shape_node_ref``: "Added on the first incident
+                # edge"). The graph index instead mints the middle ``(T, x, p)`` -- with
+                # both bridges -- for every live ENTITY of type T
+                # (``WildcardIndex._ensure_entity_middles``, invariant I14), so on a
+                # CROSSABLE shape it can cross through an entity that no edge of that shape
+                # touches. Add that middle VIRTUALLY, exactly as the bridges above are
+                # virtual: one hop w_all -> w_any, gated on an entity of type T existing.
+                #
+                # The gate is the whole content of the rule and must not be dropped: with
+                # NO entity of type T the graph mints no middle and ACCEPTS the same write
+                # (probe CTRL case), so an ungated hop would over-reject. Cf. the ghost hop
+                # above, which is the same hop for a shape whose compile gate is bypassed.
+                elif (t, p) in crossable and self._any_entity_of_type(t, entity_memo):
                     stack.append((t, '*', p, 'any'))
         return False
 
@@ -1020,6 +1038,32 @@ class SetEngine:
             if si is not None:
                 ids.append(si)
         return ids
+
+    def _any_entity_of_type(self, t: str, memo: dict[str, bool]) -> bool:
+        """Does ANY concrete entity of type ``t`` exist? (TK69, 2026-09-16.)
+
+        The EXISTENTIAL form of ``_instances_of_type``, and deliberately stated off the
+        same set: a key counts if its type matches and its name is not the star sentinel,
+        WHATEVER predicate mentions it. That is the graph's rule -- ``SchemaInfo.
+        crossable_shapes``' docstring fixes the spec §3.4 existential as ENTITY-wise
+        ("``tests/oracle.py::instances`` witnesses it with any tuple-mentioned entity of
+        type ``T``, whatever relation mentioned it") and ``WildcardIndex.
+        _ensure_entity_middles`` mints the crossing middle per live ENTITY on that basis.
+
+        ⚠ ``interner.ids_of_type`` is NOT this set: it holds only ``pred == '...'``
+        concretes, so an entity mentioned solely as a userset would be missed and the
+        crossing would stay invisible on exactly the shapes TK69 is about.
+
+        Short-circuits, and ``memo`` is a CALL-LOCAL dict owned by one ``_flow_reaches``
+        traversal (the interner cannot mutate during it). Reached only from the w_all
+        OUT-bridge branch of a CROSSABLE shape, which is rare: a shape must be bridged
+        both in and out."""
+        cached = memo.get(t)
+        if cached is None:
+            cached = any(kt == t and n != '*'
+                         for (kt, n, _p) in self.interner.key_of.values())
+            memo[t] = cached
+        return cached
 
     def _instances_of_type(self, t: str, memo: dict[str, set[str]]) -> set[str]:
         """Concrete instance names of a type (interner keys), for the strict ∀⇒∃

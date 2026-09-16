@@ -29,6 +29,77 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-09-16 — `TK69`: the set engine could not see the I14 crossing middle, and ACCEPTED a cycle-closing write the graph REFUSED
+
+`docs/specs/set-engine-spec.md` §1 item 5 (*"Write-validity parity with the graph
+backend … Reject them here too, with equivalent errors, so the 4-way matrix compares
+identical stores"*, under a decisions-made heading) was UNIMPLEMENTED for the wildcard
+crossing, and §6.2's prescribed mechanic (a DFS over the stored membership topology
+treating star sentinels as connecting to their shape's population) stopped short of it.
+On a CROSSABLE shape `(T, p)` — bridged in AND out — the graph index mints the crossing
+middle `(T, x, p)` with both bridges for every live ENTITY of type `T`
+(`index_v4/wildcard.py::WildcardIndex._ensure_entity_middles`, invariant I14), because
+`zanzibar_utils_v1.py::SchemaInfo.crossable_shapes` fixes the wildcard-materialization
+spec §3.4 existential as ENTITY-wise. The set engine's flow graph, by contrast, holds a
+node only once an edge is incident on it (`setengine/engine.py::SetEngine._shape_node_ref`,
+"Added on the first incident edge"), so `::_flow_reaches`'s w_all OUT-bridge branch could
+step only to concretes some edge already touched. An entity mentioned by an unrelated
+relation was invisible, and with it the whole `w_all -> middle -> w_any` crossing.
+
+Measured (`formal/probes/tk69_admission_parity_2026-09-16.py`, tracked, pre/post):
+on the four-write witness in order A,B,C,D the graph refused the cycle-closing write and
+both `SetOps` backends accepted it — `graph=False set:py=True set:roaring=True`. The
+consequence in the COMPOSED system is not cosmetic: admission there is the SET ENGINE
+alone (`connectedstore/source.py::TupleSource.add` validates via
+`_engine._add_tuple_direct`), so the row reaches the permanent log and the graph's refusal
+surfaces later inside the apply step, which is contractually forbidden to refuse anything
+(`connectedstore/apply.py` promotes any `ValueError` — and `AdmissionRejected` subclasses
+it deliberately — into `InvariantViolation` with a corruption message). On the async
+schedule that wedges the cursor DURABLY: reopening the store re-reads the same lag and
+`catch_up` fails identically, and with the default `batch=None` the batch is atomic so the
+cursor never advances past 0 at all — the entire index stays empty and unrelated valid
+grants read `False` forever.
+
+FIXED by adding the crossing middle VIRTUALLY, in the same style as the bridges around it:
+`SetEngine._flow_reaches` now steps `w_all(T,p) -> w_any(T,p)` on a crossable shape when an
+entity of type `T` exists, with existence stated by `::_any_entity_of_type` — the
+existential twin of `::_instances_of_type`, deliberately off the same set (any predicate,
+name not the star sentinel), because `interner.ids_of_type` holds only `pred == '...'`
+concretes and would miss an entity mentioned solely as a userset. The ENTITY GATE is the
+rule, not an optimisation: with no entity of type `T` the graph mints no middle and accepts
+the same write, so an ungated hop over-rejects. Pinned by
+`tests/test_reg_tk69_entity_crossing.py`, whose CTRL case is exactly that over-reject
+control and whose docstring carries both sabotages (remove the hop -> F1 red, CTRL green;
+drop the gate -> CTRL red, F1 green).
+
+Blast radius, measured 2026-09-16: NO `formal/conformance/` schema has a non-empty
+`crossable_shapes` (all shapes censused, including `object_wildcard`, which declares an
+object wildcard but is not bridged in), so that whole leg is inert to the change; the
+`tests/` suite passes unchanged.
+
+NOT FIXED here, and it is a SEPARATE divergence family found while fixing this one: the
+same four writes in order B,C,D,A leave the graph ACCEPTING the cycle-closing write (no
+`folder` entity exists yet) and then REFUSING the ordinary grant `user:u1 editor
+folder:f1` — a write naming no wildcard, no userset and not the crossable relation. That
+is the DETONATION `index_v4/wildcard.py::WildcardIndex._reject_star_self_edge` was written
+to prevent, and its docstring is explicit that it is the graph locking itself out of a
+grant the set engine and the oracle both allow. Its fix therefore belongs on the GRAPH
+side — refuse the latent-cycle write early, as that method already does for the same-shape
+`w_any -> w_all` routed edge it does cover — and NOT by teaching the set engine to
+detonate too. Pinned positively (never an xfail) as
+`tests/test_reg_tk69_entity_crossing.py::test_family2_detonation_is_still_open`, which
+also fires if the detonation is ever propagated into the set engine.
+
+ALSO REFUTED here, first-hand: the `TK69` row's instruction to couple the fix to audit
+item 4d (*"`test_conformance_enum.py` has no non-vacuity floor, so an admission
+OVER-REJECT stays green"*) is wrong in the part that matters. The gap is real — that
+module asserts no surviving-store floor — but its `_tuple_space` emits `"*"` only as a
+SUBJECT name and draws every object name from `_POOL`, so it cannot enumerate an
+object-wildcard write at all and therefore cannot reach a `TK69`-class store however the
+fix goes. A floor there would have been an assurance step advertised against a case it
+cannot see. The over-reject guard that does bite is the CTRL pin above, which is a direct
+witness.
+
 ## 2026-09-10 — `TK4`: §3.4 mandates a lenient-mode hook as a *per-shape config flag*; no such flag exists, and the adjudication is still a human call
 
 Recorded as a divergence, not a decision. `docs/specs/wildcard-materialization-spec.md`

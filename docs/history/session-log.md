@@ -30,6 +30,124 @@ from here.
 
 ---
 
+## 2026-09-16b — `TK69` FIXED; its fuzz sweep found a LIVE cascade bug (`TK73`) and a second divergence family (`TK70`)
+
+rows: `TK69` (`NOW` → CLOSED), `TK73` (NEW, `NOW` — a LIVE BUG), `TK70` (NEW, `NEXT`),
+`TK71` (NEW, `LATER`), `TK72` (NEW, `LATER`).
+
+task lint: clean (13 checks, 188 task file(s) parsed), 25 warning(s)
+read: board only
+
+Map: [`docs/tk69-admission-parity-2026-09-16.md`](../tk69-admission-parity-2026-09-16.md)
+(ACTIVE-PLAN, stays open with `TK70`). Ledger:
+[`docs/spec-deviations.md`](../spec-deviations.md) 2026-09-16. Instrument:
+[`formal/probes/tk69_admission_parity_2026-09-16.py`](../../formal/probes/tk69_admission_parity_2026-09-16.py).
+Pin: `tests/test_reg_tk69_entity_crossing.py`. Production change: `setengine/engine.py` only.
+
+**SEVERITY FIRST, as the row demanded — and it is worse than the row recorded.** The wedge
+was AGENT-READ/REASONED and unverified. Now measured: the promotion in
+`connectedstore/apply.py::_apply_row` exists; the exception is `AdmissionRejected`, which
+subclasses `ValueError` *deliberately*, so it fires; composed-system admission is the SET
+ENGINE ALONE, so the offending row reaches the permanent log and detonates inside apply,
+which is contractually forbidden to refuse anything. The wedge is DURABLE — reopening the
+store re-reads the same lag and `catch_up` fails identically — and with the default
+`batch=None` the batch is atomic, so the cursor never advances past 0 at all: the whole
+index stays empty and unrelated valid grants read `False` forever. Reproduced first-hand:
+`catch_up #1 RAISED InvariantViolation ... cursor=0 lag=4` / `check(u1 editor f1)
+untokened -> False`.
+
+**THE FIX WAS NOT A DESIGN CALL.** `docs/specs/set-engine-spec.md` §1 item 5, under a
+decisions-made heading, already says: *"Reject them here too, with equivalent errors, so the
+4-way matrix compares identical stores … A parity test asserts both backends accept/reject
+the same op sequences"*, with the mechanic prescribed in §6.2. `TK69` was an
+**unimplemented spec clause**. `SetEngine._flow_reaches` now steps `w_all(T,p) -> w_any(T,p)`
+on a crossable shape when an entity of type `T` exists — the I14 crossing middle added
+VIRTUALLY, like the bridges around it — with existence stated by `::_any_entity_of_type`,
+the existential twin of `::_instances_of_type` (`interner.ids_of_type` would miss an entity
+mentioned solely as a userset). ⚠ The ENTITY GATE is the rule, not an optimisation: with no
+entity the graph mints no middle and accepts the same write.
+
+**★ THE FINDING — A SECOND DIVERGENCE FAMILY, AND IT TAKES THE OPPOSITE FIX (`TK70`).** The
+same four writes in order B,C,D,A: the graph ACCEPTS the cycle-closing write (no `folder`
+entity yet, so the cycle is latent) and then REFUSES the ordinary grant `user:u1 editor
+folder:f1` — naming no wildcard, no userset, not the crossable relation — and wedges the
+cursor identically. The six-strand sweep and all three of its decision lenses recommended
+"one rule, two triggers": narrow the set engine for both families. **That is rejected**, on
+a first-hand read of `index_v4/wildcard.py::WildcardIndex._reject_star_self_edge`, which was
+written to prevent exactly this and names it: *"the detonation: the graph locks itself out
+of a grant the set engine and the oracle both allow"*. Propagating the refusal into the set
+engine would trade an admission divergence for an ORACLE divergence. F2 is a hole in that
+early rejection and is fixed GRAPH-side, by refusing the latent write. One lens raised this
+as its own strongest objection; it was right, and it decided the split.
+
+**ASSURANCE.** Sabotages, literal: S1 remove the crossing hop → `1 failed, 3 passed`, only
+`test_family1_*`; S2 keep the hop but drop the entity gate → `2 failed, 2 passed`,
+`test_ctrl_*[ops0]` AND `test_family2_*`. ⚠ S2's second red is the interesting one: an
+ungated hop makes the SET ENGINE refuse the ordinary grant too, so the F2 pin fires on its
+third assertion — the one that exists to catch the detonation being *propagated* instead of
+removed. The narrower CTRL arm stays green under S2, which attributes both reds to the gate
+rather than to a broken traversal. F2 is pinned POSITIVELY, never an xfail: closing it turns
+the pin red on purpose. Blast radius measured: ZERO conformance schemas have a non-empty
+`crossable_shapes` (all censused, including `object_wildcard`, which declares an object
+wildcard but is not bridged in), so that leg is inert; full `tests/` suite green.
+
+**⚠ THE ROW'S OWN COUPLING INSTRUCTION WAS REFUTED FIRST-HAND, AND NOT FOLLOWED.** `TK69`
+required the fix to land audit item 4d's non-vacuity floor on
+`formal/conformance/test_conformance_enum.py`, "so an admission OVER-REJECT stays green"
+otherwise. The gap is real, but `::_tuple_space` emits `"*"` only as a SUBJECT name and
+draws every object name from `_POOL` — it cannot enumerate an object-wildcard write, so it
+could not reach a `TK69`-class store however the fix went. Landing that floor *as this
+fix's gate* would have been an assurance step advertised against a case it cannot see,
+which is the house failure mode. It deserves its own row on its own merits. The guard that
+does bite is the CTRL over-reject control.
+
+**★★ THE FUZZ SWEEP FOUND A LIVE CORRECTNESS BUG — `TK73`, NOW — AND IT IS NOT THIS
+CHANGE.** The gate requires a fuzz sweep for an algorithm change; this one earned its keep
+on its first outing. `tests/test_hypothesis.py::TestBoolStarBridgeParityMachine` under the
+deep profile: seed 11 GREEN, **seed 2027 `1 failed, 29 passed`**, seed 909 GREEN — the
+argument for sweeping more than one seed, stated as a measurement rather than a principle.
+Three writes on a legal boolean schema with NO object wildcards raise
+`InvariantViolation: cascade failed to quiesce after 1 strata rounds; leftover keys:
+[('folder','owner','x')]` from the delta processor, on the REMOVE; both adds are clean.
+
+⚠ **It was proven pre-existing BEFORE anything was committed**, two independent ways: the
+falsifying schema has `object_wildcard_shapes=frozenset()`, so `crossable_shapes` is EMPTY
+and the `TK69` hop is unreachable on it; and the minimal witness reproduces IDENTICALLY
+against a pre-`TK69` copy of the tree (verified genuinely pre-fix — zero occurrences of
+`_any_entity_of_type`). The raise also comes from `index_v4/`, which this change never
+touched. Minimised to five ingredients, each measured by dropping exactly one: the boolean
+relation, a TTU onto a DIFFERENT relation, a STAR parent, the remove, and removing that
+specific write. Evidence:
+[`formal/probes/cascade_quiesce_remove_2026-09-16.py`](../../formal/probes/cascade_quiesce_remove_2026-09-16.py),
+rc=1 by design while the row is open, carrying all five controls so a "simplified" witness
+fails loudly instead of silently passing.
+
+⚠ **An exit-code trap bit inside this very investigation and is worth carrying.** The
+backgrounded reproduction reported "exit code 0" while its log ended `1 failed, 29 passed`
+— because the command was `pytest > log; rc=$?; echo; grep ...`, so the task's exit status
+was GREP's, not pytest's. The standing rule (`CLAUDE.md`, footgun 1) is written about
+`tail`/`tee`; it is really about ANY trailing command in the chain. Reading the log is what
+caught it, as it did the last three times.
+
+**On the sweep.** Nine agents, six measurement strands and three decision lenses. It earned
+its keep — it found family 2, which no one was looking for — and it was wrong twice in ways
+that mattered: the unanimous recommendation would have propagated a documented defect, and
+the 4d coupling it inherited was unexamined. Both were caught by reading the two docstrings
+the reports quoted only in fragments. A subagent report is evidence, not a finding.
+
+Still owed: `TK73` (the live cascade bug, `NOW`) and `TK70` (family 2, `NEXT`) — the open
+work this session created and did not also do. `TK73` outranks `TK70`: it needs no
+wildcards, no exotic ordering and three writes. Two loose claims were converted into rows rather than left as footnotes:
+`TK71` (the `test_conformance_enum.py` survival floor, carrying BOTH refutations of audit
+item 4d so the row cannot inherit the wrong framing) and `TK72` (the unverified
+`check_invariants`-without-`schema_info` claim from `2026-09-15d`, with the call-site
+census that would close the class). ⚠ And one claim is deliberately left UNVERIFIED and
+flagged as such in the map: "there are exactly TWO families" rests on the sweep's
+720-ordering permutation result, which was NOT reproduced first-hand. Everything said
+about F1 and F2 individually is.
+
+---
+
 ## 2026-09-16 — `P22` closes: the corpus that reached the I14 loop did not PIN it
 
 rows: `P22` (`NEXT` → CLOSED). `TK69` untouched and still `NOW` — its measurement runs in the
