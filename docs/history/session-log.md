@@ -94,6 +94,14 @@ The property is a **store invariant** — after every accepted write, no crossab
 edge rows, deliberately *not* the closure query the fix itself uses). Its discrimination
 control is built in: 156 latent states on the cycle-bearing corpus, 0 on the cycle-free one.
 
+**Gate + fuzz.** All ten phases PASSED on this tree (`gate_status.py`: COVERED);
+`formal/FINAL_REVIEW.md` counts regenerated deliberately (`tests/` 1157 → 1185, anchors
+692 → 694). Because this is an algorithm change, `tests/test_hypothesis.py` also ran under
+`HYPOTHESIS_PROFILE=deep` on **three distinct seeds** passed with `--hypothesis-seed=N`
+(`20260917`, `4242`, `991177`): `30 passed` each, in 724s / 709s / 657s. Verdicts read off
+each run's own log — the command that printed them exited 1 because its trailing `grep -c`
+matched zero `FAILED` lines, which is the standing exit-code footgun in miniature.
+
 **The composed-system wedge, end to end** (first-hand, `ConnectedStore(sync=False)`, F2
 order): `B` and `C` accepted, **`D` refused at admission**, `A` accepted → token 3,
 `catch_up OK`, `check(u1 editor f1) = True`. Pre-fix that was `A` admitted into the

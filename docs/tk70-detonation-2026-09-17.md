@@ -172,6 +172,21 @@ refusal now lands on whichever arrives last rather than being deferred. `F` *fal
 (144 → 120) for the same reason. OVERREJECT is 0 before and after, which is what says none
 of this movement reached a write outside the cycle.
 
+**Fuzz sweep** (FIRST-HAND, 2026-09-17, an algorithm change so the gate's ten phases are not
+sufficient on their own). `tests/test_hypothesis.py` under `HYPOTHESIS_PROFILE=deep`, three
+DISTINCT seeds passed with `--hypothesis-seed=N` — the env var `HYPOTHESIS_SEED` is a no-op
+and a "sweep" written with it runs one seed three times:
+
+| seed | result |
+|---|---|
+| `--hypothesis-seed=20260917` | `30 passed in 724.35s` |
+| `--hypothesis-seed=4242` | `30 passed in 709.12s` |
+| `--hypothesis-seed=991177` | `30 passed in 657.06s` |
+
+Each verdict was read off the run's own log, not off a wrapper's exit status. (The command
+that printed the table exited 1 — its trailing `grep -c` matched zero `FAILED` lines — which
+is the standing footgun in miniature and is exactly why the logs are the authority.)
+
 ### 6a. The composed-system wedge, end to end
 
 FIRST-HAND (PROBED), 2026-09-17, `ConnectedStore(sync=False)` on the same schema, writes in
