@@ -2,7 +2,7 @@
 id: TK70
 title: the DETONATION: the graph refuses an ordinary grant after admitting a latent-cycle write
 brief: F2 of TK69, CONFIRMED first-hand: fix belongs GRAPH-side (refuse the latent write), not by propagating it
-pri: NEXT
+pri: NOW
 size: M
 deps: []
 related: [TK69]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-16b
-moved: 2026-09-16b
-updated: 2026-09-16b
+moved: 2026-09-17
+updated: 2026-09-17
 closed:
 ---
 

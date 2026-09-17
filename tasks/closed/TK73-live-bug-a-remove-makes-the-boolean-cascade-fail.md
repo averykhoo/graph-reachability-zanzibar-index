@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-16b
-moved: 2026-09-16b
-updated: 2026-09-16b
-closed:
+moved: 2026-09-17
+updated: 2026-09-17
+closed: 2026-09-17
 ---
 
 ## What it is
@@ -93,3 +93,19 @@ the entire argument for sweeping more than one seed rather than one.
   key means for the state left behind after the raise (is the store still consistent?).
 
 ## Log
+
+### 2026-09-17
+
+FIXED. The CHECK was wrong, not the cascade: on the witness the graph's answers were already correct and already a fixpoint, and the terminal quiescence assertion over-fired on membership-NEUTRAL GC traffic.
+
+MECHANISM (first-hand). `_run_cascade` snapshots its frontier at the TOP of a round and reconciles afterwards. A reconcile's step (5) may collect a recorded-subject node (`index_v4/processor.py::DeltaProcessor._gc_subject_node`; `::_reconcile_subject` has its OWN call, so the emitter is not a single call site). That demotes the node (the BL-1 demote-before-strip order), which lets `index_v4/wildcard.py::WildcardIndex._maybe_remove_bridges` strip the star in-bridge, and the ref-counted closure contraction EMITS outbox rows -- after the snapshot, inside the last budgeted round (`rounds = len(strata)`, 1 here). One row carries predicate `owner.0`, so `_map_deltas_to_keys` maps it back to ('folder','owner','x'). The rows are honest BALANCED retractions an external `drain_deltas` replica must see; they are merely membership-neutral, which is why the answer was right while the traffic was real. The old check tested a SYNTACTIC proxy ("no outbox row above the final frontier maps to a derived key") for the SEMANTIC property it wants ("no derived key is stale").
+
+FIX. `::DeltaProcessor._run_cascade` now ends in a bounded SETTLE-AND-ASSERT: reconcile each leftover key once, raise iff that reconcile was NOT a fixpoint (the I9 property), verdict recorded on `::DeltaProcessor._settle` (`::SettlePass`).
+
+(!) THE ROUND BUDGET WAS DELIBERATELY NOT BUMPED, and that is the main result. `rounds = len(strata) + 1` ALSO makes the witness green -- so the witness cannot choose between the two fixes. The sabotage can: with the leftover key made GENUINELY stale, settle-and-assert RAISES "settle pass CHANGED [('folder','owner','x')]" while `rounds+1` goes GREEN, silently repairing it and reporting success. A budget bump is an assurance step that fails by passing. The shipped fix is strictly stronger, not merely different.
+
+(!) THE PROBE IS NOT THE ACCEPTANCE SIGNAL. All six controls of `formal/probes/cascade_quiesce_remove_2026-09-16.py` assert "no failure", so DELETING the quiescence check makes it rc=0 exactly as a real fix does (measured). The obvious white-box pin fails by passing too: `reconcile` is a REPAIRING mutator, so "assert reconcile(...) is False afterwards" passes on corrupted state. PIN: `tests/test_cascade_quiesce_gc.py` (3 tests) reads the settle pass's own verdict before any repairing reconcile, and makes the choosing sabotage permanent. Module mutation sweep: 6 of 7 reddened the test that claims them, M0 control attributed correctly, M6 INERT as predicted.
+
+EVIDENCE. Originating fuzz signal FLIPPED first-hand: `TestBoolStarBridgeParityMachine` deep profile `--hypothesis-seed=2027` was `1 failed`, now `1 passed in 63.63s`; seeds 11 and 909 stay green. Model gap recorded in `formal/CORRESPONDENCE.md` sec 7.1 + sec 7.4 (the Lean theorems are NOT falsified -- `CascadeStrata.lean::W3cJob.applyLoggedR` models a reconcile emitting one coalesced row at its own key, and sec 8.1 already declares node GC unmodeled; TK73 is the third bug found in that region after ZT-P0-1 and BL-1).
+
+MAP: `docs/tk73-cascade-quiesce-gc-2026-09-17.md` (ACTIVE-PLAN) -- carries the rejected alternatives, the two INSTRUMENT FAILURES (a sabotage that removed its own precondition and read as a clean pin; a trigger that never fired because round 1 uses `reconcile_subject`), and four UNVERIFIED items handed forward.

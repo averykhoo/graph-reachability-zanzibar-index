@@ -438,6 +438,40 @@ The bullet is corrected in place below.
 
 ### 7.1 Cascade-model gaps (three added 2026-07-26 — they were previously undeclared)
 
+* **★ NEW 2026-09-17 (`TK73`) — reconcile-time node GC is a THIRD dirty-key source
+  with no model, and the Python's terminal quiescence check no longer has
+  `runCascade2`'s shape.** A reconcile's step (5) may collect a recorded-subject
+  node (`index_v4/processor.py::DeltaProcessor._gc_subject_node`; `::DeltaProcessor
+  ._reconcile_subject` has its own call). That demotes the node, which lets
+  `index_v4/wildcard.py::WildcardIndex._maybe_remove_bridges` strip the star
+  in-bridge, and the ref-counted closure contraction **emits outbox rows** — after
+  the round's frontier snapshot, and on the last budgeted round nothing drains
+  them. The rows are honest *balanced retractions* (an external
+  `index_v4/outbox.py::drain_deltas` replica must see them) but membership-
+  **neutral**, so the derived key they map back to is already at its fixpoint.
+  The old check tested a syntactic proxy ("no outbox row above the final frontier
+  maps to a derived key") for the semantic property it wants ("no derived key is
+  stale"), and late GC emission pulls the two apart — a live `InvariantViolation`
+  on a legal schema. `index_v4/processor.py::DeltaProcessor._run_cascade` now ends
+  in a bounded **settle-and-assert**: reconcile each leftover key once and raise
+  iff that reconcile was **not** a fixpoint (the I9 property), recording the
+  verdict on `index_v4/processor.py::DeltaProcessor`'s `self._settle`
+  (`index_v4/processor.py::SettlePass`) — an instance attribute, so it is named
+  in prose rather than anchored, exactly as `self._bumped` is below.
+  **On the Lean side this path does not exist at all.**
+  `GraphIndex/CascadeStrata.lean::W3cJob.applyLoggedR` is `(j.applyDR S T σ).pushDelta
+  (objNode ⟨j.dt, j.on⟩ j.R) j.R` — the modelled reconcile emits exactly ONE
+  coalesced row at its OWN derived key, with no GC and no bridge-strip step. So
+  `cascade2_drains` / `runCascade2_no_abort` are **not** falsified by the witness:
+  §8.1 already declares "Node GC + flag lifecycle AS AN ALGORITHM" an unmodeled
+  region, naming these same symbols, and `ZT-P0-1` and `BL-1` are two prior bugs
+  found inside it. `TK73` is the third. ⚠ What IS new is that the Python's terminal
+  check is now a *semantic* assertion where `runCascade2`'s is structural — the
+  round budget `len(self.compiled.strata)` is unchanged, deliberately (a
+  `rounds + 1` budget makes the witness green **and silently repairs genuine
+  staleness**, measured). Full record, including the sabotage that chose between
+  them: [`docs/tk73-cascade-quiesce-gc-2026-09-17.md`](../docs/tk73-cascade-quiesce-gc-2026-09-17.md).
+
 * **★ NEW — the `_bumped` residue-version channel is a SECOND dirty-key source
   with no model (`ZT-P4-3a`).** `index_v4/processor.py::DeltaProcessor` carries
   `self._bumped`, appended by **`::DeltaProcessor._store_residue`** on every
@@ -1373,7 +1407,10 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   note.
 * **Fixed two rounds.** `runCascade2` always runs 2 rounds; Python runs
   `len(self.compiled.strata)`. Same drained fixpoint at ≤2 strata (T5, modulo the
-  `_bumped` caveat in §7.1); ≥3 strata are outside the fragment (`hLU2`
+  `_bumped` caveat in §7.1 **and, since 2026-09-17, the `TK73` caveat: the Python's
+  round loop is followed by a settle-and-assert pass that `runCascade2` has no
+  counterpart for — the budget is the same, the terminal check is not**); ≥3 strata
+  are outside the fragment (`hLU2`
   attack-confirmed load-bearing). Note `ZT-P4-4`: **no corpus in this harness
   exceeds 2 strata**, so Python's ≥3-stratum path is exercised by nothing here.
 * **Fragment surplus.** Python accepts more than `W4Fragment` (non-`ComputedOnly`

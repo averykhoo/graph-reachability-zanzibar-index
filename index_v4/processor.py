@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from contextlib import contextmanager
+from typing import NamedTuple
 
 from sqlmodel import select
 
@@ -35,6 +36,18 @@ from .wildcard import WildcardIndex
 
 SubjectKey = tuple[str, str, str]      # (predicate, type, name); predicate '...' for bare
 Key = tuple[str, str, str]             # (object_type, relation, object_name)
+
+
+class SettlePass(NamedTuple):
+    """What ``_run_cascade``'s terminal fixpoint assertion looked at and concluded.
+
+    ``keys`` are the derived keys still reachable from undrained outbox rows after the
+    budgeted rounds; ``changed`` is the subset whose reconcile was NOT a fixpoint, which
+    is the genuine-staleness signal the cascade raises on. A cascade that drained
+    cleanly records None, not an empty pass. See TK73 /
+    docs/tk73-cascade-quiesce-gc-2026-09-17.md."""
+    keys: tuple[Key, ...]
+    changed: tuple[Key, ...]
 
 # N3 WITHDRAWN 2026-07-26 (zero-trust review ZT-P0-1) -- DO NOT RE-INTRODUCE.
 #
@@ -247,6 +260,13 @@ class DeltaProcessor:
         # invalidations for the next round (spec §5.2: version bumps enqueue the same
         # dependent keys; they emit no outbox rows).
         self._bumped: list[tuple[str, str, str]] = []
+        # Last cascade's settle pass, or None if it drained without one (TK73). This is
+        # the ONLY way to observe that the fixpoint assertion actually ran and what it
+        # concluded: ``reconcile`` is a REPAIRING mutator, so a test that calls it after
+        # the fact cannot distinguish "was already a fixpoint" from "was stale and I
+        # just fixed it" -- the second call returns False either way. Read by
+        # ``tests/test_cascade_quiesce_gc.py``.
+        self._settle: SettlePass | None = None
         # Stored-tuple enumeration memo (perf R6-10). Tri-state, exactly like
         # ``ReachabilityIndex._node_cache`` (N15) and ``WildcardIndex._residue_cache``
         # (P3): None = NO scope installed, so every read goes to SQL; a dict = a scope
@@ -1578,17 +1598,71 @@ class DeltaProcessor:
                         self.reconcile_subject(object_type, rel, obj_name, s)
             self.session.flush()
 
-        # quiescence (§5.1): stratification guarantees the cascade drains
+        # quiescence (§5.1): stratification guarantees the cascade drains the work it
+        # SCHEDULES. It does not schedule reconcile-time node GC, and that is the gap
+        # this pass closes (TK73, 2026-09-17).
+        #
+        # A reconcile's step (5) may collect a recorded-subject node
+        # (``_gc_subject_node``; ``_reconcile_subject`` has its own call). That demotes
+        # the node and hands it to ``WildcardIndex._maybe_remove_bridges``, whose strip
+        # contracts ref-counted closure edges and EMITS outbox rows -- after this
+        # round's frontier snapshot was taken, and on the last budgeted round there is
+        # no further round to drain them. Those rows are honest, balanced retractions
+        # (an external ``drain_deltas`` replica must see them), but they are membership-
+        # NEUTRAL, so the derived key they map back to is already at its fixpoint.
+        #
+        # The old check tested a SYNTACTIC proxy -- "no outbox row above the final
+        # frontier maps to a derived key" -- for the SEMANTIC property it wants: "no
+        # derived key is stale". Late GC emission makes the two come apart. So ASK THE
+        # SEMANTIC QUESTION directly: reconcile each leftover key once and require that
+        # reconcile to be a FIXPOINT (the I9 property, §8.2). A key that was genuinely
+        # stale reports ``changed`` and still raises; a key that is merely the shadow of
+        # a neutral retraction reports False and the cascade is done.
+        #
+        # ⚠ The budget (``rounds``) is DELIBERATELY unchanged. ``rounds + 1`` also makes
+        # this witness green -- and that is exactly why it was rejected: under a
+        # sabotage that makes the leftover key GENUINELY stale, the extra round silently
+        # REPAIRS it and reports success, while this pass raises. A fix that absorbs the
+        # failure it is supposed to detect is an assurance step that fails by passing.
+        # Evidence and the rejected alternatives: docs/tk73-cascade-quiesce-gc-2026-09-17.md.
         rows = outbox_rows(self.session, self.store_id, frontier_start)
         leftover = self._map_deltas_to_keys(rows)
         for (b_type, b_rel, b_name) in self._bumped:
             self._fan_out((b_type, b_rel), b_name,
                           leftover, lambda k: leftover.__setitem__(k, None))
         self._bumped = []
-        if leftover:
+        self._settle = None
+        if not leftover:
+            return
+
+        settle_start = max((r.id for r in rows), default=frontier_start)
+        keys = tuple(sorted(leftover))
+        # Full-object reconcile even for subject-scoped leftovers: it recomputes
+        # neg/upos wholesale, so it is the strictly stronger fixpoint question.
+        changed = tuple(k for k in keys if self.reconcile(*k))
+        self._settle = SettlePass(keys=keys, changed=changed)
+        if changed:
             raise InvariantViolation(
-                f'cascade failed to quiesce after {rounds} strata rounds; '
-                f'leftover keys: {sorted(leftover)}')
+                f'cascade failed to quiesce after {rounds} strata rounds; the settle '
+                f'pass CHANGED derived state at {list(changed)} -- those keys were '
+                f'genuinely stale (leftover keys: {list(keys)})')
+
+        self.session.flush()
+        tail = self._map_deltas_to_keys(
+            outbox_rows(self.session, self.store_id, settle_start))
+        for (b_type, b_rel, b_name) in self._bumped:
+            self._fan_out((b_type, b_rel), b_name,
+                          tail, lambda k: tail.__setitem__(k, None))
+        self._bumped = []
+        if tail:
+            # Unobserved in practice: a fixpoint reconcile writes nothing, so it emits
+            # nothing. Raise rather than loop -- an unbounded drain has no termination
+            # argument here, because the extra pass runs a full reconcile that can
+            # itself write and emit. A witness for this arm is a bug to understand.
+            raise InvariantViolation(
+                f'cascade failed to quiesce after {rounds} strata rounds; the settle '
+                f'pass was a fixpoint at {list(keys)} but still emitted deltas mapping '
+                f'to {sorted(tail)}')
 
     # ------------------------------------------------------------------ #
     # Backfill / bootstrap (§5.5)

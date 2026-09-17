@@ -30,6 +30,91 @@ from here.
 
 ---
 
+## 2026-09-17 — `TK73` FIXED: the quiescence check tested a SYNTACTIC proxy; reconcile-time GC pulled it apart
+
+rows: `TK73` (`NOW` → CLOSED), `TK70` (→ `NOW`, it steps back up), `TK74` (NEW, `LATER`),
+`TK75` (NEW, `LATER`).
+
+task lint: clean (13 checks, 188 task file(s) parsed), 25 warning(s)
+read: board only
+
+**The live correctness bug is closed, and the board line "Known live correctness bugs" is
+back to 0.** The verdict is that **the CHECK was wrong, not the cascade**: on the witness
+the graph's answers were already correct and already a fixpoint, and the terminal
+quiescence assertion over-fired on membership-neutral garbage-collection traffic.
+
+**Mechanism** (first-hand). `DeltaProcessor._run_cascade` snapshots its frontier at the
+TOP of a round and reconciles afterwards. A reconcile's step (5) may collect a
+recorded-subject node (`::_gc_subject_node`; `::_reconcile_subject` has its own call, so
+the emitter is *not* one call site). That demotes the node — the load-bearing BL-1
+demote-before-strip order — which lets `WildcardIndex._maybe_remove_bridges` strip the
+star in-bridge, and the ref-counted closure contraction EMITS outbox rows, after the
+snapshot and inside the last budgeted round (`rounds = len(strata)`, which is `1` here).
+One row carries predicate `owner.0`, so `_map_deltas_to_keys` maps it back to
+`('folder','owner','x')` and the post-loop check raises. The rows are honest BALANCED
+retractions an external `drain_deltas` replica must see — merely membership-neutral.
+
+**The fix**: `_run_cascade`'s terminal `if leftover: raise` becomes a bounded
+**settle-and-assert** — reconcile each leftover key once, raise iff it was NOT a fixpoint
+(the I9 property), recording the verdict on `::DeltaProcessor._settle` (`::SettlePass`).
+
+**⚠ The round budget was deliberately NOT bumped, and that is the session's main result.**
+`rounds = len(strata) + 1` also makes the witness green, so *the witness cannot choose
+between the two fixes*. A sabotage can, and did: with the leftover key made GENUINELY
+stale, settle-and-assert RAISES `settle pass CHANGED [('folder','owner','x')]` while
+`rounds+1` goes GREEN — it silently repairs the staleness and reports success. A budget
+bump is an assurance step that fails by passing. The shipped fix is strictly stronger,
+not merely different.
+
+**⚠ TWO INSTRUMENT FAILURES, both of the quiet kind, both caught only by a control.**
+(1) The first sabotage fired one reconcile too early and BOTH arms stayed green *while
+every `fired`/`row_existed` control passed* — because `owner@x`'s residue is the reference
+that DEFERS the GC, so dropping it early removed the sabotage's own precondition and no
+settle pass ever ran. A sabotage that disarms itself reads exactly like a clean pin; the
+remedy was to assert the pass RAN. (2) The second attempt keyed on the *second*
+`reconcile` of the target and never fired: round 1 settles the raw delta through
+`reconcile_subject`, a different method, so the settle pass is the target's FIRST full
+`reconcile`. Only an asserted counter caught it.
+
+**The pin is NOT the probe.** `formal/probes/cascade_quiesce_remove_2026-09-16.py` cannot
+be the acceptance signal — all six of its controls assert "no failure", so DELETING the
+quiescence check makes it rc=0 exactly as a real fix does. The obvious white-box pin also
+fails by passing: `reconcile` is a REPAIRING mutator, so "assert `reconcile(...) is False`
+afterwards" passes on corrupted state. New module `tests/test_cascade_quiesce_gc.py` (3
+tests) instead reads the settle pass's own verdict before any repairing reconcile, and
+makes the choosing sabotage permanent. Module mutation sweep: 6 of 7 mutations reddened
+the test that claims them, `M0` control attributed correctly, `M6` INERT as predicted.
+
+**Fuzz sweep (the gate's algorithm-change requirement), all first-hand 2026-09-17:**
+`TestBoolStarBridgeParityMachine`, `HYPOTHESIS_PROFILE=deep`, five seeds --
+`2027` (the originating red) `1 passed in 63.63s`, `11` `56.33s`, `909` `83.78s`,
+`4242` `62.06s`, `31337` `62.72s`. All green; seed `2027` flipped from `1 failed`.
+
+**Model gap recorded**: `formal/CORRESPONDENCE.md` §7.1 gains reconcile-time node GC as a
+THIRD unmodelled dirty-key source, and §7.4's "Fixed two rounds" bullet a third qualifier.
+The Lean theorems are NOT falsified — `CascadeStrata.lean::W3cJob.applyLoggedR` models a
+reconcile that emits one coalesced row at its own key, and §8.1 already declares node GC
+an unmodeled region (`ZT-P0-1` and `BL-1` are two prior bugs inside it; `TK73` is the
+third).
+
+Map: [`docs/tk73-cascade-quiesce-gc-2026-09-17.md`](../tk73-cascade-quiesce-gc-2026-09-17.md) (ACTIVE-PLAN).
+
+**Still owed:**
+- **The originating generality claim is UNVERIFIED and is recorded as such.** "~15,000
+  instrumented cascades show the over-budget round never changes state" came from the
+  diagnosis agents; no sweep was re-run here. The fix does not depend on it — it RAISES on
+  such a case rather than absorbing it — but do not promote it to established.
+- **`_sync_entity_middles` is a second late-emission site** (`_gc_subject_node`'s final
+  act; `_gc_public_node` carries the same call) and it both strips AND re-adds bridges. No
+  witness on a non-empty `crossable_shapes` schema; worth a targeted hunt.
+- **A second witness was reported and NOT reproduced** (leftover `('folder','owner','z')`
+  on a schema adding `editor: [user, user:*]`). If real, the pin should grow that shape.
+- **The quiescence check is a DRAINAGE check only** — a verifier skipped a reconcile in a
+  productive round and got 2 wrong answers with no raise from either candidate fix
+  (UNVERIFIED, not reproduced). I9 `audit_fixpoint` is the correctness net and runs
+  per-write only under `GraphBackend.post_op`. Worth its own row: should a cheap per-write
+  staleness check exist at all?
+
 ## 2026-09-16b — `TK69` FIXED; its fuzz sweep found a LIVE cascade bug (`TK73`) and a second divergence family (`TK70`)
 
 rows: `TK69` (`NOW` → CLOSED), `TK73` (NEW, `NOW` — a LIVE BUG), `TK70` (NEW, `NEXT`),

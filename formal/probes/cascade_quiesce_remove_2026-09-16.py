@@ -1,4 +1,17 @@
-"""A LIVE CORRECTNESS BUG: a REMOVE makes the boolean cascade fail to quiesce.
+"""A REMOVE makes the boolean cascade fail to quiesce -- FIXED 2026-09-17 (`TK73`).
+
+(!) STATUS, 2026-09-17: this probe now exits **0**. The bug is closed; the cause was the
+terminal quiescence check testing a SYNTACTIC proxy for a SEMANTIC property, and
+reconcile-time node GC pulling the two apart. `index_v4/processor.py::DeltaProcessor
+._run_cascade` now ends in a bounded settle-and-assert pass. Full record:
+`docs/tk73-cascade-quiesce-gc-2026-09-17.md`; model gap: `formal/CORRESPONDENCE.md` §7.1.
+
+(!) THIS PROBE IS NOT THE ACCEPTANCE SIGNAL, and must never be used as one -- all six of
+its controls assert "no failure", so simply DELETING the quiescence check makes it rc=0
+exactly as a real fix does (measured 2026-09-17). The positive pin is
+`tests/test_cascade_quiesce_gc.py`, which reads the settle pass's own verdict and carries
+the sabotage that a round-budget bump cannot pass. This file is kept as the MINIMISED
+WITNESS and its ingredient controls, not as a gate.
 
   Run:  PYTHONPATH=. <env-python> formal/probes/cascade_quiesce_remove_2026-09-16.py
 
