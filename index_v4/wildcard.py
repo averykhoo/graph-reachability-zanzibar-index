@@ -239,6 +239,80 @@ class WildcardIndex:
             f"w_any -> w_all -> concrete -> w_any (ZT-P5, docs/spec-deviations.md "
             f"2026-07-26; the set engine rejects the same write as a userset-topology cycle)")
 
+    def _reject_latent_star_cycle(self, subject: NodeV4, obj: NodeV4) -> None:
+        """Reject a routed edge that would create a PATH ``w_any(T,p) --> w_all(T,p)`` on
+        a crossable shape (TK70, 2026-09-17) -- the length-n form of the rule
+        ``_reject_star_self_edge`` states at length 1.
+
+        THE ARGUMENT IS THE ONE ABOVE, WORD FOR WORD. The bridges of a crossable shape are
+        SCHEMATIC, not data: ``_ensure_entity_middles`` gives every present **and future**
+        entity ``x`` of type ``T`` the crossing middle ``(T,x,p)`` with both bridges (I14),
+        so ``w_all -> (T,x,p) -> w_any`` exists the moment ANY entity of type ``T`` does.
+        A path ``w_any --> w_all`` is therefore a cycle by construction whatever its
+        length, and admitting one does not avoid the cycle -- it defers it onto whichever
+        later write happens to mint an entity of type ``T``.
+
+        THE DETONATION THIS CLOSES (`TK70`, family F2 of `TK69`). Without this check the
+        deferral is real and measured. Three grant edges --
+        ``w_any(folder,viewer) -> doc:d1#viewer``, ``doc:d1#viewer -> group:g#member``,
+        ``group:g#member -> w_all(folder,viewer)`` -- are each admitted alone, and the
+        next ordinary grant naming ANY folder (``user:u1 editor folder:f1``: no wildcard,
+        no userset, not the crossable relation) is then permanently refused, because
+        minting ``folder:f1``'s middle emits the out-bridge that closes the loop. Through
+        ``ConnectedStore`` that write is admission-validated by the set engine, lands in
+        the permanent log, and wedges ``catch_up`` on every subsequent call. The measured
+        map is docs/tk70-detonation-2026-09-17.md; the instrument is
+        formal/probes/tk70_latent_cycle_sweep_2026-09-17.py.
+
+        WHY THE GRANT EDGE ALONE IS ENOUGH TO CHECK, even though this runs BEFORE
+        ``_ensure_bridges``. The only other edges a write adds are bridges, and neither
+        direction can create a ``w_any --> w_all`` path unless one already exists: a new
+        IN-bridge ``c -> w_any`` can only extend a path that already passes through
+        ``w_any``, and a new OUT-bridge ``w_all -> c`` leaves ``w_all``, so any
+        ``w_any --> w_all`` path through it must already have reached ``w_all``. Both
+        presuppose the invariant broken, which the check itself prevents inductively. So
+        the check belongs here, before any mutation, exactly like the one above.
+
+        PARITY PARTNER. ``SetEngine._flow_reaches`` states the same rule from the other
+        side: it steps ``w_all -> w_any`` for free on a crossable shape, so ANY path
+        ``w_any --> w_all`` closes a loop there and ``_would_cycle`` refuses the write.
+        One rule, two representations -- keep them in step.
+
+        MINIMALITY. Only CROSSABLE shapes (bridged in AND out) are considered: with one
+        bridge missing there is no schematic return path and the edge is harmless. A w
+        node that does not exist yet ends the shape's test immediately -- no path can run
+        through a row that is not there -- so this cannot refuse a write on a shape the
+        store has never touched. The over-reject control for the legal reg11 /
+        ``owc_star_ttu`` class is the probe's OVERREJECT arm (all 120 orderings of the
+        same corpus minus its cycle-closing write: 0 refusals, before and after)."""
+        crossable = self.schema_info.crossable_shapes
+        if not crossable:
+            return
+        for (t, p) in sorted(crossable):
+            w_any = self._w_node(t, p, 'any', create=False)
+            if w_any is None:
+                continue
+            w_all = self._w_node(t, p, 'all', create=False)
+            if w_all is None:
+                continue
+            if not (subject.id == w_any.id
+                    or self.idx.check_reachable_by_id(w_any.id, subject.id)):
+                continue
+            if not (obj.id == w_all.id
+                    or self.idx.check_reachable_by_id(obj.id, w_all.id)):
+                continue
+            # AdmissionRejected: a cycle refusal, same class and same rule as the
+            # length-1 case above and as the set engine's userset-topology refusal.
+            raise AdmissionRejected(
+                f"wildcard tuple rejected: this edge would complete a path "
+                f"w_any{(t, p)} --> w_all{(t, p)}, which is a cycle by construction -- "
+                f"the shape {(t, p)} is crossable (bridged in AND out), so the I14 "
+                f"crossing middle of every present-or-future entity of type {t!r} closes "
+                f"the loop w_any --> w_all -> middle -> w_any. Admitting it would defer "
+                f"the refusal onto the next write that mints such an entity (TK70, the "
+                f"detonation; docs/tk70-detonation-2026-09-17.md; the set engine rejects "
+                f"the same write as a userset-topology cycle)")
+
     # ------------------------------------------------------------------ #
     # Bridge lifecycle (§7)
     # ------------------------------------------------------------------ #
@@ -516,6 +590,11 @@ class WildcardIndex:
         # star self-edge from the core's cycle check. Reject it here, BEFORE any bridge
         # or grant edge is written, so the offending write never mutates closure state.
         self._reject_star_self_edge(subject, obj)
+        # TK70 (2026-09-17): the same rule at length n. A multi-hop path
+        # w_any(T,p) --> w_all(T,p) on a crossable shape is a cycle by construction too,
+        # and admitting one defers the refusal onto the next write that mints an entity
+        # of type T (the "detonation"). Also before any mutation, and for the same reason.
+        self._reject_latent_star_cycle(subject, obj)
 
         # Bridge-before-grant: cycle errors then attach to the grant (the offending write).
         self._ensure_bridges(subject)

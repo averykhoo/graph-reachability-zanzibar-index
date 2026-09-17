@@ -871,7 +871,6 @@ class SetEngine:
         bridged_in = self.schema_info.bridged_in_shapes
         bridged_out = self.schema_info.bridged_out_shapes
         crossable = self.schema_info.crossable_shapes
-        entity_memo: dict[str, bool] = {}
         seen: set[NodeKey] = set()
         stack = [src]
         while stack:
@@ -914,13 +913,28 @@ class SetEngine:
                 # (``WildcardIndex._ensure_entity_middles``, invariant I14), so on a
                 # CROSSABLE shape it can cross through an entity that no edge of that shape
                 # touches. Add that middle VIRTUALLY, exactly as the bridges above are
-                # virtual: one hop w_all -> w_any, gated on an entity of type T existing.
+                # virtual: one hop w_all -> w_any.
                 #
-                # The gate is the whole content of the rule and must not be dropped: with
-                # NO entity of type T the graph mints no middle and ACCEPTS the same write
-                # (probe CTRL case), so an ungated hop would over-reject. Cf. the ghost hop
-                # above, which is the same hop for a shape whose compile gate is bypassed.
-                elif (t, p) in crossable and self._any_entity_of_type(t, entity_memo):
+                # ⚠ THE HOP IS SCHEMATIC AND UNGATED (TK70, 2026-09-17). It was added on
+                # 2026-09-16 gated on ``_any_entity_of_type(t)``, with a comment saying the
+                # gate "must not be dropped" because with no entity of type T the graph
+                # minted no middle and ACCEPTED the same write -- so an ungated hop
+                # over-rejected RELATIVE TO THE GRAPH. That premise was the `TK70` defect,
+                # not a property worth matching: the graph was admitting a cycle that was
+                # merely LATENT, and then permanently refusing whichever innocent write
+                # later minted an entity of type T (the detonation). The graph now refuses
+                # the latent write itself (``WildcardIndex::_reject_latent_star_cycle``),
+                # so the two backends agree again -- and they agree on the SCHEMATIC rule,
+                # which is the one the ghost hop three lines above has always stated:
+                # the middle exists for any present-OR-FUTURE entity of the type, so a
+                # cycle through it is a cycle by construction and the gate was reading
+                # data where the rule is about the schema.
+                #
+                # Dropping the gate is what makes admission order-INDEPENDENT here: gated,
+                # the same corpus refused a different write depending on whether an entity
+                # of type T had arrived yet. Measured: docs/tk70-detonation-2026-09-17.md,
+                # instrument formal/probes/tk70_latent_cycle_sweep_2026-09-17.py.
+                elif (t, p) in crossable:
                     stack.append((t, '*', p, 'any'))
         return False
 
@@ -1038,32 +1052,6 @@ class SetEngine:
             if si is not None:
                 ids.append(si)
         return ids
-
-    def _any_entity_of_type(self, t: str, memo: dict[str, bool]) -> bool:
-        """Does ANY concrete entity of type ``t`` exist? (TK69, 2026-09-16.)
-
-        The EXISTENTIAL form of ``_instances_of_type``, and deliberately stated off the
-        same set: a key counts if its type matches and its name is not the star sentinel,
-        WHATEVER predicate mentions it. That is the graph's rule -- ``SchemaInfo.
-        crossable_shapes``' docstring fixes the spec §3.4 existential as ENTITY-wise
-        ("``tests/oracle.py::instances`` witnesses it with any tuple-mentioned entity of
-        type ``T``, whatever relation mentioned it") and ``WildcardIndex.
-        _ensure_entity_middles`` mints the crossing middle per live ENTITY on that basis.
-
-        ⚠ ``interner.ids_of_type`` is NOT this set: it holds only ``pred == '...'``
-        concretes, so an entity mentioned solely as a userset would be missed and the
-        crossing would stay invisible on exactly the shapes TK69 is about.
-
-        Short-circuits, and ``memo`` is a CALL-LOCAL dict owned by one ``_flow_reaches``
-        traversal (the interner cannot mutate during it). Reached only from the w_all
-        OUT-bridge branch of a CROSSABLE shape, which is rare: a shape must be bridged
-        both in and out."""
-        cached = memo.get(t)
-        if cached is None:
-            cached = any(kt == t and n != '*'
-                         for (kt, n, _p) in self.interner.key_of.values())
-            memo[t] = cached
-        return cached
 
     def _instances_of_type(self, t: str, memo: dict[str, set[str]]) -> set[str]:
         """Concrete instance names of a type (interner keys), for the strict ∀⇒∃

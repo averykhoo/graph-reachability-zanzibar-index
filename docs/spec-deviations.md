@@ -29,6 +29,71 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-09-17 — `TK70`: the ZT-P5 star self-edge rule held only at LENGTH 1, and the graph detonated on the next innocent write
+
+The 2026-07-26 ZT-P5 entry below states the rule this one completes, and states it
+correctly: on a shape bridged **in** and **out**, an edge `w_any(T,p) -> w_all(T,p)` is a
+cycle *by construction*, because the bridges are **schematic, not data** — every present
+**and future** concrete of that shape gets both — so admitting the edge *"does not avoid
+the cycle, it defers it onto the next innocent write, which is then permanently rejected
+(the 'detonation': the graph locks itself out of a grant the set engine and the oracle
+both allow)"*. `WildcardIndex::_reject_star_self_edge` implemented that argument for the
+case where the offending configuration arrives as **one routed edge**. Nothing in the
+argument depends on the length, and the same configuration assembled from three separately
+innocuous edges was admitted.
+
+Measured (`formal/probes/tk70_latent_cycle_sweep_2026-09-17.py`, the tracked pre/post
+instrument; map `docs/tk70-detonation-2026-09-17.md`). On the reg11 / `owc_star_ttu`
+class, whose one crossable shape is `('folder','viewer')`:
+
+    folder:*#viewer@any  ->  doc:d1#viewer      [folder:* parent doc:d1, via the TTU rewrite]
+    doc:d1#viewer        ->  group:g#member     [doc:d1#viewer member group:g]
+    group:g#member       ->  folder:*#viewer@all [group:g#member viewer folder:*]
+
+Each was accepted alone. The next ordinary grant naming any folder — `user:u1 editor
+folder:f1`, no wildcard, no userset, not the crossable relation — was then **permanently
+refused**, because minting `folder:f1`'s I14 crossing middle emits the out-bridge that
+closes the loop (`wildcard.py:279`, `AdmissionRejected: subject_id=2 is reachable from
+object_id=9`). Through `ConnectedStore` that write is admission-validated by the set
+engine, lands in the permanent log, and wedges `catch_up` on every later call
+(`cursor=0 lag=4`, the whole index frozen; PROBED under `TK69` 2026-09-16).
+
+Across all 720 orderings of six writes on the class: **80 of 4320 write decisions
+diverged** between the backends, on `A` *and* on `E = user:u2 viewer folder:f1`, and
+**156 store states held the latent cycle**.
+
+**FIXED, in both backends, as one rule.** `WildcardIndex::_reject_latent_star_cycle`
+refuses any routed edge that would complete a path `w_any(T,p) --> w_all(T,p)` on a
+crossable shape — the length-n form of the rule above, placed beside it and before any
+mutation. `SetEngine::_flow_reaches`'s I14 crossing hop, added 2026-09-16 gated on
+`_any_entity_of_type(t)`, is now **schematic and ungated**, like the doubly-bridged ghost
+hop three lines above it; `_any_entity_of_type` went with its last caller.
+
+> ⚠ **This retracts a "must not be dropped" written the day before.** The 2026-09-16 hop's
+> comment said the entity gate *was* the rule, because with no entity of type `T` the graph
+> minted no middle and accepted the same write — so an ungated hop over-rejected **relative
+> to the graph**. That premise was the defect, not a property worth matching. The gate was
+> reading data about a rule that is about the schema. Post-fix, all 720 orderings agree on
+> every write decision and admit **zero** latent cycles.
+
+**The refusal MOVED; it did not spread.** Unanimous refusals rise 824 → 840, which reads
+like a widened gate and is the opposite: the ordinary grants `A` and `E` go from refused-by-
+the-graph-in-40-orderings-each to refused in **zero**, and the growth is entirely in the
+three writes that form the path, because the refusal now lands on whichever of them arrives
+last instead of being deferred onto a later victim. The over-reject control — all 120
+orderings of the same corpus with the cycle-forming write removed — is **0 refusals before
+and after**, which is what says none of the movement reached a write outside the cycle.
+That control was built and run *before* the fix, per the `TK70` row's trap.
+
+Pins: `tests/test_reg_tk69_entity_crossing.py` (4 tests → 32). Two were flipped on purpose.
+`test_family2_detonation_is_still_open` pinned the divergence **positively** (never an
+xfail) so that closing it would force a deliberate edit — this is that edit. And
+`test_ctrl_no_entity_means_no_refusal`'s `[B,C,D]` arm asserted that the cycle-closing write
+is accepted when no entity exists, which *is* the latent admission being removed; it is
+restated over five corpora that contain no cycle-forming write at all, which is what the
+over-reject control was always for. The seven-mutation sweep (with an `M0` attribution
+control) is in the module docstring.
+
 ## 2026-09-16 — `TK69`: the set engine could not see the I14 crossing middle, and ACCEPTED a cycle-closing write the graph REFUSED
 
 `docs/specs/set-engine-spec.md` §1 item 5 (*"Write-validity parity with the graph

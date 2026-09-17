@@ -1646,6 +1646,32 @@ still describes the algorithm the Python actually runs. So, when optimizing:
     false. ⚠ **It is asserted for W1c ONLY.** W4 admits TTUs, so the disjunct is live
     there by design, and this argument must be RE-DERIVED for W4 when part (ii) composes
     in-bridges into the rule-routed write path. Do not read the W1c result as covering it.
+  * **`TK70`** (2026-09-17) — `index_v4/wildcard.py::WildcardIndex._reject_latent_star_cycle`
+    extends the `ZT-P5-NEW` rule above from **length 1 to length n**: it refuses any
+    routed edge that would complete a *path* `w_any(T,p) --> w_all(T,p)` on a crossable
+    shape, not merely the single routed edge. The argument is unchanged and is the one
+    already written above — bridges are schematic, so every present *and future* entity of
+    type `T` closes `w_all → middle → w_any` — and nothing in it ever depended on the
+    length. The hole was real and measured: three separately-innocuous edges assembled the
+    same configuration, and the next ordinary grant naming any `folder` was then
+    permanently refused (the detonation), wedging `ConnectedStore.catch_up` forever.
+    `setengine/engine.py::SetEngine._flow_reaches`'s I14 crossing hop became **schematic
+    and ungated** to match — its entity-existence gate helper was added 2026-09-16 and
+    deleted here with its last caller — so the two backends again state ONE rule in two
+    representations. Measured map: `docs/tk70-detonation-2026-09-17.md`; instrument
+    `formal/probes/tk70_latent_cycle_sweep_2026-09-17.py` (720 orderings: 80 divergent
+    write decisions and 156 latent-cycle states → **0 and 0**, with the cycle-free
+    over-reject control at 0 refusals before *and* after). Pin:
+    `tests/test_reg_tk69_entity_crossing.py`.
+    **Same disposition as `ZT-P5-NEW`, for the same reasons, and they still hold.** This
+    is graph WRITE ADMISSION, which §7 lists as unmapped on the set-engine side and which
+    `GraphState.admitEdge` does not model on the graph side; no Lean definition describes
+    it, so none is made stale. It is again **deliberately not** a §3 `GraphAccepts` scope
+    rejection — the dangerous schema IS reg11's, so a compile-time criterion would delete
+    the legal `owc_star_ttu` class. And the three-leg inertness argument above transfers
+    verbatim: the guard's precondition is still `bridged_in ∩ bridged_out ≠ ∅`, which both
+    modeled fragments leave unsatisfiable, so widening *which paths* trip a guard that
+    cannot fire changes nothing on either.
   * **`ZT-P4-7`** — `zanzibar_utils_v1.py::AdmissionRejected` (a `ValueError`
     subclass, re-exported from `index_v4/core.py` and the `index_v4` package)
     now types the ~20 genuine write-admission REFUSAL sites across

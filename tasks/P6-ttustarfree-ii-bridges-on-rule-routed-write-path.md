@@ -2,7 +2,7 @@
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
 brief: PARKED 2026-09-15d by user decision; green + fully scouted, stops before step 1; owed: a CORRESPONDENCE sec 7 entry
-pri: LATER
+pri: NOW
 size: L
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-15d
-updated: 2026-09-15d
+moved: 2026-09-17b
+updated: 2026-09-17b
 closed:
 ---
 
@@ -2086,3 +2086,7 @@ PARKED AT A DOCUMENTED BOUNDARY -- `NOW` -> `LATER`, by USER DECISION 2026-09-15
 **STILL OWED, and deliberately NOT done** (the "documented boundary" half of the decision): a `formal/CORRESPONDENCE.md` sec 7 entry declaring the un-widened `W4Fragment.ttuStarFree` as a standing model-scope limit, so the gap is ledgered where sec 7's other declared divergences live rather than only in a `docs/` plan. `Audit.lean:2105`'s warning already says `W4Fragment.ttuStarFree` IS NOT CHANGED, and that remains true and correct -- so nothing in the tree currently MISSTATES the position; what is missing is the positive ledger entry. Do that before this row is touched again, or as its own small task.
 
 (!) DO NOT read the parking as a verdict on the route. R1 is CONFIRMED on equivalence grounds (2026-09-15b) and the four "becomes FALSE" verdicts are kernel-confirmed (2026-09-15c). The work is well-understood and unstarted, not abandoned or doubtful.
+
+### 2026-09-17b
+
+Back to NOW now that TK70 closes the TK69/TK70 admission-divergence pair. Stage 2 is at step 4prime with its ordered map already written (docs/p6-step4prime-scout-2026-09-15.md, "Ordered sub-steps for 4prime"). Nothing in TK70 touched the Lean fragments: graph write admission is unmapped on both sides, and ZT-P5-NEW`s three-leg inertness argument transfers verbatim (the guard precondition is still bridged_in n bridged_out != empty, unsatisfiable in both modeled fragments) -- recorded on the new CORRESPONDENCE.md sec 8.1 TK70 bullet. Step 4prime resumes exactly where 2026-09-15b left it.

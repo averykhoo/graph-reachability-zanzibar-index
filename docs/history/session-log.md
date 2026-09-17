@@ -30,6 +30,118 @@ from here.
 
 ---
 
+## 2026-09-17b — `TK70` FIXED: the ZT-P5 star self-edge rule held only at LENGTH 1, so the cycle arrived in three hops
+
+rows: `TK70` (`NOW` → CLOSED), `P6` (`LATER` → `NOW`).
+
+task lint: clean (13 checks, 190 task file(s) parsed), 25 warning(s)
+read: board + note
+
+**The detonation is closed, and the fix is not a new rule — it is the one the repo wrote
+down on 2026-07-26, finished.** `WildcardIndex._reject_star_self_edge`'s docstring already
+argues that on a crossable shape a `w_any(T,p) → w_all(T,p)` edge is a cycle *by
+construction*, because the bridges are schematic: `_ensure_entity_middles` gives every
+present **and future** entity of type `T` the middle with both bridges, so `w_all → middle
+→ w_any` exists the moment any entity does. Nothing in that argument depends on the edge
+being a single hop. The guard implemented only the single hop.
+
+**Mechanism** (first-hand, dumped). After the three writes `B, C, D` the store holds exactly
+three grant edges — `w_any(folder,viewer) → doc:d1#viewer` (via the TTU rewrite),
+`doc:d1#viewer → group:g#member`, `group:g#member → w_all(folder,viewer)` — a **path**
+`w_any --> w_all` assembled from three separately innocuous writes. The next ordinary grant
+naming any folder (`user:u1 editor folder:f1`: no wildcard, no userset, not the crossable
+relation) then mints `folder:f1`'s I14 middle, and its out-bridge detonates at
+`wildcard.py:279`. Through `ConnectedStore` that write is admission-validated by the set
+engine, lands in the permanent log, and wedges `catch_up` forever.
+
+**Landed, in both backends, as ONE rule.** (1) `WildcardIndex::_reject_latent_star_cycle`
+refuses any routed edge that would complete such a path — beside the length-1 rule and
+before any mutation; only the grant edge needs checking, and the docstring carries the
+inductive reason (neither bridge direction can create the path unless one already exists).
+(2) `SetEngine::_flow_reaches`'s I14 crossing hop is now **schematic and ungated**, like the
+doubly-bridged ghost hop three lines above it. Without (2) the divergence would merely
+*move* onto the cycle-forming write.
+
+**⚠ This retracts a "must not be dropped" written the day before.** The `TK69` entity gate
+was justified by *"with no entity of type `T` the graph mints no middle and ACCEPTS the same
+write, so an ungated hop over-rejects"*. That premise **was** `TK70`. The gate was reading
+data about a rule that is about the schema.
+
+**Measured, with the over-reject control built and run BEFORE the fix** (the row's trap).
+`formal/probes/tk70_latent_cycle_sweep_2026-09-17.py`, new and tracked: all 720 orderings of
+six writes × three backends. Pre-fix **80 divergent write decisions** (on `A` *and* on
+`E = user:u2 viewer folder:f1`, 40 each) and **156 latent-cycle store states**; post-fix
+**0 and 0**. The OVERREJECT arm — the same corpus minus the cycle-forming write, 120
+orderings — is **0 refusals before *and* after**, which is what says the refusal *moved*
+rather than spread.
+
+**⚠ Read the census, not the count.** Unanimous refusals rise 824 → 840, which looks like a
+widened gate and is the opposite: `A` and `E` go from graph-refused-in-40-orderings-each to
+refused in **zero**, and all the growth is in the three writes that form the path, because
+the refusal now lands on whichever arrives last instead of being deferred onto a victim.
+`F` actually *falls*, 144 → 120.
+
+**⚠ THE PROBE'S FIRST DRAFT MANUFACTURED A FINDING, and this is the transferable half.** It
+stated the property per-write — *"an innocent write (no `*` endpoint, bare `'...'` subject
+predicate, non-crossable object relation) is never refused"* — and reported **144 orderings
+unanimously refusing `F = folder:f1 parent doc:d1`**, which reads exactly like a second,
+larger divergence family. It is not one: the TTU routes `F` to `folder:f1#viewer →
+doc:d1#viewer`, whose **subject is a concrete of the crossable shape**, so with `D` present
+`F` genuinely closes the loop and both backends are right to refuse it. **A syntactic
+innocence test cannot see a routed edge**, so it turns a correct refusal into a discovery.
+The property is a **store invariant** — after every accepted write, no crossable shape has a
+`w_any --> w_all` path — measured with an **independent instrument** (BFS over stored direct
+edge rows, deliberately *not* the closure query the fix itself uses). Its discrimination
+control is built in: 156 latent states on the cycle-bearing corpus, 0 on the cycle-free one.
+
+**The composed-system wedge, end to end** (first-hand, `ConnectedStore(sync=False)`, F2
+order): `B` and `C` accepted, **`D` refused at admission**, `A` accepted → token 3,
+`catch_up OK`, `check(u1 editor f1) = True`. Pre-fix that was `A` admitted into the
+permanent log, `catch_up` raising `InvariantViolation` every call, `cursor=0 lag=4`, and
+`check` reading `False`. **This also disposes of the `bulk_build` question the change
+raises:** `build_index` bootstraps from the log, admission there is the set engine alone,
+and the set engine now refuses the latent write — so no log can carry a corpus the offline
+builder would bootstrap and the incremental path would refuse. That is the second thing the
+set-engine half buys, beyond parity.
+
+**Pins, and two deliberate flips.** `tests/test_reg_tk69_entity_crossing.py`, 4 → 32 tests.
+`test_family2_detonation_is_still_open` → `test_family2_detonation_closed`: it pinned the
+divergence **positively** (never an xfail) so closing F2 would force this edit — this is
+that edit. `test_ctrl_no_entity_means_no_refusal` → `test_ctrl_cycle_free_corpus_fully_accepted`:
+its `[B,C,D]` arm asserted that the cycle-closing write is accepted when no entity exists,
+which **is** the latent admission being removed, so that arm could not survive the fix.
+Replacing it with something weaker would have retired the over-reject control; it is instead
+restated over five corpora that contain no cycle-forming write at all — including one with
+an ordinary grant *on* the crossable relation — which is what the control was always for.
+New: `test_no_latent_star_cycle_is_ever_admitted` (invariant L over all 24 orderings) and
+`test_ordinary_grant_accepted_in_every_ordering`.
+
+**Seven-mutation sweep with an `M0` attribution control** (table in the module docstring;
+`M0` named its own pin, so the run is interpretable). Three rows worth carrying:
+
+* **`M4`** (restore the entity gate) reddens the two *parity* arms and leaves the
+  store-invariant arm **green** — the graph still refuses correctly. That is the signature
+  of a divergence rather than a bug, and it is why those are separate tests.
+* **`M5`** (drop the `obj reaches w_all` half) is the **only** mutation that reaches the
+  over-reject control. It still refuses the cycle-closing write, so the F1/F2 arms alone
+  cannot tell it from the correct rule.
+* **`M6`** is **INERT for a stated reason**: on this schema `crossable == bridged_in ==
+  bridged_out`, so the edit could not move anything the module observes. Per 2026-09-13c an
+  `INERT` row is only readable with that argument attached.
+
+Records: map `docs/tk70-detonation-2026-09-17.md` (ACTIVE-PLAN); ledger
+`docs/spec-deviations.md` 2026-09-17; model `formal/CORRESPONDENCE.md` §8.1 `TK70` bullet —
+graph write admission is unmapped on both sides and ZT-P5-NEW's three-leg inertness argument
+transfers verbatim, so **no Lean definition describes dead code**.
+`docs/tk69-admission-parity-2026-09-16.md` is **FROZEN** with a dated correction retracting
+the entity-gate claim and its `S2` sabotage row.
+
+**Not established:** that F1 and F2 are the only two families. That still rests on the
+unreproduced 2026-09-16 agent sweep. This session's 720 orderings are first-hand but over
+the same six writes and the one schema, so the claim is no wider than it was.
+
+Still owed: nothing skipped.
+
 ## 2026-09-17 — `TK73` FIXED: the quiescence check tested a SYNTACTIC proxy; reconcile-time GC pulled it apart
 
 rows: `TK73` (`NOW` → CLOSED), `TK70` (→ `NOW`, it steps back up), `TK74` (NEW, `LATER`),

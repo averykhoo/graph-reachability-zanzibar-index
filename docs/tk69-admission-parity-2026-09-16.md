@@ -1,11 +1,30 @@
 # `TK69` / `TK70` — admission parity on the I14 crossing middle, measured
 
-**ACTIVE-PLAN, opened 2026-09-16b — the body is provenance, not a living status.** This is
-the measured map for the two admission-divergence families between the graph index and the
-set engine. `TK69` (family F1) is CLOSED and its fix is landed; `TK70` (family F2) is OPEN
-and is the reason this file is not yet frozen. Live state is the task rows
-(`python scripts/task.py show TK70`) and `python scripts/gate_status.py`, never this file.
-Corrections append **dated at the top**. Freeze it when `TK70` closes.
+**FROZEN 2026-09-17 — read for METHOD, not for state.** `TK70` closed that day, which was
+this file's stated freeze condition. Live state is the task rows
+(`python scripts/task.py show TK70`) and `python scripts/gate_status.py`.
+
+> **CORRECTION 2026-09-17 — two claims below were true on 2026-09-16 and are now WRONG.**
+> Both concern the entity gate on `SetEngine::_flow_reaches`'s I14 crossing hop.
+>
+> 1. § The F1 fix says *"⚠ The entity gate is the rule, not an optimisation … With no
+>    entity of type `T` the graph mints no middle and accepts the same write, so an
+>    ungated hop over-rejects."* The premise was `TK70`: the graph was admitting a cycle
+>    that was merely LATENT and detonating on a later innocent write. The graph now refuses
+>    the latent write itself (`WildcardIndex::_reject_latent_star_cycle`), and the hop is
+>    **schematic and ungated**, matching the doubly-bridged ghost hop beside it.
+>    `_any_entity_of_type` was deleted with its last caller.
+> 2. The sabotage table's **S2** (*"keep the hop, drop the entity gate → 2 failed"*) is no
+>    longer a sabotage — it is the shipped behaviour. Its two reds were red against the
+>    unfixed graph. The `TK69` pins were rewritten accordingly; the 2026-09-17 mutation
+>    sweep in `tests/test_reg_tk69_entity_crossing.py`'s docstring is the current evidence.
+>
+> Everything else here stands, including the F1/F2 split and the reasoning for why the two
+> families take opposite fixes — that call survived first contact. The `TK70` half of the
+> story, measured, is [`docs/tk70-detonation-2026-09-17.md`](tk70-detonation-2026-09-17.md).
+
+This is the measured map for the two admission-divergence families between the graph index
+and the set engine, as of 2026-09-16.
 
 **Provenance is labelled per claim and it is not uniform.** This session reproduced a
 subset first-hand and inherited the rest from a six-strand subagent sweep run the same day.
