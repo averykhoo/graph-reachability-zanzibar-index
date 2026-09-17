@@ -30,6 +30,89 @@ from here.
 
 ---
 
+## 2026-09-18 — `TK74` reproduces but is no live bug; the `TK73` settle pass runs on 0.54% of cascades
+
+rows: `TK74` (`LATER` → `NOW`), `TK75` (→ `NEXT`), `TK72`, `TK3`, `TK44`, `P6` (`NOW` → `LATER`), `TK76`–`TK79` (new).
+
+task lint: clean (13 checks, 194 task file(s) parsed), 29 warning(s)
+read: board only
+
+User asked for the queue re-ranked toward Python coverage and edge-case bugs, then for the
+`TK73` lineage finished. `TK73` is closed, so that was read as its two live descendants,
+`TK74` and `TK75`; the user confirmed `TK74` mid-session. Map:
+[`docs/tk74-staleness-net-2026-09-18.md`](../tk74-staleness-net-2026-09-18.md) (ACTIVE-PLAN).
+Method: a 17-agent fan-out (6 reproduction angles, 2 adversarial skeptics each, 1
+completeness critic) under an explicit ultracode opt-in, with every load-bearing number
+re-measured first-hand here before it landed.
+
+**`TK74`'s premise REPRODUCES — and the flag two agents put on it was wrong.** Skipping one
+productive reconcile yields oracle divergences with no raise from the shipped settle pass,
+none from the rejected `rounds+1`, and none at any paranoia tier. But every wrong answer
+required a deliberate monkeypatch and the unmutated controls are `divergences=0`, so this is
+an assurance-coverage gap, not a live defect. Both finder agents returned
+`is_wrong_answer_bug: true`; all four skeptics said false. **Reconciled, not averaged** —
+the banner's "Known live correctness bugs: 0" stays at 0.
+
+**Mechanism, READ at `index_v4/processor.py:1628-1636`:** `leftover` has exactly two sources
+— outbox rows above the frontier, and `_bumped` (sole append at `:1351`, inside a reconcile).
+A reconcile that never runs writes nothing, emits nothing, bumps nothing, so it cannot enter
+`leftover` by any path and `if not leftover: return` exits above both checks. Both candidate
+fixes are gated on the same outbox-derived set.
+
+**The real deliverable is the bound nobody had measured.** A plugin wrapping `_run_cascade`
+and reading `self._settle` in a `finally`, bucketed by `len(compiled.strata)`: **558 cascades,
+the settle pass executed on 3 (0.54%), all at `strata == 1`, all three inside the module
+written to make it run.** 415 measured cascades were multi-stratum and it ran on none of
+them. Instrument control: run 1 moved both arms, so run 2's zero comes from a live counter.
+So `TK73`'s fix — shipped the previous day — is essentially unexercised outside its own pin,
+and `TK74`'s "blind by construction" verdict is proven only for `rounds == 1`. The single
+next action is a skipped-reconcile experiment on a multi-stratum schema
+(`demorgans_law_2.fga`, 6 strata), in a NON-final stratum.
+
+**The design question is now answered and narrow:** per-op `audit_fixpoint` raised at exactly
+the op of the first wrong answer in 8 of 8 divergent cases, while end-of-run `audit_fixpoint`
+was clean in 4 of 8 — a later write re-reconciles the key and LAUNDERS the corruption.
+Staleness is transient and the wrong answers are served inside the window, so "audit
+periodically" is not an option. Per-write or nothing.
+
+**`TK75`: item 2 CLOSED, item 1 half closed, and its trap is wrong.** The second `TK73`
+witness was recovered, minimised to three writes and shown to be the same mechanism at a
+different entity (the `[user, user:*]` ingredient is irrelevant). The strip arm of
+`_sync_entity_middles` already fires **in the existing suite**
+(`tests/test_i14_crossing_middles.py::test_middles_retire_with_their_entity`), so the row's
+"a new fixture is required" is wrong; the re-add arm is reached 269 times and is inert.
+
+**Four surprises spun out.** `TK76`: `tests/test_cascade_quiesce_gc.py:169`'s
+`graph.widx.paranoia = False` is **inert** — `WildcardIndex` has no such attribute (READ,
+`grep -c` → 0) — so a one-day-old pin's stated instrument control is not the one it performs.
+`TK77`: the validation matrix and hypothesis campaign make **zero** `_sync_entity_middles`
+calls on a crossable entity, because the fixtures compute `crossable_shapes == []`; a
+first-hand `TK72` probe corroborates from the other direction (a subject wildcard does not
+create an in-bridge). `TK78`: `bulk_backfill.py` is an unaudited second reconcile
+implementation and `backfill()` discards `_bumped`. `TK79`: the late-GC rows' own design
+justification ("a `drain_deltas` replica must see them") is asserted by nothing, and there is
+no in-tree outbox consumer at all.
+
+**`TK72` was downgraded by its own measurement.** This session first claimed it was a
+plausible route to a real red, then probed it: 147 `check_invariants` calls with `schema_info`
+passed, 0 red — but `crossable_shapes` is empty on both corpora, so **I14 was never applicable**
+rather than satisfied. Without the control line that reads as a clean 147-call pass. Demoted
+to `LATER`; the correction is on the row.
+
+⚠ **A concurrent writer raced this investigation.** Four of six agents independently detected
+`index_v4/processor.py` mutated with a `_sk[:-1]` skip-the-last-key sabotage at ~23:28 on
+2026-09-17 and reverted by ~23:35 — someone running this very experiment on the tracked tree.
+It produced false readings in two agents' runs, caught only because `inspect.getsource`
+disagreed with an earlier read. Tree verified clean at HEAD `6c5b97c` before and after.
+Rule earned (doc §7): pin a `git archive HEAD` export and check `git status --porcelain`
+before **and** after any probe that matters — a fan-out over one repo is itself a concurrent
+writer.
+
+Still owed: the multi-stratum skip probe (`TK74`'s single next action); a `crossable_shapes`
+table over every `tests/fga_schemas/` fixture (`TK77`'s first action); first-hand
+verification of `TK78`'s two readings, which are a subagent's. Nothing from the previous
+session's "Still owed" list was executed — it is carried forward unchanged.
+
 ## 2026-09-17b — `TK70` FIXED: the ZT-P5 star self-edge rule held only at LENGTH 1, so the cycle arrived in three hops
 
 rows: `TK70` (`NOW` → CLOSED), `P6` (`LATER` → `NOW`).

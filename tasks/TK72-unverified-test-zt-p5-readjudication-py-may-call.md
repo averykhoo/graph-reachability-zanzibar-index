@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-16b
-moved: 2026-09-16b
-updated: 2026-09-16b
+moved: 2026-09-18
+updated: 2026-09-18
 closed:
 ---
 
@@ -52,3 +52,35 @@ shape as `P22`'s green sabotage, where a clause existed and nothing could reach 
 - `docs/adversarial-audit-2026-09-15.md` sec 2 -- where the claim was made, for provenance.
 
 ## Log
+
+### 2026-09-17c
+
+CONFIRMED FIRST-HAND. The row was filed UNVERIFIED (an agent claim inherited from `P22`); this session reproduced it by reading, not by trusting the report.
+
+* The three call sites are `tests/test_zt_p5_readjudication.py:673` (`'live'`), `:677` (`'inc'`), `:678` (`'blk'`) -- all `check_invariants(session, <store>)` with no third argument. `index_v4/invariants.py:161` defaults `schema_info` to `None`.
+* What that actually switches OFF is WIDER than the row's claim of "the I14 clause". With `schema_info is None` the gates at `invariants.py:256`, `:296` and `:343` skip: the rest of I3 (bridge completeness/exclusivity), **I14 crossing-middle completeness**, I4 namespace, AND all derived invariants (`_check_derived_invariants`). Roughly half the checker.
+* The module's own docstring at `:657` claims "I1-I13 are green on all three". It is not.
+* CENSUS of every `check_invariants` call site lacking `schema_info`, whole tree: 9 sites in 4 modules -- the three above, plus `tests/test_blind_audit_regressions.py:242`, `tests/test_invariants_docstring_matches_body.py:76` and `:84`, `tests/test_reg17_closure_fanout_cap.py:119`, `:147`, `:165`. Every OTHER call site in the tree passes `rs.schema_info` or `widx.schema_info`, so these are the outliers, not the idiom.
+* (!) WHY THIS MAY BE MORE THAN A TIDY-UP: the corpus is `_OWC_TTU_CORPUS` (`:592`), whose object-wildcard shapes are `{('folder','viewer')}` -- the same shape family where `P22` found the I14 crossable-middle loop and `TK70` found the latent star cycle. The test compares live vs incremental-rebuild vs BULK state over that corpus with the bridge invariants disabled. Turning them on is a plausible route to a real red, not just a green-to-green docstring fix.
+* NOT YET DONE: nothing has been changed. `ConnectedStore` exposes the handle as `self.widx.schema_info` (`connectedstore/store.py:194`), so the fix is mechanical; whether it goes RED is the open question.
+
+Promoted to NEXT this session (user instruction: prioritize Python coverage / edge-case bug hunting).
+
+CORRECTION to this session's own entry above, MEASURED not reasoned. The entry claimed passing `schema_info` here was "a plausible route to a real red, not just a green-to-green docstring fix", on the grounds that `_OWC_TTU_CORPUS` is the shape family of `P22`/`TK70`. **That is REFUTED.** The route does not exist, and the reason is exactly what the house rule says to check first.
+
+PROBE: replicated both ZT-P5 corpora and both rebuild legs, calling `check_invariants(session, <store>, schema_info)` on all three stores (`live` / `inc` / `blk`), 147 checked calls. Literal output:
+
+    === object_wildcard: 22 store subsets
+        INSTRUMENT CONTROL, live SchemaInfo: {'crossable_shapes': [], 'bridged_in_shapes': [], 'bridged_out_shapes': [('folder', 'viewer')], 'derived_families': []}
+        63 check_invariants(with schema_info) calls, 0 RED
+    === object_wildcard_ttu: 29 store subsets
+        INSTRUMENT CONTROL, live SchemaInfo: {'crossable_shapes': [], 'bridged_in_shapes': [], 'bridged_out_shapes': [('folder', 'viewer')], 'derived_families': []}
+        84 check_invariants(with schema_info) calls, 0 RED
+
+**READ THE CONTROL, NOT THE COUNT.** `crossable_shapes` is EMPTY on both corpora, so the I14 loop at `index_v4/invariants.py:296` iterates nothing; `bridged_in_shapes` is empty, so only the OUT half of the I3 bridge clause at `:266` has work; `derived_families` is empty, so `::_check_derived_invariants` at `:343` checks nothing. A green here is therefore **not** evidence that these corpora satisfy I14 -- it is evidence that **I14 was never applicable to them**. Without the control line this run would have read as "147 calls, all green", which is the failure-by-passing shape.
+
+(!) The `[user, user:*]` subject wildcard in `_OWC_TTU_CORPUS` does NOT produce an in-bridge, so the corpus is not crossable despite looking like the `P22` shape. Crossability needs bridged IN and OUT; this has OUT only. **Anyone reaching for these corpora as a crossable fixture should stop here** -- that is a direct input to `TK75`, whose whole difficulty is finding a fixture with non-empty `crossable_shapes`.
+
+REVISED DISPOSITION: `TK72` is a genuine but SMALL item -- the docstring at `tests/test_zt_p5_readjudication.py:657` claims "I1-I13 are green on all three" and that is false, and the three call sites should pass `cs.widx.schema_info` so the clauses that DO apply (I3-out, I4) actually run. It is NOT a bug route. It should not outrank `TK74` or `TK75`; consider demoting it back if a better candidate needs the NEXT slot.
+
+Probe was `.scratch/tk72/probe.py` (gitignored, therefore already lost -- the transcript above is the tracked copy, per the `.scratch/` rule).

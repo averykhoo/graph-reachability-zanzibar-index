@@ -2,7 +2,7 @@
 id: P6
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
 brief: PARKED 2026-09-15d by user decision; green + fully scouted, stops before step 1; owed: a CORRESPONDENCE sec 7 entry
-pri: NOW
+pri: LATER
 size: L
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
-moved: 2026-09-17b
-updated: 2026-09-17b
+moved: 2026-09-17c
+updated: 2026-09-17c
 closed:
 ---
 

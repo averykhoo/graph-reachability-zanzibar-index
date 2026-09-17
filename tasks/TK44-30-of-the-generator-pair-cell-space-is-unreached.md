@@ -2,7 +2,7 @@
 id: TK44
 title: ~30% of the generator pair-cell space is unreached even at deep budget, with UNKNOWN residue
 brief:
-pri: HOLD
+pri: LATER
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-09-10
-updated: 2026-09-10
+moved: 2026-09-17c
+updated: 2026-09-17c
 closed:
 ---
 
