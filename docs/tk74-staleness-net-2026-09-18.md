@@ -1,7 +1,29 @@
 # TK74 — what actually catches a stale derived key, and how often the settle pass runs
 
-**ACTIVE-PLAN** (`docs/README.md` §3). Opened 2026-09-18. Corrections append **dated at
-the top**. FREEZE when `TK74` closes.
+**FROZEN 2026-09-18c — provenance, not a living document.** Status lines below are
+as-of-then and several are now known false; live state: `python scripts/task.py show <id>`
+and `HANDOFF.md`. Corrections are appended dated at the top, never edited into the body.
+Opened 2026-09-18 as ACTIVE-PLAN; frozen when `TK74` closed and §9.10 was measured out.
+
+⚠ **CORRECTION 2026-09-18c — READ §10 BEFORE CITING ANYTHING ABOVE IT.** §9.10's seven
+open items were measured (six arms, all load-bearing claims re-verified first-hand). Two
+sentences in this document are now known to be **stronger than the evidence supports**:
+
+> 1. **"structurally incapable of detecting a skipped/stale reconcile at ANY schema
+>    shape"** (§1, §9.2, and the `TK74` close message) needs the scope qualifier **"within
+>    the cascade that skipped it"**. Across cascades the settle pass catches them
+>    *opportunistically* — a later unrelated write surfaces the stale key and it raises.
+>    §10.8 has the three-arm witness, reproduced first-hand.
+> 2. **"the divergence is carried entirely in materialized closure edges"** (§9.5) is
+>    **false** once a wildcard can reach an intersection. §9.5's own caveat called the
+>    starred case untested; it is not clean. §10.5.
+
+Also corrected in §10: §9.3's reachability route for the unguarded delete (`_gc_subject_node`
+is transitively guarded — the live route is the ordinary `remove_tuple` one); §9.2's
+"requires a WRITE" (it requires the reconcile to RUN and reach `_store_residue`); §9.1's
+`driven` column (relation-level, not object-level — the miscount recurred a **fourth** time,
+inside the correction written to fix it); and §9.4's census, whose `SETTLE_RAN = 0` does not
+survive a deduped generator. **The overall verdict and the `TK82` design are unchanged.**
 
 Provenance labels are per claim: **READ** (verified first-hand against the live tree by
 the session that wrote the line), **MEASURED** (this session ran the probe and read the
@@ -725,3 +747,557 @@ shown to fail by passing before the choice is believed.
    or multi-instance path was touched.
 7. No generated-schema sweep — `tests/test_hypothesis.py`'s machinery was never pointed at
    this question, so "structural at any schema shape" rests on the **code read**, not a search.
+
+---
+
+## 10. 2026-09-18c (third fan-out) — §9.10's seven items, measured
+
+Six arms, one per §9.10 item (items 1 and 4 share an arm, since both are "does anything ever
+put a key into `leftover` that was not written"). Every structural claim below was
+**re-verified first-hand by this session** against HEAD `05e4ba2` before it was written here;
+where an arm's report and this session's own read disagree, the read wins and the
+disagreement is recorded rather than averaged (`CLAUDE.md` § Delegation).
+
+Provenance labels are as declared at the top of this file.
+
+### 10.0 The law re-verified, and the one hole in it
+
+**READ first-hand, 2026-09-18c.** §9.2's law survives an independent enumeration:
+`leftover` has exactly one assignment (`index_v4/processor.py:1629`) and exactly one
+mutation (`:1632`, the `_bumped` fan-out); `self._bumped` has exactly one `.append` site
+(`:1351`, in `_store_residue`). There is no third path.
+
+⚠ **But "rows-driven" is not the same as "written-key-driven", and §9.3 elided the
+difference.** `_map_deltas_to_keys` branch (A) (`:1422-1425`) has a rows-driven *loop head*
+— `for nid in {r.subject_node_id for r in rows}` — yet the key it inserts is not the key
+that was written: it is `ref_key`, drawn from `_keys_referencing(nid)` (`:568`, served by
+the `ResidueRefV1` reverse index). **Branch (A) is therefore a genuine path by which a
+NON-WRITTEN key can enter `leftover`**, and it is the only one.
+
+What closes it is not the write-precondition but §9.3's *guard* argument: a node reaching
+branch (A) has been GC'd, and both processor GC paths refuse to delete a residue-referenced
+node, so `_keys_referencing` on it is empty by construction. **READ first-hand:**
+`_gc_subject_node` returns at `:1075-1076` (`if self._residue_row(n.id) is not None or
+self._residue_references(n.id): return`), `_gc_public_node` at `:1296-1299`.
+
+**So §9.10 items 1 and 2 are ONE mechanism, not two loose ends.** Item 2's unguarded delete
+is precisely the hole in item 1's argument: `index_v4/core.py` deletes `NodeV4` at three
+sites with **no residue consultation at all** (`grep _residue index_v4/core.py` → no match),
+and a node killed there can still be residue-referenced — which is exactly the precondition
+branch (A) needs. The two arms were run separately and are reconciled in §10.1–10.2.
+
+### 10.1 Item 2 / row `TK80` — the delete is REACHED, and it commits corruption on one path
+
+**Verdict: OBSERVED-AND-POSSIBLE.** Not unreachable, and no longer unobserved — §9.3's
+"unobserved in 208 arm executions" is **refuted**.
+
+**The branch table, READ first-hand and dated 2026-09-18c** (`_add_direct_edge_unsafe_impl`
+at `:714`, class `ReachabilityIndex` at `:267`). §9.3 named two branches; **there are
+three**, and the one it omitted is the only *unguarded* one:
+
+| line | branch | guard | reachable from |
+|---|---|---|---|
+| `:875-877` | neighbour-debit implicit GC | `implicit` only | self-edge path only |
+| `:882-884` | `_node = nodes.get(subject_id)` → evict → delete | **NONE** — no `implicit`, no residue | self-edge path only |
+| `:892-894` | `reference_count + count == 0 and _node.implicit` → delete | `implicit` only | **every** `add_edge` / `remove_edge` |
+
+⚠ **The arm claimed the self-edge path is `remove_node`-only; this session verified the
+claim AND supplied the reason it is true**, because the claim as stated did not survive the
+obvious objection (this repo has `tests/test_self_referential_tuples.py`, so a self-edge
+removal looks reachable from `remove_tuple`). It is not: a self direct edge is **never
+created** — `:854` guards `if subject_id != object_id and count > 0` — so
+`_remove_edge_locked` finds `direct_edge_count == 0` and raises `AdmissionRejected` at
+`:1135-1141` before reaching `:1143`. A cycle's self `Edge` row carries only
+`indirect_edge_count` and is rejected by the same test. `_add_direct_edge_unsafe` has exactly
+three call sites (`:1099` add, `:1143` remove, `:1204` in `remove_node`), so `:877`/`:884`
+are `remove_node`-only **by construction**, not by observation.
+
+⚠ **§9.3's stated reachability route is WRONG and is corrected here.** `_gc_subject_node` →
+`WildcardIndex._maybe_remove_bridges` (`wildcard.py:437`) is **transitively guarded** —
+`_gc_subject_node` returns at `:1075-1076` before it ever reaches the `_maybe_remove_bridges`
+call at `:1096`, exactly when a residue references the node. **READ first-hand.** The live
+route is the ordinary one: `remove_tuple` → `_remove_tuple_trusted:645` →
+`remove_edge_by_id:1149` → `_remove_edge_locked:1143` → `:894`.
+
+**MEASURED (arm, single-sourced, reproduced in structure but not re-run here):**
+
+| path | removals | node deletes | deletes with a LIVE residue ref | committed corruptions |
+|---|---|---|---|---|
+| `remove_tuple` + `run_cascade` (shipped) | 31 | 87 | 2 | **0** |
+| `remove_node` + cascade | — | 48 runs | 4 | **0** |
+| `remove_node`, **no cascade** | — | 48 runs | 4 | **2** |
+| ordinary suite census (120 tests) | — | 240 | 2 | 0 |
+
+The corrupting path raises, verbatim:
+
+```
+independent check_invariants RAISED: I6: residue neg holds a dead node id 4 on
+store_id='s_off' predicate='access' name='d' implicit=False id=3 type='doc'
+wildcard='' reference_count=0
+```
+
+and is **refused pre-commit at both live paranoia tiers** (`residue`, `full`); it commits
+silently only at the production default (`off`). The arm verified tier forwarding first-hand
+before trusting that result (§9.7's trap), and this session independently confirmed the fix
+is live: `tests/wildcard_helpers.py:42` forwards `level=paranoia`, pinned by
+`tests/test_paranoia_wiring.py::test_helper_forwards_the_tier` (`:350`).
+
+**Severity is bounded, and the hazard was already named in the tree.** `remove_node` has no
+caller in `connectedstore/` (**READ first-hand**: the only non-test callers are
+`index_v4/wildcard.py:697` → `index_v4/core.py:1199`), and
+`tests/test_reg14_residue_gc_elision.py::test_reg14_cheap_path_self_heals_a_missing_userset_node`
+already documents it as an admin-API gap with a self-heal mitigation. **`TK80` stays `LATER`.**
+
+⚠ **The arm ran a control that FAILED to go red, and reported it honestly — it is the most
+useful thing in the arm.** Stubbing `_keys_referencing` to `[]` (neutralising branch (A))
+on the reproducing workload left the state CLEAN. **Branch (A) is therefore not the only
+repair**; the ordinary leaf/dependent fan-out in the same function also reconciles the key.
+The delete's safety rests on **at least two independent downstream repairs, neither of which
+is a guard on the delete itself** — which is why the fix belongs on the delete.
+
+### 10.2 Item 7 — the generated-schema search, run; §9.2's law SURVIVES and gets tighter
+
+**Verdict: CLOSED BY SEARCH. No counter-instance.** "Structural at any schema shape" no
+longer rests on the code read alone.
+
+**AGENT-MEASURED**, over **588** distinct generated schemas (strata depth to 5), **738**
+skip arms, **31,824** executed cascades: `skipped key in leftover` = **0**, settle pass
+executed **0** times. Generator is the repo's own campaign grammar
+(`tests/test_hypothesis.py::_schema_ast` driven by `::_RandomChoices`, workloads from
+`::_op_pool`).
+
+The zero is **non-vacuous on both sides**, which is what §8.7 item 7 actually needed:
+
+* *Staleness side* — **682 of 738** arms were truncated so the skip cascade is last, and
+  I9 then confirmed the store was **genuinely left non-fixpoint** at the moment
+  `_run_cascade` returned (388/443 full-reconcile, 294/295 subject-scoped). The fault was
+  real in 92% of arms and the settle pass saw nothing in every one.
+* *Rows side* — a post-loop census on the `:1629` call over the same 8,688 unmutated
+  cascades: **416 calls were fed ≥1 outbox row and returned 0 keys**. That replicates
+  §9.2's `het` instance (`rows>=1: 3/32`, `keys>=1: 0/32`) at ~130× the scale, on
+  generated schemas.
+
+⚠ **TWO CORRECTIONS TO §9.2's LAW, both verified first-hand by this session.**
+
+1. **The law is TIGHTER than stated — the enumeration closes by SIGNATURE, not by branch
+   inspection.** `_fan_out` (`index_v4/processor.py:1504-1543`, next `def` at `:1544`)
+   takes a `keys: dict` parameter and **never reads or writes it**: `keys` occurs exactly
+   once in the whole function, on the signature line `:1505`. **READ first-hand.** Every
+   invalidation it performs goes through the `full` callback instead. So `:1632`'s lambda
+   is not merely the only *observed* channel into `leftover` — it is the only *possible*
+   one. (The dead parameter is passed at `:1471`, `:1580`, `:1631`, `:1654`. Not a defect;
+   noted as a cleanup in §10.6.)
+2. ⚠ **The (b) clause's precondition is MIS-STATED and must be narrowed.** §9.2 says the
+   `_bumped` half "requires a WRITE". **READ first-hand at `:1329-1351`:** `_store_residue`
+   early-returns at `:1331-1333` **only** when `row is None and empty`. Its `elif empty`
+   branch deletes the row (`:1339`) and its `else` branch rewrites all three columns and
+   does `row.version += 1` (`:1341-1345`) **even when the values are unchanged** — and both
+   fall through to the `:1351` append. The accurate precondition is therefore **"the
+   reconcile RAN and reached `_store_residue` past that early return"**, not "a write
+   occurred".
+   **The conclusion is unaffected** — a suppressed reconcile never calls `_store_residue`
+   at all — but §9.2 as written claims more than the code guarantees, and a future session
+   reasoning from the stronger sentence would be reasoning from something false.
+
+**Settle-pass null, combined and re-stated on 2026-09-18c:** `SETTLE_RAN = 0` over
+**16,497** unmutated cascades — 2,385 handwritten-fixture (§9.4) + 14,112 generated
+(8,688 full + 5,424 subject-scoped).
+
+**Instrument limits, recorded because they bound the claim** (AGENT-REPORTED, not
+independently re-run): the grammar has two entity types, relations `r0..r4`, one tupleset
+body drawn from 8, and a 5-name universe — so "any schema shape" means *any shape this
+repo's own campaign generates*, which includes **no object-wildcard shapes** and no HA
+structure. 114 of 500 drawn schemas were `UnsupportedByGraphIndex` and never ran. And the
+fault model is one *suppressed* reconcile; a reconcile that RUNS but reads a stale input
+was not injected — §9.2's argument covers it identically (still a non-write for the
+consumer key) but that remains **REASONED**, not measured.
+
+### 10.3 Item 5 — the `TK82` tier's false-positive rate is ZERO, and the design choice is unfalsifiable on clean traffic
+
+**Verdict: CLOSED. Nothing about false positives blocks shipping `TK82`.** But the arm's
+*second* result matters more to the design than the first, and it is recorded here because
+it changes what evidence the item is allowed to accept.
+
+**AGENT-MEASURED**, 8 seeds × 40 ops over the **9** fixtures that have derived predicates
+(the other 6 of 15 are `NO_DERIVED` — `RuleSet.compiled` has no plans, so the tier is
+vacuous there and they must not be counted as passing):
+
+```
+---- TOTALS: cascades=2853 tier_ran=2853 keys_rereconciled=3358 FALSE_POSITIVE_CASCADES=0 settle_ran=0 bumped_grew=0
+FP RATE = 0 / 2853 cascades
+```
+
+The zero is controlled at both ends, which is what makes it a measurement rather than a
+hope:
+
+```
+---- CONTROL TOTALS: {'arms': 49, 'wrong': 43, 'B_raise': 49, 'C_raise': 0, 'B_raise_and_wrong': 43, 'C_raise_and_wrong': 0}
+CONTROL (job 4): proposed tier raised on 43 / 43 genuinely-wrong arms
+SABOTAGE  (job 5): reconciled-union tier raised on 0 / 43 genuinely-wrong arms
+```
+
+* **The detector has teeth: 43/43** on arms where the state is genuinely oracle-wrong.
+* **§9.9's mandatory sabotage behaves exactly as predicted: 0/43.** The reconciled-union
+  variant ships **dead**. Note the sabotaged union is *not* trivially empty — `|U_C| = 1`
+  where `|U_B| = 2` on several arms — it is non-empty and still blind, which is a more
+  convincing failure than an empty set would have been.
+* **The tier is strictly MORE sensitive than the oracle grid: 49 raises on 43 wrong arms.**
+  On the 6 extra arms the suppressed reconcile left derived state internally stale while
+  the check surface still answered correctly. These are `TK81`'s transiently-divergent
+  cases, caught before a later write launders them. **That is a detector firing on a
+  genuine I9 violation, not a false positive** — and it is the strongest argument yet
+  against `TK81`'s "a periodic audit is worth ~zero", because a *per-cascade* tier catches
+  what a *periodic* audit cannot.
+
+⚠ **THE LOAD-BEARING RESULT, and it belongs next to §9.9 AMENDMENT 3.** On unmutated
+traffic the scheduled union and the dispatched (reconciled) set are **byte-identical** —
+`union_minus_dispatched = 0` and `never_dispatched = 0` across 3,744 clean cascades
+(1239/1239, 3344/3344, 288/288). **So the right design and the sabotaged design are
+indistinguishable by ANY clean-traffic measurement — same cost, same FP rate, same union
+size.** The scheduled-vs-reconciled choice can be justified **only** by a fault-injection
+arm. A benchmark cannot see it. `TK82` must therefore carry its sabotage as a permanent
+test, not as a one-time check.
+
+⚠ **A trap earned: do NOT write "the tier is a subset of `audit_fixpoint`".** The
+per-cascade ratio of scheduled-union size to `audit_fixpoint` scope **exceeds 1, max 2.0 on
+four fixtures**. REASONED cause: the union is scheduled from deltas, so it can contain keys
+whose object has just gone dead and left `_live_keys_of`'s enumeration (`:1671`) — keys
+`audit_fixpoint` (`:1732-1742`) would never visit. The aggregate ratio is **0.242** over
+1,429 cascades (2026-09-18c, **40-op toy stores** — quote it only with that caveat).
+§9.9's single toy-store `0.481` is not contradicted, it is unrepresentative. The durable
+claim stays the REASONED one: the tier is **O(cascade work)**, `audit_fixpoint` is
+**O(live derived keys)**, unbounded by write size.
+
+**Instrument caveat that must survive into `TK82`:** the arm wrapped the *public*
+`run_cascade` (`:1544`), so its re-reconciles ran **outside** `_node_cache_scope()` +
+`_stored_cache_scope()`. That is the stronger question (a stale memo cannot mask a
+divergence), but **a tier shipped INSIDE those scopes is not what was measured — re-measure
+if `TK82` lands inside them.**
+
+**No control coverage on two fixtures**, and they must not be counted: `owc_star_ttu`
+(1 stratum, so "non-final stratum" is empty by definition) and `demorgans_law_1` (0
+productive non-final-stratum reconciles in 16 ops).
+
+### 10.4 ⚠ AN INSTRUMENT BUG IN THE ROUND-2 HARNESS — reproduced first-hand
+
+**MEASURED first-hand by this session**, not taken from the arm that found it:
+
+```
+add1 None
+add2 None
+rm   None
+still present? True
+```
+
+`WildcardIndex.add_tuple` is **ref-counted**: `add(t); add(t); remove(t)` leaves `t`
+**present**. The sanctioned write path is not: `connectedstore/source.py::TupleSource.add`
+(`:470-473`) is documented *"Idempotent on duplicates (raw tuples are a set): no state
+change, no log row"* and enforces it via `_add_tuple_direct` (`:489`).
+
+**So a probe that writes straight to `WildcardIndex` and draws adds from the whole pool
+without excluding already-live tuples silently diverges from `tests/oracle.py`** — graph
+`True`, oracle `False` — for reasons that have nothing to do with the property under test.
+The `fprate` arm hit it on 28 seed-runs across 7 of 9 fixtures before fixing its generator;
+its headline was unchanged by the fix (FP was 0 either way), but **the meaning changed**,
+because a false-positive rate measured on oracle-divergent traffic is not the number
+§9.10 item 5 asked for.
+
+⚠ **This impugns a ROUND-2 number.** `.scratch/tk74c-habitat/habitat_fuzz.py` and
+`habitat_census.py` share that generator and never oracle-checked — and that is the code
+behind §9.4's **2385-cascade `SETTLE_RAN = 0` census**, i.e. §9.10 item 4, the one round-2
+arm with an empty skeptic list. The item-4 arm was warned mid-flight and asked to re-run
+the census with a deduping generator and report both numbers; the outcome is §10.5.
+
+**The durable rule, and it is new:** *a harness that writes directly to a backend must
+reproduce that backend's admission semantics, or its oracle comparison means nothing.*
+Prefer driving `TupleSource`/`ConnectedStore`, which dedupes for you.
+
+### 10.5 ⚠ Item 3 — §9.5's "the residue channel is clean" is REFUTED; it was untested, and it is wrong
+
+**Verdict: DIVERGENT.** §9.5 recorded, correctly for its fixture, that a half-stale
+intersection writes **no residue at all** and that "the divergence is carried entirely in
+materialized closure edges". §9.5's own CAVEAT flagged the starred case as *untested, not
+tested-and-clean*. It was right to hedge: **the starred case is not clean.**
+
+**The premise re-verified first-hand, 2026-09-18c.** Exactly **3** `PIntersection` nodes
+exist in the whole tree, and the screen below is this session's own run, not the arm's:
+
+| fixture | intersection key | stratum | `Plan.deps` | star-admitting leaf child? |
+|---|---|---|---|---|
+| `boolean_wildcards.fga` | `('doc','restricted')` | 0 | `()` | **yes** (`public: [user:*]`) — but nothing to go stale |
+| `demorgans_law_2.fga` | `('role','authorized_user')` | 4 | `(('role','role_user_met'),)` | **no** (`assigned: [user]`) |
+| `tupleset_shapes.fga` | `('doc','approved_parent')` | 0 | `()` | no |
+
+**So no in-tree fixture has both a non-empty derived dep AND a star-admitting leaf child.**
+That is *why* §9.5 measured `residue=None`, and the mechanism is now MEASURED rather than
+assumed: stars *do* reach `demorgans_law_2`'s intersection through the derived child, but
+`stars ∩ no-stars = ∅`, so nothing is ever written.
+
+**The constructed fixture is inside the supported fragment** — this matters, because "the
+graph index rejects it" would have been a perfectly good answer and is not the answer.
+`.scratch/tk74d-starisect/star_isect.fga` is `demorgans_law_2.fga` with **one token
+changed** (`define assigned: [user]` → `[user, user:*]`). **Verified first-hand:** it
+compiles with no `UnsupportedByGraphIndex` and no `ValueError`, same six strata, with
+`('role','authorized_user')` at stratum 4, `deps=(('role','role_user_met'),)`.
+
+**And the intersection then DOES write a residue — reproduced first-hand by this session**
+(the arm's control re-run here, `rc=0`):
+
+```
+CONTROL divergences (unit: grid queries): 0 grid size: 160
+CONTROL audit_fixpoint: clean
+CONTROL ResidueV1 rows (unit: residue rows): 20
+   ('role', 'authorized_user', 'r3')   stars=[["user", "..."]]   neg=[]   upos=[]
+```
+
+**In the half-stale state that residue is WRONG** (AGENT-MEASURED, 144 arms; TIGHT = §9.8's
+corrected rule, object-level at a strictly later round and oracle-wrong):
+
+```
+  TIGHT arms                                   : 18 {1: 9, 2: 9}
+  TIGHT arms hitting the STARRED object r3     : 4 {1: 2, 2: 2}
+  settle EXECUTED / RAISED                     : 0 / 0
+  TIGHT arms where audit_fixpoint RAISED       : 18
+```
+
+In 2 of the 4 star-tight arms the row is **present-and-starred when correct and ABSENT when
+stale**, and the loss propagates one relation further (`('doc','access','d2')` `stars` →
+`[]`). **So for the starred case the divergence is carried in the residue too, not only in
+closure edges.** Nothing catches it: the settle pass never executed, and `off`/`residue`/
+`full` all returned `err=none` — with the tier read back off the installed guard, and with
+a sabotage (a planted dead node id in that *same* `authorized_user` residue row) proving
+`residue` and `full` **can** go red there. The tier green is real, not a blind instrument.
+
+⚠ **One arm diverges FAIL-OPEN** — `graph=True, oracle=False` on three
+`user_missing_requirement c4` queries, alongside five fail-closed. Recorded explicitly
+because a fail-open in an authorization index is the direction that matters.
+
+**This is NOT a live correctness bug and the board's "0" stays 0.** It needs both a
+constructed fixture that exists nowhere in the tree and a deliberate fault injection. It is
+an assurance-coverage gap of exactly `TK74`'s class — but a *wider* one than §9.5 left on
+record, because §9.5's "carried entirely in materialized closure edges" would have sent a
+future session looking in the wrong place. **Filed as `TK83`** (add a star-admitting
+intersection fixture to the tree, so the case stops being unreachable).
+
+**Caveat, and it bounds the claim:** one constructed schema, one object, 4 star-tight arms,
+2 of which show the diff (the other 2 have no residue on either side at that op prefix).
+**Do not quote "the residue always differs".** That a *general* starred intersection
+diverges is REASONED, not measured.
+
+### 10.6 Item 6 — PostgreSQL: the result is BYTE-IDENTICAL, and the concurrency question gets a real answer
+
+**Verdict: SAME.** Not "similar" — the two sweep logs differ only in the storage-name line
+and the elapsed-time lines; all 170 arm result lines are identical, and a field-by-field
+JSON diff of the per-arm records gives **0** differences (32 arms × 16 fields on `het`,
+138 × 15 on `demorgans_law_2`). The settle pass's blindness is a property of
+`_run_cascade`, not of the storage engine.
+
+The PG leg was genuinely live, not silently falling back: `index_v4/core.py::is_sqlite`
+returned `False` on every run, so `take_row_write_lock`'s real `FOR UPDATE` arm and
+`_lock_store` were exercised. Sanity first, to the log-file recipe: `rc=0`,
+`17 passed in 11.23s`.
+
+**§9.2's non-vacuity instance reproduces on PG arm-for-arm and row-for-row:**
+
+```
+arms where the :1629 map saw >=1 outbox ROW : 3 / 32
+arms where the :1629 map returned >=1 KEY   : 0 / 32
+    (34, 3, rows=1, keys=0)  (35, 2, rows=3, keys=0)  (35, 3, rows=4, keys=0)
+```
+
+**The concurrency answer to §9.10 item 1 — the honest shape.** Two threads on the raw
+graph path, with outbox rows attributed to their writing transaction by PostgreSQL's
+`xmin` (server ground truth, not a heuristic):
+
+```
+_lock_store acquisitions                     : 800   ... that BLOCKED >5ms : 79  max wait=2.325s
+IN-LOOP reads (:1574) that saw a FOREIGN row : 79
+POST-LOOP reads (:1628) with a FOREIGN row   : 0
+cascades with NON-EMPTY leftover             : 0
+outbox rows=408 distinct writing txids=88 id-order block boundaries=87
+```
+
+**88 distinct writers, 87 boundaries ⇒ exactly 88 contiguous blocks, zero id interleaving.**
+That is the structural reason the coincidence cannot fire for a lock-respecting writer: the
+store lock is held from the first edge write through commit, so a competitor cannot allocate
+an outbox id inside another's range. It survived a widened window (a 0.5s sleep injected
+immediately before the `:1628` read, `fired 88 times`, wall clock +39s — so the sleep really
+was inside the held critical section): still 0 foreign post-loop rows. The composed path
+(`ConnectedStore`/`TupleSource`, 4 writers + a tailing replica) is **stricter still** —
+in-loop foreign rows drop to 0, because `_lock_source` is taken before the watermark is read.
+
+⚠ **But the mechanism is real for a writer that BYPASSES `_lock_store`**, and this is the
+part worth carrying: a bare INSERT into `delta_outbox_v1` never touches `store_v4`, so it
+does not block, and it lands above another cascade's final frontier **on the first try**.
+Nothing in the shipped write paths does this — but an external outbox producer, a future
+async worker (boolean spec §13), or any tool writing the outbox directly **would**, and it
+would put a *foreign* key into someone else's `leftover`. So item 1's answer is:
+**not observed from any lock-respecting writer in 128 concurrent op transactions across two
+layers with a widened window; trivially producible by a lock-bypassing one.**
+
+**The control is the strongest in this document** — a second PG session on a second
+connection commits a *real* `DeltaOutboxV1` row timed between the last frontier snapshot and
+the `:1628` read, so the real `_map_deltas_to_keys` maps a real committed row:
+
+```
+C-A  STALE  (reconcile suppressed, then foreign row forces leftover)
+    settle.changed : [('group', 'member', 'g1')]      RAISED : True
+    InvariantViolation: cascade failed to quiesce after 3 strata rounds; the settle pass
+    CHANGED derived state at [('group', 'member', 'g1')] -- those keys were genuinely stale
+C-B  FRESH  (no suppression, IDENTICAL foreign injection)
+    settle.changed : []                                RAISED : False
+```
+
+C-A proves the instrument goes red on PG; **C-B proves the red is caused by the staleness
+and not by the injection.** That is the control-your-instrument discipline done right.
+
+### 10.7 ⚠ §9.1's `driven` COLUMN IS WRONG — the miscount recurred a FOURTH time, in the correction itself
+
+The banner records that this count "was wrong three times the same way". **It is wrong a
+fourth time, and this time it is wrong in the row that was written to fix it.**
+
+**MEASURED first-hand by this session** from round 2's own artifact,
+`.scratch/tk74c-isect/sweep_rows.json`:
+
+```
+rows                       : 138
+later_consumer > 0         : 130          <- relation-level
+later_consumer>0 AND div>0 : 130
+settle_exec True           : 0
+settle_raised True         : 0
+leftover_n > 0             : 0
+skipped_in_leftover True   : 0
+```
+
+* **`demorgans_law_2 driven = 54` is not reproducible from the artifact it came from.**
+  The artifact yields **130** at relation level; the PG arm's strict object-level score
+  yields **27**. Neither is 54. **UNRECONCILED** — recorded as a discrepancy rather than
+  silently replaced, because guessing which is right is how the number got wrong the first
+  three times.
+* **`heterogeneous_tupleset driven = 4` is the RELATION-level count.** Its source
+  (`.scratch/tk74c-het-sk/attack.py`, the "object-level DRIVEN check" block) filters on
+  `(kk[0], kk[1]) in cons` only — no object match and no oracle-wrong conjunct, despite
+  its own heading. The strict count is **2**. The two dropped arms are instructive: on
+  `op=35 ord=3` the only oracle-wrong key is the *skipped key itself*, and on `op=35 ord=2`
+  the wrong consumer (`doc.viewer.d1`) was never among the later-round reconciles.
+* ⚠ **A trap that produced this, found first-hand:** every field in `sweep_rows.json` is
+  stored as a **STRING**, so `'0'` is truthy and a naive count returns **138 for every
+  column** — including `skipped_in_leftover`, which would read as "the net caught
+  everything". Convert before counting, and sanity-check any column that comes back equal
+  to the row count.
+
+**The verdict does not move.** Every net column in that artifact is 0 on both backends, so
+the blindness result stands exactly as §9.2 states it. What moves is the *size of the
+evidence*: `~62 skeptic-confirmed driven arms` in §9.1 is a relation-level figure, and the
+strict object-level number is substantially smaller. **Cite §9.1's `driven` column as
+relation-level, or re-derive it.**
+
+### 10.8 ⚠⚠ Items 1 and 4 — THE HEADLINE NEEDS A QUALIFIER, and §9.4's census verdict does not survive
+
+This is the most consequential result of the round. Read it before citing §1, §9.2 or the
+`TK74` close message.
+
+#### Item 1 — REFUTED as stated. The settle pass DOES catch a skipped key, across cascades.
+
+**Reproduced first-hand by this session** (`rc=0`), three arms on a 1-stratum schema:
+
+```
+### ARM A -- no skip (negative control)
+   RAISED: no          oracle grid: 252 queries, divergences=0
+### ARM B -- skip at op1 only; op4 is an UNRELATED write
+   RAISED: [(4, "cascade failed to quiesce after 1 strata rounds; the settle pass CHANGED
+            derived state at [('folder','owner','x')] -- those keys were genuinely stale")]
+                       oracle grid: 252 queries, divergences=1
+### ARM C -- same skip, script truncated BEFORE op4 (staleness control)
+   RAISED: no          oracle grid: 252 queries, divergences=1
+  ALL THREE ARMS MOVED AS PREDICTED = True
+```
+
+**Arm C is the load-bearing one**: the staleness is demonstrably present and the settle pass
+does **not** see it. **Arm B**: the *same* staleness, plus one later unrelated write, and the
+settle pass **raises**. Independently reproduced at 3 strata, where the raising key is the
+downstream consumer `('box','b2','bx')` rather than the skipped key itself.
+
+**So §9.2's law is mechanically intact and its CONCLUSION was overstated.** A later write is
+a write; its rows map to the stale key; `leftover` gets it. What must be added everywhere the
+claim appears is the scope qualifier:
+
+> The settle pass is structurally incapable of detecting a skipped/stale reconcile **within
+> the cascade that skipped it**. Across cascades it catches them **opportunistically**.
+
+**How opportunistic — AGENT-MEASURED, and the numbers keep it in proportion:** of 2,179 skip
+arms, the skipped key reached `leftover` in **8**; of those, **1** was a genuinely
+staleness-creating skip, and that one **RAISED (1 of 1)**. A ~0.4% placement rate on a
+fault-injected corpus is **not a net**, and `TK82` is still the answer — but "structurally
+incapable at any schema shape" is no longer a true sentence and must not be repeated.
+
+⚠ **The doc's named route is the WRONG one.** Branch (A) at `:1424` called from `:1629`
+stayed at **0 non-empty across 866 calls** — an 11.9× widening of §9.3's 73, so §9.3's
+number holds and grows. The hits arrive by the post-loop mapcall's **ordinary per-row
+fan-out** and by the **`_bumped`** route (`:1630-1633`), not by branch (A). My own §10.0
+reasoning — that branch (A) is the one non-written-key path — is therefore **correct about
+branch (A) and wrong about where the risk lives**; recorded rather than quietly amended.
+
+**And item 2's delete IS driven, closing §10.1's open end:** of 5,132 `_evict_node` calls,
+**10** deleted a node under a live residue reference — **all 10 at `core.py:893`**, none at
+either processor GC path (0 of 458 and 0 of 992, exactly as their guards predict). All 10
+fired on the raw-write path before round 0 and were drained by the first in-loop mapcall.
+
+#### Item 4 — the census REPRODUCES exactly, and its verdict still does not survive
+
+**The instrument is sound** — the mandatory control passes on both instruments (the §9.4
+witness reports `SETTLE_RAN=1`, its negative control `0`, `BOTH MOVED=True`). The `0` was a
+real observation of **contaminated and under-powered** traffic:
+
+| run | generator | multi-stratum cascades | `SETTLE_RAN` |
+|---|---|---|---|
+| prior probe, verbatim re-run | buggy | **2385** | **0** ✅ reproduces |
+| independent instrument, 18 seeds | buggy | 7155 | **1** |
+| same instrument, **deduped** generator | dedupe | 7156 | **5** |
+
+**The §10.4 harness bug is confirmed to have contaminated it**: `habitat_census.py::sweep`
+(`:91`) and `habitat_fuzz.py::sweep` both do `t = rng.choice(pool); op = 'add'` with **no
+dedupe**. On the census's own traffic that put **34.4%** of ops on ref-count-inflated state
+and left **87 of 198** seed runs oracle-dirty. **The fix changed the verdict: 1 → 5 at the
+same N.**
+
+**It is also diluted**, which is the more durable finding: only **6.7%** of budget≥3 cascades
+ever enter their final budgeted round (the loop `break`s early), falling to 0.37% at budget 5.
+A census of a pass that only runs in the final round is mostly counting cascades that never
+reach it.
+
+⚠ **Two framing corrections to §9.4, MEASURED:** the census covers **8 fixtures + 2
+engineered schemas**, not "all 15 fixtures plus 3 engineered" (6 fixtures have no derived
+relations, `owc_star_ttu` is 1-stratum and excluded, one engineered schema is
+`UNSUPPORTED`). And the §9.4 witness is **not** `demorgans_reverse` (that fixture is 5
+strata) — it is the engineered `E1` `folder`/`box` schema at budget 3.
+
+**Consequence: `SETTLE_RAN = 0` must not be cited again from those two probes.** Any number
+taken from `habitat_census.py` or `habitat_fuzz.py` is contaminated until their generator
+dedupes. Filed as `TK84`.
+
+### 10.9 §9.10 closed out — all seven items
+
+| # | item | verdict | where |
+|---|---|---|---|
+| 1 | coincidental late emission places a skipped key in `leftover` | ⚠ **REFUTED as stated** — it happens (8/2179, the 1 genuinely-stale one raised). The *branch-(A)* route stays 0-of-866. Headline needs "within the skipping cascade". | §10.8 |
+| 2 | the unguarded implicit-node delete (`TK80`) | **OBSERVED-AND-POSSIBLE.** Three branches not two; `:884` is the unguarded one; 10 of 5132 evictions ran under a live residue ref, all at `core.py:893`. Corrupts only via `remove_node` with no cascade. `TK80` stays `LATER`. | §10.1, §10.8 |
+| 3 | a **starred** half-stale intersection | ⚠ **REFUTES §9.5.** The residue channel is not clean, it was unreachable. One token makes it reachable; the residue diverges and one query goes FAIL-OPEN. → `TK83` | §10.5 |
+| 4 | `habitat`'s 2385-cascade census | **REPRODUCES, verdict does NOT survive.** Instrument sound; traffic contaminated and under-powered. `SETTLE_RAN` 0 → 1 (3× N) → 5 (deduped). → `TK84` | §10.8 |
+| 5 | the tier's false-positive rate | **CLOSED. 0 of 2853**, control 43/43, sabotage 0/43. `TK82` unblocked. | §10.3 |
+| 6 | PostgreSQL | **CLOSED — SAME.** Byte-identical arm logs; `_lock_store` genuinely serializing; the coincidence is structurally blocked for lock-respecting writers, trivially producible by a lock-bypassing one. | §10.6 |
+| 7 | generated-schema sweep | **CLOSED BY SEARCH.** 588 schemas / 738 arms / 31,824 cascades / 0 hits, non-vacuous at both ends. Law tightened (dead `keys` param) and one clause narrowed. | §10.2 |
+
+**What this round changed about the answer, in one paragraph.** `TK74`'s verdict survives:
+the settle pass is the wrong net for this class, `audit_fixpoint` is the only real detector
+and still has zero production callers, and `TK82`'s scheduled-union tier is the right fix —
+now with a measured FP rate of zero and a sabotage that demonstrably ships dead. What
+changed is the *strength* of two sentences that were written more confidently than the
+evidence supported: "structurally incapable at **any** schema shape" needs **"within the
+skipping cascade"**, and "the divergence is carried **entirely** in materialized closure
+edges" is false once a star can reach an intersection. Both were found by pointing controls
+at the claims rather than at the code.
+
+**Next action:** implement `TK82` (`NOW`) against §10.3's constraints — the sabotage is
+mandatory *and permanent*, because §10.3 proves no clean-traffic measurement can
+distinguish the right design from the wrong one.

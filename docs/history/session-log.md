@@ -30,6 +30,74 @@ from here.
 
 ---
 
+## 2026-09-18c — §9.10's seven unmeasured items, measured: two headline sentences were stronger than the evidence
+
+rows: `TK74` (closed — correction logged), `TK80`, `TK82`, `TK83`–`TK84` (new).
+
+task lint: clean (13 checks, 199 task file(s) parsed), 34 warning(s)
+read: board + note
+
+User asked what §9.10 needed, then for everything to be measured, recorded, and the item
+closed. Six arms, one per item (1 and 4 share one, since both ask "does anything put a key
+into `leftover` that was not written"). Map:
+[`docs/tk74-staleness-net-2026-09-18.md`](../tk74-staleness-net-2026-09-18.md) §10 — **now
+FROZEN**, with a correction block at the top, because `TK74` closed on 2026-09-18b and the
+freeze was owed.
+
+**Five of seven closed clean; two refuted a sentence this repo had already written down.**
+
+* **Item 1 — REFUTED as stated.** The settle pass is blind to a skipped reconcile *within
+  the cascade that skipped it*, but a later **unrelated** write surfaces the stale key and
+  it raises. Reproduced first-hand, three arms: A (no skip) no raise / 0 divergences; B
+  (skip + later write) **RAISED** / 1; C (same skip, truncated before the later write) no
+  raise / **1** — C is the one that matters. So §1/§9.2's "structurally incapable at **any**
+  schema shape" needs **"within the skipping cascade"**. Opportunistic only (8 of 2179 arms
+  placed the key; the 1 genuinely-stale one raised), so `TK82` is still the answer.
+* **Item 3 — REFUTES §9.5.** "The divergence is carried entirely in materialized closure
+  edges" is an artifact of a star-free leaf. Exactly 3 `PIntersection` nodes exist in the
+  tree and none has both a non-empty `Plan.deps` and a star-admitting leaf child (verified
+  first-hand), so the starred case is **unreachable**, not clean. One token
+  (`assigned: [user]` → `[user, user:*]`) makes it reachable and the residue diverges too,
+  with one query **FAIL-OPEN**. → `TK83`.
+* **Item 5 — CLOSED, `TK82` unblocked.** FP rate **0 of 2853** cascades, control 43/43,
+  sabotage 0/43. The load-bearing result is not the zero: on clean traffic the scheduled and
+  reconciled unions are **byte-identical** (`union_minus_dispatched = 0` over 3744
+  cascades), so the right and wrong designs are indistinguishable by *any* benchmark. The
+  sabotage must SHIP as a permanent test.
+* **Item 6 — CLOSED, SAME.** PG arm logs byte-identical to SQLite; `_lock_store` genuinely
+  serializing (79 of 80 transactions blocked, max 2.3s); 88 contiguous outbox-id blocks is
+  the structural reason the coincidence cannot fire for a lock-respecting writer — and it is
+  trivially producible by one that bypasses the lock.
+* **Item 7 — CLOSED BY SEARCH.** 588 generated schemas / 738 arms / 31,824 cascades / 0
+  hits, non-vacuous at both ends. It also *tightened* the law: `_fan_out`'s `keys` parameter
+  is **dead** (one occurrence, its signature line), so `:1632` is the only possible channel
+  into `leftover` by signature rather than by inspection.
+* **Items 2 and 4** → `TK80` re-briefed (three delete branches, not two; `:884` is the
+  unguarded one; §9.3's reachability route is transitively guarded and wrong) and `TK84`
+  filed.
+
+**(!) A harness bug that invalidated a round-2 number, reproduced first-hand:**
+`WildcardIndex.add_tuple` is **ref-counted** — `add; add; remove` leaves the tuple present,
+while `TupleSource.add` (`:470-473`) is idempotent. `habitat_census.py:91` and
+`habitat_fuzz.py` do not dedupe, which put **34.4%** of the §9.4 census's ops on inflated
+state; its `SETTLE_RAN = 0` goes to **1** at 3× N and **5** deduped. The census instrument
+is sound (its control moves both ways) — the *traffic* was contaminated. → `TK84`. Durable
+rule: **a harness writing directly to a backend must reproduce that backend's admission
+semantics, or its oracle comparison means nothing.**
+
+**(!) The `driven` miscount recurred a FOURTH time — inside the correction written to fix
+it.** §9.1's `driven` column is relation-level: recomputed first-hand from round 2's own
+artifact, `later_consumer > 0` = **130**, strict object-level = **27**, and §9.1 says **54**,
+which is not reproducible from either. Mechanism found: every field in `sweep_rows.json` is
+a **string**, so `'0'` is truthy and a naive count returns the row count for every column.
+Verdict unmoved — every net column is 0 — but cite that column as relation-level or
+re-derive it.
+
+Still owed: nothing skipped from the Rhythm. `TK82` stays `NOW` and is now fully specified
+(§10.3's constraints, sabotage permanent). `TK83`/`TK84`/`TK80`/`TK81` are `LATER`.
+
+---
+
 ## 2026-09-18b — the settle pass is structurally blind to a stale reconcile; `TK74` closed, tier knob fixed
 
 rows: `TK74` (`NOW` → closed), `TK80`–`TK82` (new), `TK82` (→ `NOW`).

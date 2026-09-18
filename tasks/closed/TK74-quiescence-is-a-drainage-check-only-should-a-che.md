@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-17
-moved: 2026-09-18b
-updated: 2026-09-18b
+moved: 2026-09-18c
+updated: 2026-09-18c
 closed: 2026-09-18b
 ---
 
@@ -116,3 +116,19 @@ CLOSED — the row's question is answered, recorded, and the blocking instrument
 Gate: full `verify.sh` green on this tree before commit (see the session-log entry).
 
 `read: board + note`
+
+### 2026-09-18c
+
+CORRECTION TO THIS ROW ANSWER (row is closed; reopening is not warranted, the verdict stands). Section 9.10 listed seven unmeasured items; all seven are now measured. Map: docs/tk74-staleness-net-2026-09-18.md section 10, and the doc is now FROZEN.
+
+(!) THE CLOSE MESSAGE ABOVE OVERSTATES ONE SENTENCE. It says the settle pass is "structurally incapable of detecting a skipped/stale reconcile AT ANY SCHEMA SHAPE". That needs the scope qualifier "WITHIN THE CASCADE THAT SKIPPED IT". Across cascades it catches them opportunistically: a later UNRELATED write surfaces the stale key and the pass raises. Reproduced first-hand, three arms:
+  ARM A (no skip)                -> raised=False, oracle_div=0
+  ARM B (skip + later write op4) -> RAISED, oracle_div=1
+  ARM C (same skip, truncated)   -> raised=False, oracle_div=1
+Arm C is the one that matters: the staleness is present and unseen. Arm B: same staleness plus one unrelated write, and it raises. Rate is 8 of 2179 skip arms placed the key, 1 of those genuinely stale, and that one raised -- opportunistic, not a net. TK82 is still the answer.
+
+WHAT ELSE MOVED. (1) Section 9.5 "the divergence is carried ENTIRELY in materialized closure edges" is FALSE for the starred case -- one token in demorgans_law_2 (assigned: [user] -> [user, user:*]) makes a starred intersection reachable, and the residue diverges too, with one query FAIL-OPEN. -> TK83. (2) Section 9.3 reachability route for the unguarded delete is wrong -- _gc_subject_node is transitively guarded (returns at :1075-1076 before reaching _maybe_remove_bridges at :1096); the live route is remove_tuple -> :894. And there are THREE delete branches, not two; the one section 9.3 omitted (:884) is the only UNGUARDED one. (3) Section 9.2 "requires a WRITE" should read "requires the reconcile to RUN and reach _store_residue" -- the else branch at :1340-1345 bumps on an unchanged rewrite. (4) Section 9.1 driven column is RELATION-level; the miscount recurred a FOURTH time, inside the correction written to fix it. (5) Section 9.4 census is contaminated -> TK84.
+
+WHAT HELD. The verdict, the TK82 design, audit_fixpoint as the only real detector with zero production callers, and PostgreSQL: the arm logs are BYTE-IDENTICAL to SQLite. The generated-schema search found no counter-instance in 588 schemas / 31824 cascades, and it tightened the law -- _fan_out keys parameter is DEAD (occurs once, on its signature line), so :1632 is the only possible channel into leftover, by signature rather than by inspection.
+
+Known live correctness bugs: still 0. Everything above needs deliberate fault injection.
