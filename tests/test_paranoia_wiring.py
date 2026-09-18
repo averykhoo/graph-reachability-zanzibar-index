@@ -37,6 +37,8 @@ from index_v4.invariants import (InvariantViolation, PARANOIA_ENV_VAR,
                                  install_paranoia, normalize_paranoia_level,
                                  resolve_paranoia_level)
 from index_v4.models import NodeV4, ResidueV1
+from tests.wildcard_helpers import make_wildcard_index
+from zanzibar_utils_v1 import parse_openfga_schema
 
 STORE = 'cs'
 
@@ -293,6 +295,83 @@ def test_off_store_can_still_be_wired_by_a_later_install(session, load_fga_schem
     session.add(row)
     with pytest.raises(InvariantViolation, match='I6'):
         cs.add_tuple('...', 'user', 'grace', 'editor', 'doc', 'd7')
+
+
+# ---------------------------------------------------------------------------
+# TK74: the TEST HARNESS's tier knob must not be a lie
+# ---------------------------------------------------------------------------
+#
+# Everything above pins ``install_paranoia``. But almost no wildcard test calls it
+# directly -- they go through ``tests/wildcard_helpers.py::make_wildcard_index``,
+# whose ``paranoia=`` argument was typed ``bool`` and forwarded NOTHING:
+#
+#     if paranoia:
+#         install_paranoia(session, store_id, schema_info)      # <- no level=
+#
+# ``install_paranoia`` defaults to ``PARANOIA_FULL``, so every non-empty string was
+# TRUTHY and installed the FULL tier. ``paranoia='off'`` -- the spelling that most
+# obviously means "no checking" -- silently installed the strongest checker there is.
+#
+# That is the exact intent ``normalize_paranoia_level`` exists to defend ("a typo'd
+# security switch must never silently mean 'off'", :112-130) being defeated one layer
+# up, in the direction the docstring did not anticipate: silently meaning *full*.
+#
+# WHY IT MATTERS ENOUGH TO PIN. It is an assurance step that fails by PASSING. A tier
+# sweep written against this helper reports three arms and runs off/FULL/FULL, so a
+# "we measured all three tiers" claim is unfalsifiable. It cost a real measurement:
+# during the TK74 round-2 fan-out (2026-09-18b) one probe's entire three-tier sweep
+# was invalid for this reason and only its skeptic's corrected re-run was citable
+# (docs/tk74-staleness-net-2026-09-18.md sec 9.7).
+#
+# OBSERVED BEFORE THE FIX (literal, 2026-09-18b):
+#     make_wildcard_index(paranoia='off')     -> guard=ParanoiaGuard level='full'
+#     make_wildcard_index(paranoia='residue') -> guard=ParanoiaGuard level='full'
+#     install_paranoia(level='off')           -> guard=None
+#     install_paranoia(level='residue')       -> guard=ParanoiaGuard level='residue'
+#
+# SABOTAGE: revert make_wildcard_index to ``install_paranoia(session, store_id,
+# schema_info)`` and ``test_helper_forwards_the_tier`` fails on the 'off' case with
+# ``level == 'full'``; ``test_helper_rejects_a_typod_tier`` fails because the typo is
+# accepted and installs full. Both were observed RED before the fix landed.
+
+
+def _helper_guard(schema_info, level):
+    """Install via the test helper and report what tier actually landed."""
+    session, _widx = make_wildcard_index(schema_info, store_id='tier', paranoia=level)
+    guard = session.info.get('paranoia_guards', {}).get('tier')
+    return guard.level if guard is not None else None
+
+
+@pytest.mark.parametrize('level,expected', [
+    (False, None), ('off', None),
+    ('residue', 'residue'),
+    (True, 'full'), ('full', 'full'),
+])
+def test_helper_forwards_the_tier(load_fga_schema, level, expected):
+    """``make_wildcard_index(paranoia=X)`` must install exactly tier X.
+
+    The two string cases are the regression: both used to land on 'full'.
+    The two bool cases pin that the historical flag still means what it meant --
+    every tracked caller passes a bool, so this fix must be behaviour-preserving
+    for them.
+    """
+    schema_info = parse_openfga_schema(
+        load_fga_schema('boolean_wildcards.fga')).schema_info
+    assert _helper_guard(schema_info, level) == expected
+
+
+@pytest.mark.parametrize('bad', ['paranoid', 'I6', 'on-ish'])
+def test_helper_rejects_a_typod_tier(load_fga_schema, bad):
+    """A misspelled tier must be LOUD here too, not silently promoted to 'full'.
+
+    Without the fix the string is merely truthy and the full checker is installed,
+    so the typo is invisible -- the failure mode this module's
+    ``test_a_typod_level_is_loud`` already forbids one layer down.
+    """
+    schema_info = parse_openfga_schema(
+        load_fga_schema('boolean_wildcards.fga')).schema_info
+    with pytest.raises(ValueError):
+        make_wildcard_index(schema_info, store_id='tier', paranoia=bad)
 
 
 if __name__ == '__main__':          # pragma: no cover

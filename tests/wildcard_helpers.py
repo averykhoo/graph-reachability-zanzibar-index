@@ -17,12 +17,21 @@ from zanzibar_utils_v1 import SchemaInfo
 
 
 def make_wildcard_index(schema_info: SchemaInfo, store_id: str = 'test', *,
-                        paranoia: bool = True) -> tuple[Session, WildcardIndex]:
+                        paranoia: 'bool | str' = True) -> tuple[Session, WildcardIndex]:
     """Fresh in-memory store + WildcardIndex.
 
     Paranoia mode (boolean spec §8.1) is ON by default while prerelease: the invariant
     checker runs inside every commit (violation ⇒ raise ⇒ abort) and again post-commit
     in a fresh session. Pass ``paranoia=False`` for benchmarks.
+
+    ``paranoia`` takes anything ``normalize_paranoia_level`` takes -- ``True``/``False``
+    (the historical flag, = ``'full'``/``'off'``) or a tier name ``'off'`` / ``'residue'``
+    / ``'full'``. **The level is FORWARDED**; it used to be dropped, which made every
+    non-empty string truthy and installed ``'full'``, so ``paranoia='off'`` silently
+    installed the strongest checker there is and a three-tier sweep written against this
+    helper actually ran off/full/full. Pinned by
+    ``tests/test_paranoia_wiring.py::test_helper_forwards_the_tier`` and
+    ``::test_helper_rejects_a_typod_tier`` (TK74, 2026-09-18b).
     """
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
@@ -30,8 +39,7 @@ def make_wildcard_index(schema_info: SchemaInfo, store_id: str = 'test', *,
     session.add(Store(id=store_id))
     session.commit()
     idx = ReachabilityIndex(session, store_id=store_id)
-    if paranoia:
-        install_paranoia(session, store_id, schema_info)
+    install_paranoia(session, store_id, schema_info, level=paranoia)
     return session, WildcardIndex(idx, schema_info)
 
 

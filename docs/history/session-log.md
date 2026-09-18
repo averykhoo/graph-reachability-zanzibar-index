@@ -30,6 +30,86 @@ from here.
 
 ---
 
+## 2026-09-18b — the settle pass is structurally blind to a stale reconcile; `TK74` closed, tier knob fixed
+
+rows: `TK74` (`NOW` → closed), `TK80`–`TK82` (new), `TK82` (→ `NOW`).
+
+task lint: clean (13 checks, 197 task file(s) parsed), 32 warning(s)
+read: board + note
+
+Ran `TK74`'s single blocking next action — the skipped-reconcile experiment on a
+multi-stratum schema — as two fan-outs (11 + 8 agents), then closed the row. Map:
+[`docs/tk74-staleness-net-2026-09-18.md`](../tk74-staleness-net-2026-09-18.md) §8 (round 1)
+and §9 (round 2), both written into the tracked file *before* acting on them.
+
+**The answer.** The `TK73` settle pass is **structurally incapable** of detecting a
+skipped/stale reconcile **at any schema shape**: `leftover` is built exclusively from
+things that were WRITTEN — outbox rows above the final frontier, plus the `_bumped`
+fan-out whose sole append is `_store_residue` (`index_v4/processor.py:1351`) — and a stale
+reconcile is a *non-write*. Its teeth are real and correctly aimed at a **different** class
+(late reconcile-time GC emission): force the key into the post-loop map at `:1629` and it
+raises 4/4 and 2/2. The only detector for this class is `audit_fixpoint` (I9, `:1732`),
+which has **zero production callers**. `TK82` carries the decision — an opt-in tier over the
+cascade's **scheduled**-key union, default OFF.
+
+**Two corrections to round 1, both found by skeptics or by round 2.** (1) Round 1 blamed
+the null on `if not keys: break` (`:1583`) decapitating strict chains; that is one
+sufficient cause, **not the reason** — a hand-built diamond defeated decapitation (the
+final round wrote and emitted 1/3/4 outbox rows in 3 of 32 arms) and `_map_deltas_to_keys`
+still returned zero keys. (2) "No paranoia tier fires" **overclaimed**: the FULL tier
+incidentally catches a dangling-id side-effect (I6) on ~2.4% of arms on one fixture,
+though never the staleness itself.
+
+**The count that mattered was wrong three times in the same direction.** Probes reported
+104, 130 and 5 driven arms; their skeptics re-derived **6**, **54** and **2**. Every time
+the probe scored at *relation* level over any object, or ignored the cascade round index.
+Standing rule now recorded: count **object-level, at a strictly later round, and
+oracle-wrong**. The honest n went 6 → ~62 across both rounds, and the net stayed empty in
+every arm.
+
+**A habitat control finally separated "blind" from "never runs"** — reproduced first-hand:
+the settle pass *does* execute naturally on a 3-stratum schema, with no skip and no
+injection, on a **stratum-0** leftover key, returning `changed=()`. So round 1's nulls are
+genuine nulls rather than dormancy. The habitat is brittle (one extra tuple silences it)
+and had to be engineered: 2385 fuzzed multi-stratum cascades gave `SETTLE_RAN = 0`.
+
+**Landed: the instrument, not the detector.**
+`tests/wildcard_helpers.py::make_wildcard_index` silently **dropped its tier argument** —
+`paranoia: bool` with `if paranoia: install_paranoia(...)` and no `level=`, while
+`install_paranoia` defaults to FULL. So `paranoia='off'` was a truthy string that installed
+the **strongest** checker, and `'residue'` did too. An assurance step failing by *passing*,
+in tracked test code; it had already invalidated one round-2 probe's entire three-tier
+sweep (it ran off/FULL/FULL). Now forwards the level, pinned by
+`tests/test_paranoia_wiring.py::test_helper_forwards_the_tier` and
+`::test_helper_rejects_a_typod_tier`. **Sabotage observed RED before the fix**
+(`assert 'full' == None`, `assert 'full' == 'residue'`, typos `DID NOT RAISE`) — and the
+*first* red was an instrument failure (`AttributeError: 'str' object has no attribute
+'schema_info'`), fixed before any red was believed. All 8 tracked callers pass booleans, so
+the change is behaviour-preserving for them; `normalize_paranoia_level` already handled both
+forms and raises loudly on a typo.
+
+**A phantom symbol nearly reached a tracked doc.** An agent cited
+`index_v4/core.py::_adjust_reference_counts` as an unguarded implicit-node-delete path.
+That symbol **does not exist** anywhere in the tree. The *code* is real — the enclosing
+symbol is `ReachabilityIndex._add_direct_edge_unsafe_impl` (`core.py:714`), branches at
+`:877`/`:894`, no residue-reference check, reachable via `_gc_subject_node` →
+`WildcardIndex._maybe_remove_bridges` (`wildcard.py:437`). Filed as `TK80`; the finding
+survives, the citation did not.
+
+**Process:** the 2026-09-17 concurrent-writer incident did not recur — HEAD pinned to a
+`git archive` export, `git status --porcelain` clean before and after both runs, and agents
+were forbidden from touching tracked files (all mutation by instance-level monkeypatch).
+The one expected exception, this session's own doc edit, was pre-declared to the round-2
+agents so it would not read as a foreign writer.
+
+Still owed: nothing skipped from the Rhythm. `TK82` (implement the tier) is `NOW`; its
+mandatory sabotage is named on the row — take the union from the RECONCILED set instead of
+the SCHEDULED set and watch the test go green. `TK80` (unguarded delete) and `TK81`
+(staleness is transient, so a periodic audit is worth ~zero) are `LATER`. §9.10 lists seven
+things still unmeasured, including that both rounds ran only on SQLite in-memory.
+
+---
+
 ## 2026-09-18 — `TK74` reproduces but is no live bug; the `TK73` settle pass runs on 0.54% of cascades
 
 rows: `TK74` (`LATER` → `NOW`), `TK75` (→ `NEXT`), `TK72`, `TK3`, `TK44`, `P6` (`NOW` → `LATER`), `TK76`–`TK79` (new).

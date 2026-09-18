@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-17
-moved: 2026-09-18
-updated: 2026-09-18
-closed:
+moved: 2026-09-18b
+updated: 2026-09-18b
+closed: 2026-09-18b
 ---
 
 ## What it is
@@ -79,3 +79,40 @@ THE PREMISE REPRODUCES -- AND IT IS AN ASSURANCE GAP, NOT A LIVE BUG. Map: [`doc
 Spun out: `TK76` (a shipped pin's stated control is inert), `TK77` (the matrix/hypothesis campaign cannot reach the `_sync_entity_middles` surface), `TK78` (`bulk_backfill.py` unaudited; `backfill()` drops `_bumped`), `TK79` (the late-GC rows' own design justification is pinned by nothing). `TK3` demoted to LATER: its census question is answered in sec 3 of the doc (`audit_fixpoint` has zero production callers, READ).
 
 (!) PROCESS: four of six agents detected a CONCURRENT WRITER mutating `index_v4/processor.py` (`_sk[:-1]`, a skip-the-last-key sabotage) at ~23:28-23:35 on 2026-09-17, reverted before I looked. It produced false readings in two agents' runs. Tree verified clean at HEAD 6c5b97c before and after; nothing from that window was committed. Rule earned, doc sec 7: pin a `git archive HEAD` export and check `git status --porcelain` before AND after any probe that matters.
+
+### 2026-09-18b
+
+THE EXPERIMENT IS RUN AND THE DESIGN QUESTION IS ANSWERED. Map: [`docs/tk74-staleness-net-2026-09-18.md`](../docs/tk74-staleness-net-2026-09-18.md) §8 (round 1) and §9 (round 2). Two fan-outs, 19 agents; every load-bearing claim re-verified first-hand by the session.
+
+**THE ANSWER.** The `TK73` settle pass is **structurally incapable** of detecting a skipped/stale reconcile **at any schema shape** — `leftover` is built exclusively from things that were WRITTEN (outbox rows above the final frontier, plus the `_bumped` fan-out whose sole append is `_store_residue`, `index_v4/processor.py:1351`), and a stale reconcile is a *non-write*. Its teeth are real and correctly aimed at a DIFFERENT class (late reconcile-time GC emission): forcing the key into the post-loop map at `:1629` makes it raise 4/4 and 2/2. **Do not widen it.** The only detector for this class is `audit_fixpoint` (I9, `:1732`) — **zero production callers**, confirmed first-hand.
+
+**(!) TWO CORRECTIONS TO §8, BOTH FROM ROUND 2.** (1) §8.2 blamed the null on `if not keys: break` (`:1583`) decapitating strict chains — that is ONE SUFFICIENT CAUSE, NOT THE REASON. `het` built a diamond that defeats decapitation: the final round DID write and emit (1/3/4 outbox rows in 3 of 32 arms) and `_map_deltas_to_keys` still returned ZERO keys. §9.2 has the stronger law. (2) §8.4's "no paranoia tier fires" OVERCLAIMS — the FULL tier incidentally catches a dangling-id side-effect on ~2.4% of arms on one fixture (I6, dead node id in a residue's neg). It still never detects the staleness itself.
+
+**n WENT FROM 6 TO ~62 AND THE NET STAYED EMPTY.** Round 1's 104 arms were really 6 (98 were structurally unreachable). Round 2 adds 54 (`demorgans_law_2`, skeptic-corrected from the probe's inflated 130), 4 (`heterogeneous_tupleset`), 4 (`demorgans_reverse`). In every one: settle executed 0, raised 0, leftover non-empty 0.
+
+**THE HABITAT CONTROL SEPARATES "BLIND" FROM "NEVER RUNS"** — reproduced first-hand: the settle pass DOES execute naturally on a 3-stratum schema with no skip and no injection, on a STRATUM-0 leftover key, returning `changed=()`. So the nulls are genuine nulls, not dormancy. But the habitat is brittle (one extra tuple silences it) and had to be engineered: 2385 fuzzed multi-stratum cascades gave `SETTLE_RAN = 0`.
+
+**LANDED THIS SESSION (the next action, and it is the INSTRUMENT, not the detector):** `tests/wildcard_helpers.py::make_wildcard_index` silently DROPPED its tier argument — signature `paranoia: bool`, body `if paranoia: install_paranoia(...)` with no `level=`, and `install_paranoia` defaults to FULL. So `paranoia='off'` was a truthy string that installed the STRONGEST checker. A live assurance step failing by PASSING, in tracked test code; it already invalidated one round-2 probe's entire three-tier sweep (it ran off/FULL/FULL). Fixed to forward the level; pinned by `tests/test_paranoia_wiring.py::test_helper_forwards_the_tier` and `::test_helper_rejects_a_typod_tier`. **Sabotage observed RED before the fix** (`assert 'full' == None`, `assert 'full' == 'residue'`, typos `DID NOT RAISE`) — and the FIRST red was an instrument failure (`AttributeError: 'str' object has no attribute 'schema_info'`), fixed before the red was believed.
+
+**(!) A PHANTOM SYMBOL NEARLY REACHED A TRACKED DOC.** An agent cited `index_v4/core.py::_adjust_reference_counts` as an unguarded implicit-node-delete path. MEASURED: that symbol does not exist anywhere in the tree. The CODE is real; the enclosing symbol is `ReachabilityIndex._add_direct_edge_unsafe_impl` (`core.py:714`), branches at `:877`/`:894`, no residue-reference check, reachable via `_gc_subject_node` -> `WildcardIndex._maybe_remove_bridges` (`wildcard.py:437`). Unobserved in 208 arm executions, excluded by no guard. Spun out as `TK81`.
+
+**NEXT (spun out, this row's question is answered):** `TK80` implements the opt-in tier — I9 fixpoint over the cascade's SCHEDULED-key union (NOT the reconciled set: the skipped key is absent from that by construction), default OFF. `TK81` is the unguarded delete. `TK82` is the transient-staleness finding that demotes any periodic audit.
+
+`read: board + note`
+
+CLOSED — the row's question is answered, recorded, and the blocking instrument fix has landed.
+
+**(!) ID CORRECTION to the entry above, which was written before the ids were allocated.** The spin-outs are: **`TK80`** = the unguarded `core.py` implicit-node delete; **`TK81`** = staleness is transient so a periodic audit is worth ~zero; **`TK82`** = implement the opt-in I9 tier (promoted to the work queue). The previous entry's "TK80 implements the tier / TK82 is transient" mapping is WRONG — `new` allocates on creation order and the tier row was refused at NEXT and re-created last. Cite the ids in THIS entry.
+
+**THE DECISION, so nobody re-litigates it.** A cheap per-write staleness check SHOULD exist, as a NEW OPT-IN PARANOIA TIER beside off/residue/full (`index_v4/invariants.py::install_paranoia`), DEFAULT OFF, asking the I9 fixpoint question over the cascade's SCHEDULED-key union. Three things are settled and must not be re-opened without new evidence:
+1. **NOT by widening the settle pass.** It is structurally blind to this class at any schema shape (§9.2) and its teeth are correctly aimed at a different one. `rounds+1` was already rejected in `TK73` for repairing what it should detect.
+2. **NOT by a periodic or end-of-run `audit_fixpoint` sweep.** Staleness here is TRANSIENT — 31/34 arms transiently divergent, 0/34 still divergent after the workload, because later writes launder it (`TK81`). A periodic audit is worth ~zero as a DETECTOR; ship the production entry point framed as REPAIR/DIAGNOSIS (its own docstring already names `backfill()`).
+3. **The union must come from the SCHEDULING side** (`keys` at `index_v4/processor.py:1591`), never the reconciled set — the skipped key is absent from the latter BY CONSTRUCTION, so specified that way the tier ships DEAD. The mandatory sabotage for `TK82` is exactly that narrowest plausible weakening: take the union from the RECONCILED set and watch the test go green.
+
+**SCOPE BOUND that must survive into `TK82`:** the tier covers EXECUTION-side misses only. No arm in either round falsified the SCHEDULING side (`_fan_out`, `_map_deltas_to_keys` key derivation, `compiled.dependents`), so a key that is never scheduled at all stays uncovered — full-key `audit_fixpoint` remains the only net for that.
+
+**Known live correctness bugs stays 0.** Every wrong answer across ~166 arms required a deliberate instance-level monkeypatch; every unmutated control is `divergences=0`.
+
+Gate: full `verify.sh` green on this tree before commit (see the session-log entry).
+
+`read: board + note`
