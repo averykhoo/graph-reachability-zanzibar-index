@@ -26,7 +26,8 @@ and aborts the commit) and post-commit in a *fresh* session on the same bind (ca
 commit-boundary/session-state bugs). Default ON while prerelease; pass
 ``paranoia=False`` at the wiring site for benchmarks.
 
-**Tiers (ZT-P1-3, 2026-07-26).** Paranoia now has three levels, because the full
+**Tiers (ZT-P1-3, 2026-07-26; a fourth added by TK82, 2026-09-19).** Paranoia has four
+levels, because the full
 checker is an O(store) per-commit cost (measured 4.8x-10x on the write path,
 `benchmarks/results/BASELINE_2026-07-13.md`) and was therefore never wired into
 production at all -- leaving every runtime corruption detector dark:
@@ -40,10 +41,26 @@ production at all -- leaving every runtime corruption detector dark:
                  ``upos``/``neg`` id class, i.e. the ZT-P0-1 authorization
                  escalation (pin: ``tests/test_reg14_residue_gc_elision.py``).
                  Pre-commit only, so a violation ABORTS the writing transaction.
-  ``'full'``     everything: ``check_invariants`` (I1/I2/I3/I13/I14 + I4-I7 + I10) plus
-                 the delta-scoped BFS verifier, pre-commit AND post-commit in a
-                 fresh session. O(store) per commit, plus O(pairs x edges) for the
-                 verifier (`docs/perf-next-round.md`). Prerelease/test tier.
+  ``'full'``     everything above: ``check_invariants`` (I1/I2/I3/I13/I14 + I4-I7 +
+                 I10) plus the delta-scoped BFS verifier, pre-commit AND post-commit
+                 in a fresh session. O(store) per commit, plus O(pairs x edges) for
+                 the verifier (`docs/perf-next-round.md`). Prerelease/test tier.
+  ``'fixpoint'`` everything ``'full'`` runs, PLUS the per-cascade I9 tier
+                 (``DeltaProcessor._check_cascade_fixpoint``): after each cascade
+                 drains, re-reconcile every key the cascade SCHEDULED and require each
+                 to be a fixpoint. It is the only detector for an execution-side
+                 missed reconcile -- the settle pass is structurally blind to one
+                 within the cascade that skipped it, and no I1-I12 clause fires on the
+                 resulting closure-edge-only staleness (TK74,
+                 docs/tk74-staleness-net-2026-09-18.md sec 9.2 / sec 10.3).
+                 O(cascade work), roughly DOUBLING cascade cost -- far past
+                 ``'residue'``'s ~+5%, so it is a diagnosis tier, never a production
+                 one. Nothing selects it implicitly: it is above ``'full'`` on the
+                 ladder, no default is it, and no boolean-ish word maps to it.
+                 Scope bound: EXECUTION-side misses only. A key that was never
+                 SCHEDULED is outside this tier by construction; ``audit_fixpoint``
+                 (O(live derived keys), unbounded by write size) remains the only
+                 detector for that class.
 
 ``resolve_paranoia_level`` is the shared precedence rule for wiring sites: an
 explicit argument beats the ``ZANZIBAR_PARANOIA`` environment variable, which beats
@@ -96,8 +113,38 @@ _ALLOWED_DIRECT = {('', ''), ('', 'any'), ('all', ''), ('any', ''), ('', 'all'),
 PARANOIA_OFF = 'off'
 PARANOIA_RESIDUE = 'residue'
 PARANOIA_FULL = 'full'
-PARANOIA_LEVELS = (PARANOIA_OFF, PARANOIA_RESIDUE, PARANOIA_FULL)
+PARANOIA_FIXPOINT = 'fixpoint'
+#: Ordered WEAKEST to STRONGEST. The order is load-bearing twice over: ``_LEVEL_RANK``
+#: is built from it, and ``ParanoiaGuard.raise_to`` keeps the higher rank when a store
+#: is wired twice. ``'fixpoint'`` is appended ABOVE ``'full'`` deliberately -- placed
+#: below it, ``full`` would IMPLY the cascade tier and every caller that passes
+#: ``paranoia=True`` would start paying a doubled cascade, which is exactly the
+#: "opt-in, default OFF" property TK82 is specified around
+#: (docs/tk82-cascade-fixpoint-tier-2026-09-19.md sec 1).
+PARANOIA_LEVELS = (PARANOIA_OFF, PARANOIA_RESIDUE, PARANOIA_FULL, PARANOIA_FIXPOINT)
 _LEVEL_RANK = {name: i for i, name in enumerate(PARANOIA_LEVELS)}
+
+
+def paranoia_at_least(level: str, floor: str) -> bool:
+    """``level`` is at least as strong as ``floor`` on the ladder.
+
+    Use this instead of ``level == PARANOIA_FULL``: an equality test silently EXCLUDES
+    every tier added above the one compared, so appending ``'fixpoint'`` would have made
+    the strongest tier weaker than ``'full'`` (it would have fallen into the residue
+    branch and lost post-commit re-checking). Pinned by
+    ``tests/test_cascade_fixpoint_tier.py::test_fixpoint_tier_is_at_least_full``."""
+    return _LEVEL_RANK[level] >= _LEVEL_RANK[floor]
+
+
+def paranoia_level(session: Session, store_id: str) -> str:
+    """The level installed for ``store_id`` on ``session``, or ``'off'`` if none is.
+
+    The registry IS the authority: ``install_paranoia`` registers nothing for ``'off'``,
+    so absence means off. This is how code that runs *inside* a write (the delta
+    processor's cascade tier) reads the operator's setting without growing a second,
+    separately-configurable knob that could disagree with the guard."""
+    guard = session.info.get('paranoia_guards', {}).get(store_id)
+    return guard.level if guard is not None else PARANOIA_OFF
 
 #: The environment variable an operator sets to turn the layer on (or off) without
 #: a code change. Accepts a level name, or a boolean-ish word (``1``/``true``/``on``
@@ -731,7 +778,7 @@ class ParanoiaGuard:
             return
         sess.flush()   # before_commit fires before the commit's flush; check real state
         with _violations_tagged(self.store_id, 'pre-commit'):
-            if self.level == PARANOIA_FULL:
+            if paranoia_at_least(self.level, PARANOIA_FULL):
                 check_invariants(sess, self.store_id, self.schema_info,
                                  residue_versions=dict(self.committed_versions))
                 verify_outbox_deltas(sess, self.store_id, self.wm)
@@ -742,7 +789,7 @@ class ParanoiaGuard:
         # Post-commit re-checking is a FULL-tier facility only: it cannot abort
         # anything (the commit already landed), so the cheap tier -- whose whole job
         # is to fail closed on the write path -- does not pay for it.
-        if self.level != PARANOIA_FULL:
+        if not paranoia_at_least(self.level, PARANOIA_FULL):
             return
         with Session(sess.get_bind()) as fresh:
             with _violations_tagged(self.store_id, 'post-commit'):

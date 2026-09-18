@@ -36,18 +36,34 @@ rejection, full-grid check parity vs the oracle. Raw-tuple set semantics live he
 
 ## Paranoia mode (`index_v4/invariants.py`)
 
-Default ON while prerelease **in the TEST harness only** — it is wired by
-`tests/wildcard_helpers.make_wildcard_index` and `tests/test_connectedstore.py`, and by
-nothing else: `index_v4/invariants.py::install_paranoia` has exactly those two callers, and
-`ConnectedStore.__init__` never calls it and exposes no flag. So a production deployment
-runs with this entire layer dark. (`paranoia=False` for benchmarks or
-deliberate-corruption tests.) Inside every `session.commit()`:
+Default ON while prerelease **in the TEST harness** (`tests/wildcard_helpers.
+make_wildcard_index`, `paranoia=False` for benchmarks or deliberate-corruption tests) and
+**OFF but selectable in production**: `ConnectedStore.__init__` takes `paranoia=` and
+honours `ZANZIBAR_PARANOIA`, defaulting to `'off'`
+(`connectedstore/store.py::ConnectedStore.DEFAULT_PARANOIA`). This paragraph said the
+opposite — "`ConnectedStore.__init__` never calls it and exposes no flag … a production
+deployment runs with this entire layer dark" — until 2026-09-19; that was true before
+ZT-P1-3 wired the tiers and stale after. The live caller census is
+`grep -rn 'install_paranoia(' --include=*.py`. Inside every `session.commit()`:
 
 * **pre-commit** (in-transaction; violation aborts): `check_invariants` + the
   delta-scoped verifier (§8.3: per outbox row, BFS over direct edges vs closure row
   vs claimed flip);
 * **post-commit** (fresh session, same bind): `check_invariants` again — catches
   commit-boundary/session-state bugs.
+
+And, at the opt-in `'fixpoint'` tier only (TK82, 2026-09-19), **once per boolean cascade**
+after it drains: re-reconcile every key the cascade SCHEDULED and require each to be an I9
+fixpoint (`index_v4/processor.py::DeltaProcessor._check_cascade_fixpoint`). It is the only
+detector for an *execution-side* missed reconcile — the terminal settle pass is
+structurally blind to one within the cascade that skipped it, and no I1–I12 clause fires on
+the closure-edge-only staleness left behind (TK74). It sits ABOVE `'full'` on the ladder so
+nothing acquires it implicitly, and it roughly doubles cascade cost, so it is a diagnosis
+tier and never a production one. Its key set comes from the **scheduling** side, a choice
+no clean-traffic measurement can justify (the scheduled and reconciled sets are byte-
+identical on unmutated traffic) and which therefore ships with a permanent fault-injection
+sabotage: `tests/test_cascade_fixpoint_tier.py`. Design:
+[`../tk82-cascade-fixpoint-tier-2026-09-19.md`](../tk82-cascade-fixpoint-tier-2026-09-19.md).
 
 **What `check_invariants` actually runs** (read off the function body, 2026-07-26 — its
 own docstring says "I1–I6 + I10" and is wrong, and two docs used to give two other

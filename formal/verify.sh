@@ -518,7 +518,17 @@ MIN_CONF_ALL=546
 #   here, and a session that only ADDS tests never sees a red to remind it. Carried as a
 #   "Still owed" bullet in HANDOFF.md rather than fixed in the same change.
 #   Re-measured with `pytest tests/ -q --collect-only` -> `1131 tests collected`.
-MIN_TESTS_ALL=1131
+#   RAISED 1131 -> 1209 on 2026-09-19 (TK82): +16 `tests/test_cascade_fixpoint_tier.py`
+#   (the opt-in 'fixpoint' paranoia tier, its permanent reconciled-union sabotage and
+#   its controls), and +62 THAT WERE ALREADY UNRATCHETED -- this tree collected 1193
+#   before those 16 landed, against this floor of 1131. That is the FOURTH consecutive
+#   raise to find pre-existing headroom, and by far the largest (1, 17, and now 62), so
+#   the drift is accelerating rather than occasional: sixty-two tests could have been
+#   deleted with the gate green. The "Still owed" bullet in HANDOFF.md asking for a
+#   mechanical ratchet here -- the equivalent of tasks/config.json's min_tasks_parsed --
+#   is now the fourth piece of evidence for itself and is NOT fixed in this change.
+#   Re-measured with `pytest tests/ -q --collect-only` -> `1209 tests collected`.
+MIN_TESTS_ALL=1209
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

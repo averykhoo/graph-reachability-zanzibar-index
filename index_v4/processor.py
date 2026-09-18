@@ -29,7 +29,8 @@ from sqlmodel import select
 
 from zanzibar_utils_v1 import (CompiledBooleans, DerivedFamily, LeafFamily)
 
-from .invariants import InvariantViolation
+from .invariants import (InvariantViolation, PARANOIA_FIXPOINT,
+                         paranoia_at_least, paranoia_level)
 from .models import EdgeV4, NodeV4, ResidueRefV1, ResidueV1
 from .outbox import outbox_rows
 from .wildcard import WildcardIndex
@@ -46,6 +47,23 @@ class SettlePass(NamedTuple):
     is the genuine-staleness signal the cascade raises on. A cascade that drained
     cleanly records None, not an empty pass. See TK73 /
     docs/tk73-cascade-quiesce-gc-2026-09-17.md."""
+    keys: tuple[Key, ...]
+    changed: tuple[Key, ...]
+
+
+class FixpointTier(NamedTuple):
+    """What the opt-in ``'fixpoint'`` paranoia tier looked at and concluded (TK82).
+
+    ``keys`` is the cascade's SCHEDULED-key union -- every key placed in
+    ``_run_cascade``'s per-round ``keys`` map, plus the terminal ``leftover`` -- and
+    ``changed`` is the subset whose re-reconcile was NOT a fixpoint, i.e. the keys the
+    cascade left stale. A cascade that ran with the tier OFF records None, not an empty
+    pass, so a test can tell "the tier ran and found nothing" from "the tier never ran".
+
+    ⚠ Reading this is the ONLY way to observe the tier's verdict after the fact:
+    ``reconcile`` is a REPAIRING mutator, so calling it again returns False both on
+    state that was already a fixpoint and on state the tier just repaired.
+    See docs/tk82-cascade-fixpoint-tier-2026-09-19.md."""
     keys: tuple[Key, ...]
     changed: tuple[Key, ...]
 
@@ -267,6 +285,12 @@ class DeltaProcessor:
         # just fixed it" -- the second call returns False either way. Read by
         # ``tests/test_cascade_quiesce_gc.py``.
         self._settle: SettlePass | None = None
+        # TK82's opt-in per-cascade I9 tier. ``_tier_union`` is tri-state exactly like
+        # the caches below: None = the tier is OFF for this cascade and the scheduling
+        # sites cost one ``is not None`` test; a set = the tier is armed and collecting.
+        # ``_tier`` is last cascade's verdict (None if it never ran).
+        self._tier_union: set[Key] | None = None
+        self._tier: FixpointTier | None = None
         # Stored-tuple enumeration memo (perf R6-10). Tri-state, exactly like
         # ``ReachabilityIndex._node_cache`` (N15) and ``WildcardIndex._residue_cache``
         # (P3): None = NO scope installed, so every read goes to SQL; a dict = a scope
@@ -1561,9 +1585,24 @@ class DeltaProcessor:
         because the raw stored tuples it reads cannot change inside a cascade -- the
         full premise, and the two places it must NOT be installed or widened, are in
         ``_stored_cache_scope``'s own docstring. Unlike (1) this one is NOT installed
-        by ``advance_index``, deliberately: that scope spans the raw-write apply loop."""
+        by ``advance_index``, deliberately: that scope spans the raw-write apply loop.
+
+        (3) TK82's opt-in ``'fixpoint'`` tier runs AFTER both scopes close, not inside
+        them. That is the stronger question -- a memoized node resolution or stored-tuple
+        enumeration cannot mask a divergence the check exists to see -- it is what
+        docs/tk74-staleness-net-2026-09-18.md sec 10.3 actually measured (its instrument
+        wrapped this public method), and one call site here covers all three of
+        ``_run_cascade``'s normal exits, where a check placed inside would have to be
+        repeated at each and silently skipped by the next one added. ⚠ Bound: under
+        ``advance_index`` an OUTER node-cache scope spans the apply loop, so there the
+        tier still runs inside *that* one; the tier closes its own scopes, not a
+        caller's."""
+        self._tier = None
+        self._tier_union = set() if paranoia_at_least(
+            paranoia_level(self.session, self.store_id), PARANOIA_FIXPOINT) else None
         with self.idx._node_cache_scope(), self._stored_cache_scope():
             self._run_cascade(txn_start_watermark)
+        self._check_cascade_fixpoint()
 
     def _run_cascade(self, txn_start_watermark: int) -> None:
         self.session.flush()
@@ -1579,6 +1618,7 @@ class DeltaProcessor:
             for (b_type, b_rel, b_name) in bumped:
                 self._fan_out((b_type, b_rel), b_name,
                               keys, lambda k: keys.__setitem__(k, None))
+            self._tier_schedule(keys)
 
             if not keys:
                 break
@@ -1632,6 +1672,7 @@ class DeltaProcessor:
                           leftover, lambda k: leftover.__setitem__(k, None))
         self._bumped = []
         self._settle = None
+        self._tier_schedule(leftover)
         if not leftover:
             return
 
@@ -1663,6 +1704,71 @@ class DeltaProcessor:
                 f'cascade failed to quiesce after {rounds} strata rounds; the settle '
                 f'pass was a fixpoint at {list(keys)} but still emitted deltas mapping '
                 f'to {sorted(tail)}')
+
+    # ------------------------------------------------------------------ #
+    # The opt-in per-cascade I9 tier (TK82, paranoia level 'fixpoint')
+    # ------------------------------------------------------------------ #
+
+    def _tier_schedule(self, keys) -> None:
+        """Record keys the cascade has just SCHEDULED, for the fixpoint tier.
+
+        ⚠ THE SIDE THIS READS FROM IS THE WHOLE DESIGN, and it is not observable by any
+        clean-traffic measurement. On unmutated traffic the scheduled union and the
+        dispatched (reconciled) set are BYTE-IDENTICAL -- ``union_minus_dispatched = 0``
+        over 3,744 clean cascades (2026-09-18c) -- so the right and the wrong source cost
+        the same, produce the same union and the same zero false-positive rate. Only
+        fault injection separates them: the key of a SKIPPED reconcile is absent from the
+        dispatched set *by construction*, because its reconcile is precisely what did not
+        run, so a tier sourced from the execution side ships DEAD (measured: raises on
+        0 of 43 genuinely-wrong arms, against 43 of 43 for this one).
+
+        Called from the scheduling sites only -- after ``_map_deltas_to_keys`` plus the
+        bumped fan-out in each round, and on the terminal ``leftover``. It is a named
+        method rather than an inline ``update`` so the permanent sabotage
+        (``tests/test_cascade_fixpoint_tier.py::test_sabotage_reconciled_union_ships_dead``)
+        can re-source the union from the execution side by patching ONE symbol, which is
+        the refactor this design chooses against. Do not inline it.
+        """
+        if self._tier_union is not None:
+            self._tier_union.update(keys)
+
+    def _check_cascade_fixpoint(self) -> None:
+        """I9 over the cascade's scheduled-key union: every key the cascade scheduled
+        must now re-reconcile to a fixpoint (boolean spec §8.2 I9; TK82).
+
+        Runs only at paranoia ``'fixpoint'``; ``_tier_union is None`` otherwise, and this
+        is a single test per cascade. Detects EXECUTION-side misses -- a scheduled
+        reconcile that did not run, or ran wrong. A key never scheduled at all is out of
+        scope by construction; ``audit_fixpoint`` is the detector for that class, at
+        O(live derived keys) rather than O(cascade work).
+
+        ⚠ Do NOT write "the tier is a subset of ``audit_fixpoint``". The per-cascade
+        ratio of union size to ``audit_fixpoint`` scope EXCEEDS 1 (max 2.0 measured
+        2026-09-18c): the union is scheduled from deltas, so it can hold keys whose
+        object has just gone dead and left ``_live_keys_of``'s enumeration -- keys
+        ``audit_fixpoint`` would never visit.
+
+        Like the settle pass this repairs as it detects (``reconcile`` is a mutator) and
+        then raises, so the caller's rollback is what restores the pre-write state.
+        """
+        union, self._tier_union = self._tier_union, None
+        if union is None:
+            return
+        keys = tuple(sorted(union))
+        # Full-object reconcile even for subject-scoped schedulings: it recomputes
+        # neg/upos wholesale, so it is the strictly stronger fixpoint question (the
+        # settle pass takes the same decision for the same reason).
+        changed = tuple(k for k in keys if self.reconcile(*k))
+        self._tier = FixpointTier(keys=keys, changed=changed)
+        # A fixpoint reconcile writes nothing, so it bumps nothing; on the changed path
+        # we raise and the transaction is dead either way. Clearing keeps a caller that
+        # swallows the violation from carrying this cascade's bumps into the next one.
+        self._bumped = []
+        if changed:
+            raise InvariantViolation(
+                f'I9: the cascade left derived state STALE at {list(changed)} -- '
+                f'the re-reconcile of its SCHEDULED keys was not a fixpoint '
+                f'(scheduled union: {list(keys)})')
 
     # ------------------------------------------------------------------ #
     # Backfill / bootstrap (§5.5)

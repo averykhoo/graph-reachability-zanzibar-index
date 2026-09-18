@@ -312,6 +312,29 @@ So for any probe, sweep, or differential:
   every individual draw behaved correctly and the suite was green; only the *rate* was wrong,
   and nothing measured the rate.
 
+### A LEFT-ARMED instrument does not merely hide the detector — it edits the subject (2026-09-19)
+
+`TK82`'s tier re-runs the very operation its fault injection suppresses. The first probe
+armed the suppression for the whole cascade, so the **tier's own** re-reconcile of the
+skipped key was suppressed too, and **all four detection arms reported `NO RAISE`** — a
+working detector, reported as a dead one, with no error and nothing to notice. The rule that
+falls out is narrow and worth carrying: **when the check under test performs the same call
+the injection intercepts, the injection must be DISARMED at the check's entry point.** The
+shipped harness does exactly that, and says so in a comment, because the failure is silent.
+
+The second half is worse and is specific to a *repairing* detector. In the whole-suite sweep
+one test kept its suppression armed and therefore appears in **no** raise line — while the
+tier's re-reconciles of the OTHER keys silently REPAIRED downstream state and moved that
+test's measured divergence count. So a left-armed instrument at a repairing tier does not
+just fail to observe: **it changes the thing being measured, and the number you write down
+is of a state your code created.** Before trusting any arm of a probe that wraps a repairing
+mutator, ask which calls the wrapper is still intercepting *after* the subject has finished.
+
+Third form, cheap to miss: the injection wrapped `reconcile` but not `reconcile_subject`,
+which **silently halves** it — the cascade dispatches through whichever of the two the round
+scheduled. **Wrap every entry point the subject can take, and assert the injection fired the
+number of times you expect** (`assert state['skipped'] == 1`), never merely that it fired.
+
 ### Sweep the TEST MODULE with mutations — one sabotage certifies one test (2026-09-08)
 
 A sabotage certifies the *case you sabotaged*. When you then write a suite of tests around

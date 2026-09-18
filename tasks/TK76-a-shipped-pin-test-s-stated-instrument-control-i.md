@@ -2,7 +2,7 @@
 id: TK76
 title: a shipped pin test's stated instrument control is INERT: widx.paranoia is not an attribute
 brief: READ: grep -c paranoia index_v4/wildcard.py -> 0; the docstring claim at test_cascade_quiesce_gc.py:163 is false
-pri: NEXT
+pri: NOW
 size: S
 deps: []
 related: [TK73, TK74]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-18
-moved: 2026-09-18
-updated: 2026-09-18
+moved: 2026-09-19
+updated: 2026-09-19
 closed:
 ---
 

@@ -30,6 +30,99 @@ from here.
 
 ---
 
+## 2026-09-19 — `TK82` shipped: the opt-in `'fixpoint'` tier, whose ladder placement nearly made it weaker than `'full'`
+
+rows: `TK82` (implemented, swept, CLOSED), `TK76` (promoted `NOW`).
+
+task lint: clean (13 checks, 199 task file(s) parsed), 33 warning(s)
+read: board only
+
+Entered at the board, which ranked `TK82` `NOW` and called it fully specified. It was —
+for *what* to build. It left two things open that decide the blast radius, and both are
+decided and recorded here: **where the tier sits in the level ladder**, and **whether it
+runs inside or outside the cascade's two cache scopes**. Map, opened and FROZEN in the same
+session because the item closed in it:
+[`docs/tk82-cascade-fixpoint-tier-2026-09-19.md`](../tk82-cascade-fixpoint-tier-2026-09-19.md).
+
+**WHAT LANDED.** `PARANOIA_FIXPOINT = 'fixpoint'`, a fourth level appended **above**
+`'full'` in `index_v4/invariants.py::PARANOIA_LEVELS`, arming
+`index_v4/processor.py::DeltaProcessor._check_cascade_fixpoint` once per cascade over the
+SCHEDULED-key union that `::_tier_schedule` collects. The verdict is recorded on
+`::FixpointTier` — the only way a test can observe that the tier ran, since `reconcile` is
+a repairing mutator and a post-hoc call returns `False` on stale state too (the same reason
+`TK73` reads `_settle`). 16 tests: `tests/test_cascade_fixpoint_tier.py`.
+
+⚠ **THE PLACEMENT DECISION HAS TEETH, AND IT CREATED A TRAP THAT WAS FIXED IN THE SAME
+EDIT.** The ladder is a **total order** (`_LEVEL_RANK` enumerates `PARANOIA_LEVELS`;
+`raise_to` keeps the higher rank), so a tier placed *below* `'full'` is **implied** by it —
+and `install_paranoia` defaults to `'full'`, `make_wildcard_index` to `paranoia=True`, so
+the entire suite would have silently started paying a doubled cascade. Placed above.
+But `ParanoiaGuard`'s two listeners branched on `level == PARANOIA_FULL`, **equality**, so
+appending a rank above `'full'` routed the STRONGEST tier into the **residue** branch: it
+would have shipped *weaker* than `'full'`, losing post-commit re-checking entirely. That is
+`TK74` §9.7's lying tier knob recurring one layer down, in the same week. Now rank-based
+(`::paranoia_at_least`) and pinned **behaviourally**, off an I13 refcount corruption, by
+`::test_fixpoint_tier_is_at_least_full`.
+
+**THE SABOTAGE SHIPS AS A TEST, WHICH IS THE POINT OF THE ITEM.** §10.3 established that on
+unmutated traffic the scheduled union and the dispatched set are byte-identical, so the
+right design and the wrong one have the same cost, the same union size and the same FP
+rate: **no benchmark can ever tell them apart.** Measured on shipped code — detection
+**4 of 4** suppressed reconciles at non-final strata; the reconciled-union variant
+**0 of 4**, with a **non-empty** union (it looks alive and is dead, a better failure than an
+empty set). Controlled at the far end too: with the tier OFF the same skip leaves the store
+disagreeing with the independent oracle on **4 of 49** grid queries, reaching the top
+stratum — so the raise is a real defect, not an artifact of the monkeypatch.
+
+**FALSE POSITIVES: ZERO, and this is the first time the number is measured on shipped
+code.** `.scratch/tk82/fp_plugin.py` forces every store the suite wires at `'full'` up to
+`'fixpoint'`, turning the whole of `tests/` into the sweep:
+`tier_cascades=1612 keys_rereconciled=1912 tier_raises=5`. ⚠ **A raise count without
+attribution is worthless** — five raises could be five false positives. The plugin was
+re-run recording the nodeid at each raise, and **all five are this module's own deliberate
+fault injection**, so 1,607 unmutated cascades raised zero times. The five *test failures*
+under the plugin are a different five and are all plugin artifacts: a plugin that rewrites
+`'full'` to `'fixpoint'` necessarily breaks every test that asserts an exact tier.
+
+**MUTATION SWEEP of the new module** (mandatory; a sabotage certifies one test):
+**13 mutations, 12 RED, 1 INERT**, `M0` control attributing correctly. ⚠ **Neither INERT was
+believed.** `M2` (drop the leftover half of the union) was inert because this module's own
+fixture never produces a non-empty `leftover` at all — `_settle` is `None` on every one of
+its cascades — i.e. a coverage hole, not a redundant line; on `TK73`'s GC witness the
+leftover key is the *only* reason the union has two keys instead of one. `M6` (move the
+check inside the cache scopes) was inert because no behavioural assertion can see the
+placement. Both earned new tests and both now redden. `M12` stays INERT with its mechanism
+written down rather than dressed up.
+
+⚠ **AN INSTRUMENT FINDING THAT READS EXACTLY LIKE A CLEAN RESULT.** The first probe left the
+reconcile suppression armed while the tier ran — so the tier's own re-reconcile of the
+skipped key was suppressed, and **all four detection arms came back `NO RAISE`**: a working
+detector reported as a dead one. A second form wrapped `reconcile` but not
+`reconcile_subject`, which silently halves the injection, because the in-loop dispatch takes
+the subject-scoped path whenever a round scheduled subjects. Both are now controlled in the
+shipped harness, and the whole-suite sweep independently re-derived the first one: the arm
+that keeps its suppression armed appears in **no** raise line *and* has its measured
+divergence count moved, because the tier's other re-reconciles silently REPAIRED downstream
+state. **At this tier an armed instrument does not merely hide the detector — it edits the
+thing being measured.**
+
+⚠ **FOUND IN PASSING, AND FIXED.** `docs/architecture/verification.md` §"Paranoia mode" and
+`docs/architecture/correctness.md` §3 both asserted that **`ConnectedStore.__init__` never
+calls `install_paranoia` and exposes no flag, so a production deployment runs with this
+entire layer dark.** False since ZT-P1-3: `connectedstore/store.py:193` installs the guard
+and `__init__` takes `paranoia=` and honours `ZANZIBAR_PARANOIA`. The claim errs in the
+security-relevant direction — it describes a layer that *cannot* be turned on, when the real
+situation is one that defaults off and can be. Both corrected, both now name the live caller
+census command instead of a count. `ZANZIBAR_PARANOIA=fixpoint` arming the tier end-to-end
+through `ConnectedStore` is itself now a test, for the same §9.7 reason.
+
+Still owed: §8.8's rider — **`audit_fixpoint` still has no production-reachable entry
+point**, a complete detector for this class living as dead code outside tests. §9.9
+AMENDMENT 1 demoted it ("if only one of the two ships, ship the tier"), so it was
+deliberately not expanded into this item; it is unfiled and wants a row.
+
+---
+
 ## 2026-09-18c — §9.10's seven unmeasured items, measured: two headline sentences were stronger than the evidence
 
 rows: `TK74` (closed — correction logged), `TK80`, `TK82`, `TK83`–`TK84` (new).

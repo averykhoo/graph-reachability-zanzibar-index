@@ -67,9 +67,13 @@ groups runs here; `verification.md` has the per-invariant table) and the delta-s
 verifier (each outbox flip re-derived by BFS over
 direct edges and compared to the closure row) — a violation aborts the commit — and
 runs the checker again post-commit in a fresh session. **"Every commit in the test suite"
-is literal:** paranoia is wired only by `tests/wildcard_helpers.make_wildcard_index` and
-`tests/test_connectedstore.py`; `ConnectedStore` never installs it, so in production this
-layer is dark (see §4's "Paranoia off" gap). This converts "eventually a
+is literal:** paranoia is wired by `tests/wildcard_helpers.make_wildcard_index` and by
+`ConnectedStore.__init__`, which takes `paranoia=` and honours `ZANZIBAR_PARANOIA` but
+**defaults to `'off'`**, so a production deployment that configures nothing runs this layer
+dark (see §4's "Paranoia off" gap). This sentence read "`ConnectedStore` never installs
+it" until 2026-09-19 — true before ZT-P1-3, stale after. An opt-in fourth tier,
+`'fixpoint'`, adds a per-cascade I9 check above `'full'`
+(`verification.md` §"Paranoia mode"; TK82). This converts "eventually a
 grid comparison fails somewhere downstream" into "the writing transaction itself
 refuses", which is the difference between a reproducible bug and an archaeology
 project. The seeded-corruption tests prove each invariant class actually fires.
