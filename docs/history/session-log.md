@@ -30,6 +30,73 @@ from here.
 
 ---
 
+## 2026-09-19b — `TK76`: a shipped control was inert AND its rationale was false; both repaired mechanically
+
+rows: `TK76` (fixed, swept, CLOSED), `TK85` (FILED — the `audit_fixpoint` rider), `TK75` (promoted `NOW`).
+
+task lint: clean (13 checks, 200 task file(s) parsed), 32 warning(s)
+read: board only
+
+Entered at the board with a user instruction to land the unfiled "Still owed" rider and then
+continue with the open work. Two deliverables.
+
+**1. `TK85` filed — the `audit_fixpoint` production entry point.** `TK74` §8.8 called it
+"arguably the real deliverable"; §9.9 AMENDMENT 1 then demoted it (staleness in that class is
+transient — 31 of 34 arms transiently divergent, **0 of 34** still divergent after the
+workload — so a periodic sweep is worth ≈ 0 as a detector) and said "if only one of the two
+ships, ship the tier". `TK82` shipped the tier on 2026-09-19. So the rider is real but not
+urgent: filed `LATER`, size `S`, with the census re-run first-hand — the only *definition* is
+`index_v4/processor.py::DeltaProcessor.audit_fixpoint` (`:1838`), the four other `index_v4/`
+hits are docstrings, and **every call site is under `tests/`**; zero in `connectedstore/`,
+zero in `scripts/`. The row carries the three candidate shapes, the O(live derived keys)
+cost argument for why it can never be a write-path default, and the trap that matters:
+`audit_fixpoint` is a **repairing mutator**, so an entry point that swallows its exception
+silently repairs and reports nothing.
+
+**2. `TK76` fixed.** The finding was that `tests/test_cascade_quiesce_gc.py`'s
+`graph.widx.paranoia = False` is inert (`WildcardIndex` has no such attribute). Measuring it
+before fixing it changed the fix. The docstring's *rationale* — "paranoia is OFF so the
+settle assert is the instrument under test rather than I6" — is false in its premise too:
+the settle assert raises inside `run_cascade`, **before `session.commit()`**, so no
+commit-time checker can preempt it at any tier. Measured at all four tiers: the settle clause
+raises in every arm and no message carries `_violations_tagged`'s `store=` prefix. Stronger
+still — the corruption this test performs is **invisible** to the commit-phase checker:
+deleting that residue row, deleting every residue row, and bumping a residue version all
+commit clean at `paranoia='full'`; only a closure-edge deletion reaches it
+(`store='g' [pre-commit] I13: ...`). So I6 would not have preempted anything even had the
+tier really been off.
+
+The repair is therefore not "restore the claimed control" but "make the claim checkable":
+`tests/test_matrix.py::GraphBackend` grew a `paranoia` kwarg that **forwards** (it had to be
+a constructor knob — `install_paranoia` can only ever RAISE, via `ParanoiaGuard.raise_to`,
+so no post-construction call can produce an off store); the test is parametrized over
+`PARANOIA_LEVELS` with `paranoia_level(session, 'g') == tier` as a real control; it asserts
+the raise carries no `store=` prefix; and a new
+`::test_a_commit_phase_violation_is_tagged_so_test_3_can_tell_them_apart` shows that
+discriminator can fire, because an assertion no arm can fail is a false green.
+
+**Sweep: 8 mutations, 8 RED, 0 INERT, `M0` attributing** (literal table in the module
+docstring). ⚠ **The attribution column is the load-bearing half, not the verdict column.**
+`M0`/`M1`/`M2` redden the `off`, `residue` and `fixpoint` arms and leave `full` **GREEN** —
+which is the proof that the single-arm version of this test could not have caught the knob
+failure it claimed to be controlling for, and what earns the parametrization over a one-line
+docstring correction. `M3`/`M4`/`M5` redden `full` too, so the settle-pass pins are
+tier-independent as claimed.
+
+⚠ **The sweep's own instrument failed first, exactly as `P6` step 0 did.** Run 1 reported
+`attributed=0/0` on *every* row: `pytest -q` prints no nodeids, so the harness's
+`FAILED <nodeid>` regex matched nothing and an all-RED table carried an attribution column
+that meant nothing. `-rf` fixed it. Without `M0` in the table there is nothing to distinguish
+that from a clean module — the ninth consecutive addition where the sweep or its instrument
+found what a single sabotage would have missed.
+
+Note for the next session: the test count moved `3 -> 7` in that module, which is free
+(the gate's floors are `-ge`).
+
+Still owed: nothing skipped from the Rhythm. `TK85` is filed but not started, deliberately.
+
+---
+
 ## 2026-09-19 — `TK82` shipped: the opt-in `'fixpoint'` tier, whose ladder placement nearly made it weaker than `'full'`
 
 rows: `TK82` (implemented, swept, CLOSED), `TK76` (promoted `NOW`).

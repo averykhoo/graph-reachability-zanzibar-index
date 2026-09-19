@@ -45,9 +45,16 @@ def _fresh_session() -> Session:
 class GraphBackend:
     name = 'graph'
 
-    def __init__(self, schema, object_wc=frozenset()):
+    def __init__(self, schema, object_wc=frozenset(), *, paranoia='full'):
+        """``paranoia`` is FORWARDED to ``make_wildcard_index`` and takes anything
+        ``normalize_paranoia_level`` takes. It exists because ``install_paranoia`` can
+        only ever RAISE a level (``ParanoiaGuard.raise_to``), so a caller wanting a store
+        with paranoia genuinely OFF cannot get one after construction -- and a test that
+        instead sets an attribute on the index gets a silent no-op it can mistake for a
+        control (TK76: ``WildcardIndex`` has no ``paranoia`` attribute)."""
         self.ruleset = parse_openfga_schema(schema, object_wildcard_shapes=object_wc)
-        self.session, self.widx = make_wildcard_index(self.ruleset.schema_info, store_id='g')
+        self.session, self.widx = make_wildcard_index(self.ruleset.schema_info,
+                                                      store_id='g', paranoia=paranoia)
         self.proc = None
         if self.ruleset.compiled is not None and self.ruleset.compiled.plans:
             self.proc = DeltaProcessor(self.widx, self.ruleset.compiled)

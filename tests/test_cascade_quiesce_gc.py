@@ -50,19 +50,57 @@ them. Making the leftover key genuinely stale does:
 why the round budget was deliberately left alone: a budget bump is an assurance step that
 fails by passing, this repo's house failure mode.
 
-(!) The sabotage runs with paranoia OFF on purpose. With it on, I6 catches the corrupted
-residue first and the settle assert -- the instrument under test -- is never reached.
+(!) CORRECTED 2026-09-19b (TK76). This paragraph used to read "the sabotage runs with
+paranoia OFF on purpose. With it on, I6 catches the corrupted residue first and the settle
+assert -- the instrument under test -- is never reached." That is true of the standalone
+.scratch script above, which commits; it is FALSE of the shipped test, which raises inside
+``run_cascade`` and never reaches ``session.commit()``. Measured at all four tiers: the
+settle clause raises in every arm and none of the messages carries ``_violations_tagged``'s
+``store=`` commit-phase prefix. Stronger still: the corruption this test performs is
+INVISIBLE to the commit-phase checker -- delete that residue row (or all of them) on a
+clean witness store at ``paranoia='full'`` and the commit raises nothing -- so I6 could
+not have preempted the settle assert even had the tier really been off. TEST 3 is now
+PARAMETRIZED over the tiers and asserts both facts, TEST 4 shows the second assertion can
+fail, and the line that was supposed to implement the old claim
+(``graph.widx.paranoia = False``) set an attribute that does not exist.
 (!) An earlier form of that sabotage fired one reconcile too early and BOTH arms stayed
 green with every M0 control passing, because owner@x's residue is the reference that
 DEFERS the GC: dropping it early removed the sabotage's own precondition and no settle
 pass ever ran. ``test_settle_pass_runs_and_is_a_fixpoint`` asserting the pass RAN is what
 distinguishes a clean pin from a sabotage that quietly disarmed itself.
+
+THE TK76 MUTATION SWEEP (literal output, 2026-09-19b, `.scratch/tk76/sweep.py`; anchors
+dated the same day). Eight mutations, 8 RED, 0 INERT, M0 attributing:
+
+    BASELINE  rc=0  7 passed in 0.85s
+    M0   RED   rc=1  attributed=3/3   the control's own claim flipped to == 'full'
+    M1   RED   rc=1  attributed=3/3   GraphBackend stops forwarding `paranoia`
+    M2   RED   rc=1  attributed=3/3   the TK76 bug restored (set an attribute instead)
+    M3   RED   rc=1  attributed=4/4   settle pass stops raising on `changed`
+    M4   RED   rc=1  attributed=4/4   settle pass reports `changed=()` regardless
+    M6   RED   rc=1  attributed=1/1   `_violations_tagged` drops the `store=` prefix
+    M7   RED   rc=1  attributed=1/1   TEST 4 corrupts nothing
+    M5   RED   rc=1  attributed=5/5   settle pass examines no keys at all
+    RESTORED  rc=0  7 passed in 0.87s
+
+(!) READ THE ATTRIBUTION COLUMNS, not just the verdicts. M0/M1/M2 redden the `off`,
+`residue` and `fixpoint` arms and leave `full` GREEN -- which is exactly why the
+single-arm version of TEST 3 could not have caught the knob failure it claimed to be
+controlling for, and why the parametrization is the fix rather than a flourish. M3/M4/M5
+redden `full` too, so the settle-pass pins are tier-independent as claimed.
+
+(!) The sweep's FIRST run reported `attributed=0/0` on every row -- P6 step 0's instrument
+failure verbatim: `pytest -q` does not print nodeids, so the harness's
+``FAILED <nodeid>`` regex matched nothing and an all-RED table carried an attribution
+column that meant nothing. `-rf` fixed it. A sweep without an M0 control cannot tell that apart from a
+clean module.
 """
 import pytest
 from sqlmodel import select
 
-from index_v4.invariants import InvariantViolation
-from index_v4.models import ResidueV1
+from index_v4.invariants import (PARANOIA_LEVELS, InvariantViolation,
+                                 paranoia_level)
+from index_v4.models import EdgeV4, ResidueV1
 from setengine import ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from tests.test_matrix import GraphBackend, SetBackend
@@ -156,17 +194,44 @@ def test_settle_pass_runs_and_is_a_fixpoint():
         graph.close()
 
 
-def test_settle_pass_detects_genuine_staleness():
-    """TEST 3: the settle assert has TEETH -- on genuinely stale state it RAISES.
+@pytest.mark.parametrize('tier', PARANOIA_LEVELS)
+def test_settle_pass_detects_genuine_staleness(tier):
+    """TEST 3: the settle assert has TEETH -- on genuinely stale state it RAISES, and it
+    is the settle assert that raises AT EVERY PARANOIA TIER.
 
     The choosing sabotage, made permanent (docs/sabotage-procedure.md ranks a permanent
-    test above a recorded transcript). Paranoia is OFF so the settle assert is the
-    instrument under test rather than I6, and the corruption lands immediately before the
-    settle pass's own reconcile -- the moment a round-budget bump would instead have
-    silently repaired it."""
-    graph = GraphBackend(SCHEMA, frozenset())
+    test above a recorded transcript). The corruption lands immediately before the settle
+    pass's own reconcile -- the moment a round-budget bump would instead have silently
+    repaired it.
+
+    (!) TK76, 2026-09-19b. This test used to run one arm and open with
+    ``graph.widx.paranoia = False`` under a docstring claiming "Paranoia is OFF so the
+    settle assert is the instrument under test rather than I6". BOTH halves were wrong.
+    ``WildcardIndex`` has no ``paranoia`` attribute (``grep -c paranoia
+    index_v4/wildcard.py`` -> 0), so that line created a fresh instance attribute nothing
+    reads and the arm actually ran at FULL paranoia -- the project's house failure mode,
+    a control that fails by passing, sitting inside the module that pins TK73. And the
+    rationale was false in its premise too: the tier is IRRELEVANT here, because the
+    settle assert raises inside ``run_cascade``, before ``session.commit()``, so no
+    commit-time checker can preempt it. MEASURED 2026-09-19b at all four tiers --
+    ``settle-clause=True commit-prefix=False`` in every arm, with
+    ``fired=1 row_existed=True``.
+
+    So the fix is not to restore the claimed control but to make it REAL and mechanical:
+    the tier is threaded through ``GraphBackend`` (``install_paranoia`` can only RAISE,
+    so it cannot produce an off store after construction), ``paranoia_level`` is asserted
+    to be the tier actually requested -- the TK74 sec 9.7 lesson, a tier knob that does
+    not forward is a lie -- and the raise is asserted to carry NO ``store=`` prefix,
+    which is what ``_violations_tagged`` adds at commit time. That last assertion is the
+    mechanical form of "the settle assert is the instrument under test"."""
+    graph = GraphBackend(SCHEMA, frozenset(), paranoia=tier)
     try:
-        graph.widx.paranoia = False
+        # THE INSTRUMENT CONTROL. Read the registry, which IS the authority: a knob that
+        # silently did not forward would leave this equal to 'full' on every arm.
+        assert paranoia_level(graph.session, 'g') == tier, (
+            f'asked for paranoia={tier!r}, store is at '
+            f'{paranoia_level(graph.session, "g")!r} -- the tier did not forward, so '
+            f'this arm is not the arm it says it is')
         proc = graph.proc
         original = proc.reconcile
         state = {'seen': 0, 'fired': 0, 'row_existed': None}
@@ -208,6 +273,51 @@ def test_settle_pass_detects_genuine_staleness():
         assert 'settle pass CHANGED' in str(exc.value), (
             f'raised, but not from the settle assert: {exc.value}')
         assert str(LEFTOVER_KEY) in str(exc.value)
+        # ``_violations_tagged`` prefixes every commit-phase violation with
+        # ``store=... [pre-commit]``/``[post-commit]``. Its ABSENCE is the mechanical
+        # proof that a paranoia checker did not get there first -- which is what the old
+        # docstring asserted in prose and never checked.
+        assert not str(exc.value).startswith('store='), (
+            f'a commit-phase paranoia check raised first at tier {tier!r}, so the '
+            f'settle assert is not the instrument under test here: {exc.value}')
+    finally:
+        graph.session.rollback()
+        graph.close()
+
+
+def test_a_commit_phase_violation_is_tagged_so_test_3_can_tell_them_apart():
+    """TEST 4: the INSTRUMENT CONTROL for TEST 3's last assertion.
+
+    TEST 3 ends with ``not str(exc.value).startswith('store=')`` and reads it as "no
+    commit-phase paranoia check got there first". An assertion no arm can ever fail is a
+    false green, so this test shows the discriminator FIRES: corrupt state that the
+    commit-phase checker does catch, and its message is prefixed by
+    ``_violations_tagged`` exactly as TEST 3 assumes.
+
+    (!) MEASURED 2026-09-19b, and it is why TEST 3's four arms are not redundant: the
+    residue-row deletion TEST 3 performs is INVISIBLE to the commit-phase checker.
+    Deleting that row (or every residue row, or bumping a version) and committing at
+    ``paranoia='full'`` raises NOTHING. So the module docstring's old "with paranoia on,
+    I6 catches the corrupted residue first" was false in both directions -- the tier was
+    never off, and it would not have preempted anything if it had been on. A closure edge
+    is the corruption that does reach the checker (I13)."""
+    graph = GraphBackend(SCHEMA, frozenset(), paranoia='full')
+    try:
+        _apply_witness(graph)
+        edge = graph.session.exec(
+            select(EdgeV4).where(EdgeV4.store_id == 'g')).first()
+        assert edge is not None, (
+            'no closure edge on the witness store -- INSTRUMENT BROKEN, there is '
+            'nothing here to corrupt and this test asserts nothing')
+        graph.session.delete(edge)
+
+        with pytest.raises(InvariantViolation) as exc:
+            graph.session.commit()
+
+        assert str(exc.value).startswith("store='g' [pre-commit]"), (
+            f'a commit-phase violation did NOT carry the store/phase prefix, so TEST '
+            f"3's `not startswith('store=')` assertion discriminates nothing: "
+            f'{exc.value}')
     finally:
         graph.session.rollback()
         graph.close()

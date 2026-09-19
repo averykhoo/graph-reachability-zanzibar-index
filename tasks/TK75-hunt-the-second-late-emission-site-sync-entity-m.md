@@ -2,7 +2,7 @@
 id: TK75
 title: hunt the SECOND late-emission site (_sync_entity_middles) and the unreproduced second TK73 witness
 brief: TK73 left two unpinned: the strip-AND-re-add call site on crossable schemas, and a reported witness never reproduced
-pri: NEXT
+pri: NOW
 size: S
 deps: []
 related: [TK73]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-17
-moved: 2026-09-18
-updated: 2026-09-18
+moved: 2026-09-19b
+updated: 2026-09-19b
 closed:
 ---
 
