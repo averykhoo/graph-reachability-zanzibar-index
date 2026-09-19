@@ -2,7 +2,7 @@
 id: TK77
 title: the matrix and hypothesis campaign have ZERO reach into the _sync_entity_middles surface
 brief: crossable_shapes == [] for wildcards.fga and boolean_wildcards.fga under the matrix OBJECT_WC; census EMPTY 2026-09-18
-pri: NEXT
+pri: NOW
 size: M
 deps: []
 related: [TK75, TK44]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-18
-moved: 2026-09-18
-updated: 2026-09-18
+moved: 2026-09-19b
+updated: 2026-09-19b
 closed:
 ---
 
@@ -37,3 +37,15 @@ CAUSE: `tests/fga_schemas/wildcards.fga` and `tests/fga_schemas/boolean_wildcard
 WHY IT MATTERS: the validation matrix and the hypothesis campaign are the two mechanisms this repo relies on to find semantic divergence. A surface they structurally cannot reach is a surface where the graph index and the set engine could disagree indefinitely -- and I14 / crossing middles is exactly the area that produced `TK69`, `TK70` and `P22`.
 
 FIRST ACTION: measure `crossable_shapes` for every fixture in `tests/fga_schemas/` and publish the table (which fixtures are crossable at all, under which `object_wildcard_shapes`). That is cheap, it is the thing nobody has, and it decides whether the fix is a new matrix fixture or a generator change. Related: `TK44` (the unreached generator pair-cell space) may share a cause.
+
+### 2026-09-19b
+
+INHERITED FROM `TK75` (closed 2026-09-19b): this row now owns the re-add-arm fixture question, and it has a first-hand measurement to start from.
+
+Census run first-hand 2026-09-19b over exactly the three modules this row names as the only coverage of the crossable surface -- `tests/test_i14_crossing_middles.py`, `tests/test_owc_star_parent_cross.py`, `tests/test_bulk_build.py`, run together: **7 `_sync_entity_middles` calls in total, 1 of them inside a reconcile-time GC, and that one takes the STRIP arm.** The in-GC RE-ADD arm (`_ensure_entity_middles`, the witness-survives branch) is reached **zero** times by any of them. Two of the three modules make no `_sync_entity_middles` call at all -- the count is identical whether the run is all three or `test_i14_crossing_middles.py` alone.
+
+That tightens this row's claim in a useful direction: it is not only that the matrix and the hypothesis campaign cannot reach the crossable surface, it is that the three hand-written modules that CAN reach it exercise one branch of one function once. So the deliverable is the same fixture work this row already names, and the re-add arm is a concrete acceptance target for it.
+
+(!) The ceiling control on that census was LEFT-ARMED and must not be read as a null result: the arm that punches an I14 hole before the real call never fired (`holes=0`) because `_entity_has_witness` was never true in-GC. The measurement supports "not REACHED", not "reached and emits nothing". The 2026-09-18 "269 in-GC re-add calls, every one emitting zero rows" figure on `TK75` was over a wider run and stays AGENT-MEASURED -- re-measure before quoting it.
+
+`TK75` decided the re-add arm gets a RECORDED NEGATIVE rather than a forced-strip control test, on the grounds that such a test would pin a fixture invented for the probe and assert behaviour on a store state I14 forbids. That decision is reversible here once a real crossable fixture exists. The strip arm itself is now pinned: `tests/test_i14_crossing_middles.py::test_the_strip_arm_emits_from_inside_a_reconcile_time_gc` (3 rows, nesting `cascade=1 reconcile=1 gc=1`, and the honest rider that those rows map to no derived key so `_settle is None`).

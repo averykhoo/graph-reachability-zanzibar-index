@@ -69,25 +69,40 @@ DEFERS the GC: dropping it early removed the sabotage's own precondition and no 
 pass ever ran. ``test_settle_pass_runs_and_is_a_fixpoint`` asserting the pass RAN is what
 distinguishes a clean pin from a sabotage that quietly disarmed itself.
 
-THE TK76 MUTATION SWEEP (literal output, 2026-09-19b, `.scratch/tk76/sweep.py`; anchors
-dated the same day). Eight mutations, 8 RED, 0 INERT, M0 attributing:
+THE MUTATION SWEEP (literal output, 2026-09-19b, `.scratch/tk76/sweep.py`; anchors dated
+the same day). 13 mutations, 13 RED, 0 INERT, M0 and N0 both attributing. M-rows are
+TK76's, N-rows are TK75's:
 
-    BASELINE  rc=0  7 passed in 0.85s
-    M0   RED   rc=1  attributed=3/3   the control's own claim flipped to == 'full'
-    M1   RED   rc=1  attributed=3/3   GraphBackend stops forwarding `paranoia`
-    M2   RED   rc=1  attributed=3/3   the TK76 bug restored (set an attribute instead)
-    M3   RED   rc=1  attributed=4/4   settle pass stops raising on `changed`
-    M4   RED   rc=1  attributed=4/4   settle pass reports `changed=()` regardless
-    M6   RED   rc=1  attributed=1/1   `_violations_tagged` drops the `store=` prefix
-    M7   RED   rc=1  attributed=1/1   TEST 4 corrupts nothing
-    M5   RED   rc=1  attributed=5/5   settle pass examines no keys at all
-    RESTORED  rc=0  7 passed in 0.87s
+    BASELINE  rc=0  12 passed in 1.53s
+    M0   RED   attributed=3/3   the tier control's own claim flipped to == 'full'
+    M1   RED   attributed=3/3   GraphBackend stops forwarding `paranoia`
+    M2   RED   attributed=3/3   the TK76 bug restored (set an attribute instead)
+    M3   RED   attributed=4/4   settle pass stops raising on `changed`
+    M4   RED   attributed=4/4   settle pass reports `changed=()` regardless
+    M5   RED   attributed=9/9   settle pass examines no keys at all
+    M6   RED   attributed=1/1   `_violations_tagged` drops the `store=` prefix
+    M7   RED   attributed=1/1   TEST 4 corrupts nothing
+    N0   RED   attributed=3/3   TEST 2b's expected key hard-coded to witness 1's
+    N1   RED   attributed=4/4   `_witness` ignores its argument (the family collapses)
+    N2   RED   attributed=3/3   the grid stops naming the star target among its objects
+    N2b  RED   attributed=3/3   `_grid` ignores its argument entirely
+    N3   RED   attributed=1/1   the no-GC control points at a target that DOES gc
+    RESTORED  rc=0  12 passed in 1.57s
 
 (!) READ THE ATTRIBUTION COLUMNS, not just the verdicts. M0/M1/M2 redden the `off`,
 `residue` and `fixpoint` arms and leave `full` GREEN -- which is exactly why the
 single-arm version of TEST 3 could not have caught the knob failure it claimed to be
 controlling for, and why the parametrization is the fix rather than a flourish. M3/M4/M5
-redden `full` too, so the settle-pass pins are tier-independent as claimed.
+redden `full` too, so the settle-pass pins are tier-independent as claimed. N0 leaves the
+`x` arm green for the mirror-image reason: witness 1 IS the hard-coded key.
+
+(!) N2's FIRST form was INERT, and the INERT row is what earned the tightening. It
+removes `star_target` from the grid's object names, and TEST 2b's vacuity guard then
+still passed -- because the guard asked only whether the target appeared ANYWHERE in a
+query, and the SUBJECT entries satisfy that. Say what the edit was supposed to move and
+check it moved: the guard now demands `owner@folder:<star_target>` on the OBJECT side,
+which is the query that can actually catch a wrong answer at the leftover key, and N2
+reddens.
 
 (!) The sweep's FIRST run reported `attributed=0/0` on every row -- P6 step 0's instrument
 failure verbatim: `pytest -q` does not print nodeids, so the harness's
@@ -120,19 +135,51 @@ WITNESS = [(W1, 'add'), (W2, 'add'), (W2, 'remove')]
 SURVIVING = [OracleTuple(*W1)]
 LEFTOVER_KEY = ('folder', 'owner', 'x')
 
+#: TK75, 2026-09-19b. The witness generalises on its STAR TARGET: the add/remove pair is
+#: always `folder:x parent folder:y`, and only the star write moves. Witness 1 is the
+#: E='x' case; the second, independently reported TK73 witness -- leftover
+#: `('folder','owner','z')`, recovered by the TK74 fan-out and never re-derived until now
+#: -- is the E='z' case. MEASURED first-hand 2026-09-19b: the leftover key is
+#: `('folder','owner',E)` for every one of these, i.e. the STAR PARENT'S OBJECT and not
+#: the removed edge's object.
+STAR_TARGETS = ('x', 'z', 'w', 'q')
 
-def _grid():
+#: ⚠ The one star target that is GREEN, and it is a negative control rather than an
+#: anomaly. `TK75` recorded it as "UNEXPLAINED -- do not encode the unqualified
+#: generalisation in a docstring". EXPLAINED and MEASURED 2026-09-19b, by refcount
+#: arithmetic: with E='y' the star write and the concrete write name the SAME object, so
+#: `parent@folder:y` is at reference_count **2** before the remove and the remove drops it
+#: to 1. Nothing is released, `_demote_released_node` is never called, and the whole
+#: reconcile-time-GC chain TK73 is about never starts -- `_settle is None`, not a settle
+#: pass that found nothing. At E in STAR_TARGETS that node is at 1 and goes to 0.
+#: Pinned, with its cause, by `test_the_star_target_that_shares_the_removed_object`.
+STAR_TARGET_NO_GC = 'y'
+
+
+def _witness(star_target):
+    """The three writes, with the star write retargeted. `_witness('x') == WITNESS`."""
+    return [(('...', 'folder', '*', 'parent', 'folder', star_target), 'add'),
+            (W2, 'add'), (W2, 'remove')]
+
+
+def _grid(star_target='x'):
     """Every probe path on this schema: concretes, a ghost, and the wildcard name, with
-    userset subjects for the TTU from-chain."""
+    userset subjects for the TTU from-chain. `star_target` is folded into both the
+    subject and the target names so a retargeted witness is actually probed at its own
+    entity -- a grid that never mentions E would agree with the oracle vacuously."""
+    names = ('x', 'y', 'ghost', '*', star_target)
     subjects = [('...', 'user', 'u1'), ('...', 'user', 'ghost'), ('...', 'user', '*'),
                 ('...', 'folder', 'x'), ('...', 'folder', 'y'), ('...', 'folder', '*'),
+                ('...', 'folder', star_target),
                 ('viewer', 'folder', 'x'), ('owner', 'folder', 'x'),
+                ('viewer', 'folder', star_target), ('owner', 'folder', star_target),
                 ('admin', 'folder', 'y'), ('parent', 'folder', 'x')]
     targets = [(rel, 'folder', name)
                for rel in ('parent', 'viewer', 'owner')
-               for name in ('x', 'y', 'ghost', '*')]
+               for name in dict.fromkeys(names)]
     return [(sp, st, sn, rel, ot, on)
-            for (sp, st, sn) in subjects for (rel, ot, on) in targets]
+            for (sp, st, sn) in dict.fromkeys(subjects)
+            for (rel, ot, on) in targets]
 
 
 def _apply_witness(backend):
@@ -190,6 +237,128 @@ def test_settle_pass_runs_and_is_a_fixpoint():
         assert settle.changed == (), (
             f'settle pass found genuine staleness at {list(settle.changed)} -- the '
             f'cascade left a derived key stale')
+    finally:
+        graph.close()
+
+
+@pytest.mark.parametrize('star_target', STAR_TARGETS)
+def test_the_witness_generalises_on_its_star_target(star_target):
+    """TEST 2b (TK75): the witness is a FAMILY, and the leftover key tracks the STAR
+    write's object rather than the removed edge's object.
+
+    This is the second, independently reported TK73 witness -- leftover
+    `('folder','owner','z')` -- finally pinned, plus the two further targets that show the
+    name is not load-bearing. The add/remove pair is identical in every arm
+    (`folder:x parent folder:y`); only the star write moves, and the leftover key moves
+    with it. `star_target='x'` is witness 1, kept in the parametrization as the
+    overlapping-name arm so a change that only broke the retargeted cases is visible as a
+    3-of-4 failure rather than a whole-test failure.
+
+    Both claims are asserted, because they fail differently: the black-box one (answers
+    still match the independent oracle and both SetOps over a grid that mentions
+    `star_target`) and the white-box one (the settle pass ran, looked at exactly
+    `('folder','owner',star_target)`, and found it already at fixpoint).
+
+    (!) The grid is rebuilt per target on purpose. A grid hard-coded to x/y agrees with
+    the oracle at `star_target='q'` without ever probing q -- vacuously green."""
+    writes = _witness(star_target)
+    surviving = [OracleTuple(*writes[0][0])]
+    leftover_key = ('folder', 'owner', star_target)
+
+    graph = GraphBackend(SCHEMA, frozenset())
+    try:
+        for raw, op in writes:
+            assert graph.apply(raw, op), f'{op} {raw} was REJECTED'
+        graph.post_op()                 # assert_wildcard_invariants + I9 audit_fixpoint
+
+        settle = graph.proc._settle
+        assert settle is not None, (
+            f'no settle pass ran at star_target={star_target!r} -- the cascade drained '
+            f'without reaching the assertion, so this arm is green for an unrelated '
+            f'reason (that is what star_target={STAR_TARGET_NO_GC!r} does, and why it is '
+            f'a separate test with its cause pinned)')
+        assert list(settle.keys) == [leftover_key], (
+            f'settle pass examined {list(settle.keys)}, expected [{leftover_key}] -- the '
+            f'leftover key is supposed to follow the STAR write, not the removed edge')
+        assert settle.changed == (), (
+            f'settle pass found genuine staleness at {list(settle.changed)}')
+
+        oracle = Oracle(SCHEMA, surviving)
+        sets = [SetBackend(SCHEMA, frozenset(), ops) for ops in ALL_SETOPS]
+        try:
+            for s in sets:
+                for raw, op in writes:
+                    assert s.apply(raw, op), f'{s.name} REJECTED {op} {raw}'
+            grid = _grid(star_target)
+            # ⚠ Instrument control, and it must name the OBJECT side. "the grid mentions
+            # star_target somewhere" is satisfied by the subject entries alone and was
+            # INERT under the sweep's N2 arm (2026-09-19b); the query that can actually
+            # catch a wrong answer at the leftover key is `owner@folder:<star_target>`.
+            assert any(q[3:] == ('owner', 'folder', star_target) for q in grid), (
+                f'the grid never probes owner@folder:{star_target} -- it would agree '
+                f'with the oracle vacuously, INSTRUMENT BROKEN')
+            for q in grid:
+                want = oracle.check(*q)
+                assert graph.check(q) == want, f'graph vs oracle disagree on {q}'
+                for s in sets:
+                    assert s.check(q) == want, f'{s.name} vs oracle disagree on {q}'
+        finally:
+            for s in sets:
+                s.session.close()
+    finally:
+        graph.close()
+
+
+def test_the_star_target_that_shares_the_removed_object():
+    """TEST 2c (TK75): the ONE star target that runs no settle pass, and WHY.
+
+    `TK75` recorded that the leftover appears for star targets x/z/w/q but not for 'y',
+    and labelled that green **UNEXPLAINED**, with the standing instruction not to encode
+    the unqualified generalisation in a docstring. MEASURED and explained 2026-09-19b, and
+    it is refcount arithmetic rather than anything about the cascade: at
+    `star_target='y'` the star write and the concrete write name the SAME object, so
+    `parent@folder:y` carries **two** references going into the remove. The remove takes
+    it to 1, nothing is released, `_demote_released_node` is never called, no
+    reconcile-time GC runs, nothing is emitted late, and the cascade drains with an empty
+    `leftover` -- so `_settle` is None because the pass never ran, NOT because it ran and
+    found nothing.
+
+    (!) The refcount assertion is the load-bearing one. `assert _settle is None` alone
+    would stay green for any future reason the cascade stops reaching this code, which is
+    precisely the shape TK75's own trap warns about: an un-fireable probe reads exactly
+    like a clean surface. TEST 2b is the positive arm -- the same three writes with the
+    star elsewhere DO produce a settle pass."""
+    writes = _witness(STAR_TARGET_NO_GC)
+    graph = GraphBackend(SCHEMA, frozenset())
+    demoted = []
+    try:
+        for raw, op in writes[:-1]:
+            assert graph.apply(raw, op), f'{op} {raw} was REJECTED'
+
+        shared = graph.widx.idx.node('parent', 'folder', STAR_TARGET_NO_GC,
+                                     create_if_missing=False)
+        assert shared.reference_count == 2, (
+            f'parent@folder:{STAR_TARGET_NO_GC} is at reference_count '
+            f'{shared.reference_count}, expected 2 (the star write and the concrete '
+            f'write) -- the premise of this whole test is gone, so its green means '
+            f'nothing')
+
+        original = graph.proc._demote_released_node
+        graph.proc._demote_released_node = lambda n, *a, **k: (
+            demoted.append((n.predicate, n.name)), original(n, *a, **k))[1]
+
+        assert graph.apply(*writes[-1]), 'the remove was REJECTED'
+
+        assert demoted == [], (
+            f'a node WAS released at star_target={STAR_TARGET_NO_GC!r} ({demoted}), so '
+            f'the reconcile-time GC did run and this test no longer explains the green')
+        assert graph.proc._settle is None, (
+            f'a settle pass ran after all: {graph.proc._settle}')
+        assert graph.widx.idx.node(
+            'parent', 'folder', STAR_TARGET_NO_GC,
+            create_if_missing=False).reference_count == 1, (
+            'the shared parent node did not drop to exactly one reference')
+        graph.post_op()
     finally:
         graph.close()
 

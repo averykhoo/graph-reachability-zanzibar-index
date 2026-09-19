@@ -30,9 +30,9 @@ from here.
 
 ---
 
-## 2026-09-19b — `TK76`: a shipped control was inert AND its rationale was false; both repaired mechanically
+## 2026-09-19b — `TK76` and `TK75` both closed: two inert controls, and a green nobody had explained
 
-rows: `TK76` (fixed, swept, CLOSED), `TK85` (FILED — the `audit_fixpoint` rider), `TK75` (promoted `NOW`).
+rows: `TK76` (fixed, swept, CLOSED), `TK75` (both items pinned, swept, CLOSED), `TK85` (FILED — the `audit_fixpoint` rider), `TK77` (inherited the re-add fixture question, promoted `NOW`).
 
 task lint: clean (13 checks, 200 task file(s) parsed), 32 warning(s)
 read: board only
@@ -90,8 +90,65 @@ that meant nothing. `-rf` fixed it. Without `M0` in the table there is nothing t
 that from a clean module — the ninth consecutive addition where the sweep or its instrument
 found what a single sabotage would have missed.
 
-Note for the next session: the test count moved `3 -> 7` in that module, which is free
-(the gate's floors are `-ge`).
+**3. `TK75` closed — both items, and the second one had an unexplained green sitting in it.**
+
+*Item 2, the second witness.* The witness is a FAMILY parameterised on its STAR TARGET: the
+add/remove pair is always `folder:x parent folder:y` and only the star write moves, with the
+leftover key following the star write rather than the removed edge.
+`::test_the_witness_generalises_on_its_star_target` pins x/z/w/q with `settle.keys`,
+`settle.changed`, and full oracle + both-SetOps parity over a grid rebuilt per target. E='z'
+is the second `TK73` witness that was reported in the fuzz sweep and never reproduced; it
+reproduces.
+
+The row recorded that E='y' is green and **UNEXPLAINED**, with a standing instruction not to
+encode the unqualified generalisation. It is now explained, and it is refcount arithmetic
+rather than anything about the cascade: at E='y' the star write and the concrete write name
+the SAME object, so `parent@folder:y` is at reference_count **2** going into the remove and
+the remove takes it to 1. Nothing is released, `_demote_released_node` is never called, no
+reconcile-time GC runs, and `_settle is None` because the pass never RAN — as distinct from
+ran-and-found-nothing. `::test_the_star_target_that_shares_the_removed_object` pins that with
+its CAUSE, because `assert _settle is None` alone would stay green for any future reason the
+code stops being reached, which is the row's own trap.
+
+*Item 1, the second late-emission site.*
+`tests/test_i14_crossing_middles.py::test_the_strip_arm_emits_from_inside_a_reconcile_time_gc`
+is its first witness: `_sync_entity_middles`' no-witness branch calls `_strip_bridges` on
+`('folder','viewer')` and emits 3 outbox rows at nesting `cascade=1, reconcile=1, gc=1`. The
+nesting clause is the load-bearing one — outside a reconcile-time GC this is an ordinary
+write. ⚠ **The honest other half, which the earlier entry did not have:** on this fixture
+those rows map back to no derived key, so `leftover` stays empty and `_settle is None`. The
+second site is a late EMITTER; it is not a late LEFTOVER producer, so it does **not**
+reproduce `TK73`'s shape. That distinction is now in the docstring so a later reader cannot
+upgrade one into the other.
+
+*The executive decision the row left open* — does the inert re-add arm earn a forced-strip
+control as a permanent test? **No: recorded negative, re-homed to `TK77`.** Census run
+first-hand over every module `TK77` names as the only coverage of the crossable surface
+(`test_i14_crossing_middles.py`, `test_owc_star_parent_cross.py`, `test_bulk_build.py`): 7
+`_sync_entity_middles` calls in total, **1** inside a reconcile-time GC, and that one takes
+the STRIP arm. The in-GC re-add arm is reached **zero** times by any of them — two of the
+three make no call at all. A forced-strip test would pin a fixture invented for the probe and
+assert behaviour on a store state I14 forbids and paranoia already catches. ⚠ The ceiling
+control on that census was **LEFT-ARMED** and is reported as such (`holes=0`, because
+`_entity_has_witness` was never true in-GC), so it supports "not REACHED" and does not
+re-confirm the 2026-09-18 "269 calls, zero rows" figure, which stays agent-measured.
+
+**Sweeps, and two more instrument failures.** `test_cascade_quiesce_gc.py`: 13 mutations, 13
+RED, 0 INERT, `M0` and `N0` both attributing. ⚠ `N2` was **INERT** on its first form, and
+that is what earned a real tightening rather than a shrug: it removes the star target from
+the grid's object names, and the vacuity guard still passed because it asked only whether the
+target appeared *anywhere* in a query — which the SUBJECT entries satisfy. The guard now
+demands `owner@folder:<star_target>` on the OBJECT side, the query that can actually catch a
+wrong answer at the leftover key, and `N2` reddens. `test_i14_crossing_middles.py`: 5
+mutations, 5 RED, 0 INERT, `P0` attributing, every row reddening the new pin. ⚠ `P4`'s first
+form **died of a `KeyError`, not of the property** — it injected a key that is not derived on
+that schema, so the cascade blew up in plan lookup before the assertion was reached. It
+reddened and proved nothing; `GL-1`'s instrument failure verbatim. With a real derived key
+(`('folder','restricted','f1')`) it dies on the `_settle is None` clause itself, which is what
+makes that clause live rather than decorative.
+
+Note for the next session: `tests/test_cascade_quiesce_gc.py` moved `3 -> 12` tests and
+`tests/test_i14_crossing_middles.py` `4 -> 5`, all free (the gate's floors are `-ge`).
 
 Still owed: nothing skipped from the Rhythm. `TK85` is filed but not started, deliberately.
 

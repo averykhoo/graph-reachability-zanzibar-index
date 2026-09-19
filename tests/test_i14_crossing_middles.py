@@ -57,7 +57,7 @@ from pathlib import Path
 import pytest
 
 from index_v4.invariants import InvariantViolation, check_invariants
-from index_v4.outbox import outbox_watermark
+from index_v4.outbox import outbox_rows, outbox_watermark
 from index_v4.processor import DeltaProcessor
 from index_v4.wildcard import WildcardIndex
 from tests.wildcard_helpers import make_wildcard_index, snapshot
@@ -165,4 +165,114 @@ def test_middles_retire_with_their_entity():
     assert widx._get_concrete('viewer', 'folder', 'f1') is None, \
         'the middle must go when the entity does'
     assert snapshot(widx) == clean, 'add-then-remove must restore the row multiset'
+    session.close()
+
+
+def test_the_strip_arm_emits_from_inside_a_reconcile_time_gc():
+    """TK75 item 1: `_sync_entity_middles`' strip arm is a SECOND late-emission site,
+    and this is its first witness.
+
+    `TK73` fixed the cascade's terminal quiescence check after
+    `_maybe_remove_bridges` was found emitting outbox rows from inside a reconcile-time
+    GC, i.e. after the round's frontier snapshot. Its doc named
+    `_sync_entity_middles` as a second such site and had no witness; `TK75` then
+    recorded (agent-measured) that the site fires on THIS module's
+    `test_middles_retire_with_their_entity` and that only instrumentation was missing.
+    Re-derived first-hand 2026-09-19b and pinned here: the removal's cascade takes the
+    no-witness branch, calls `_strip_bridges` on the `('folder','viewer')` middle, and
+    that call emits **3** outbox rows while nested `cascade=1, reconcile=1, gc=1`.
+
+    (!) THE HONEST OTHER HALF, and it is why this test does not assert a leftover: on
+    this fixture the late rows map back to NO derived key, so `leftover` stays empty,
+    no settle pass runs, and `_settle is None`. The site is a late EMITTER here; it is
+    not (here) a late LEFTOVER producer, so it does not reproduce `TK73`'s shape. Do
+    not read this test as "the second site reproduces TK73" -- it does not, and the
+    fixture that would is `TK77`'s deliverable, not this module's.
+
+    (!) The re-add arm of the same function is a separate question and is NOT pinned
+    here. Measured 2026-09-19b across every module `TK77` names as coverage of the
+    crossable surface (this one, `test_owc_star_parent_cross.py`,
+    `test_bulk_build.py`): 7 `_sync_entity_middles` calls in total, **1** of them
+    inside a reconcile-time GC, and that one takes the STRIP arm. The in-GC re-add arm
+    is not reached by any of them, so a "forced-strip" control test here would be
+    pinning a fixture invented for the probe rather than the shipped surface. Recorded
+    as a negative on `TK75`; the fixture question belongs to `TK77`.
+
+    SWEEP (literal output, 2026-09-19b, `.scratch/tk75/sweep_i14.py`). 5 mutations,
+    5 RED, 0 INERT, P0 attributing, and every row reddens THIS pin::
+
+        BASELINE  rc=0  5 passed in 0.47s
+        P0   RED  new-pin=1  total-failed=1   the pin's own shape claim flipped
+        P1   RED  new-pin=1  total-failed=2   no-witness branch stops stripping
+        P2   RED  new-pin=1  total-failed=2   `_strip_bridges` emits nothing
+        P3   RED  new-pin=1  total-failed=1   the pin's own depth counter un-armed
+        P4   RED  new-pin=1  total-failed=1   a leftover key forced to survive the drain
+        RESTORED  rc=0  5 passed in 0.46s
+
+    (!) P4's FIRST form died of a `KeyError`, not of the property -- it injected
+    `('folder','viewer','f1')`, which is not a derived key on this schema, so the
+    cascade blew up in plan lookup before reaching the assertion. It reddened, and it
+    proved nothing. That is `GL-1`'s instrument failure verbatim. The real derived
+    keys here are `('doc','restricted')` and `('folder','restricted')`; with
+    `('folder','restricted','f1')` the mutation dies on the `_settle is None` clause
+    itself, which is what makes that clause live rather than decorative.
+    """
+    rs, session, widx, proc = _make(paranoia=True)
+    _write(rs, session, widx, proc, _WITNESS)
+
+    depth = {'cascade': 0, 'reconcile': 0, 'gc': 0}
+    calls = []
+
+    def _counted(key, fn):
+        def inner(*a, **k):
+            depth[key] += 1
+            try:
+                return fn(*a, **k)
+            finally:
+                depth[key] -= 1
+        return inner
+
+    o_strip = widx._strip_bridges
+
+    def strip(node_id, shape):
+        wm = outbox_watermark(session, widx.idx.store_id)
+        out = o_strip(node_id, shape)
+        session.flush()
+        calls.append((shape, len(outbox_rows(session, widx.idx.store_id, wm)),
+                      dict(depth)))
+        return out
+
+    widx._strip_bridges = strip
+    proc.run_cascade = _counted('cascade', proc.run_cascade)
+    proc.reconcile = _counted('reconcile', proc.reconcile)
+    proc.reconcile_subject = _counted('reconcile', proc.reconcile_subject)
+    proc._gc_subject_node = _counted('gc', proc._gc_subject_node)
+    proc._gc_public_node = _counted('gc', proc._gc_public_node)
+
+    _write(rs, session, widx, proc, _WITNESS, action='remove')
+
+    assert calls, (
+        'the strip arm never ran -- INSTRUMENT BROKEN or the fixture stopped reaching '
+        'the site, and either way this test asserts nothing'
+    )
+    assert len(calls) == 1, f'expected one strip call, got {calls}'
+    shape, emitted, nesting = calls[0]
+    assert shape == ('folder', 'viewer'), f'stripped the wrong shape: {shape}'
+    assert emitted > 0, (
+        'the strip arm emitted NOTHING, so it is not a late-emission site and TK73 '
+        "doc sec 7's second-site claim is wrong"
+    )
+    assert nesting['cascade'] >= 1 and nesting['reconcile'] >= 1 and nesting['gc'] >= 1, (
+        f'the strip ran at nesting {nesting} -- "late emission" means from inside a '
+        f'reconcile-time GC inside the cascade, and outside that it is an ordinary write'
+    )
+
+    # The honest other half: the rows map to no derived key here, so the cascade drains
+    # without a settle pass. If this ever starts producing one, TK73's shape has arrived
+    # at the second site and TK75/TK77 want to know.
+    assert proc._settle is None, (
+        f'a settle pass ran at the second emission site ({proc._settle}) -- this '
+        f'fixture now reproduces TK73 shape here; that is a finding, not a failure'
+    )
+    assert widx._get_concrete('viewer', 'folder', 'f1') is None
     session.close()
