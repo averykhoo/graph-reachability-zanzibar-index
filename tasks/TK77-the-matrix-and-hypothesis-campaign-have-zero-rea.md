@@ -1,26 +1,59 @@
 ---
 id: TK77
 title: the matrix and hypothesis campaign have ZERO reach into the _sync_entity_middles surface
-brief: crossable_shapes == [] for wildcards.fga and boolean_wildcards.fga under the matrix OBJECT_WC; census EMPTY 2026-09-18
+brief: census DONE 2026-09-19c: 1/15 fixtures, 0/26 conf, 0/65535 genswarm crossable; unreached = the _sync REMOVE path
 pri: NOW
 size: M
 deps: []
-related: [TK75, TK44]
+related: [TK75, TK44, TK83]
 parent:
 labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-18
-moved: 2026-09-19b
-updated: 2026-09-19b
+moved: 2026-09-19c
+updated: 2026-09-19c
 closed:
 ---
 
-TODO: one paragraph -- what this item is and why it matters.
+I14 crossing middles -- the `w_all -> concrete -> w_any` crossing the graph index maintains
+per live entity -- can only be exercised by a schema whose `crossable_shapes` is non-empty,
+and a schema is crossable-capable only if it carries a TTU over a `[S:*]`-admitting tupleset
+whose target relation is also an object-wildcard shape. That two-feature conjunction is rare
+enough that the two mechanisms this repo relies on to find semantic divergence barely reach
+it: the validation matrix reaches it **zero** times (no fixture it uses can be made crossable
+by any argument -- not a configuration miss, a structural one) and the hypothesis campaign
+reaches it in well under 1% of draws. The REMOVE half of the surface,
+`_sync_entity_middles`, is covered by exactly one hand-written, non-differential, un-fuzzed
+module in the whole suite. That matters because a surface the differential net cannot reach
+is a surface where the graph index and the set engine can disagree indefinitely, and I14 is
+precisely the area that produced `TK69`, `TK70` and `P22`. The item is to give that surface a
+crossable fixture (and/or the one-line generator fix) so the matrix and the campaign cover
+it, with the census probe's `_sync ... EFF` count as the acceptance check.
 
 ## Traps
 
+- A RAW call count of `index_v4/wildcard.py::_ensure_entity_middles` or
+  `::_sync_entity_middles` is NOT reach. Both return at a guard when `crossable_shapes` is
+  empty and both are called unconditionally, so a module with zero crossable schemas still
+  books hundreds of calls (measured 2026-09-19c: 7408 raw vs 257 effective). Count the calls
+  that get PAST the guard, and carry a ceiling control so a zero reads as "never reached"
+  rather than "instrument dead".
+- An empty `crossable_shapes` is a SILENT no-op, so a new fixture that fails to be crossable
+  passes every test it is added to and looks like coverage. Do not accept a green as evidence
+  here; read the `_sync ... EFF` count.
+- Do NOT re-use this row's 2026-09-18 or 2026-09-19b counts. Both are superseded by the
+  first-hand census, which contradicts the 2026-09-18 ones outright; the 2026-09-19b "7"
+  is unexplained. Re-measure with the probe.
+
 ## Read first
+
+- [`docs/tk77-crossable-census-2026-09-19.md`](../docs/tk77-crossable-census-2026-09-19.md)
+  -- the census (ACTIVE-PLAN): which corpora can reach I14 at all, why the `OBJECT_WC`
+  option is structurally closed, and the two points on which it CONTRADICTS this row.
+- [`formal/probes/tk77_crossable_census_2026-09-19.py`](../formal/probes/tk77_crossable_census_2026-09-19.py)
+  -- the tracked probe reproducing every figure in it, incl. the live pytest-plugin census,
+  its ceiling control, and the sabotage that proves the EFF columns read the guard.
 
 ## Log
 
@@ -49,3 +82,71 @@ That tightens this row's claim in a useful direction: it is not only that the ma
 (!) The ceiling control on that census was LEFT-ARMED and must not be read as a null result: the arm that punches an I14 hole before the real call never fired (`holes=0`) because `_entity_has_witness` was never true in-GC. The measurement supports "not REACHED", not "reached and emits nothing". The 2026-09-18 "269 in-GC re-add calls, every one emitting zero rows" figure on `TK75` was over a wider run and stays AGENT-MEASURED -- re-measure before quoting it.
 
 `TK75` decided the re-add arm gets a RECORDED NEGATIVE rather than a forced-strip control test, on the grounds that such a test would pin a fixture invented for the probe and assert behaviour on a store state I14 forbids. That decision is reversible here once a real crossable fixture exists. The strip arm itself is now pinned: `tests/test_i14_crossing_middles.py::test_the_strip_arm_emits_from_inside_a_reconcile_time_gc` (3 rows, nesting `cascade=1 reconcile=1 gc=1`, and the honest rider that those rows map to no derived key so `_settle is None`).
+
+### 2026-09-19c
+
+FIRST ACTION DISCHARGED, first-hand. The census this row asked for is published as
+docs/tk77-crossable-census-2026-09-19.md (ACTIVE-PLAN), reproduced by the tracked probe
+formal/probes/tk77_crossable_census_2026-09-19.py. Read the doc before this row: it
+CONTRADICTS the row on two points.
+
+WHAT LANDED. (1) The structural result: a schema is crossable-capable iff it carries a TTU
+whose tupleset relation admits a bare object star [S:*] AND the TTU's target relation is a
+declared-or-expanded object-wildcard shape. The other producer of an in-bridge -- a literal
+T:*#p wildcard-userset restriction -- is CATEGORICALLY excluded, because
+zanzibar_utils_v1.py::_reject_doubly_bridged_shapes refuses to let that same shape also be an
+object wildcard. (2) Fixture census: 1 of 15 tests/fga_schemas/ fixtures is crossable-capable
+(owc_star_ttu). 13 have an empty bridged_in_shapes, so NO object_wildcard_shapes argument of
+any value can make them crossable; wildcards.fga and wildcard_userset_cross.fga are
+compile-REFUSED with DoublyBridgedShapeError if you try. (3) Conformance: 0 of 26 schemas in
+test_conformance_enum.SCHEMAS -- including 'object_wildcard', which declares an owc and still
+has in=0. (4) genswarm: 0 of 65535 witness configs, CLOSED and RNG-free, and the cause is one
+line -- witness() hardwires owc to ('doc','parent') while its through-shape is ('doc','r1'),
+disjoint by construction. (5) test_hypothesis.py::star_bridge_configs IS crossable-capable:
+24 of its 224-config closed domain, ALL of them in the self-referential A==B arm added for
+ZT-P5-NEW on 2026-07-26. That arm is the only crossable generator in the repo.
+
+SO THE MENU IS DECIDED: the fix is a NEW fixture (or the one-line genswarm change), never an
+OBJECT_WC parameter edit. That option is structurally closed.
+
+TWO CONTRADICTIONS OF THIS ROW, both first-hand, both against 2026-09-18 AGENT-MEASURED
+figures the row itself flagged as re-measure-before-quoting. (a) The title's "hypothesis
+campaign has ZERO reach" is WRONG: test_hypothesis.py compiles 2-3 crossable schemas per run
+and makes 34-40 effective _ensure_entity_middles calls. Thin (~0.3-0.5% of parses) and
+run-dependent, but a DISTRIBUTION problem, not a structural one. (b)
+tests/test_zt_p5_readjudication.py, listed on the row as producing an empty census, is the
+LARGEST reacher in the suite: 82 crossable parses, 189 effective calls, more than every other
+module combined. The matrix half of the title is CONFIRMED -- test_matrix.py 0 of 36 parses,
+test_wildcard_property.py 0 of 3.
+
+THE ROW'S CLAIM SURVIVES IN A SHARPER FORM, and this should become the row's statement: the
+unreached surface is the crossing-middle REMOVE path. _sync_entity_middles is EFFECTIVE in
+exactly ONE module across an 82-test run -- test_i14_crossing_middles.py, 8 calls out of
+524-571 raw -- in both runs. The add side is reached by five of seven modules. So the
+acceptance target for any fixture/generator work here is the _sync EFF column, not the
+_ensure one.
+
+(!) INSTRUMENT NOTES, both load-bearing. A RAW call count of either function is NOT reach:
+both return at a guard when crossable_shapes is empty, so a module with zero crossable
+schemas still books hundreds of calls (7408 raw vs 257 effective). The probe carries a
+CEILING CONTROL (_ensure_own_bridges on a crossable schema) so a zero EFF reads as "never
+reached" rather than "instrument dead". The EFF columns were SABOTAGED -- override
+SchemaInfo.crossable_shapes to empty, and every EFF and CTL column goes to 0 while
+_ensure/raw stays at 21 and all 5 tests go RED.
+
+(!) UNRESOLVED DISCREPANCY against this row's own 2026-09-19b census. It recorded "7
+_sync_entity_middles calls in total" over three modules; this run measures 14 raw / 8
+effective over the same three, and test_i14_crossing_middles.py alone re-runs at the same
+14/8 twice. Neither is 7. Coincidence worth noting, UNVERIFIED: the SABOTAGED run -- the one
+with crossability neutered -- books exactly 7. A probe that broke the thing it was measuring
+would produce that number, which is P6 step 0's failure verbatim. I did not reconstruct the
+earlier probe.
+
+(!) test_hypothesis.py's row is a SAMPLE, not a measurement -- it moved on every column
+between two runs of the same command (ci profile is not derandomized). The other six modules
+are byte-identical across both runs. Quote its numbers as a rate.
+
+NEXT ACTION: write the crossable matrix fixture (the owc_star_ttu template is the working
+shape) and put it under test_matrix.py / test_wildcard_property.py, with the probe's _sync
+EFF column as the acceptance check -- an added fixture that does not move it bought nothing,
+and an empty crossable_shapes is a silent no-op that passes every test it is added to.

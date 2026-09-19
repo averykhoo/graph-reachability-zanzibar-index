@@ -30,6 +30,94 @@ from here.
 
 ---
 
+## 2026-09-19c — `TK77`'s census: only 1 of 15 fixtures can EVER be crossable, and the row was wrong twice
+
+rows: `TK77` (FIRST ACTION discharged — census published, traps + read-first + body written, brief re-pointed), `TK83` (related-linked: same fixture deliverable).
+
+task lint: clean (13 checks, 200 task file(s) parsed), 31 warning(s)
+read: board only
+
+⚠ The receipt vocabulary still has no token for "entered via `show`" (the standing
+"Still owed" item, carried from 2026-09-07b). Literally: board, then `show TK77`, then
+`show TK83`; `HANDOFF.md` was read at write-back, not to start work. `board only` is the
+nearest true token and is written with that caveat, again.
+
+Discharged `TK77`'s FIRST ACTION — *"measure `crossable_shapes` for every fixture in
+`tests/fga_schemas/` and publish the table"*. The census is
+[`docs/tk77-crossable-census-2026-09-19.md`](../tk77-crossable-census-2026-09-19.md)
+(ACTIVE-PLAN), reproduced end-to-end by the tracked probe
+[`formal/probes/tk77_crossable_census_2026-09-19.py`](../../formal/probes/tk77_crossable_census_2026-09-19.py).
+Nothing in it is agent-reported; every claim is labelled READ / MEASURED / REASONED.
+
+**The structural result, which is what makes the rest decisive.** A schema is
+crossable-capable **iff** it carries a TTU over a `[S:*]`-admitting tupleset whose target
+relation is also an object-wildcard shape. The only other producer of an in-bridge — a
+literal `T:*#p` wildcard-userset restriction — is **categorically excluded**, because
+`zanzibar_utils_v1.py::_reject_doubly_bridged_shapes` refuses to let that same shape also be
+an object wildcard. So crossability is a two-feature conjunction, and "it declares an object
+wildcard, therefore it exercises the crossing machinery" is a wrong inference — measured
+wrong in six more fixtures here, on top of the four `TK77` already recorded.
+
+**The censuses.** `tests/fga_schemas/`: **1 of 15** crossable-capable (`owc_star_ttu`);
+13 have an empty `bridged_in_shapes` and cannot be made crossable by ANY
+`object_wildcard_shapes` argument, and `wildcards.fga` / `wildcard_userset_cross.fga` are
+compile-REFUSED (`DoublyBridgedShapeError`) if you try. Conformance: **0 of 26**, including
+`object_wildcard`, which declares an owc and still has no in-bridge. `genswarm.witness`:
+**0 of 65535** — closed and RNG-free, and the cause is one line, not a draw count
+(`witness()` hardwires `owc` to `('doc','parent')` while its through-shape is `('doc','r1')`,
+disjoint by construction). `test_hypothesis.py::star_bridge_configs`: **24 of its 224-config
+closed domain ARE crossable**, every one in the self-referential `A == B` arm added for
+`ZT-P5-NEW` on 2026-07-26 — the only crossable generator in the repo, and its docstring
+already said "exactly reg11 / `owc_star_ttu`" without anyone noticing what that implied.
+
+**So the menu `TK77` opened is decided: a NEW fixture (or the one-line `genswarm` change),
+never an `OBJECT_WC` parameter edit.** That option is structurally closed, not merely
+unattractive.
+
+**The row was wrong twice, and it said so in advance.** Its 2026-09-18 figures were
+AGENT-MEASURED and flagged *"re-measure before quoting them"*; this is that re-measurement.
+(a) The title's *"the hypothesis campaign has ZERO reach"* is **false** —
+`tests/test_hypothesis.py` compiles 2–3 crossable schemas per run and makes 34–40 effective
+`_ensure_entity_middles` calls. (b) `tests/test_zt_p5_readjudication.py`, listed on the row
+as producing an empty census, is the **largest reacher in the suite**: 82 crossable parses,
+189 effective calls, more than every other module combined. The matrix half of the title is
+**confirmed** (`test_matrix.py` 0 of 36 parses; `test_wildcard_property.py` 0 of 3), and §2
+now supplies the reason.
+
+**The claim survives in a sharper form, and that is the deliverable.** The unreached surface
+is not "the crossing middles" but the crossing-middle **REMOVE path**: across an 82-test run,
+`_sync_entity_middles` is effective in **exactly one module** — `test_i14_crossing_middles.py`,
+8 calls out of 524–571 raw — in both runs. The add side is reached by five of seven modules.
+So the acceptance check for any fixture or generator work here is the `_sync … EFF` column,
+and a change that only lifts `_ensure … EFF` has not moved the thing the row is about.
+
+**Two instrument findings, both of which would have inverted the table.** (i) A RAW call
+count of either function is **not** reach — both return at a guard when `crossable_shapes` is
+empty and both are called unconditionally, so 7408 raw `_ensure` calls correspond to 257
+effective ones. (ii) The probe therefore carries a **ceiling control** (`_ensure_own_bridges`
+on a crossable schema), so a zero EFF reads as "never reached" rather than "instrument dead".
+The EFF columns were **sabotaged** — override `SchemaInfo.crossable_shapes` to the empty set
+and every EFF and CTL column goes to `0` while `_ensure/raw` holds at `21` and all five tests
+go RED. Literal output is in the census §6.
+
+Two honesty riders carried in place rather than footnoted. `tests/test_hypothesis.py`'s row
+is a **sample, not a measurement** — it moved on every column between two runs of the same
+command (the `ci` profile is not derandomized), while the other six modules are
+byte-identical across both. And the row's own 2026-09-19b figure of *"7
+`_sync_entity_middles` calls"* is **unexplained**: the same three modules measure 14 raw / 8
+effective, twice. Noted as UNVERIFIED, because the SABOTAGED run — crossability neutered —
+books exactly 7, which is `P6` step 0's failure verbatim; I did not reconstruct the earlier
+probe to confirm it.
+
+Still owed: `TK77` itself — write the crossable fixture (the `owc_star_ttu` template is the
+working shape) into `test_matrix.py` / `test_wildcard_property.py`, take the one-line
+`genswarm.witness` `owc` fix, and re-weight `star_bridge_configs`; the census §7 ranks all
+three and names the acceptance check. `TK83` wants a star-admitting intersection fixture in
+the same directory and should be taken in the same pass. The standing receipt-vocabulary
+item above is still unfiled.
+
+---
+
 ## 2026-09-19b — `TK76` and `TK75` both closed: two inert controls, and a green nobody had explained
 
 rows: `TK76` (fixed, swept, CLOSED), `TK75` (both items pinned, swept, CLOSED), `TK85` (FILED — the `audit_fixpoint` rider), `TK77` (inherited the re-add fixture question, promoted `NOW`).

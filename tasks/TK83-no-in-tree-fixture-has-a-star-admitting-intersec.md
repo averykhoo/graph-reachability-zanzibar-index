@@ -5,14 +5,14 @@ brief: starred half-stale intersection diverges in the RESIDUE too, refuting 9.5
 pri: LATER
 size: S
 deps: []
-related: [TK74]
+related: [TK74, TK77]
 parent:
 labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-18c
-moved: 2026-09-18c
-updated: 2026-09-18c
+moved: 2026-09-19c
+updated: 2026-09-19c
 closed:
 ---
 
