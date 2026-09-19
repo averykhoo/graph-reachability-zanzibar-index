@@ -1,7 +1,7 @@
 ---
 id: TK72
 title: UNVERIFIED: test_zt_p5_readjudication.py may call check_invariants without schema_info (I14 off)
-brief: agent claim from 2026-09-15, never reproduced; verify FIRST, then census other call sites
+brief: CLOSED 2026-09-19f: 3 call sites fixed, false docstring corrected, AST census now refuses a silent revert
 pri: NOW
 size: S
 deps: []
@@ -13,7 +13,7 @@ source_hash:
 created: 2026-09-16b
 moved: 2026-09-19f
 updated: 2026-09-19f
-closed:
+closed: 2026-09-19f
 ---
 
 ## What it is
@@ -106,3 +106,55 @@ rather than on the banner. Three reasons, no new work done on this row:
 passing remark; CLAUDE.md sec  Delegation makes verifying it the first step, and TK67 is the
 standing example of a trap that was nearly deleted because the subagent report about it was
 wrong.
+
+CLOSED 2026-09-19f. Outcome: the row's 2026-09-17c disposition ("a genuine but SMALL item
+-- fix the three call sites and the false docstring, it is NOT a bug route") is CONFIRMED
+and executed, and it gained the one thing that disposition did not name: a mechanical
+refusal, because the fix was otherwise silently revertible.
+
+(!) FIRST, A CORRECTION TO THIS ROW'S OWN BRIEF. The brief still read "UNVERIFIED: ...
+verify FIRST", and the 2026-09-19f promote comment repeated that instruction -- but the
+2026-09-17c log entry had already CONFIRMED it first-hand and censused every call site. The
+brief is what the board prints, so a stale brief re-orders a session's work; it was the
+promoting session (this one) that read the brief and not the log. Brief corrected at close.
+
+LANDED (tests/test_zt_p5_readjudication.py): `_live_state` now returns
+`(session, landed, cs.widx.schema_info)` and all three `check_invariants` calls in
+`::test_zt_p5_object_wildcard_state_level_live_equals_rebuild` pass it, with an INSTRUMENT
+CONTROL asserting `si.bridged_out_shapes` is non-empty so the enabled clause cannot iterate
+nothing unnoticed. The docstring's false "I1-I13 are green on all three" is replaced by what
+is actually run, plus the narrowing the 2026-09-17c probe measured and this session
+re-measured: `crossable_shapes` is EMPTY on both corpora, so **I14 still checks nothing
+here** -- the clause the handle really turns on is I3 bridge completeness/exclusivity.
+Module green, 21 passed.
+
+EVIDENCE THE ARGUMENT BUYS COVERAGE (formal/probes/tk72_schema_info_gate_2026-09-19.py,
+MEASURED 2026-09-19f). Delete one `w_all -> concrete` bridge edge and decrement the two
+endpoint refcounts, so every schema-INDEPENDENT clause stays satisfied:
+
+    sabotage: deleting the bridge folder:*#viewer[all] -> folder:f1#viewer,
+    and decrementing both refcounts by 1
+      WITHOUT schema_info  GREEN
+      WITH schema_info     RED   I3: concrete id=2 ... name='f1' predicate='viewer'
+        type='folder' ... of bridged-out shape missing its w_all->concrete bridge
+
+(!) THE PART THE ROW DID NOT ASK FOR, AND THE REASON IT WAS NEEDED. Nothing went red when
+the three sites were fixed, and nothing would go red if they were un-fixed -- `schema_info`
+defaults to None and the reduced checker returns cleanly. So the fix was invisible in both
+directions. NEW:
+`tests/test_invariants_docstring_matches_body.py::test_every_schema_backed_check_invariants_call_passes_schema_info`
+-- an AST census of every `check_invariants` call site in the repo, with an EXACT allowlist
+(both directions: a new bare site FAILS, and an allowlisted site that gains a handle FAILS as
+rot) and a ceiling control floor of 40 sites so a broken walk cannot pass by scanning nothing.
+
+CENSUS RE-VERIFIED FIRST-HAND, and the row's remaining six sites are NOT defects: all six
+(`test_blind_audit_regressions.py`, `test_invariants_docstring_matches_body.py` x2,
+`test_reg17_closure_fanout_cap.py` x3) build a raw `index_v4.ReachabilityIndex`, which has no
+`schema_info` attribute at all -- there is no handle in scope to pass. They are the
+allowlist, each with its reason at the entry.
+
+SWEEP (formal/probes/tk72_callsite_sweep_2026-09-19.py): 6 mutations, 4 CAUGHT -- `S0`
+harness control, `S1` revert one ZT-P5 call site, `S2` drop an allowlist entry, `S4` blind
+the AST walk (the floor fires: "only 0 check_invariants call site(s) found, floor 40"). Two
+INERT, both predicted and stated: `S3` a no-op edit, and `S5` weakening the ZT-P5 instrument
+control to `or True` -- a control claims nothing while its subject is unchanged.

@@ -128,3 +128,127 @@ def test_body_enforces_i7_residue_version_monotonicity():
     check_invariants(session, 'test', rs.schema_info,
                      residue_versions={(row.id, row.object_node_id): row.version})
     session.close()
+
+
+# ===========================================================================
+# The OPTIONAL argument that is not optional in practice (TK72, 2026-09-19f)
+# ===========================================================================
+
+# Every (repo-relative path, enclosing function) whose `check_invariants` call
+# deliberately passes NO `schema_info`, with the reason. Each was READ first-hand on
+# 2026-09-19f: all six build a raw `index_v4.ReachabilityIndex`, which has no
+# `schema_info` attribute at all (`grep schema_info index_v4/core.py` -> nothing), so
+# there is no handle in scope to pass and the reduced checker is the only one available.
+_SCHEMALESS_SITES = {
+    ('tests/test_blind_audit_regressions.py',
+     'test_remove_node_decrements_neighbour_refcounts'):
+        'raw ReachabilityIndex; the store is asserted EMPTY on the line above',
+    ('tests/test_invariants_docstring_matches_body.py',
+     'test_body_enforces_i13_reference_count_degree'):
+        'raw ReachabilityIndex built inline to corrupt a refcount (2 call sites)',
+    ('tests/test_reg17_closure_fanout_cap.py',
+     'test_rejection_leaves_no_partial_state'):
+        'raw ReachabilityIndex with a synthetic p/t shape and no compiled schema',
+    ('tests/test_reg17_closure_fanout_cap.py',
+     'test_removals_are_never_capped'):
+        'raw ReachabilityIndex with a synthetic p/t shape and no compiled schema',
+    ('tests/test_reg17_closure_fanout_cap.py',
+     'test_node_removal_is_never_capped'):
+        'raw ReachabilityIndex with a synthetic p/t shape and no compiled schema',
+}
+
+_MIN_CALL_SITES = 40        # measured 2026-09-19f: 42 sites across 184 parsed files
+
+
+def test_every_schema_backed_check_invariants_call_passes_schema_info():
+    """TK72 (2026-09-19f). Property guarded: a caller that HAS a `SchemaInfo` passes
+    it, so the schema-gated half of the checker actually runs.
+
+    WHY A CENSUS AND NOT A CODE COMMENT. `schema_info` defaults to `None`, and without
+    it `check_invariants` silently skips the rest of I3 (bridge
+    completeness/exclusivity), I14, I4 namespace classification and every derived
+    invariant -- roughly half the body -- while still returning cleanly. Dropping the
+    argument is therefore INVISIBLE: the call keeps passing, the test keeps passing,
+    and the coverage is gone. `tests/test_zt_p5_readjudication.py` lived that way for
+    weeks with a docstring claiming "I1-I13 are green on all three"; nothing went red
+    when it was fixed, and nothing would go red if it were un-fixed. This test is that
+    missing red.
+
+    MEASURED 2026-09-19f, `formal/probes/tk72_schema_info_gate_2026-09-19.py`: on the
+    ZT-P5 corpus, deleting one `w_all -> concrete` bridge (and decrementing the two
+    endpoint refcounts, so every schema-independent clause stays satisfied) is GREEN
+    without the handle and RED with it -- `I3: concrete ... of bridged-out shape
+    missing its w_all->concrete bridge`. That is the coverage the argument buys.
+
+    The allowlist is asserted EXACT in both directions. A new schema-less site must be
+    justified here; a listed site that gains a handle must be removed from the list, or
+    the list rots into a permanent exemption.
+
+    SWEPT by `formal/probes/tk72_callsite_sweep_2026-09-19.py` (2026-09-19f): 6
+    mutations, 4 CAUGHT — `S0` the harness control, `S1` below, `S2` (drop an allowlist
+    entry -> reported MISSING), `S4` (blind the AST walk -> the ceiling control fires,
+    `only 0 check_invariants call site(s) found, floor 40`). Two INERT and both
+    predicted: `S3` a no-op edit beside the floor, and `S5` weakening the ZT-P5
+    instrument control to `or True`, which claims nothing while that corpus IS
+    bridged-out — a control only fires when its subject changes.
+
+    SABOTAGE (literal output, 2026-09-19f). Narrowest plausible weakening: revert ONE
+    of the three `tests/test_zt_p5_readjudication.py` calls to the pre-TK72 form::
+
+        FAILED tests/test_invariants_docstring_matches_body.py::test_every_schema_backed_check_invariants_call_passes_schema_info
+        AssertionError: check_invariants called WITHOUT schema_info at a schema-backed
+        site: [('tests/test_zt_p5_readjudication.py',
+        'test_zt_p5_object_wildcard_state_level_live_equals_rebuild')]
+    """
+    import ast
+    import pathlib
+
+    skip = {'.scratch', '.gate-runs', '.git', '.lake', 'build', '.venv', '__pycache__'}
+    root = pathlib.Path(__file__).resolve().parents[1]
+    total = 0
+    bare: dict = {}
+    for path in root.rglob('*.py'):
+        rel = path.relative_to(root).as_posix()
+        if any(part in skip for part in path.relative_to(root).parts):
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding='utf-8'))
+        except SyntaxError:                     # not this test's business
+            continue
+        stack: list = []
+
+        def walk(node):
+            nonlocal total
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                stack.append(node.name)
+                for child in ast.iter_child_nodes(node):
+                    walk(child)
+                stack.pop()
+                return
+            if isinstance(node, ast.Call):
+                name = getattr(node.func, 'id', None) or getattr(node.func, 'attr', None)
+                if name == 'check_invariants':
+                    total += 1
+                    has = (len(node.args) >= 3
+                           or any(k.arg == 'schema_info' for k in node.keywords))
+                    if not has:
+                        bare.setdefault((rel, stack[-1] if stack else '<module>'), []) \
+                            .append(node.lineno)
+            for child in ast.iter_child_nodes(node):
+                walk(child)
+
+        walk(tree)
+
+    # CEILING CONTROL: a walker that found nothing would pass this test silently.
+    assert total >= _MIN_CALL_SITES, (
+        f'only {total} check_invariants call site(s) found, floor {_MIN_CALL_SITES} -- '
+        f'the AST walk is broken, so the census below means nothing')
+
+    missing = sorted(set(bare) - set(_SCHEMALESS_SITES))
+    assert not missing, (
+        f'check_invariants called WITHOUT schema_info at a schema-backed site: '
+        f'{missing}')
+    stale = sorted(set(_SCHEMALESS_SITES) - set(bare))
+    assert not stale, (
+        f'allowlisted site(s) no longer call check_invariants without schema_info, so '
+        f'the exemption is rot: {stale}')

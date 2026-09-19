@@ -32,7 +32,7 @@ from here.
 
 ## 2026-09-19f — the swarm can REMOVE: `_sync/EFF` `0 → 20`, and a sweep caught my own pin claiming nothing
 
-rows: `TK87` (CLOSED — the churn pass landed), `TK77` (CLOSED — its acceptance column is non-zero on both halves; its census is now FROZEN), `TK88` (NEW — the module says it is RED and has been green for five weeks), `TK72` (promoted `NOW`, reasoning on the row).
+rows: `TK87` (CLOSED — the churn pass landed), `TK77` (CLOSED — its acceptance column is non-zero on both halves; its census is now FROZEN), `TK72` (CLOSED — three call sites, a false docstring, and an AST census that refuses a silent revert), `TK88` (NEW — the module says it is RED and has been green for five weeks), `TK78` (promoted `NOW`, reasoning on the row).
 
 task lint: clean (13 checks, 203 task file(s) parsed), 32 warning(s)
 read: board only
@@ -107,11 +107,54 @@ Two figures left deliberately unreconciled: the `TK77` row's `parse_crossable` *
 this session's first-hand **18** on the same tree with the same command, and the older
 2026-09-19b *"7"*.
 
+
+**Second item, same session: `TK72` — an optional argument that was not optional.**
+`tests/test_zt_p5_readjudication.py` called `check_invariants(session, store)` at three
+sites and its docstring said *"I1-I13 are green on all three"*. Without `schema_info` that
+function skips the rest of I3, I14, I4 namespace and every derived invariant — so the
+docstring named invariants the run did not perform. All three sites now pass
+`cs.widx.schema_info` (`_live_state` returns it), with an instrument control asserting
+`si.bridged_out_shapes` is non-empty so the enabled clause cannot iterate nothing unnoticed,
+and the docstring states what is actually run **plus the narrowing**: `crossable_shapes` is
+EMPTY on both corpora, so I14 still checks nothing there — the clause the handle really
+turns on is I3 bridge completeness. That paragraph is a direct input to any future hunt for
+a crossable fixture.
+
+That the coverage is real is shown, not asserted
+(`formal/probes/tk72_schema_info_gate_2026-09-19.py`): delete one `w_all -> concrete` bridge
+and decrement the two endpoint refcounts, so every schema-independent clause stays satisfied
+— `WITHOUT schema_info GREEN`, `WITH schema_info RED   I3: concrete ... of bridged-out shape
+missing its w_all->concrete bridge`.
+
+⚠ **The fix was invisible in both directions, which is the part worth carrying.** Nothing
+went red when the three sites were fixed, and nothing would go red if they were un-fixed —
+the argument defaults to `None` and the reduced checker returns cleanly. So the session added
+the missing red:
+`tests/test_invariants_docstring_matches_body.py::test_every_schema_backed_check_invariants_call_passes_schema_info`,
+an AST census of every `check_invariants` call site in the repo with an EXACT allowlist (a
+new bare site fails; an allowlisted site that gains a handle fails as rot) and a ceiling
+floor of 40 sites so a broken walk cannot pass by scanning nothing. Swept 6 mutations, 4
+caught, `S0` control attributed, `S3`/`S5` INERT and both predicted
+(`formal/probes/tk72_callsite_sweep_2026-09-19.py`). The row's other six bare call sites are
+NOT defects and are now the allowlist: all six build a raw `ReachabilityIndex`, which has no
+`schema_info` attribute to pass.
+
+⚠ **And a process finding about this session's own work:** `TK72`'s brief still read
+*"UNVERIFIED … verify FIRST"* when the row's 2026-09-17c log had already CONFIRMED it
+first-hand and censused every call site. The promoting session (this one) read the brief and
+not the log, and wrote an instruction to re-do finished work. **The brief is what the board
+prints, so a stale brief re-orders the next session's work** — `set <id> brief` is part of
+closing a finding, not decoration. Corrected at close.
+
 Still owed: nothing skipped from this session's Rhythm. The pre-existing "Still owed" list
 below is unchanged. Two banner nav lines were stale and were corrected in place rather than
 carried: `P22` was described as live (it closed 2026-09-16, pinned three ways), and `P6` was
 described as `NOW` (it has been `LATER`, PARKED by user decision, since 2026-09-15d). Neither
-was re-ranked — only the description of the ranking was wrong.
+was re-ranked — only the description of the ranking was wrong. Adding the `TK72` line then put
+the banner over BOTH its caps (61 lines, 11 trap badges), so the defined move was taken rather
+than the ceiling raised: the `FoldAdmits` trap and its 2026-09-12 narrowing were transcribed
+onto `TK67` and the banner keeps a one-clause pointer, and the spent line announcing that the
+red-gate snapshot trap had been promoted into `CLAUDE.md` was dropped. 60 lines, 10 badges.
 
 ---
 

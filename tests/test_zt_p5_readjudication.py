@@ -632,6 +632,14 @@ def _state_diff(a, b):
 
 
 def _live_state(schema, owc, seq):
+    """``(session, landed, schema_info)``.
+
+    The third element is `TK72` (2026-09-19f): `check_invariants` takes `schema_info`
+    as an OPTIONAL argument and silently drops half its body without it — the rest of
+    I3 (bridge completeness/exclusivity), I14, I4 namespace and every derived
+    invariant. This helper returns the handle so its callers cannot accidentally run
+    the reduced checker; `connectedstore/store.py` exposes it as `cs.widx.schema_info`.
+    """
     from connectedstore import ConnectedStore
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
@@ -646,7 +654,7 @@ def _live_state(schema, owc, seq):
         except ValueError:
             pass
     session.commit()
-    return session, landed
+    return session, landed, cs.widx.schema_info
 
 
 @pytest.mark.parametrize('corpus,k', [(_OWC_CORPUS, 2), (_OWC_TTU_CORPUS, 2)],
@@ -654,10 +662,41 @@ def _live_state(schema, owc, seq):
 def test_zt_p5_object_wildcard_state_level_live_equals_rebuild(corpus, k):
     """STATE level (bounded, exhaustive to k tuples): the live incremental state
     of an object-wildcard corpus equals a fresh incremental rebuild AND a fresh
-    BULK build, over the four canonical projections; and I1-I13 are green on all
-    three. Settles the Python half of the "never probed at state level" gap; the
-    Lean half still needs a `formal/` state-conformance run over the
-    `object_wildcard` corpus (currently EXCLUDED from `GRAPH_FRAGMENT`).
+    BULK build, over the four canonical projections; and the invariant checker is
+    green on all three WITH the schema handle passed. Settles the Python half of the
+    "never probed at state level" gap; the Lean half still needs a `formal/`
+    state-conformance run over the `object_wildcard` corpus (currently EXCLUDED from
+    `GRAPH_FRAGMENT`).
+
+    ⚠ THIS DOCSTRING CLAIMED "I1-I13 are green on all three" UNTIL 2026-09-19f AND IT
+    WAS FALSE (`TK72`). The three calls below passed no `schema_info`, and without it
+    `index_v4/invariants.py::check_invariants` skips the rest of I3 (bridge
+    completeness/exclusivity), I14, I4 namespace classification and every derived
+    invariant — roughly half the body. A test that names the invariants it runs must
+    name the ones it actually ran.
+
+    ⚠ AND THE COVERAGE THIS BUYS IS NARROWER THAN THE FIX LOOKS, which is the second
+    half of `TK72`'s finding and the reason the control below is an assertion rather
+    than a comment. MEASURED 2026-09-17c and re-measured 2026-09-19f: on BOTH corpora
+    `crossable_shapes` is EMPTY, so **I14 still checks nothing here** — the corpus has
+    bridged-OUT shapes only, and crossability needs in AND out. What the handle turns
+    on for real is the I3 bridge completeness/exclusivity clause (and I4). Anybody
+    reaching for these corpora as a crossable fixture should stop at this paragraph;
+    that is a direct input to `TK75`.
+
+    SABOTAGE (literal output, 2026-09-19f,
+    `formal/probes/tk72_schema_info_gate_2026-09-19.py`): delete one `w_all ->
+    concrete` bridge edge and decrement the two endpoint refcounts, so every
+    schema-INDEPENDENT clause stays satisfied (I1's per-edge algebra, I2, I3's
+    direct-edge variant rules, I13's refcount == degree). The store is then consistent
+    to the reduced checker and broken to the full one::
+
+        sabotage: deleting the bridge folder:*#viewer[all] -> folder:f1#viewer,
+        and decrementing both refcounts by 1
+          WITHOUT schema_info  GREEN
+          WITH schema_info     RED   I3: concrete id=2 store_id='live' name='f1'
+            implicit=True predicate='viewer' type='folder' wildcard=''
+            reference_count=3 of bridged-out shape missing its w_all->concrete bridge
     """
     from connectedstore import build_index
     from index_v4.invariants import check_invariants
@@ -666,16 +705,23 @@ def test_zt_p5_object_wildcard_state_level_live_equals_rebuild(corpus, k):
     stores = [s for kk in range(k + 1) for s in itertools.combinations(space, kk)]
     assert len(stores) >= 20, 'bound went vacuous'
     for store in stores:
-        session, landed = _live_state(schema, owc, list(store))
+        session, landed, si = _live_state(schema, owc, list(store))
         try:
             if not landed:
                 continue
-            check_invariants(session, 'live')
+            # INSTRUMENT CONTROL: the handle must turn something ON, or these three
+            # calls are the reduced checker wearing a longer argument list. A green
+            # from a clause that iterated nothing is not evidence (2026-09-17c: the
+            # first probe here read "147 calls, 0 RED" and meant "never applicable").
+            assert si.bridged_out_shapes, (
+                'schema_info carries no bridged-out shape, so the I3 completeness '
+                'clause this argument exists to enable checks nothing')
+            check_invariants(session, 'live', si)
             live = _state_projections(session, 'live')
             build_index(session, 'live', 'inc', bulk=False)
             build_index(session, 'live', 'blk', bulk=True)
-            check_invariants(session, 'inc')
-            check_invariants(session, 'blk')
+            check_invariants(session, 'inc', si)
+            check_invariants(session, 'blk', si)
             inc = _state_projections(session, 'inc')
             blk = _state_projections(session, 'blk')
             assert not _state_diff(live, inc), \
@@ -694,11 +740,11 @@ def test_zt_p5_object_wildcard_state_is_order_independent():
     schema, owc, space = _OWC_TTU_CORPUS
     checked = 0
     for store in itertools.combinations(space, 3):
-        session, landed = _live_state(schema, owc, list(store))
+        session, landed, _si = _live_state(schema, owc, list(store))
         base = _state_projections(session, 'live')
         session.close()
         for perm in (tuple(reversed(store)), (store[1], store[2], store[0])):
-            session2, landed2 = _live_state(schema, owc, list(perm))
+            session2, landed2, _si2 = _live_state(schema, owc, list(perm))
             other = _state_projections(session2, 'live')
             session2.close()
             if set(landed) != set(landed2):

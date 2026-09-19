@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-07b
-moved: 2026-09-07b
-updated: 2026-09-07b
+moved: 2026-09-19f
+updated: 2026-09-19f
 closed:
 ---
 
@@ -63,3 +63,23 @@ in a file that has been edited since, and `P3` landed on 2026-09-05b.
 - `formal/HANDOFF.md` — the live site that matters most, since every formal item is told to read it first
 
 ## Log
+
+### 2026-09-19f
+
+TRANSCRIBED FROM THE `HANDOFF.md` BANNER 2026-09-19f, not re-verified here. The banner line
+carrying this was demoted into this row because the banner was over its trap-badge budget
+(11 of 10) and `docs/README.md` names the defined move: put the trap on its item and leave a
+pointer. The content below is the 2026-09-12 session's first-hand narrowing; treat it as that
+session's evidence, dated, and resolve the line numbers by SYMBOL before acting (this row's
+own trap says so).
+
+> `FoldAdmits`: 21 of 24 sites move, THREE MUST STAY (`PROOF_STATUS.md:4895`). 2026-09-12
+> narrowed `TK67`: the trap is SOUND and the symbol EXISTS -- `ReachedByRulesAdmitted.step`
+> is `RulesComplete.lean:113` with `hadm` at `:115` (used at 8+ sites); only the recorded
+> line `:91` is stale, and a subagent that reported "there is no `step` constructor" would
+> have deleted a valid trap. Stay-sites: `RulesComplete.lean:115`, `RestrictBase.lean:470`,
+> `:531`.
+
+That narrowing answers most of what the body calls "the actual work here" for ONE of the
+three sites (the `step` constructor exists, at a different line than recorded). The two
+`RestrictBase.lean` sites are still line-cited and still unresolved by symbol.
