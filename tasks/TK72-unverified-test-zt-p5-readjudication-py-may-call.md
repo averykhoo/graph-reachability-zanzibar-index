@@ -2,7 +2,7 @@
 id: TK72
 title: UNVERIFIED: test_zt_p5_readjudication.py may call check_invariants without schema_info (I14 off)
 brief: agent claim from 2026-09-15, never reproduced; verify FIRST, then census other call sites
-pri: LATER
+pri: NOW
 size: S
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-16b
-moved: 2026-09-18
-updated: 2026-09-18
+moved: 2026-09-19f
+updated: 2026-09-19f
 closed:
 ---
 
@@ -84,3 +84,25 @@ PROBE: replicated both ZT-P5 corpora and both rebuild legs, calling `check_invar
 REVISED DISPOSITION: `TK72` is a genuine but SMALL item -- the docstring at `tests/test_zt_p5_readjudication.py:657` claims "I1-I13 are green on all three" and that is false, and the three call sites should pass `cs.widx.schema_info` so the clauses that DO apply (I3-out, I4) actually run. It is NOT a bug route. It should not outrank `TK74` or `TK75`; consider demoting it back if a better candidate needs the NEXT slot.
 
 Probe was `.scratch/tk72/probe.py` (gitignored, therefore already lost -- the transcript above is the tracked copy, per the `.scratch/` rule).
+
+### 2026-09-19f
+
+PROMOTED to NOW 2026-09-19f by the session that closed TK77/TK87, with the reasoning here
+rather than on the banner. Three reasons, no new work done on this row:
+
+1. It is the loose thread P22's close explicitly refused to pull ("NOT CLOSED HERE ... still
+   UNVERIFIED and still deserves its own row"), and it is still labelled UNVERIFIED after
+   three sessions in the I14 area.
+2. If it is true, it is an assurance hole of the exact shape this repo calls the house
+   failure mode: a module that runs the invariant checker with the I14 clause silently
+   DISABLED passes for a reason unrelated to what it claims. TK77's census measured
+   test_zt_p5_readjudication.py as the single largest crossable reacher in the suite, so
+   this is the module where an I14 clause would matter most.
+3. It is `S` and mechanically checkable: grep the `check_invariants` call sites in that
+   module, look at whether `schema_info` is passed, and if it is not, decide whether the
+   clause can be turned on without a corpus change. First-hand, not by agent report.
+
+⚠ Do not assume the claim is true because it is old. It entered the tree as a subagent's
+passing remark; CLAUDE.md sec  Delegation makes verifying it the first step, and TK67 is the
+standing example of a trap that was nearly deleted because the subagent report about it was
+wrong.

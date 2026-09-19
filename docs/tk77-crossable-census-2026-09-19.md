@@ -1,12 +1,19 @@
 # `TK77` — the crossable-shape census (which corpora can reach I14 at all)
 
-**ACTIVE-PLAN, opened 2026-09-19c — the body is provenance, not a living status.** This is
-`TK77`'s FIRST ACTION discharged: *"measure `crossable_shapes` for every fixture in
-`tests/fga_schemas/` and publish the table"*. Every figure below was measured first-hand on
-2026-09-19c against the live tree. Live state is the task row
-(`python scripts/task.py show TK77`) and `python scripts/gate_status.py` — never this file.
-Corrections append **dated at the top**, never edited into the body. Freeze it when `TK77`
-closes.
+**FROZEN 2026-09-19f — provenance, not a living document.** `TK77` closed on 2026-09-19f
+(`python scripts/task.py show TK77`, now under `tasks/closed/`), which is what this file's
+own ACTIVE-PLAN banner said would freeze it. Status lines below are as-of-then and several
+are already false — §4's *"0 of 65535"* is contradicted by the 2026-09-19e append above it,
+and §7's three items are all executed. The REMOVE half of §7.4's acceptance target was
+finished by `TK87` on the same day; its map is
+[`tk87-swarm-churn-2026-09-19.md`](tk87-swarm-churn-2026-09-19.md), which also records a
+first-hand `parse_crossable` **18** against this file's **17**, deliberately unreconciled.
+Live state is the task tree and `python scripts/gate_status.py` — never this file.
+Corrections are appended **dated at the top**, never edited into the body.
+
+*Opened 2026-09-19c as ACTIVE-PLAN, as `TK77`'s FIRST ACTION: "measure `crossable_shapes`
+for every fixture in `tests/fga_schemas/` and publish the table". Every figure below was
+measured first-hand on its own dated section's date.*
 
 ⚠ **This census CONTRADICTS the `TK77` row on two load-bearing points** (§6). The row's
 title — *"the matrix and hypothesis campaign have ZERO reach"* — is right about the matrix

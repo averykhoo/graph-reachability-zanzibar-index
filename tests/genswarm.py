@@ -803,13 +803,26 @@ def rejection_explained_cells() -> set[frozenset]:
 # 6. THE REPORTING DIFFERENTIAL
 # =========================================================================== #
 
-def grid_for(ast, present, *, cap: int = 400, rng: random.Random | None = None):
+def grid_for(ast, present, *, cap: int = 400, rng: random.Random | None = None,
+             extra_names: dict | None = None):
     """Universe u ghosts u ``'*'``, derived from the schema's own shapes — the same
     construction ``ParityEngine._grid`` uses, including its anti-vacuity fallback for a
     schema whose relations are all Computed/TTU (which declares no Direct restriction,
     so the naive grid would be EMPTY and every parity assertion would pass by looping
-    zero times)."""
+    zero times).
+
+    ``extra_names`` (``TK87``, 2026-09-19f) is names to grid over that are NOT in
+    ``present``. It exists for the REMOVE side: deriving the universe from ``present``
+    alone means that the moment a tuple is removed, the entity it named drops out of the
+    grid -- and a stale-closure over-grant on a just-removed entity is exactly the
+    divergence a removal sweep is for. ``Diff`` passes every name it has ever admitted,
+    so the grid does not shrink under removal. ``GHOST`` alone is NOT a substitute: a
+    name that was never written and a name that was written and revoked take different
+    paths through the index (``tests/test_generator_coverage.py``
+    ::``test_removal_grid_still_probes_the_removed_entity``)."""
     names: dict[str, set[str]] = {}
+    for t, ns in (extra_names or {}).items():
+        names.setdefault(t, set()).update(n for n in ns if n != '*')
     for (_, s_type, s_name, _, o_type, o_name) in present:
         if s_name != '*':
             names.setdefault(s_type, set()).add(s_name)
@@ -847,6 +860,14 @@ class RunResult:
     driven: bool = False
     graph_dropped: str | None = None
     divergences: list = field(default_factory=list)   # (query, oracle, {backend: ans})
+    # --- the churn pass (TK87, 2026-09-19f). Counted SEPARATELY on purpose: folded into
+    # `comparisons` a removal half that compared nothing would be invisible behind the
+    # add half's thousands, which is this repo's house failure mode with the counter
+    # already in place. `remove_comparisons` is the non-vacuity floor for the REMOVE
+    # side specifically, and it counts only sweeps taken while the store is NON-EMPTY.
+    removed: int = 0
+    remove_comparisons: int = 0
+    unrestored: list = field(default_factory=list)    # (side name, subset index)
 
     @property
     def fail_open(self):
@@ -887,7 +908,10 @@ class Diff:
         self.sets = [_SetSide(schema, owc, ops) for ops in ALL_SETOPS]
         self.sides = ([self.graph] if self.graph else []) + self.sets
         self.present: set[RawTuple] = set()
+        # Every name EVER admitted, never unwound on remove -- see `grid_for`'s
+        # `extra_names`. Before TK87 this dict was written and never read.
         self._names: dict[str, set[str]] = {}
+        self._before = {b.name: b.snapshot() for b in self.sides}
 
     def add(self, raw: RawTuple) -> bool:
         if raw in self.present:
@@ -905,8 +929,36 @@ class Diff:
                 self._names.setdefault(o_type, set()).add(o_name)
         return decision
 
+    def remove(self, raw: RawTuple) -> bool:
+        """Symmetric to ``add``: unanimous accept/reject, or ``AdmissionDivergence``.
+
+        ``TK87`` (2026-09-19f). Removing a tuple that is not present is NOT posed to the
+        backends -- the swarm removes only what it admitted, and an absent-tuple removal
+        is a different admission question with its own (unanimous) answer, so posing it
+        here would spend the sweep on the rejection path (the same reason ``add``
+        no-ops a duplicate). ``self._names`` is deliberately NOT unwound."""
+        if raw not in self.present:
+            return True
+        results = {b.name: b.apply(raw, 'remove') for b in self.sides}
+        decision = next(iter(results.values()))
+        if any(v != decision for v in results.values()):
+            raise AdmissionDivergence(
+                f'accept/reject divergence on remove {raw}: {results}')
+        if decision:
+            self.present.discard(raw)
+        return decision
+
+    def restored(self) -> list[str]:
+        """Side names whose row multiset differs from construction. Meaningful only
+        after every admitted write has been removed: add-then-remove-everything must
+        return each backend to byte-identical state, and on the graph side that is what
+        drags the I14 crossing middles (``WildcardIndex::_sync_entity_middles``) back
+        out -- ref-counted closure edges, bridges and interned middles alike."""
+        return [b.name for b in self.sides if b.snapshot() != self._before[b.name]]
+
     def grid(self):
-        return grid_for(self.ast, self.present, cap=self.grid_cap, rng=self._rng)
+        return grid_for(self.ast, self.present, cap=self.grid_cap, rng=self._rng,
+                        extra_names=self._names)
 
     def sweep(self):
         """``(comparisons, divergences)``. One comparison = one (query, backend) pair."""
@@ -1003,29 +1055,72 @@ def subsets_for(pool, regime: str, k: int, rng: random.Random, ast=None):
 
 
 def drive_config(ast, owc, *, regime: str, k: int = 2, seed: int = 0,
-                 pool_cap: int = 24, grid_cap: int = 400) -> RunResult:
+                 pool_cap: int = 24, grid_cap: int = 400,
+                 churn: bool = False) -> RunResult:
     """Compile ``(ast, owc)``, then drive it under ``regime`` and sweep the grid.
 
     Returns a ``RunResult``; raises nothing except ``AdmissionDivergence`` (which is a
     genuine failure, not a shape the sweep should skip). Compile refusals are reported
-    via ``RunResult.graph_dropped`` / by re-raising so the caller can classify."""
+    via ``RunResult.graph_dropped`` / by re-raising so the caller can classify.
+
+    ``churn`` (``TK87``, 2026-09-19f) appends a REMOVAL pass to each subset, and it is
+    OFF by default for a reason worth stating rather than discovering. ``subsets_for``'s
+    two regimes are calibrated against a monotone pool -- ``SPARSE``/``DENSE``/``FULL``
+    each mean *which subset of the pool is applied*, and the two positive controls
+    (``test_sparse_regime_finds_no_fail_closed_divergence`` /
+    ``..._dense_..._fail_open_...``) plus the non-vacuity floors are read against that.
+    Churn does not change which subset is applied, so a regime's meaning is unchanged
+    and both controls keep measuring what they were calibrated on; what it adds is a
+    second sweep from a state no monotone driver can reach.
+
+    The pass, per subset, in order:
+
+      1. remove HALF the admitted writes, newest first, and sweep again. Half, not all:
+         an add-then-remove-everything sequence restores the row multiset, so a sweep
+         taken only at the END compares an EMPTY store against an empty oracle and
+         reports success (``::test_a_sweep_with_an_empty_pool_would_have_reported_success``
+         is the same failure mode from the other side). ``remove_comparisons`` counts
+         only this non-empty sweep.
+      2. remove the REST, and compare every backend's row multiset with its state at
+         construction. This is the step that reaches the I14 remove path at all:
+         ``_sync_entity_middles``' callers are all removals.
+
+    A subset with fewer than two admitted writes cannot do (1) with a non-empty store,
+    so it is skipped rather than swept empty."""
     schema = unparse_schema_ast(ast)
     pool = swarm_op_pool(ast)[:pool_cap]
     rng = random.Random(seed)
     res = RunResult()
-    for subset in subsets_for(pool, regime, k, rng, ast):
+    for i, subset in enumerate(subsets_for(pool, regime, k, rng, ast)):
         d = Diff(schema, owc, grid_cap=grid_cap, seed=seed)
         try:
             res.graph_dropped = d.drop
+            admitted = []
             for t in subset:
                 res.attempted += 1
                 if d.add(t):
                     res.accepted += 1
+                    if t not in admitted:      # a duplicate add no-ops; removing it
+                        admitted.append(t)     # twice would count a phantom removal
             n, bad = d.sweep()
             res.comparisons += n
             res.divergences.extend(bad)
             if n:
                 res.driven = True
+            if churn and len(admitted) >= 2:
+                half = len(admitted) // 2
+                for raw in reversed(admitted[-half:]):
+                    if d.remove(raw):
+                        res.removed += 1
+                assert d.present, 'the churn pass emptied the store before its sweep'
+                n, bad = d.sweep()
+                res.comparisons += n
+                res.remove_comparisons += n
+                res.divergences.extend(bad)
+                for raw in reversed(admitted[:-half]):
+                    if d.remove(raw):
+                        res.removed += 1
+                res.unrestored.extend((name, i) for name in d.restored())
         finally:
             d.close()
     return res

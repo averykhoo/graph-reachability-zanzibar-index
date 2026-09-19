@@ -30,6 +30,91 @@ from here.
 
 ---
 
+## 2026-09-19f — the swarm can REMOVE: `_sync/EFF` `0 → 20`, and a sweep caught my own pin claiming nothing
+
+rows: `TK87` (CLOSED — the churn pass landed), `TK77` (CLOSED — its acceptance column is non-zero on both halves; its census is now FROZEN), `TK88` (NEW — the module says it is RED and has been green for five weeks), `TK72` (promoted `NOW`, reasoning on the row).
+
+task lint: clean (13 checks, 203 task file(s) parsed), 32 warning(s)
+read: board only
+
+⚠ Literally: `board`, then `show TK87`, `show TK77`, then the `TK77` census. `HANDOFF.md`
+itself was read only at write-back, to rewrite the banner. `board only` is the closest true
+token and it still hides the `show` hop — the standing owed item, carried from 2026-09-07b.
+
+Executed `TK87`, the structural zero `TK77` closed its own scope around: `tests/genswarm.py`
+had no remove op, so every driven config was a monotone sequence of adds and no swarm config
+of any shape could reach `index_v4/wildcard.py::_sync_entity_middles`, whose every caller is a
+removal path. Map: [`docs/tk87-swarm-churn-2026-09-19.md`](../tk87-swarm-churn-2026-09-19.md)
+(ACTIVE-PLAN). Probes `formal/probes/tk87_churn_reach_2026-09-19.py` (modes `reach`,
+`regimes`) and `formal/probes/tk87_churn_sweep_2026-09-19.py`.
+
+**The premise was re-measured before anything was edited**, with `TK77`'s own instrument, and
+it sharpened: the module booked `_sync/raw` **0** — it never called the method at all, rather
+than calling it and being turned away at the `crossable_shapes` guard — with `CTL` `110`
+proving the instrument was alive.
+
+**What landed.** `Diff::remove` (unanimity across graph + both set engines or
+`AdmissionDivergence`), `Diff::restored` (per-side row multiset against construction),
+`grid_for(..., extra_names=)`, `drive_config(..., churn=False)`, and `RunResult.removed` /
+`.remove_comparisons` / `.unrestored` counted separately from the add half. Three pins in
+`tests/test_generator_coverage.py` §6b. Acceptance, whole module, same command before and
+after: `parse_crossable` `18 → 24`, `_ensure/EFF` `46 → 78`, `_sync/raw` `0 → 44`,
+`_sync/EFF` **`0 → 20`**, `CTL` `110 → 166`, `28 passed → 31 passed`, +1.1 s.
+
+**The decision the row asked for, made by not making it.** `TK87` warned that giving the
+swarm removes *changes what a regime IS* — `subsets_for`'s two regimes and their positive
+controls are calibrated on a monotone pool. Churn is therefore OFF by default and does not
+touch `subsets_for`; it appends after each subset's sweep. The evidence that the add half is
+undisturbed is arithmetic rather than assertion: sparse `124644 − 61953 = 62691` and dense
+`123318 − 61659 = 61659`, i.e. the add-phase comparison count with churn ON equals the entire
+comparison count with churn OFF, exactly, on both regimes. Adopting it inside the controls
+would cost +81% / +102% wall and, measured, finds nothing extra on the 96-config driven space.
+
+**A trap inside the trap, and it is the reusable part.** `grid_for` derives its query universe
+from the tuples that are PRESENT, which is right for a monotone driver and a silent hole for a
+removal pass: the moment a tuple is removed the entity it named leaves the grid, so a
+stale-closure over-grant on a just-revoked entity has no query left to catch it. `Diff` now
+passes every name it has ever admitted (`_names`, which before this was written on every add
+and read nowhere).
+
+⚠ **The sweep — 9 mutations, 8 caught, `M0` attributed — found `M1` INERT, and the pin was the
+bug, not the mutation.** The first version of `test_removal_grid_still_probes_the_removed_entity`
+removed the last admitted tuple and asserted on both of that tuple's names; a sibling tuple
+still named one of them, so `present` never lost it and dropping `extra_names` changed
+nothing. **A pin that claims a property it does not measure reads exactly like a clean row**,
+and the only reason this one was caught is that the mutation was written to move the property
+the pin CLAIMED. That is the fifth or sixth variant of the same lesson in the banner and the
+first where the defect was in the session's own new test rather than in an inherited one.
+
+★ **`M6` is a genuine coverage gain, stated as a catcher and not as a count.** It is `TK77`'s
+`N5` — drop `remove_edge`'s OBJECT-endpoint `_sync_entity_middles` call — which
+`tests/test_i14_crossing_middles.py`, the module named after the invariant, stays GREEN on,
+and which `TK77` recorded as caught by exactly one test in the suite. The churn pass reddens
+on it too, `[('graph', 1)]` unrestored, from a GENERATED schema rather than a hand-written
+fixture.
+
+`TK77` closed with it: §7 items (1)/(2)/(3) all executed, §7.4's acceptance met on both
+modules, and [`docs/tk77-crossable-census-2026-09-19.md`](../tk77-crossable-census-2026-09-19.md)
+frozen — its `ACTIVE-PLAN` banner said to freeze it on that close.
+
+**Filed `TK88`.** `tests/test_generator_coverage.py` announces in five places that it is
+expected to be RED (`:15`, `:126`, `:761`, and both regime docstrings' `★ CURRENTLY RED`
+openers). It is `28 passed`; `tests/test_ttu_tupleset_parent_types.py` is `12 passed`; RC2 was
+closed at `0838bcf`. A module that announces its own redness is a module whose genuine red
+reads as normal.
+
+Two figures left deliberately unreconciled: the `TK77` row's `parse_crossable` **17** against
+this session's first-hand **18** on the same tree with the same command, and the older
+2026-09-19b *"7"*.
+
+Still owed: nothing skipped from this session's Rhythm. The pre-existing "Still owed" list
+below is unchanged. Two banner nav lines were stale and were corrected in place rather than
+carried: `P22` was described as live (it closed 2026-09-16, pinned three ways), and `P6` was
+described as `NOW` (it has been `LATER`, PARKED by user decision, since 2026-09-15d). Neither
+was re-ranked — only the description of the ranking was wrong.
+
+---
+
 ## 2026-09-19e — `TK77`'s generator half landed, and both census items' premises were wrong when measured
 
 rows: `TK77` (census §7 items (2) and (3) executed; brief re-pointed), `TK87` (NEW — `genswarm.Diff` is add-only, so the swarm can never reach a removal path).

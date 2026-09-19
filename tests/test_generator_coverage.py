@@ -1201,6 +1201,248 @@ def test_admission_parity_is_asserted_not_assumed():
 
 
 # ===========================================================================
+# 6b. THE CHURN PASS -- the REMOVE side of the driven sweep (TK87)
+# ===========================================================================
+
+def _crossable_driven_configs():
+    """Every driven config (`K<=DRIVE_K`) that COMPILES to a non-empty
+    `crossable_shapes`. Measured 2026-09-19f: 1 of the 96 that compile, `{owc,
+    ts_wildcard}` -- `test_driven_config_space_reaches_a_crossable_schema` is the floor
+    that keeps it from silently becoming 0."""
+    out = []
+    for sw in G.enumerate_configs(DRIVE_K):
+        ast, owc = G.witness(sw)
+        try:
+            rs = parse_openfga_schema(unparse_schema_ast(ast), object_wildcard_shapes=owc)
+        except Exception:                       # noqa: BLE001 -- refusals are elsewhere
+            continue
+        if rs.schema_info.crossable_shapes:
+            out.append((frozenset(sw), ast, owc))
+    return out
+
+
+def test_churn_pass_reaches_the_i14_remove_path():
+    """TK87 (2026-09-19f). Property guarded: the driven sweep reaches
+    `index_v4/wildcard.py::_sync_entity_middles` EFFECTIVELY -- i.e. past its
+    `crossable_shapes` guard, on a store where the I14 `w_all -> concrete -> w_any`
+    crossing actually exists.
+
+    WHY THIS IS A TEST AND NOT A NOTE. Until 2026-09-19f `genswarm.Diff` exposed `add`
+    and `sweep` only, so every config was driven as a monotone sequence of adds, and
+    every caller of `_sync_entity_middles` is a REMOVAL path (`::remove_edge`,
+    `::remove_node`, `index_v4/processor.py`'s reconcile-time GC). The census measured
+    this module at `_sync/raw` **0** -- not "reached and guarded out", never called at
+    all (`docs/tk77-crossable-census-2026-09-19.md`, and the baseline re-measured
+    first-hand 2026-09-19f in `docs/tk87-swarm-churn-2026-09-19.md` §1).
+
+    FOUR CLAIMS, and each is separately load-bearing:
+
+    * the config is CROSSABLE -- an empty `crossable_shapes` makes both middles
+      entrypoints silent no-ops, so without this the other three pass while measuring
+      nothing (the census §7 trap on items (1)/(2));
+    * writes were REMOVED, and the removal sweep COMPARED something -- a removal pass
+      that compared nothing reports success, which is this module's founding theme;
+    * `_sync_entity_middles` was reached EFFECTIVELY. A raw call count would be
+      satisfied by any schema in the suite: both entrypoints are called unconditionally
+      and return at the guard;
+    * every backend is restored to its construction state. That is what drags the
+      crossing middles back out, and it is the property a stale-middle bug breaks.
+
+    MEASURED 2026-09-19f (`formal/probes/tk87_churn_reach_2026-09-19.py reach sparse`):
+    over the 96 driven configs that compile, 470 accepted / 467 removed / 61953 removal
+    comparisons / 0 unrestored / 0 divergences, with `_sync/raw` 0 -> 1717 and
+    `_sync/EFF` 0 -> **10**, all 10 from this one config. Under `dense`: 1967 removed,
+    `_sync/EFF` **36**, still 0 unrestored and 0 divergences.
+
+    SABOTAGE, 8 of 9 mutations caught (`formal/probes/tk87_churn_sweep_2026-09-19.py`,
+    full table in `docs/tk87-swarm-churn-2026-09-19.md` §4). The one that matters is a
+    PRODUCT mutation -- a capability no product mutation can move is a capability that
+    reaches nothing. `M5`, the I14 remove-side GC made a no-op (literal output)::
+
+        FAILED tests/test_generator_coverage.py::test_churn_pass_reaches_the_i14_remove_path
+        E   AssertionError: backends NOT restored after removing every admitted write:
+            [('graph', 0), ('graph', 1)]
+
+    ★ `M6` is the same mutation TK77 recorded as NOT caught by its own remove pin:
+    dropping `remove_edge`'s OBJECT-endpoint `_sync_entity_middles` call, which
+    `tests/test_i14_crossing_middles.py` -- the module named after the invariant --
+    stays green on. This test reddens on it, `[('graph', 1)]`, from a GENERATED schema.
+    That is the coverage the churn pass buys, stated as a second independent catcher
+    rather than as a count.
+    """
+    import index_v4.wildcard as W
+
+    cfgs = _crossable_driven_configs()
+    assert cfgs, (
+        'no driven config is crossable, so this test measures nothing -- see '
+        'test_driven_config_space_reaches_a_crossable_schema, which is the floor that '
+        'should have caught it first')
+
+    eff: list = []
+    original = W.WildcardIndex._sync_entity_middles
+
+    def counted(self, entity_type, entity_name, *a, **k):
+        # EFFECTIVE, not raw: the guard is `_sync_entity_middles`' own first line, and
+        # counting calls would report reach on every schema in the suite.
+        if entity_name != '*' and any(
+                t == entity_type for (t, _p) in self.schema_info.crossable_shapes):
+            eff.append((entity_type, entity_name))
+        return original(self, entity_type, entity_name, *a, **k)
+
+    results = []
+    W.WildcardIndex._sync_entity_middles = counted
+    try:
+        for _sw, ast, owc in cfgs:
+            results.append(G.drive_config(ast, owc, regime=G.SPARSE, k=DRIVE_K,
+                                          seed=7, churn=True))
+    finally:
+        W.WildcardIndex._sync_entity_middles = original
+
+    removed = sum(r.removed for r in results)
+    rcmp = sum(r.remove_comparisons for r in results)
+    unrestored = [u for r in results for u in r.unrestored]
+    divs = [d for r in results for d in r.divergences]
+    assert removed > 0, 'the churn pass removed nothing -- no removal path was driven'
+    assert rcmp > 0, (
+        'the removal sweep made ZERO comparisons, so it passed by comparing nothing '
+        '(the empty-store failure mode, from the remove side)')
+    assert not unrestored, (
+        f'backends NOT restored after removing every admitted write: {unrestored[:3]}')
+    assert not divs, f'divergence under the churn pass: {divs[:3]}'
+    assert eff, (
+        'no EFFECTIVE _sync_entity_middles call on a crossable store -- the swarm still '
+        'has zero reach into the I14 remove path, which is what TK87 is about')
+
+
+def test_removal_grid_still_probes_the_removed_entity():
+    """TK87 (2026-09-19f). Property guarded: `Diff.grid` keeps probing an entity AFTER
+    its last tuple is removed.
+
+    `grid_for` derives its universe from the tuples that are PRESENT. Under a monotone
+    driver that is exactly right; under the churn pass it is a trap, because the moment
+    a tuple is removed the entity it named leaves the grid -- and a stale-closure
+    over-grant on a just-revoked entity is the single most likely thing a removal sweep
+    is there to catch. It would leave, precisely, no query to catch it with.
+
+    `GHOST` is not a substitute and that is the second assertion below: a name that was
+    never written and a name that was written and revoked take different paths through
+    the index (one has no node, the other has a node whose refcount just fell). `Diff`
+    therefore passes every name it has EVER admitted as `extra_names`, and never unwinds
+    `_names` on remove.
+
+    SABOTAGE (literal output, 2026-09-19f, sweep row `M1`). Narrowest plausible
+    weakening: drop the `extra_names=self._names` argument in `Diff.grid` -- i.e. the
+    pre-TK87 line, exactly::
+
+        FAILED tests/test_generator_coverage.py::test_removal_grid_still_probes_the_removed_entity
+        E   AssertionError: the grid stopped probing 'f1' the moment its last tuple was
+            removed -- a removal sweep over this grid cannot see a stale-closure over-grant
+            assert 'f1' in {'*', 'd1', 'd2', 'u1', 'u2', 'zz-ghost'}
+
+    ⚠ THE FIRST VERSION OF THIS TEST SWEPT `M1` **INERT**, and the mutation was not the
+    problem -- the test was. It removed the LAST admitted tuple and asserted on both of
+    that tuple's names; a sibling tuple still named one of them, so `present` still
+    carried it and the grid was unchanged. An INERT row that reads as a clean pin is
+    this repo's quiet failure mode (`docs/sabotage-procedure.md`), and the only reason
+    it was caught here is that `M1` was written to move a property this test CLAIMED
+    and did not measure. The victim is now chosen so that every tuple naming it is
+    removed, and the second assertion below refuses the test outright if that ever stops
+    being true.
+    """
+    ast, owc = G.witness(frozenset({'multi_type'}))
+    pool = G.swarm_op_pool(ast)
+    d = G.Diff(unparse_schema_ast(ast), owc, grid_cap=10000)
+    try:
+        admitted = [t for t in pool if d.add(t)]
+        assert len(admitted) >= 2, f'pool admitted {len(admitted)} -- need 2'
+        # Every admitted tuple that names each concrete entity. Removing ONE tuple is
+        # not enough and the first version of this test made exactly that mistake: a
+        # sibling tuple naming the same entity keeps it in `present`, so the pin passed
+        # with `extra_names` dropped (sweep row `M1`, first run, INERT). The victim must
+        # be an entity whose LAST tuple is gone.
+        holders: dict = {}
+        for t in admitted:
+            for nm in (t[2], t[5]):
+                if nm != '*':
+                    holders.setdefault(nm, []).append(t)
+        assert holders, 'no admitted tuple names a concrete entity'
+        victim = min(sorted(holders), key=lambda n: len(holders[n]))
+        for t in holders[victim]:
+            assert d.remove(t) is True, f'admitted write was not removable: {t}'
+        assert all(victim not in (x[2], x[5]) for x in d.present), (
+            f'{victim!r} is still named by a present tuple, so this test would pass '
+            f'without `extra_names` and prove nothing')
+        grid = d.grid()
+        seen = {q[2] for q in grid} | {q[5] for q in grid}
+        assert victim in seen, (
+            f'the grid stopped probing {victim!r} the moment its last tuple was '
+            f'removed -- a removal sweep over this grid cannot see a stale-closure '
+            f'over-grant')
+        assert G.GHOST in seen, 'the ghost row is gone, so the control for this is too'
+        # ... and the ghost is NOT the same probe: it names an entity that never existed.
+        assert G.GHOST != victim
+    finally:
+        d.close()
+
+
+def test_churn_pass_never_sweeps_an_empty_store():
+    """TK87 (2026-09-19f). Property guarded: every sweep the churn pass takes sees a
+    NON-EMPTY store.
+
+    The cheap way to add removes -- append a remove-everything pass and sweep at the end
+    -- restores the row multiset, so that final sweep compares an empty store against an
+    empty oracle and reports success for every config, forever. This module already
+    pins that failure mode from the add side
+    (`test_a_sweep_with_an_empty_pool_would_have_reported_success`); this is the remove
+    side of the same trap, and it is the reason `drive_config` removes HALF, sweeps, and
+    only then removes the rest.
+
+    The observation is made by patching `Diff.sweep` to record `len(self.present)` at
+    entry, so it pins the ORDER of operations rather than restating it.
+
+    MEASURED 2026-09-19f on the crossable config `{owc, ts_wildcard}`: 2 sparse subsets,
+    2 sweeps each, store sizes `[2, 1, 3, 2]`; 5 accepted, 5 removed, 396 removal
+    comparisons.
+
+    SABOTAGE (literal output, 2026-09-19f, sweep row `M3`). Narrowest plausible
+    weakening: move the removal sweep in `drive_config` to AFTER the second removal
+    phase -- one line later, and the sweep still happens, still counts, still compares
+    hundreds of queries::
+
+        FAILED tests/test_generator_coverage.py::test_churn_pass_never_sweeps_an_empty_store
+        E   AssertionError: the churn pass swept an EMPTY store: sizes [2, 0, 3, 0] --
+            that sweep compares nothing and reports success
+
+    `M2` (remove EVERYTHING, i.e. `half = len(admitted)`) reddens this test too, via
+    `drive_config`'s own `assert d.present` -- the mechanical refusal in the driver, one
+    layer below this pin.
+    """
+    cfgs = _crossable_driven_configs()
+    assert cfgs, 'no crossable driven config -- see the floor test'
+    _sw, ast, owc = cfgs[0]
+
+    sizes: list = []
+    original = G.Diff.sweep
+
+    def recorded(self):
+        sizes.append(len(self.present))
+        return original(self)
+
+    G.Diff.sweep = recorded
+    try:
+        r = G.drive_config(ast, owc, regime=G.SPARSE, k=DRIVE_K, seed=7, churn=True)
+    finally:
+        G.Diff.sweep = original
+
+    assert r.removed > 0 and r.remove_comparisons > 0, (
+        'the churn pass did not run, so this test proves nothing about its order')
+    assert len(sizes) >= 2, f'expected an add sweep AND a removal sweep, saw {sizes}'
+    assert all(n > 0 for n in sizes), (
+        f'the churn pass swept an EMPTY store: sizes {sizes} -- that sweep compares '
+        f'nothing and reports success')
+
+
+# ===========================================================================
 # 7. THE REPORT (never an assertion -- `deep` publishes the open number)
 # ===========================================================================
 

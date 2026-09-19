@@ -11,9 +11,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-18
-moved: 2026-09-19e
-updated: 2026-09-19e
-closed:
+moved: 2026-09-19f
+updated: 2026-09-19f
+closed: 2026-09-19f
 ---
 
 I14 crossing middles -- the `w_all -> concrete -> w_any` crossing the graph index maintains
@@ -268,3 +268,28 @@ exposes `add` and `sweep` only, no remove op, while every caller of `_sync_entit
 removal path. Giving the swarm driver a remove op changes the contract of the thing that fuzzes
 admission SEQUENCES, so it is its own item, not a one-liner. Unchanged and still not to be
 reconciled arithmetically: the 2026-09-19b "7" discrepancy.
+
+### 2026-09-19f
+
+CLOSED 2026-09-19f. Every item this row owned is executed and the acceptance column it was
+filed about is non-zero on both halves.
+
+The row's title -- "the matrix and hypothesis campaign have ZERO reach into the
+_sync_entity_middles surface" -- is discharged: the hypothesis campaign books `_sync/EFF` 8
+(deterministic, 2026-09-19e) and tests/test_generator_coverage.py now books it too, via the
+swarm removal pass that TK87 landed 2026-09-19f (see that row and
+docs/tk87-swarm-churn-2026-09-19.md). The census's section 7 items (1), (2) and (3) are all
+executed; its section 7.4 acceptance target -- "a change that lifts `_ensure` EFF while
+leaving `_sync` EFF where it was has not moved the thing TK77 is about" -- is met.
+
+Map: docs/tk77-crossable-census-2026-09-19.md, now FROZEN with this close (dated appends
+2026-09-19d and 2026-09-19e, plus the TK87 doc for the removal half).
+
+Carried forward rather than dropped:
+* TK87 (closed same session) took the structural zero -- `genswarm.Diff` was add-only.
+* TK88 (NEW 2026-09-19f) -- the "this module is expected to be RED" prose in
+  tests/test_generator_coverage.py, which has been green since 0838bcf.
+* The 2026-09-19b "7" discrepancy is STILL unreconciled and still not to be reconciled
+  arithmetically, and 2026-09-19f adds a second one of the same kind: the module's
+  `parse_crossable` measured 18 on this tree with the same command that produced the row's
+  17. Both are first-hand; neither is averaged.
