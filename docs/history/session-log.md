@@ -30,6 +30,84 @@ from here.
 
 ---
 
+## 2026-09-19e — `TK77`'s generator half landed, and both census items' premises were wrong when measured
+
+rows: `TK77` (census §7 items (2) and (3) executed; brief re-pointed), `TK87` (NEW — `genswarm.Diff` is add-only, so the swarm can never reach a removal path).
+
+task lint: clean (13 checks, 202 task file(s) parsed), 32 warning(s)
+read: board + note
+
+⚠ The receipt vocabulary still has no token for "entered via `show`" (the standing "Still
+owed" item, carried from 2026-09-07b). Literally: `board`, then `show TK77`, then the census
+doc's §4/§5/§7. `board + note` is true; the `show` hop is still unnameable.
+
+Executed the two items [`docs/tk77-crossable-census-2026-09-19.md`](../tk77-crossable-census-2026-09-19.md)
+§7 left open — *(2) the `genswarm.py::witness` fix, (3) the `star_bridge_configs`
+re-weighting* — and **neither landed as written, because measuring the premise first
+contradicted it.** The full map, both tables and the sweep are the doc's 2026-09-19e dated
+append; probes `formal/probes/tk77_generator_reach_2026-09-19.py` (modes `owc`, `reweight`)
+and `formal/probes/tk77_generator_reach_sweep_2026-09-19.py`.
+
+**What landed.** `witness` now object-wildcards the TTU TARGET `('doc','r1')` — the star
+tupleset's through-shape — guarded off `body_boolean` (taints `r1`, so an object wildcard on
+it is the decision-15 owc-on-a-derived-relation refusal) and `body_wc_userset` (the literal
+`[doc:*#r1]` would make the shape doubly bridged). Measured over all 65535 configs the
+guarded form's rejection outcomes are byte-identical to the old generator's, so the rejection
+census and every coverage floor are undisturbed; the UNGUARDED form costs 256 fresh
+`DoublyBridgedShapeError` and reaches the same crossable count, i.e. it buys nothing and
+deletes configs. Two pins:
+`tests/test_generator_coverage.py::test_driven_config_space_reaches_a_crossable_schema` (a
+floor on the DRIVEN space, 1 of 96 compiled at `K<=2`) and
+`tests/test_hypothesis.py::test_star_bridge_crossing_middle_remove_deterministic_pin` (the
+acceptance target: pool applied, middle interned, every accepted write removed in reverse,
+middles gone, row multiset restored exactly, effective `_sync_entity_middles` counted with
+the census's own guard). `star_bridge_configs` re-weighted on both axes.
+
+**The two contradictions, both first-hand.** (a) **A static shape census and a compiled one
+are different measurements, and only the compiled one predicts reach.** §4's *"0 of 65535"*
+was a DECLARED-shape figure; compiled — which is what `WildcardIndex` keys off — the
+UNCHANGED generator is crossable in 128 of the 4991 configs that compile, because
+`_expand_object_wildcard_shapes` propagates the declared `('doc','parent')` onto the TTU head
+`('doc','r2')`, which `self_ttu` then makes a through-shape. Every one needs a switch TRIPLE
+and `DRIVE_K` is 2, which is why the DRIVEN space was 0 either way and the module still
+measured `_ensure/EFF` 0. (b) **§5's "simply rare" is false about the strategy.**
+`star_bridge_configs` draws crossable configs at 10.7% of draws — 32/300 on each of
+hypothesis seeds 0, 1 and 2, exactly its closed-domain fraction 24/224. §6's *"3 crossable
+parses in 644"* is a CONSUMER-budget figure, so a re-weighting could never have met §7.4's
+acceptance target: the target is the REMOVE column, a sampled count can be zero on the next
+seed, and the durability ranking puts a permanent test above a distribution tweak. The
+re-weighting landed anyway for the other half of that measurement — 56% of the old draws were
+doubly bridged, so the machine spent more than half its example budget asserting a rejection
+and skipping.
+
+**Acceptance columns, measured with the census's own instrument.**
+`tests/test_generator_coverage.py` (never in the §6 table at all): `parse_crossable` 3 → 17,
+`_ensure/EFF` 0 → 46, CTL 0 → 110. `tests/test_hypothesis.py`: `parse_crossable` 2-3 → 6,
+`_ensure/EFF` 34-40 → 74, `_sync/EFF` 0 → 8 (deterministic, from the pin), CTL 82 → 146. The
+one remaining zero is the swarm's `_sync/EFF`, and it is structural rather than a fixture or a
+weighting — `genswarm.py::Diff` exposes `add` and `sweep` only, while every caller of
+`_sync_entity_middles` is a removal path. Filed as `TK87` with the reason it is not a
+one-liner: the regimes and their two positive controls are calibrated on a monotone pool.
+
+**SABOTAGE: 7 mutations, 6 caught, `N0` control attributed, `N6` legitimately INERT.** The
+keeper is `N5`, a PRODUCT mutation (drop `remove_edge`'s OBJECT-endpoint
+`_sync_entity_middles` call) that **read INERT on the first run, and that was the sweep's
+fault**: the catching test lived in a module the selection did not run. A sweep whose
+selection cannot see the catching test reports a hole that does not exist — the mirror image
+of the failure these sweeps exist to find, and easier to believe because an unexplained INERT
+row reads like a discovery. Same mutation, second finding: `tests/test_i14_crossing_middles.py`
+— *the module named after the invariant* — stays GREEN on it, while the 2026-09-19d
+property-walk recorder reddens. The fixture module pins the witness; the walk pins the call
+sites. `N6` (revert half the re-weighting) is the honest kind of INERT and is recorded rather
+than fixed: it moves a distribution (41.0% → 21.3%, measured) and no assertion in the suite
+claims one.
+
+Still owed: nothing skipped. `TK87` is filed rather than done, which is the scope call this
+entry records; the 2026-09-19b *"7"* discrepancy is still unreconciled and still not to be
+reconciled arithmetically.
+
+---
+
 ## 2026-09-19d — the differential's zero reach into I14 is closed, and the sweep's first run found two real holes
 
 rows: `TK77` (census §7 item (1) executed — fixture landed in both zero-reach modules, brief re-pointed), `TK86` (NEW — the trap-badge budget is evadable by writing `(!)`).

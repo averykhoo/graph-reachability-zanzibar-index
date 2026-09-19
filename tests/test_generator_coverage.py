@@ -150,7 +150,7 @@ from collections import Counter
 import pytest
 from hypothesis import HealthCheck, Phase, given, settings
 
-from zanzibar_utils_v1 import unparse_schema_ast
+from zanzibar_utils_v1 import parse_openfga_schema, unparse_schema_ast
 from tests import genswarm as G
 
 # ---------------------------------------------------------------------------
@@ -424,6 +424,52 @@ def test_no_enumerated_config_is_silently_dropped():
     assert sum(refusals.values()) > 0, (
         'ANTI-VACUITY: no config was refused, so the rejection-witness machinery was '
         'never exercised')
+
+
+def test_driven_config_space_reaches_a_crossable_schema():
+    """TK77 (2026-09-19e). Property guarded: at least one config in the DRIVEN space
+    (`K<=DRIVE_K`) compiles to a NON-EMPTY `crossable_shapes` — i.e. the swarm can reach
+    the I14 `w_all -> concrete -> w_any` crossing at all.
+
+    WHY A FLOOR AND NOT A DOC NOTE. Until 2026-09-19e `genswarm.witness` declared its
+    object wildcard on the TTU TUPLESET alone (`('doc','parent')`), while the star
+    tupleset's through-shape is the TTU TARGET (`('doc','r1')` —
+    `zanzibar_utils_v1.py::derive_schema_info` folds in `(restriction_type,
+    ttu.target_rel)`). Two disjoint sets, so `crossable_shapes` was empty for every driven
+    config and every I14 path the swarm ran was a SILENT NO-OP that passed: an empty
+    `crossable_shapes` changes no answer, only which state space is explored, so no
+    assertion anywhere could see it (`docs/tk77-crossable-census-2026-09-19.md` §7, the
+    trap on items (1)/(2)). Re-narrowing that one line is the obvious future "tidy", and
+    this floor is what refuses it.
+
+    MEASURED 2026-09-19e — `formal/probes/tk77_generator_reach_2026-09-19.py owc 2`: **1**
+    crossable of 96 compiled at `K<=2`, the config `{'owc','ts_wildcard'}`. Its sibling
+    `{'owc','ts_negonly'}` is statically crossable but REFUSED (an object wildcard on a
+    `parent` the negation has tainted), which is why the floor is 1 and deliberately not
+    higher. The same change moved this module's live middles census `_ensure/EFF` 0 -> 46
+    and CTL 0 -> 110 (`parse_crossable` 3 -> 17); `_sync/EFF` stays 0 for a structural
+    reason recorded on the row — `genswarm.Diff` has no remove op at all.
+
+    SABOTAGE (literal output, 2026-09-19e). Narrowest plausible weakening: revert the
+    `owc.add(('doc', 'r1'))` line in `genswarm.witness` — the exact pre-2026-09-19e
+    state::
+
+        FAILED tests/test_generator_coverage.py::test_driven_config_space_reaches_a_crossable_schema
+        AssertionError: no DRIVEN config compiles to a non-empty crossable_shapes
+    """
+    crossable = []
+    for sw in G.enumerate_configs(DRIVE_K):
+        ast, owc = G.witness(sw)
+        try:
+            rs = parse_openfga_schema(unparse_schema_ast(ast), object_wildcard_shapes=owc)
+        except Exception:                       # noqa: BLE001 — refusals are the sibling
+            continue                            # test's business, not this floor's
+        if rs.schema_info.crossable_shapes:
+            crossable.append((sorted(sw), sorted(rs.schema_info.crossable_shapes)))
+    assert crossable, (
+        'no DRIVEN config compiles to a non-empty crossable_shapes — the swarm cannot '
+        'reach the I14 crossing, so every middles path it runs is a silent no-op '
+        '(TK77: witness() must object-wildcard the TTU TARGET, not only its tupleset)')
 
 
 def test_every_alphabet_feature_is_hit_or_rejection_explained():

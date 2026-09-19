@@ -1,7 +1,7 @@
 ---
 id: TK77
 title: the matrix and hypothesis campaign have ZERO reach into the _sync_entity_middles surface
-brief: fixture half DONE 2026-09-19d: matrix+property _sync EFF 0->46/0->23; left = genswarm + star_bridge weights
+brief: genswarm+hypothesis arms DONE 2026-09-19e: EFF 0->46/74, _sync/EFF 0->8; left = genswarm Diff has no remove op
 pri: NOW
 size: M
 deps: []
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-18
-moved: 2026-09-19d
-updated: 2026-09-19d
+moved: 2026-09-19e
+updated: 2026-09-19e
 closed:
 ---
 
@@ -213,3 +213,58 @@ through-shape is `('doc','r1')`, disjoint by construction) and the `star_bridge_
 re-weighting (24 of 224 configs are crossable, all in the `A == B` arm). The fixture half of
 this row is DONE. Unchanged and still not to be reconciled arithmetically: the 2026-09-19b
 "7" discrepancy.
+
+### 2026-09-19e
+
+CENSUS §7 ITEMS (2) AND (3) EXECUTED, first-hand, and NEITHER LANDED AS WRITTEN because
+measuring them first contradicted the section that asked for them. Full map, with the tables:
+docs/tk77-crossable-census-2026-09-19.md, dated append at the top (2026-09-19e). Probes
+formal/probes/tk77_generator_reach_2026-09-19.py (modes `owc`, `reweight`) and
+formal/probes/tk77_generator_reach_sweep_2026-09-19.py.
+
+LANDED. (1) `tests/genswarm.py::witness` now object-wildcards the TTU TARGET `('doc','r1')`
+too -- the star tupleset's through-shape -- guarded off `body_boolean` (taints r1 -> owc on a
+derived relation is a decision-15 refusal) and `body_wc_userset` (literal `[doc:*#r1]` ->
+doubly bridged). MEASURED over all 65535 configs: rejection outcomes byte-identical to the old
+generator (0 changes), so no coverage floor moves. The UNGUARDED form costs 256 fresh
+DoublyBridgedShapeError and reaches the same 128 -- it buys nothing and deletes configs.
+(2) `tests/test_generator_coverage.py::test_driven_config_space_reaches_a_crossable_schema`
+pins that reach (1 of 96 compiled at K<=2). (3)
+`tests/test_hypothesis.py::test_star_bridge_crossing_middle_remove_deterministic_pin` is the
+acceptance target: a generated star-bridge config through a ParityEngine, pool applied, middle
+interned, every accepted write removed in reverse, middles gone, row multiset restored exactly.
+(4) `star_bridge_configs` re-weighted (B==A at 1/2, owc forced to include the TTU target at
+1/2 on that arm).
+
+ACCEPTANCE COLUMNS, §8's instrument: test_generator_coverage.py parse_crossable 3 -> 17,
+`_ensure/EFF` 0 -> 46, CTL 0 -> 110 (that module was never in §6's table at all);
+test_hypothesis.py parse_crossable 2-3 -> 6, `_ensure/EFF` 34-40 -> 74, `_sync/EFF` 0 -> 8
+(deterministic, from the pin), CTL 82 -> 146.
+
+(!) TWO MEASURED CONTRADICTIONS OF THE CENSUS, both first-hand. (a) §4's "0 of 65535" is a
+DECLARED-shape figure. Compiled -- which is what WildcardIndex reads -- the UNCHANGED generator
+is crossable in 128 of the 4991 configs that compile: `_expand_object_wildcard_shapes`
+propagates the declared ('doc','parent') onto the TTU head ('doc','r2'), which `self_ttu` then
+makes a through-shape. All 128 need a switch TRIPLE and DRIVE_K is 2, which is why the DRIVEN
+space was 0 either way. A static shape census and a compiled one are different measurements;
+only the compiled one predicts reach. (b) §5's "simply rare" is FALSE about the strategy:
+`star_bridge_configs` draws crossable at 10.7% of draws, 32/300 on each of seeds 0/1/2 --
+exactly its closed-domain fraction 24/224. §6's "3 in 644" is a CONSUMER-BUDGET figure, so
+re-weighting could never have met §7.4's acceptance target; a deterministic pin was the only
+instrument that could.
+
+SABOTAGE: 7 mutations, 6 CAUGHT, `N0` control attributed. `N5` (PRODUCT: drop `remove_edge`'s
+OBJECT-endpoint `_sync_entity_middles` call) READ INERT ON THE FIRST RUN and that was the
+SWEEP's fault -- the catching test was in a module the selection did not run. Two keepers: a
+sweep whose selection cannot see the catching test reports a hole that does not exist; and on
+that mutation `tests/test_i14_crossing_middles.py` -- the module named after the invariant --
+stays GREEN while the 2026-09-19d property-walk recorder reddens. `N6` (revert half the
+re-weighting) is legitimately INERT: a weighting moves a distribution, and no assertion claims
+one.
+
+NEXT ACTION / STILL OPEN: the only remaining zero in the acceptance table is
+test_generator_coverage.py's `_sync/EFF`, and the cause is structural -- `genswarm.py::Diff`
+exposes `add` and `sweep` only, no remove op, while every caller of `_sync_entity_middles` is a
+removal path. Giving the swarm driver a remove op changes the contract of the thing that fuzzes
+admission SEQUENCES, so it is its own item, not a one-liner. Unchanged and still not to be
+reconciled arithmetically: the 2026-09-19b "7" discrepancy.

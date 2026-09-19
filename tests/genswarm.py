@@ -596,8 +596,27 @@ def witness(sw) -> tuple[dict, frozenset]:
         ast[('doc', 'r2')] = Union((ast[('doc', 'r2')], TTU('r2', 'parent')))
     if 'multi_type' in sw:
         ast[('folder', 'r1')] = Direct((Restriction('user', '...', False),))
-    owc = frozenset({('doc', 'parent')}) if 'owc' in sw else frozenset()
-    return ast, owc
+    owc = set()
+    if 'owc' in sw:
+        owc.add(('doc', 'parent'))                     # the `ttu.ts:owc` feature
+        # TK77 (2026-09-19e): ALSO object-wildcard the TTU's TARGET. `crossable_shapes` is
+        # `bridged_in & bridged_out` (zanzibar_utils_v1.py::SchemaInfo), and the star
+        # tupleset's through-shape is ('doc', 'r1') -- `derive_schema_info` folds
+        # (restriction_type, ttu.target_rel) in, never the tupleset relation itself. So
+        # declaring ('doc','parent') ALONE made the two sets disjoint BY CONSTRUCTION and no
+        # draw could reach the I14 crossing: MEASURED 0 of the 136 DRIVEN (K<=2) configs and
+        # 0 of 65535 statically, with the 128 compile-time crossable ones reachable only
+        # through the `self_ttu` TRIPLE, which `DRIVE_K` excludes.
+        # The two exclusions below are the two scope refusals this would otherwise import;
+        # skipping them keeps the rejection census byte-identical (MEASURED: 0 outcome
+        # changes over all 65535 configs -- docs/tk77-crossable-census-2026-09-19.md 2026-09-19e):
+        #   * `body_boolean` taints r1, and an object wildcard on a DERIVED relation is a
+        #     decision-15 scope refusal (UnsupportedByGraphIndex);
+        #   * `body_wc_userset` puts the LITERAL `[doc:*#r1]` restriction on r6, which would
+        #     make ('doc','r1') doubly bridged (DoublyBridgedShapeError).
+        if 'body_boolean' not in sw and 'body_wc_userset' not in sw:
+            owc.add(('doc', 'r1'))
+    return ast, frozenset(owc)
 
 
 def enumerate_configs(k: int):

@@ -33,6 +33,7 @@ from hypothesis.stateful import RuleBasedStateMachine, initialize, invariant, ru
 from index_v4.invariants import snapshot_rows
 from index_v4.outbox import outbox_watermark
 from index_v4.processor import DeltaProcessor
+from index_v4.wildcard import WildcardIndex
 from zanzibar_utils_v1 import (Computed, CyclicDerivedDependency, Direct,
                                DoublyBridgedShapeError, Exclusion,
                                Intersection, Restriction, TTU, Union,
@@ -1368,10 +1369,38 @@ def star_bridge_configs(draw):
     old ``B != A`` draw made unreachable. Crossed with the ``(T,'parent')`` object
     wildcard the domain below already offered, that is precisely the conjunction which
     hid a live accept/reject divergence + graph detonation from every previous sweep
-    (see ``_star_bridge_schema`` and tests/test_zt_p5_readjudication.py)."""
+    (see ``_star_bridge_schema`` and tests/test_zt_p5_readjudication.py).
+
+    TK77 (2026-09-19e) -- the CROSSABILITY re-weighting, and what it corrects. The
+    census that asked for it (docs/tk77-crossable-census-2026-09-19.md section 5/7.3)
+    called the crossable arm *"simply rare"*. It is not: MEASURED over 300 draws at
+    hypothesis seeds 0/1/2, this strategy drew crossable configs at **10.7%** of draws
+    on all three seeds -- exactly its closed-domain fraction 24/224, i.e. hypothesis was
+    already sampling it about uniformly. The module's 3-crossable-parses-in-644 is a
+    CONSUMER-budget figure (how many examples the star-bridge machines get), not a
+    weighting one, which is why the deterministic pin below and not this draw is what
+    moves the acceptance column. What the re-weighting does buy, MEASURED 2026-09-19e at
+    300 draws / seed 0 (``formal/probes/tk77_generator_reach_2026-09-19.py reweight``):
+
+        variant                    crossable/draws   compiled/draws   A==B draws
+        live (before)                    10.7%            43.7%            40
+        + ``B == A`` bias                21.3%            52.3%            80
+        + owc-includes-target bias       21.3%            50.7%            72
+        BOTH (landed)                    41.0%            69.0%           137
+
+    The ``compiled`` column is the half that is easy to miss: **56%** of the old draws
+    were doubly bridged, so the machine spent more than half its example budget
+    asserting a rejection and then skipping. That rejection is real coverage (the F1/F2
+    axis, deviations 2026-07-17) and is still drawn ~31% of the time, which is ample;
+    what it should not be is the MAJORITY case."""
     T = draw(st.sampled_from(_SB_TYPES))
     A = draw(st.sampled_from(_SB_RELS))
-    B = draw(st.sampled_from(_SB_RELS))
+    # TK77 (2026-09-19e), half of the crossability re-weighting: draw ``B == A``
+    # outright half the time instead of hoping for it at 1/4. The self-referential arm
+    # is the ONLY compilable-and-crossable one (the ``A != B`` template keeps the
+    # literal ``T:*#A``, so an owc on its through-shape is doubly bridged and refused),
+    # and it is also the arm that is not skipped -- see the docstring table.
+    B = A if draw(st.booleans()) else draw(st.sampled_from(_SB_RELS))
     # Object-wildcard shapes are drawn over ``parent`` (out-bridge feeder, reg11), ``B``
     # (the TTU target -- its w_all node gets the out-bridge) AND ``A`` (deviations
     # 2026-07-17: this is the previously-excluded F1/F2 axis). ``A`` carries the literal
@@ -1382,8 +1411,17 @@ def star_bridge_configs(draw):
     # other configs proceed exactly as before. Widening the domain here fuzzes the F1/F2
     # boundary that the previous ``{parent, B}``-only domain left uncovered.
     owc_domain = sorted({(T, 'parent'), (T, A), (T, B)})   # A == B collapses to 2
-    owc = frozenset(draw(st.sets(st.sampled_from(owc_domain),
-                                 max_size=len(owc_domain))))
+    drawn = set(draw(st.sets(st.sampled_from(owc_domain),
+                             max_size=len(owc_domain))))
+    # TK77 (2026-09-19e), the other half: on the self-referential arm force the TTU
+    # TARGET in half the time. ``(T, B)`` is the star tupleset's through-shape there
+    # (``derive_schema_info`` folds in ``(restriction_type, ttu.target_rel)``), so
+    # ``crossable_shapes`` is non-empty exactly when it is declared -- that is the I14
+    # ``w_all -> concrete -> w_any`` crossing, and nothing but ``st.sets``' bias toward
+    # small subsets was keeping it rare.
+    if A == B and draw(st.booleans()):
+        drawn.add((T, B))
+    owc = frozenset(drawn)
     return _star_bridge_schema(T, A, B), owc, _star_bridge_pool(T, A, B, owc)
 
 
@@ -1517,6 +1555,91 @@ def test_star_bridge_self_referential_ttu_deterministic_pin():
     finally:
         pe.close()
     assert any(decisions), f'pool exercised no accepted ops (0/{len(decisions)})'
+
+
+def test_star_bridge_crossing_middle_remove_deterministic_pin():
+    """TK77 (2026-09-19e): the REMOVE side of the I14 crossing middle, on a GENERATED
+    star-bridge config -- the arm this module had ZERO reach into.
+
+    WHY A DETERMINISTIC PIN AND NOT A HEAVIER DRAW. The acceptance target TK77 set is the
+    REMOVE column (``WildcardIndex._sync_entity_middles``, census section 7.4), and the
+    census measured this module at ``_sync/EFF`` **0** while ``_ensure/EFF`` was 34-40:
+    crossable configs WERE being compiled and driven, but never through a removal. No
+    change to ``star_bridge_configs``' weighting can fix that honestly -- a sampled count
+    can be zero on the next seed, and `CLAUDE.md`'s durability ranking puts a permanent
+    test above a distribution tweak. The re-weighting above widens the fuzz; this pin is
+    what makes the column non-zero every run.
+
+    ``owc = {(T,'parent')}`` alone is already crossable here, and that is worth stating
+    because it is not obvious from the declaration: ``_expand_object_wildcard_shapes``
+    propagates the tupleset shape onto the TTU head, so ``(T, A)`` -- the star tupleset's
+    through-shape on the self-referential arm -- ends up in BOTH bridge sets. The
+    ``assert crossable`` below is therefore a mechanical refusal, not decoration: an empty
+    ``crossable_shapes`` makes every I14 path a silent no-op, so this test would pass while
+    measuring nothing (census section 7, the trap on items (1)/(2)).
+
+    MEASURED 2026-09-19e, this test alone: 4 of 15 pool tuples accepted, 4 removed, exact
+    row-multiset round trip, middles present for ``folder:x``/``folder:y`` after the adds
+    and gone after the removes, and **8** effective ``_sync_entity_middles`` calls (the
+    module booked 0 before). SWEPT by
+    ``formal/probes/tk77_generator_reach_sweep_2026-09-19.py``: this pin is what reddens
+    on ``N0`` (its own claim inverted), ``N3`` (its config made non-crossable) and ``N4``
+    (adds but never removes).
+
+    ⚠ WHAT THIS PIN DOES **NOT** CATCH, from that sweep's ``N5``: dropping
+    ``remove_edge``'s OBJECT-endpoint ``_sync_entity_middles`` call
+    (``index_v4/wildcard.py``) leaves this test GREEN -- the surviving subject-side call
+    and the bridge GC still collect the middles for this sequence, so the round trip and
+    the effective count both hold. That call site is pinned by
+    ``tests/test_wildcard_property.py::test_middle_sync_record_excludes_the_wildcard_entity``
+    instead -- and NOT by ``tests/test_i14_crossing_middles.py``, which also stays green
+    on it. This pin's claim is that the remove side is REACHED and round-trips, not that
+    every call site on it is necessary.
+    """
+    T, A = 'folder', 'admin'
+    owc = frozenset({(T, 'parent')})
+    schema = _star_bridge_schema(T, A, A)
+    crossable = parse_openfga_schema(
+        schema, object_wildcard_shapes=owc).schema_info.crossable_shapes
+    assert crossable, (
+        'this config must be CROSSABLE or the test measures nothing -- an empty '
+        'crossable_shapes makes _ensure/_sync_entity_middles silent no-ops')
+    pool = _star_bridge_pool(T, A, A, owc)
+
+    effective: list = []
+    original = WildcardIndex._sync_entity_middles
+
+    def counted(self, entity_type, name):
+        # The guard is `_sync_entity_middles`' own first line; counting CALLS instead
+        # would report coverage on every schema in the suite (census section 6).
+        if any(t == entity_type for (t, _p) in self.schema_info.crossable_shapes):
+            effective.append((entity_type, name))
+        return original(self, entity_type, name)
+
+    pe = _parity_or_skip_doubly_bridged(schema, owc)
+    assert pe is not None, 'the self-referential config must COMPILE'
+    WildcardIndex._sync_entity_middles = counted
+    try:
+        widx = pe.graph.widx
+        before = pe.graph.snapshot()
+        accepted = [t for t in pool if pe.add_tuple(*t)]
+        assert accepted, f'pool exercised no accepted ops (0/{len(pool)})'
+        middled = [x for x in _SB_OBJS if widx._get_concrete(A, T, x) is not None]
+        assert middled, (
+            'no crossing middle was interned on a crossable store after '
+            f'{len(accepted)} accepted writes -- I14 never ran')
+        for raw in reversed(accepted):
+            assert pe.remove_tuple(*raw), f'accepted write was not removable: {raw}'
+        assert [x for x in _SB_OBJS if widx._get_concrete(A, T, x) is not None] == [], \
+            'crossing middles outlived their entities (the I14 GC direction)'
+        assert pe.graph.snapshot() == before, \
+            'add-then-remove must restore the row multiset exactly'
+    finally:
+        WildcardIndex._sync_entity_middles = original
+        pe.close()
+    assert effective, (
+        'no EFFECTIVE _sync_entity_middles call on a crossable store -- the remove side '
+        'of I14 was not reached, which is the hole TK77 was filed about')
 
 
 class StarBridgeParityMachine(RuleBasedStateMachine):
