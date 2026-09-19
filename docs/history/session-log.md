@@ -30,6 +30,124 @@ from here.
 
 ---
 
+## 2026-09-19d — the differential's zero reach into I14 is closed, and the sweep's first run found two real holes
+
+rows: `TK77` (census §7 item (1) executed — fixture landed in both zero-reach modules, brief re-pointed), `TK86` (NEW — the trap-badge budget is evadable by writing `(!)`).
+
+task lint: clean (13 checks, 201 task file(s) parsed), 32 warning(s)
+read: board + note
+
+⚠ The receipt vocabulary still has no token for "entered via `show`" (the standing
+"Still owed" item, carried from 2026-09-07b). Literally: `board`, then `HANDOFF.md` in
+full, then `show TK77`, then the census doc. `board + note` is true; the `show` hop is
+still unnameable.
+
+Executed [`docs/tk77-crossable-census-2026-09-19.md`](../tk77-crossable-census-2026-09-19.md)
+§7 item (1) — *"a new matrix fixture, not a parameter change"* — against §7.4's acceptance
+target, the `_sync … EFF` column. `tests/fga_schemas/owc_star_ttu.fga` is now a second corpus
+in both modules the census measured at zero:
+`tests/test_matrix.py::test_matrix_4way_crossable_star_ttu` (4-way — graph, connected store,
+oracle, set engine under both `SetOps`, seeds 0/1/2) and
+`tests/test_wildcard_property.py::test_wildcard_property_crossable_vs_oracle` (seeds 0/1/2).
+The corpus, its grid and its guards live once in `test_wildcard_property.py`; the matrix
+imports them, matching how `OBJECT_WC` / `_query_grid` already flow between the two.
+
+**MEASURED 2026-09-19d**, this row's own probe, the census §8 command:
+
+```
+module                            parse_crossable   _ensure/EFF   _sync/EFF   CTL
+tests/test_matrix.py                 0 -> 6            0 -> 78      0 -> 46    0 -> 196
+tests/test_wildcard_property.py      0 -> 5            0 -> 40      0 -> 23    0 -> 101
+```
+
+For scale: §6 measured the whole seven-module suite at **8** effective `_sync` calls, all in
+`tests/test_i14_crossing_middles.py`. These two modules now book **69** between them, and they
+are the differential and the property grid rather than one hand-written module — which is what
+`TK77` was filed about.
+
+**A real bug the new arm caught on its first run, and it was not the one being looked for.**
+The corpus carries the boolean `restricted`, and the index-only property harness had never
+needed a `DeltaProcessor`. Without the cascade `restricted` answers `False` forever: the
+walk's own oracle grid reddened on seeds 0 and 2 at
+`('...', 'user', 'u1', 'restricted', 'folder', 'f1')`, `index=False oracle=True`. Wired in
+(watermark before the write, `run_cascade` inside the same txn, per `CLAUDE.md` I5). Sweep
+`M11` pins it.
+
+**Sabotage: 12 mutations, 11 caught**, reproducer tracked at
+[`formal/probes/tk77_middles_reach_sweep_2026-09-19.py`](../../formal/probes/tk77_middles_reach_sweep_2026-09-19.py)
+(it edits tracked files and restores them in `finally`). `M0` is the harness control and
+attributed correctly, so the table measures the module rather than a broken instrument. The
+literal table is in the test module's own section comment and in the census doc's dated
+append.
+
+**The first run of that sweep is the part worth carrying — one ANCHOR-MISS, three INERT rows,
+and two of the three inert rows were real holes.**
+
+* **`M5` — the CORPUS half of crossability was unpinned.** Deleting every bare-star tupleset
+  subject from the pool left all eight crossable tests GREEN. `SchemaInfo.crossable_shapes` is
+  computed from the schema, and both `_sync_entity_middles`' guard *and this row's own
+  EFFECTIVE column* key off the entity TYPE — so no assertion and no column in the census can
+  see a pool that stopped carrying the star. The differential simply explored a smaller state
+  space and agreed with itself. Closed mechanically by
+  `tests/test_wildcard_property.py::assert_crossable_pool`, a refusal and not a comment,
+  because a pool shrink is never caught by the tests that consume the pool. `M4` (drop *one*
+  of the two star subjects) stays legitimately INERT: one is enough for the feature, and a row
+  that reddened on losing either would be over-fitted.
+* **`M10` — the `n != '*'` clause of the effective filter was unpinned**, because on a
+  crossable corpus raw and filtered counts are both non-zero either way. Closed by
+  `::test_middle_sync_record_excludes_the_wildcard_entity`.
+* **`M9` — "read RAW as reach", i.e. `TK77`'s own trap (a) committed inside the instrument —
+  is caught ONLY by the two instrument controls, never by a walk.** That is why the negative
+  control runs on `wildcards.fga`: on a crossable corpus there is no observation that
+  distinguishes a filtered count from an unfiltered one. This is the practical form of
+  "control your instrument as well as your subject".
+* ⚠ **An ANCHOR-MISS row measures NOTHING, and prints in the same column as a CAUGHT row.**
+  `M9`'s first form had a two-line anchor and the tree is CRLF, so it matched zero times and
+  sat in the table looking like a result. Same family as the ten zero-match anchors in `P6`
+  step 2.
+
+New shared instrument: `tests/wildcard_helpers.py::record_middle_syncs` /
+`::MiddleSyncRecord`, whose `effective` property is the census's EFFECTIVE definition computed
+from the façade's own `schema_info` — a claim about the CALL, not about the callee's control
+flow, so it survives a restructuring of the guard.
+
+**Two write-back findings, both filed rather than absorbed.**
+
+* ⚠ **`HANDOFF.md`'s trap-badge budget counts ONE glyph, and `(!)` evades it.**
+  `scripts/handoff_lint.py:209` sets `WARN = u'⚠'` and `::check_warn_budget` counts only
+  that; the banner already carries `(!)`-written traps in several lines, including the
+  previous session's headline. MEASURED 2026-09-19d: one ⚠ in the new banner line took the
+  count 10 → 11 and the lint went RED, while the same line with `(!)` in that position is
+  green with nothing else changed. Filed as `TK86`, with the reason a one-line widening is
+  NOT the fix (the board renders ⚠ as `(!)` on the way out, so the glyphs are already
+  conflated at the read surface, and widening reds the banner at once). An assurance step
+  that fails by passing, in the file whose whole job is to carry the traps.
+  **The same hole has a second half, found while filing the row:** the counter has no
+  escape for QUOTING the glyph. A banner pointer that merely names the badge inside
+  backticks spent budget and reddened the lint again (`11 trap badges, budget 10`); it
+  had to be written `U+26A0`. The figure guard in the same file has four escapes, this
+  one has none and counts inside code spans -- which pushes every author toward the
+  ASCII form, i.e. straight into the first half.
+* The red-gate snapshot trap (**TEMP INDEX, never `git stash` / `git checkout --`**, because
+  `core.autocrlf` rewrites LF → CRLF on the way back) was the trap DEMOTED to make room —
+  the defined move, and the right one: it is durable and repo-wide, so it is now
+  `CLAUDE.md` § "The five standing footguns" (that heading said "four" until today) and the
+  banner keeps only a pointer.
+
+Still owed:
+- Census §7 items **(2)** and **(3)**, neither started and both generator work: the one-line
+  `tests/genswarm.py::witness` fix (declared `owc` is `('doc','parent')` while its
+  through-shape is `('doc','r1')` — disjoint by construction, 0 of 65535 configs crossable)
+  and the `star_bridge_configs` re-weighting (24 of its 224-config domain are crossable, all
+  in the `A == B` arm). The fixture half of `TK77` is done; the row stays open on these.
+- The §6 discrepancy against `TK77`'s own 2026-09-19b *"7"* is still unreconciled, and still
+  must not be reconciled arithmetically.
+- Everything carried in `HANDOFF.md`'s "Still owed" from before this session, untouched:
+  the receipt-vocabulary gap, `GC-1`, the hand-ratcheted `MIN_TESTS_ALL`, `TT-8`'s unpinned
+  banner-fence behaviour, and `P6` stage 2 step 4' onward.
+
+---
+
 ## 2026-09-19c — `TK77`'s census: only 1 of 15 fixtures can EVER be crossable, and the row was wrong twice
 
 rows: `TK77` (FIRST ACTION discharged — census published, traps + read-first + body written, brief re-pointed), `TK83` (related-linked: same fixture deliverable).

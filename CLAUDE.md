@@ -121,7 +121,7 @@ IVM delta processor.
   be "type `pytest tests/` and read the tail" — no count floor, no
   skipped/xfailed/xpassed parse, no exit-code assertion, no proof a tile collected
   anything. Bare `pytest tests/` is fine while iterating; it is not the gate.
-- **The four standing footguns.** Each of these has bitten a session in this repo, and
+- **The five standing footguns.** Each of these has bitten a session in this repo, and
   the first one has bitten three. They live here because `CLAUDE.md` is auto-loaded
   every session, so carrying them costs the reader nothing; the full write-ups are in
   [`docs/gate-runbook.md`](docs/gate-runbook.md).
@@ -164,6 +164,11 @@ IVM delta processor.
   * ⚠ **`MIN_CONF_ALL` / `MIN_TESTS_ALL` have ZERO headroom** — they are set equal to
     the live collected counts, so deleting a single test turns the gate red. Adding
     tests is always free; lowering a floor must be a deliberate, reviewed edit.
+  * ⚠ **On a red gate, snapshot with a TEMP INDEX — never `git stash` or
+    `git checkout --`.** `core.autocrlf` rewrites LF → CRLF on the way back out, so the
+    "restored" tree is not the tree you saved and the next diff is noise you then have to
+    reason through (trap (ee), scope doc §11.13). Promoted here from `HANDOFF.md`'s banner
+    on 2026-09-19d: it is durable and repo-wide, and the banner is volatile by design.
 - **Shared doc conventions live in [`docs/README.md`](docs/README.md)** — the liveness
   states (LIVING / FROZEN / ACTIVE-PLAN) and the frozen banner, the session-ledger entry
   format, the citation-key rules (ids, `file::symbol`, archive-section form), the

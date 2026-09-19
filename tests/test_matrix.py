@@ -23,9 +23,16 @@ from index_v4.outbox import outbox_watermark
 from index_v4.processor import DeltaProcessor
 from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
 from tests.oracle import Oracle, OracleTuple
-from tests.wildcard_helpers import make_wildcard_index, assert_wildcard_invariants
+from tests.wildcard_helpers import (make_wildcard_index, assert_wildcard_invariants,
+                                    record_middle_syncs)
 from setengine import SetEngine, PySets, RoaringSets, ALL_SETOPS
-from tests.test_wildcard_property import _candidate_raw_tuples, _query_grid, OBJECT_WC
+from tests.test_wildcard_property import (_candidate_raw_tuples, _query_grid,
+                                          OBJECT_WC, CROSSABLE_WC,
+                                          _crossable_raw_tuples,
+                                          _crossable_query_grid,
+                                          assert_crossable,
+                                          assert_crossable_pool,
+                                          assert_remove_path_reached)
 
 
 def _norm(pred: str | EllipsisType) -> str:
@@ -345,6 +352,90 @@ def test_matrix_4way_boolean(load_fga_schema, seed):
     for b in [graph, connected] + set_backends:
         b.close()
 
+
+# ---------------------------------------------------------------------------
+# 4-way: the CROSSABLE corpus (TK77) -- the I14 crossing-middle surface
+#
+# The census (`docs/tk77-crossable-census-2026-09-19.md`) MEASURED this module at
+# **0 crossable schemas in 36 parses** on 2026-09-19c: every fixture it used had
+# an empty `SchemaInfo.crossable_shapes`, so the differential matrix -- the
+# artifact that pins "same semantics" -- could not reach the
+# `w_all -> concrete -> w_any` crossing at all, and the graph index and the set
+# engine could have disagreed there indefinitely. §2 of the census closed the
+# cheap fix (no `OBJECT_WC` argument can make `wildcards.fga` crossable; it is
+# compile-REFUSED if you try), so this is a second corpus on `owc_star_ttu.fga`,
+# the one fixture that carries the conjunction.
+#
+# The corpus, its grid and its two mechanical guards live beside the property
+# walk in `tests/test_wildcard_property.py`, so both grids share one definition.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize('seed', [0, 1, 2])
+def test_matrix_4way_crossable_star_ttu(load_fga_schema, seed):
+    """4-way differential over a CROSSABLE corpus: graph (processor-maintained) ·
+    connected store · oracle · set engine under both SetOps, unanimous
+    accept/reject after every op and identical `check` over the full grid (TK77).
+
+    Identical in shape to `test_matrix_4way_union_wildcard`; the point is the
+    fixture. Two things are asserted that the other arms do not need:
+
+      * `assert_crossable` -- the corpus really does compile a crossable shape. An
+        empty `crossable_shapes` changes no answer, so without this the arm would
+        keep passing while quietly reverting to the zero-reach state the census
+        measured.
+      * `assert_remove_path_reached` -- the walk really did drive
+        `_sync_entity_middles` past its guard. That is the census's acceptance
+        target (§7.4): the ADD side was already reached by five of seven modules,
+        the REMOVE side by exactly one.
+    """
+    schema = load_fga_schema('owc_star_ttu.fga')
+    graph = GraphBackend(schema, CROSSABLE_WC)
+    assert_crossable(graph.ruleset.schema_info, f'crossable matrix arm (seed={seed})')
+    assert graph.proc is not None, \
+        'owc_star_ttu.fga minted no derived plans -- the `restricted` grid cell is vacuous'
+    connected = ConnectedBackend(schema, CROSSABLE_WC)
+    set_backends = [SetBackend(schema, CROSSABLE_WC, PySets)] \
+        + ([SetBackend(schema, CROSSABLE_WC, RoaringSets)] if RoaringSets else [])
+    oracle = OracleBackend(schema)
+    mb = MultiBackend([graph, connected] + set_backends, decider=graph)
+
+    pool = _crossable_raw_tuples()
+    grid = _crossable_query_grid()
+    assert_crossable_pool(pool, f'crossable matrix arm (seed={seed})')
+    rng = random.Random(seed)
+    present, history = set(), []
+
+    with record_middle_syncs(graph.widx) as rec:
+        for _ in range(14):
+            if not present or rng.random() < 0.55:
+                cands = [r for r in pool if r not in present]
+                op, raw = ('add', rng.choice(cands)) if cands \
+                    else ('remove', rng.choice(sorted(present)))
+            else:
+                op, raw = 'remove', rng.choice(sorted(present))
+
+            accepted = mb.apply(raw, op)
+            if accepted:
+                (present.add if op == 'add' else present.discard)(raw)
+                history.append((op, raw))
+
+            oracle.bind(present)
+            all_backends = [graph, connected, oracle] + set_backends
+            for q in grid:
+                answers = {b.name: b.check(q) for b in all_backends}
+                if len(set(answers.values())) != 1:
+                    pytest.fail(f'crossable check disagreement seed={seed} q={q}: '
+                                f'{answers}\n'
+                                + '\n'.join(f'  {o} {r}' for o, r in history))
+
+    # ANTI-VACUITY -- see the note on the union/wildcard matrix above.
+    assert len(history) >= 7, (
+        f'only {len(history)}/14 ops were accepted (seed={seed}) -- the crossable '
+        f'differential largely compared the empty store')
+    assert_remove_path_reached(rec, f'crossable matrix arm (seed={seed})')
+
+    for b in [graph, connected] + set_backends:
+        b.close()
 
 # ---------------------------------------------------------------------------
 # De Morgan equivalence (§7.3): the property the retired xfail was gesturing at

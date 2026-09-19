@@ -8,6 +8,7 @@ original test-facing API and semantics.
 """
 
 from collections import Counter
+from contextlib import contextmanager
 
 from sqlmodel import Session, create_engine, SQLModel
 
@@ -59,3 +60,57 @@ def snapshot(widx: WildcardIndex) -> tuple[Counter, Counter]:
     """Return (node_rows, edge_rows) as id-independent multisets, so two stores that
     reach the same logical state compare equal."""
     return snapshot_rows(widx.idx.session, widx.idx.store_id)
+
+
+# ---------------------------------------------------------------------------
+# I14 crossing-middle reach instrument (TK77)
+# ---------------------------------------------------------------------------
+
+class MiddleSyncRecord:
+    """The `(entity_type, entity_name)` argument of every ``_sync_entity_middles``
+    call made on one façade, plus the EFFECTIVE subset.
+
+    ⚠ **A RAW count is not reach.** ``WildcardIndex._sync_entity_middles`` is called
+    UNCONDITIONALLY -- from ``::remove_edge`` (both endpoints), from ``::remove_node``,
+    and from ``index_v4/processor.py`` -- and returns at a guard when the schema has no
+    crossable shape of that entity's type, so a corpus with an empty
+    ``SchemaInfo.crossable_shapes`` still books hundreds of calls that do nothing. The
+    census measured **7408 raw vs 257 effective** across seven modules
+    (`docs/tk77-crossable-census-2026-09-19.md` §6, MEASURED 2026-09-19c); reading raw
+    as reach inverts its whole table.
+
+    ``effective`` is the census's EFFECTIVE definition, computed from the façade's own
+    ``schema_info``: a call naming a CONCRETE entity of a type that carries a crossable
+    shape. That is a claim about the call, not about the callee's control flow -- so it
+    stays true if the guard inside ``_sync_entity_middles`` is ever restructured.
+    """
+
+    def __init__(self, schema_info: SchemaInfo):
+        self._crossable_types = frozenset(t for (t, _p) in schema_info.crossable_shapes)
+        self.raw: list[tuple[str, str]] = []
+
+    @property
+    def effective(self) -> list[tuple[str, str]]:
+        return [(t, n) for (t, n) in self.raw
+                if n != '*' and t in self._crossable_types]
+
+
+@contextmanager
+def record_middle_syncs(widx: WildcardIndex):
+    """Record ``_sync_entity_middles`` calls on ``widx`` for the duration (TK77).
+
+    Patches the INSTANCE attribute, so ``self.widx._sync_entity_middles(...)`` from
+    ``index_v4/processor.py`` is recorded too; restored on exit.
+    """
+    rec = MiddleSyncRecord(widx.schema_info)
+    original = widx._sync_entity_middles
+
+    def wrapper(entity_type: str, name: str) -> None:
+        rec.raw.append((entity_type, name))
+        return original(entity_type, name)
+
+    widx._sync_entity_middles = wrapper
+    try:
+        yield rec
+    finally:
+        del widx._sync_entity_middles

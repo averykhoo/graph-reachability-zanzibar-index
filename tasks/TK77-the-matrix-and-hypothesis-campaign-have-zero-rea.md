@@ -1,7 +1,7 @@
 ---
 id: TK77
 title: the matrix and hypothesis campaign have ZERO reach into the _sync_entity_middles surface
-brief: census DONE 2026-09-19c: 1/15 fixtures, 0/26 conf, 0/65535 genswarm crossable; unreached = the _sync REMOVE path
+brief: fixture half DONE 2026-09-19d: matrix+property _sync EFF 0->46/0->23; left = genswarm + star_bridge weights
 pri: NOW
 size: M
 deps: []
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-18
-moved: 2026-09-19c
-updated: 2026-09-19c
+moved: 2026-09-19d
+updated: 2026-09-19d
 closed:
 ---
 
@@ -150,3 +150,66 @@ NEXT ACTION: write the crossable matrix fixture (the owc_star_ttu template is th
 shape) and put it under test_matrix.py / test_wildcard_property.py, with the probe's _sync
 EFF column as the acceptance check -- an added fixture that does not move it bought nothing,
 and an empty crossable_shapes is a silent no-op that passes every test it is added to.
+
+### 2026-09-19d
+
+CENSUS §7 ITEM (1) EXECUTED, first-hand, and the acceptance column MOVED. The fixture work
+this row named is landed: `tests/fga_schemas/owc_star_ttu.fga` is now a second corpus in BOTH
+modules the census measured at zero reach --
+`tests/test_matrix.py::test_matrix_4way_crossable_star_ttu` (4-way: graph + connected store +
+oracle + set engine under both SetOps, seeds 0/1/2) and
+`tests/test_wildcard_property.py::test_wildcard_property_crossable_vs_oracle` (seeds 0/1/2).
+Corpus, grid and guards live once, in `test_wildcard_property.py`, and the matrix imports
+them.
+
+MEASURED 2026-09-19d with this row's own probe, same command as the census §8 (log figures in
+the doc's dated append):
+
+    module                            parse_crossable   _ensure/EFF   _sync/EFF   CTL
+    tests/test_matrix.py                 0 -> 6            0 -> 78      0 -> 46    0 -> 196
+    tests/test_wildcard_property.py      0 -> 5            0 -> 40      0 -> 23    0 -> 101
+
+`_sync ... EFF` is the acceptance target this row set (census §7.4), and for scale: the whole
+seven-module suite measured 8 before, all of them in `tests/test_i14_crossing_middles.py`.
+These two modules now book 69 between them, and they are the differential and the property
+grid rather than a hand-written module -- which is the thing this row was filed about.
+
+A REAL BUG CAUGHT BY THE NEW ARM ON ITS FIRST RUN, worth recording because it was not the
+bug being looked for: the corpus carries the boolean `restricted`, and the index-only
+property harness had never needed a `DeltaProcessor`. Without the cascade `restricted`
+answers False forever -- the walk's own oracle grid reddened on seeds 0 and 2 at
+`('...', 'user', 'u1', 'restricted', 'folder', 'f1')`, `index=False oracle=True`. Wired in
+(watermark before, `run_cascade` inside the same txn, per CLAUDE.md I5); sweep `M11` now pins
+it.
+
+SABOTAGE: 12 mutations, 11 CAUGHT, reproducer tracked at
+`formal/probes/tk77_middles_reach_sweep_2026-09-19.py` (it edits tracked files and restores
+them in `finally`). `M0` is the harness control and attributed correctly, so the table
+measures the module and not a broken instrument. Full table in the test module's own section
+comment and in the census doc's dated append.
+
+(!) THE FIRST RUN OF THAT SWEEP IS THE PART TO CARRY: it reported one ANCHOR-MISS and three
+INERT rows, and TWO of the three inert rows were real holes.
+ * `M5` -- the CORPUS half of crossability was unpinned. Deleting every bare-star tupleset
+   subject from the pool left all eight crossable tests GREEN, because `crossable_shapes` is
+   schema-computed and both the `_sync_entity_middles` guard AND this row's own EFFECTIVE
+   column key off the entity TYPE. No assertion and no column in the census can see a pool
+   that stopped carrying the star; the differential just explores a smaller state space and
+   agrees with itself. Closed mechanically by `::assert_crossable_pool`. `M4` (drop ONE of
+   the two star subjects) stays legitimately INERT -- one is enough for the feature.
+ * `M10` -- the `n != '*'` clause of the effective filter was unpinned, because on a
+   crossable corpus raw and filtered counts are both non-zero either way. Closed by
+   `::test_middle_sync_record_excludes_the_wildcard_entity`.
+ * `M9` (effective -> raw, i.e. this row's own trap (a) committed inside the instrument) is
+   caught ONLY by the two instrument controls, never by a walk. That is why the negative
+   control runs on `wildcards.fga`: on a crossable corpus nothing distinguishes a filtered
+   count from an unfiltered one.
+ * An ANCHOR-MISS row measures NOTHING and prints in the same column as a CAUGHT row. `M9`'s
+   first form spanned two lines and the tree is CRLF.
+
+NEXT ACTION: census §7 items (2) and (3), both generator work and neither started -- the
+one-line `tests/genswarm.py::witness` fix (its declared `owc` is `('doc','parent')` while its
+through-shape is `('doc','r1')`, disjoint by construction) and the `star_bridge_configs`
+re-weighting (24 of 224 configs are crossable, all in the `A == B` arm). The fixture half of
+this row is DONE. Unchanged and still not to be reconciled arithmetically: the 2026-09-19b
+"7" discrepancy.

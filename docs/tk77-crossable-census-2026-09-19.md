@@ -18,6 +18,92 @@ Provenance labels used throughout: **READ** (first-hand from the named `file::sy
 **MEASURED** (first-hand run this session, command in §8), **REASONED** (derived from a READ,
 not separately observed). Nothing here is agent-reported.
 
+## Correction / continuation — 2026-09-19d: §7 item (1) is EXECUTED, and the acceptance column moved
+
+**MEASURED 2026-09-19d, first-hand, same probe and same command as §8.** §7 decided *"a new
+matrix fixture, not a parameter change"*, with §7.4 naming the acceptance target: the
+`_sync … EFF` column, not the `_ensure` one. Both are now done. `owc_star_ttu.fga` joined
+`tests/test_matrix.py` and `tests/test_wildcard_property.py` as a second corpus
+(`::test_matrix_4way_crossable_star_ttu`, `::test_wildcard_property_crossable_vs_oracle`,
+seeds 0/1/2 each), and the two modules that had ZERO reach now carry most of the suite's:
+
+```
+module                            parse_crossable   _ensure/EFF   _sync/EFF   CTL
+                                   before  after    before after   before after
+tests/test_matrix.py                 0       6        0     78       0     46   0 -> 196
+tests/test_wildcard_property.py      0       5        0     40       0     23   0 -> 101
+```
+
+For scale, §6 measured the whole seven-module suite at **8** effective `_sync` calls, all of
+them in `tests/test_i14_crossing_middles.py`. These two modules alone now book **69**, and
+they are the differential and the property grid rather than a hand-written module — which is
+the thing `TK77` was filed about.
+
+**Corpus shape.** `crossable_shapes == {('folder','viewer')}` (MEASURED, both under the
+two-shape `CROSSABLE_WC` and under `{('folder','viewer')}` alone). The corpus carries the
+boolean `restricted` too, so the graph leg runs its delta-processor cascade; the property
+walk needed a `DeltaProcessor` wired in, which the index-only harness had never needed. That
+was not a design choice but a **caught bug in the first draft** — without the cascade
+`restricted` answers `False` forever, and the walk's own oracle grid reddened on seeds 0 and
+2 at `('...', 'user', 'u1', 'restricted', 'folder', 'f1')`, `index=False oracle=True`.
+
+### Sabotage: 12 mutations, 11 caught, and two of the three first-run INERT rows were real holes
+
+Reproducer tracked at `formal/probes/tk77_middles_reach_sweep_2026-09-19.py`; it restores the
+tree in `finally`, and the run below left `git status` showing only the intended edits.
+
+```
+M0   CAUGHT   HARNESS CONTROL: invert assert_remove_path_reached's own claim   6 walks red
+M1   CAUGHT   CROSSABLE_WC -> {('doc','viewer')} (the plausible parameter edit)   8 red
+M2   CAUGHT   CROSSABLE_WC -> frozenset()                                        8 red
+M3   CAUGHT   CROSSABLE_SHAPES -> frozenset() (weaken the pin itself)            8 red
+M4   INERT    drop ONE of the two bare-star tupleset subjects from the pool
+M5   CAUGHT   drop EVERY bare-star tupleset subject from the pool                6 walks red
+M6   CAUGHT   property walk never removes (rng < 1.1)                            3 red
+M7   CAUGHT   matrix arm never removes (rng < 1.1)                               3 red
+M8   CAUGHT   INSTRUMENT KILL: recorder observes nothing                         8 red
+M9   CAUGHT   effective filter -> `if True` (read RAW as reach)                  2 controls red
+M10  CAUGHT   drop only the `n != '*'` clause from the filter                    1 control red
+M11  CAUGHT   omit proc.run_cascade(wm)                                          2 of 3 seeds
+```
+
+**`M0` attributed correctly**, so the table is a measurement of the module rather than of a
+broken harness (`docs/sabotage-procedure.md`; `P6` step 0's failure mode).
+
+**What the FIRST run of this sweep found, which is the part worth carrying.** It reported
+`M9` as `ANCHOR-MISS (0 matches)` and `M4` / `M5` / `M10` as `INERT`, and two of those were
+genuine holes rather than clean pins:
+
+* **`M5` — the corpus half of crossability was unpinned.** Deleting every bare-star tupleset
+  subject from `_crossable_raw_tuples` left all eight crossable tests GREEN.
+  `crossable_shapes` is computed from the SCHEMA, and both `_sync_entity_middles`' guard and
+  this census's own EFFECTIVE column key off the entity TYPE — so no assertion anywhere, and
+  no column in this document, can see a pool that stopped carrying the star. The differential
+  simply explored a smaller state space and agreed with itself. Closed by
+  `tests/test_wildcard_property.py::assert_crossable_pool`, a refusal rather than a comment
+  because a pool shrink is never caught by the tests that consume the pool. `M4` stays
+  legitimately inert: one of the two star subjects is enough for the feature, so a sweep row
+  that reddened on losing either would be over-fitted.
+* **`M10` — the `n != '*'` clause of the effective filter was unpinned**, because on a
+  crossable corpus raw and filtered counts are both non-zero either way. Closed by
+  `::test_middle_sync_record_excludes_the_wildcard_entity`.
+* **`M9` — "read RAW as reach", i.e. trap (a) of §6 committed inside the instrument** — is
+  caught only by the two instrument controls, never by a walk. That is what those controls are
+  for, and it is the reason the negative control runs on `wildcards.fga`: on a crossable
+  corpus there is no observation that distinguishes a filtered count from an unfiltered one.
+* ⚠ **`M9`'s first form was an ANCHOR-MISS and an anchor-miss measures nothing** — it prints
+  in the same column as the CAUGHT rows. Its anchor spanned two lines and the tree is CRLF.
+
+### What is still open on this row
+
+The acceptance target of §7.4 is met, so what remains is §7 items (2) and (3), neither
+started: the one-line `tests/genswarm.py::witness` change (§4) and the
+`star_bridge_configs` re-weighting (§5). Both are generator work; the fixture work is done.
+Also unchanged: the §6 discrepancy against the row's own 2026-09-19b *"7"*, still not
+reconciled and still not to be reconciled arithmetically.
+
+---
+
 ---
 
 ## 1. The structural result — what makes a schema crossable at all
