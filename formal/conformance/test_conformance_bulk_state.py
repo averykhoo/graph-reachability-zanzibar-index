@@ -46,6 +46,19 @@ What this does NOT cover, said plainly:
     them. A bulk build over a store whose log contains REMOVEs is pinned only
     by `tests/test_connectedstore_build.py::test_built_index_equals_live_maintained`
     (one history, one remove).
+    (!) CORRECTION 2026-09-20 (TK91) -- the LAST sentence is now too strong;
+    the first two are unchanged and still true of THIS module.
+    `formal/conformance/test_conformance_remove.py::test_graph_remove_bulk_build_survivors`
+    runs `backends.bulk_build_drive` over the SURVIVOR SET of a seeded
+    interleaved add/remove sequence, all 26 `SCHEMAS` x 5 seeds (measured
+    2026-09-20: 130 cells, 740 survivors, 3757 state rows, 44245 grid
+    comparisons), comparing `snapshot_rows` node/edge multisets, the per-edge
+    `derived` flag, residues and the grid, plus I1-I8 and the I9 audit on the
+    bulk-built index. So the bulk constructor over a post-removal survivor
+    SET is now covered there. What remains covered only by
+    `test_built_index_equals_live_maintained` is a bulk build whose own LOG
+    interleaves removes: that arm re-writes the survivors fresh through a
+    `TupleSource`, so `build_index` still reads an add-only snapshot.
   * **The outbox.** `bulk_build.py` writes exactly one `ADDED` row per final
     closure pair by design (Phase W (3)); the incremental path's outbox is a
     per-write delta history. Neither is in the canonical state, and the Lean
@@ -83,6 +96,15 @@ What this does NOT cover, said plainly:
     (`snapshot_rows` compares every `EdgeV4` column as a multiset), so this
     module pins the bulk-built DIRECT multigraph + derived flags + residues
     to the model-driven state — not the closure rows a `check` actually reads.
+    (!) CORRECTION 2026-09-20 (TK91) -- "ONLY by `tests/test_bulk_build.py`"
+    is no longer true; everything else in this bullet still is.
+    `test_conformance_remove.py::test_graph_remove_bulk_build_survivors`
+    compares `snapshot_rows`, which carries `indirect_edge_count`, over
+    post-removal survivor sets. Measured 2026-09-20 with the same clamp this
+    bullet records as GREEN here (`'indirect_edge_count': min(1, pvec[a][b])`,
+    1751 rows touched): that arm goes RED, ``3 failed, 23 passed, 104
+    deselected in 135.00s (0:02:15)`` -- `deep_grid` and `group_userset` on
+    the state differential, `nary_union` on I1 (`indirect < direct`).
 
 Skips cleanly if the Lean binary is not built (verify.sh preflights the
 binary, so the hard gate never runs skipped).

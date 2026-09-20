@@ -28,10 +28,47 @@ from .schema_io import ensure_schema, load_schema, open_graph_index
 from .source import log_watermark
 
 
+class BuildReport(tuple):
+    """``build_index``'s return: the historical ``(cursor, widx, ruleset)``
+    3-tuple, plus ``.constructor`` naming WHICH branch actually ran --
+    ``'bulk'`` (``index_v4.bulk_build``) or ``'incremental'`` (the per-tuple
+    ``widx.add_tuple`` replay + ``DeltaProcessor.backfill()``).
+
+    A plain ``tuple`` subclass, so every existing
+    ``cursor, widx, ruleset = build_index(...)`` call site is untouched.
+
+    WHY THIS FIELD EXISTS. The two constructors are byte-identical in effect by
+    design (P13's correctness bar), so no assertion about the resulting STATE --
+    anywhere, in any test -- can tell them apart. A flipped default, or a silent
+    fallback added here, would downgrade every "bulk" test in the repo to a
+    second run of the incremental path with nothing going red. Measured
+    2026-09-20 (`docs/tk91-tk80-removal-coverage-2026-09-20.md`): forcing
+    ``if bulk:`` to ``if False:`` left
+    ``formal/conformance/test_conformance_remove.py::test_graph_remove_bulk_build_survivors``
+    at ``26 passed, 104 deselected`` rc=0 while ``bulk_build`` ran 0 times
+    instead of 130. This is the repo's house failure mode -- an assurance step
+    that fails by PASSING -- and ``docs/sabotage-procedure.md`` prefers a
+    mechanical refusal over a doc warning, so callers that need the bulk path
+    refuse on this field (``formal/conformance/backends.py::bulk_build_drive``).
+
+    The label is assigned INSIDE each branch, AFTER that branch's constructor
+    returns, and ``build_index`` gives it no default: deleting an assignment is
+    an ``UnboundLocalError``, not a wrong label.
+    """
+
+    def __new__(cls, cursor: IndexCursorV1, widx: WildcardIndex,
+                ruleset: RuleSet, constructor: str) -> 'BuildReport':
+        if constructor not in ('bulk', 'incremental'):
+            raise ValueError(f'unknown build_index constructor {constructor!r}')
+        self = super().__new__(cls, (cursor, widx, ruleset))
+        self.constructor = constructor
+        return self
+
+
 def build_index(session: Session, source_store_id: str,
                 index_store_id: str | None = None,
                 *, bulk: bool = True,
-                ) -> tuple[IndexCursorV1, WildcardIndex, RuleSet]:
+                ) -> BuildReport:
     """Build a fresh graph index from a tuple store's current snapshot.
 
     One transaction (committed on success, rolled back on failure). Refuses to run
@@ -44,6 +81,10 @@ def build_index(session: Session, source_store_id: str,
     that per-tuple loop; it is byte-identical in effect and is the identity gate's
     reference side (``tests/test_bulk_build.py``). Everything else (guards, backfill,
     watermark re-check, cursor) is shared by both paths.
+
+    Returns a `BuildReport`: the ``(cursor, widx, ruleset)`` tuple it has always
+    returned, plus ``.constructor`` naming which of the two branches ran -- the
+    only thing that distinguishes them, since their state is identical by design.
     """
     index_store_id = index_store_id or source_store_id
 
@@ -86,6 +127,7 @@ def build_index(session: Session, source_store_id: str,
             # to the bulk=False reference path below, so this branch skips backfill().
             bulk_build(session, source_store_id, index_store_id, ruleset,
                        widx.schema_info)
+            constructor = 'bulk'
         else:
             # Reference path: bulk-load the snapshot through the rewrite fan-out one
             # routed triple at a time (leaf writes only), then derive the boolean state
@@ -105,6 +147,7 @@ def build_index(session: Session, source_store_id: str,
 
             if ruleset.compiled is not None and ruleset.compiled.plans:
                 DeltaProcessor(widx, ruleset.compiled).backfill()
+            constructor = 'incremental'
 
         # Blind-audit X1: watermark and snapshot were two unserialized reads -- a
         # write committed between them would be IN the snapshot AND above the
@@ -121,7 +164,7 @@ def build_index(session: Session, source_store_id: str,
         cursor.applied_log_id = watermark
         session.add(cursor)
         session.commit()
-        return cursor, widx, ruleset
+        return BuildReport(cursor, widx, ruleset, constructor)
     except Exception:
         session.rollback()
         raise

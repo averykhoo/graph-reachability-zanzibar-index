@@ -55,7 +55,7 @@ from formal.conformance.grid import (
     assert_grid_nonvacuous, queries_for, fmt_mismatches as _fmt)
 from formal.conformance import runner
 from formal.conformance.backends import (
-    _fresh_session, GraphDriver, graphindex_drive_ops)
+    _fresh_session, GraphDriver, graphindex_drive_ops, bulk_build_drive)
 
 SEEDS = list(range(5))
 
@@ -559,3 +559,430 @@ def test_graph_full_churn_restores(name):
 
     fsession.close()
     drv.close()
+
+
+# ---------------------------------------------------------------------------
+# BULK arm (TK91) — the OFFLINE bootstrap replayed over a POST-REMOVAL
+# survivor set.
+#
+# `test_graph_remove_sequences` above compares the driven index against a fresh
+# ADD-ONLY write-by-write build of the survivors. That fresh build is the same
+# constructor, run again: `graphindex_drive_ops`, routing + same-transaction
+# cascade. The PRODUCTION bootstrap is a different constructor —
+# `connectedstore.build_index(bulk=True)` -> `index_v4/bulk_build.py` (one
+# in-memory pass, closed-form path counts, `bulk_backfill.py`'s in-memory
+# boolean Phase-D backfill, bulk INSERTs) — and until this arm nothing anywhere
+# bulk-built from a POST-REMOVAL survivor set. `test_conformance_bulk_state.py`
+# runs the bulk constructor only over whole, add-only corpora (its "Remove
+# histories" bullet says so); the survivor sets this file produces are sparse
+# and holey in a way no add-only corpus is.
+# ---------------------------------------------------------------------------
+
+# Anti-vacuity floors for the bulk arm. `_MIN_SEQ_COMPARISONS` (:69) floors GRID
+# QUERIES, which does NOT cover this arm: `_graph_state` on two EMPTY indexes
+# compares equal, and `bulk_build.py` returns early on an empty node set, so an
+# empty survivor set would pass having compared no STATE at all. These floor the
+# state instead. Both are set AT the live minimum (no headroom): adding state is
+# free, losing it is loud.
+#
+# FLOOR PROVENANCE, measured 2026-09-20 over all 26 `SCHEMAS` x 5 `SEEDS` = 130
+# cells (sweep script `.scratch/tk91-tk80/measure_arm.py`, mirroring this test
+# exactly; totals `740` survivors, `3757` state rows, `72` residues, `157`
+# derived edges, `44245` grid comparisons, 0 mismatches):
+#   * per-corpus state rows over the 5-seed sweep, MINIMUM = 12
+#     (`wildcard_public`; next thinnest `object_wildcard` at 32, median 148).
+#   * exactly ONE of the 130 cells compares two EMPTY indexes —
+#     `wildcard_public` seed 4, 0 survivors / 0 state rows — and 7 of 130 have
+#     <= 1 survivor or <= 3 state rows. That cell is NOT skipped: it still pins
+#     that the driven remove path drained completely and that the bulk build
+#     wrote nothing extra. It is exactly why the floor is on the SWEEP and not
+#     per cell.
+#   * derived-arm state (processor-stamped `derived` edges + symbolic residues)
+#     over the sweep, MINIMUM over the 17 boolean corpora = 1
+#     (`nary_intersection`: 1 derived edge, 0 residues). 13 of 26 corpora carry
+#     a derived edge at all; 5 carry residues.
+_MIN_BULK_STATE_ROWS = 12
+_MIN_BULK_DERIVED_STATE = 1
+
+
+def _derived_edge_flags(session, store_id):
+    """Per-edge `EdgeV4.derived` stamp (I5), keyed id-free like `snapshot_rows`.
+
+    `invariants.py::snapshot_rows` captures `direct_edge_count` /
+    `indirect_edge_count` but NOT `derived`, so `_graph_state` cannot see a
+    constructor that materializes the right closure with the wrong I5
+    provenance stamp. This is the one field added on top of it here; measured
+    2026-09-20 to redden under the bulk-backfill control in the test docstring
+    below (12 of 130 cells) while staying green on the clean tree (0 of 130).
+    """
+    from index_v4.models import EdgeV4, NodeV4
+    nodes = session.exec(select(NodeV4).where(NodeV4.store_id == store_id)).all()
+    by_id = {n.id: (n.predicate, n.type, n.name, n.wildcard) for n in nodes}
+    edges = session.exec(select(EdgeV4).where(EdgeV4.store_id == store_id)).all()
+    return Counter((by_id[e.subject_id], by_id[e.object_id], e.derived)
+                   for e in edges)
+
+
+def _flag_diff(driven: Counter, bulk: Counter) -> str:
+    lines = []
+    for k in sorted(set(driven) | set(bulk), key=repr):
+        if driven[k] != bulk[k]:
+            lines.append(f'  {k[0]} -> {k[1]} derived={k[2]}: '
+                         f'driven={driven[k]} bulk={bulk[k]}')
+    return '\n'.join(lines)
+
+
+def _incremental_constructor_label(schema_text, tuples, object_wildcards):
+    """CONTROL for leg (e): build the SAME snapshot with ``bulk=False`` and
+    report which constructor ``build_index`` says it ran.
+
+    Leg (e) is a refusal in `backends.bulk_build_drive`: it raises unless
+    `build_index` reports `constructor == 'bulk'`. That refusal is worth
+    nothing if the label can only ever say `'bulk'` — the classic assertion
+    that cannot fail. This runs the OTHER branch of the same function over the
+    same survivors and requires the OTHER label, so a
+    `BuildReport.constructor` that silently became a constant reddens here
+    instead of quietly disarming the pin.
+
+    Cheap by construction: the survivor sets are small (740 tuples over all
+    130 cells, measured 2026-09-20) and this runs once per corpus, not once
+    per seed. It asserts nothing about STATE — `tests/test_bulk_build.py` owns
+    the bulk/incremental identity differential.
+    """
+    from connectedstore import TupleSource, build_index, save_schema
+
+    session = _fresh_session()
+    try:
+        save_schema(session, 'ctl', schema_text, frozenset(object_wildcards))
+        src = TupleSource(session, 'ctl')
+        for tup in tuples:
+            src.add(tup.subject_predicate, tup.subject_type, tup.subject_name,
+                    tup.relation, tup.object_type, tup.object_name)
+        session.commit()
+        return build_index(session, 'ctl', bulk=False).constructor
+    finally:
+        session.close()
+
+
+@pytest.mark.parametrize('name', sorted(SCHEMAS))
+def test_graph_remove_bulk_build_survivors(name):
+    """The OFFLINE bulk bootstrap, run over the survivor set of a remove
+    sequence, lands on exactly the state the driven graph index is in.
+
+    Same universe/ops/grid/seeds as `test_graph_remove_sequences` (identical
+    generators, so all three graph arms traverse identical op streams). Per
+    corpus x seed: drive adds/removes through the synchronous v1 path
+    (`graphindex_drive_ops`), snapshot the accepted survivors, then build a
+    SECOND index from that snapshot through `connectedstore.build_index(
+    bulk=True)` (`backends.bulk_build_drive`) and assert
+
+      (a) the bulk-built index satisfies I1-I8 on its own, and on a boolean
+          schema passes the I9 fixpoint audit (absolute, not differential —
+          a defect both constructors shared would still fail here);
+      (b) driven state == bulk state, id-free, via `_graph_state`
+          (`snapshot_rows` node/edge multisets + symbolic residues);
+      (c) driven per-edge `derived` flags == bulk's (`_derived_edge_flags`) —
+          the I5 stamp `snapshot_rows` does not carry;
+      (d) driven grid `check` == bulk grid `check` over the full universe;
+      (e) the BULK constructor is the one that actually RAN. `bulk_build_drive`
+          refuses unless `build_index` reports `constructor == 'bulk'`
+          (`connectedstore/build.py::BuildReport`), and this arm carries the
+          CONTROL that keeps that refusal from being an assertion that cannot
+          fail: once per corpus `_incremental_constructor_label` rebuilds the
+          last seed's survivors with `bulk=False` and requires the OTHER label.
+          Legs (a)-(d) are blind here BY DESIGN — P13's correctness bar is that
+          the two constructors produce identical state — so nothing about the
+          RESULT can distinguish them. Measured 2026-09-20, before leg (e)
+          existed: a byte edit of `connectedstore/build.py` turning `if bulk:`
+          into `if False:` left this arm at `26 passed, 104 deselected` rc=0
+          while `index_v4.bulk_build.bulk_build` was called 0 times instead of
+          130 — the arm's whole stated subject silently replaced by the
+          constructor it was written to differ from.
+
+    WHAT THIS COVERS THAT NOTHING ELSE DID. `bulk_build.py` /
+    `bulk_backfill.py` were pinned only over whole, add-only tuple lists:
+    `test_conformance_bulk_state.py` (25 `GRAPH_FRAGMENT` corpora, add-only),
+    `tests/test_bulk_build.py` (its own `_CORPORA`, add-only), and
+    `tests/test_connectedstore_build.py::test_built_index_equals_live_maintained`
+    (ONE history with ONE remove). A post-removal survivor set is a different
+    input class — sparse and holey, with families partly drained and
+    recombined `_extras` names left dangling — and nothing bulk-built from one.
+    Two secondary widenings, both measured 2026-09-20:
+      * the comparison is `snapshot_rows`, which carries
+        `indirect_edge_count`, so Phase P's closed-form path counts ARE
+        compared here; `test_conformance_bulk_state.py`'s canonical form
+        (`extract_sql_state`, P1) drops them and says so.
+      * this module parametrizes over all 26 `SCHEMAS`, and the one corpus
+        in `SCHEMAS` minus `GRAPH_FRAGMENT` — `object_wildcard` — is the ONLY
+        corpus in either set with a non-empty `bridged_in_shapes` /
+        `bridged_out_shapes` (`bridged_out = [('folder', 'viewer')]`). Its
+        bulk-built survivor indexes carry `2` BRIDGE rows across the 5 seeds
+        (a row whose target is a `w_any` node or whose source is a `w_all`
+        node), and `snapshot_rows` filters nothing, so they are compared here.
+        `extract_sql_state`'s P2 drops exactly those rows, which is why
+        `test_conformance_bulk_state.py` records its Phase-B coverage as nil.
+        Do not read more into this than the number: 2 rows on 1 corpus, and
+        `crossable_shapes` is EMPTY on all 26 corpora, so `bulk_build.py`'s
+        I14 crossable-middle loop is still reached by nothing in this file
+        (it is pinned by `tests/test_bulk_build.py::_assert_r4bf_features`
+        clause (g), per `P22`).
+
+    WHAT THIS DOES *NOT* COVER, said plainly:
+
+      * **The mutation TK91 was opened for.** Deleting the leading `rel` from
+        `index_v4/processor.py::_live_keys_of`'s `preds` list leaves this arm
+        GREEN, and that is not fixable by strengthening the comparison. Two
+        measured reasons (2026-09-20): the bulk path never calls that function
+        (`bulk_backfill.py::_live_keys_of` is its own mirror; the processor's
+        was called 0 times on the bulk arm across all 26 corpora), AND on a
+        CONSISTENT store the edit is a semantic no-op — clean vs mutated dumps
+        of every answer it returns are byte-identical (536 enumerated names,
+        same sha, `diff` exit 0). Only a corrupt-then-repair shape
+        (uncascaded leaf retraction + `DeltaProcessor.backfill()`)
+        discriminates it; that is a `tests/` unit, not a conformance remove
+        arm. Literal output of the mutated run is in the evidence block below.
+      * **The bulk side's LOG never contains a remove.** The survivors are
+        re-written fresh through a `TupleSource`, so `build_index` reads an
+        add-only snapshot. What is pinned is the bulk constructor over a
+        survivor SET; a bulk build over a store whose own log interleaves
+        removes is still pinned only by
+        `tests/test_connectedstore_build.py::test_built_index_equals_live_maintained`.
+      * **The outbox**, which neither `_graph_state` nor the grid reads: the
+        bulk path writes one `ADDED` row per final closure pair by design
+        while the driven path holds a per-write delta history, so they are not
+        comparable here. `tests/test_bulk_build.py` compares them against
+        `bulk=False`.
+      * **`sem` / the Lean model.** Out of scope for the whole graph section of
+        this module — the Lean operational chain is add-only (see the section
+        note above `test_graph_remove_sequences`). The reference here is the
+        driven Python index, which the sibling test has already pinned to the
+        oracle on these exact corpora and seeds.
+      * **Accept/reject parity at the two admission surfaces.**
+        `bulk_build_drive` writes through `TupleSource` (set-engine admission)
+        while `graphindex_drive_ops` validates through the graph index. If they
+        disagreed on a survivor, `bulk_build_drive` raises its landed-count
+        refusal instead of reporting a mismatch. Measured 2026-09-20: it never
+        fires over the 130 cells (`landedfail=0`). If it ever does, that is a
+        Python bug to fix, not an arm to relax (`CLAUDE.md` "Who decides").
+        MEASURED AND DELIBERATELY NOT PINNED (sweep M15, 2026-09-20): because
+        every cell satisfies `landed == len(tuples)`, neutering that refusal to
+        `if False:` is GREEN. It guards a future divergence, not a live
+        property, and was not contorted into one.
+      * **Six paths the bulk constructor never takes on this input class.**
+        Each proven dead by an instrumented counter over all 130 cells —
+        MEASURED, not inferred: the hit counters were never taken — and each
+        MEASURED AND DELIBERATELY NOT PINNED (2026-09-20). Subject-side
+        bridging in `bulk_build.py` Phase B; the `_ensure_bridges` call in
+        `bulk_backfill.py::_write_derived_add`; Phase P's multiplicity weight
+        (`mult` is never != 1); `ResidueV1.version` != 1 on a fresh bulk build;
+        `bulk_backfill.py::_store_residue`'s re-store branch; and the step-4
+        neg-maintenance `_store_residue`. Weakening any of them leaves this arm
+        green because nothing here reaches them. Detail:
+        `docs/tk91-tk80-removal-coverage-2026-09-20.md`.
+
+    ★ SABOTAGE EVIDENCE (2026-09-20, `docs/sabotage-procedure.md`), literal
+    observed output. Every run below is
+    ``pytest formal/conformance/test_conformance_remove.py
+    -k test_graph_remove_bulk_build_survivors -q`` against this module as
+    landed. The weakenings were applied as RUNTIME monkeypatches loaded with
+    `-p` from `.scratch/` rather than as edits to `index_v4/`, because sibling
+    agents were running pytest against this same working tree in the same
+    session; each replacement body is a byte-for-byte copy of the shipped one
+    with only the named line changed.
+
+      * CLEAN: ``26 passed, 104 deselected in 279.57s (0:04:39)``.
+
+      * ★ **The control that shows the arm is not vacuous.** Drop the
+        `derived-computed` recursion from
+        `index_v4/bulk_backfill.py::_BulkBackfill._live_keys_of`
+        (`names |= self._live_keys_of(o_type, spec.predicate)` -> `pass`) —
+        the narrowest plausible weakening of the bulk mirror's enumeration::
+
+            E   index_v4.invariants.InvariantViolation: I9: reconcile of (doc, approver, d1) was not a fixpoint -- derived state was stale
+            FAILED ...::test_graph_remove_bulk_build_survivors[cross_stratum_resettle]
+            FAILED ...[nary_union_derived4]
+            FAILED ...[residue_rich]
+            FAILED ...[star_two_strata_churn]
+            FAILED ...[taint_computed_root_over_boolean]
+            FAILED ...[taint_union_over_boolean]
+            FAILED ...[taint_union_userset_arm]
+            FAILED ...[two_stratum_cascade]
+            8 failed, 18 passed, 104 deselected in 197.72s (0:03:17)
+
+      * ★ **Controlling the INSTRUMENT.** Every red above is leg (a)'s I9
+        audit, which runs first — so that run alone does NOT show the
+        DIFFERENTIAL sees anything. Re-run with the same control PLUS
+        `DeltaProcessor.audit_fixpoint` monkeypatched to a no-op: the SAME 8
+        corpora redden, now on leg (b)::
+
+            E   AssertionError: [cross_stratum_resettle seed=0] driven/BULK-BUILT STATE divergence on the post-removal survivor set (the offline bootstrap does not reproduce the state the logged write path is in):
+            E       driven nodes=Counter({... ('a', 'doc', 'y_doc_1', '', False, 1): 1, ('...', 'user', 'alice', '', True, 4): 1, ('a', 'doc', 'd1', '', False, 1): 1})
+            E       bulk   nodes=Counter({('...', 'user', 'alice', '', True, 3): 1, ... ('v.0', 'doc', 'y_doc_1', '', True, 2): 1})
+            8 failed, 18 passed, 104 deselected in 157.46s (0:02:37)
+
+        Reading the two Counters (interpretation, not observed text): the
+        bulk build is missing the whole public `a` family — both
+        `('a', 'doc', d)` nodes and the two grant edges into them — because
+        the dropped recursion never enumerated the objects that only the
+        derived-computed arm reaches.
+
+      * **INERT, recorded as such rather than worked around.** The mutation
+        TK91 was opened for —
+        `index_v4/processor.py::DeltaProcessor._live_keys_of`'s
+        `preds = [rel] + [...]` -> `preds = [] + [...]` — leaves this arm
+        GREEN: ``26 passed, 104 deselected in 243.89s (0:04:03)``. The two
+        measured reasons are in the "does NOT cover" list above. It is pinned
+        in `tests/`, not here, and the arm was deliberately NOT contorted to
+        chase it.
+
+      * **Phase P — the closed-form path counts — IS pinned here**, which
+        `test_conformance_bulk_state.py` records as impossible for itself
+        (its canonical form never reads `indirect_edge_count`; `snapshot_rows`
+        does). `bulk_build.py` Phase W `'indirect_edge_count': pvec[a][b]`
+        -> `min(1, pvec[a][b])`, clamped at the `executemany` boundary
+        (`1751` `EdgeV4` rows touched)::
+
+            E   index_v4.invariants.InvariantViolation: I1: indirect < direct on edge id=3 subject_id=1 direct_edge_count=2 derived=False store_id='conf' object_id=7 indirect_edge_count=1
+            E   AssertionError: [deep_grid seed=1] driven/BULK-BUILT STATE divergence on the post-removal survivor set (the offline bootstrap does not reproduce the state the logged write path is in):
+            E   AssertionError: [group_userset seed=2] driven/BULK-BUILT STATE divergence on the post-removal survivor set (the offline bootstrap does not reproduce the state the logged write path is in):
+            FAILED ...[deep_grid]
+            FAILED ...[group_userset]
+            FAILED ...[nary_union]
+            3 failed, 23 passed, 104 deselected in 135.00s (0:02:15)
+
+        Two of the three reds are the DIFFERENTIAL (leg b) and one is leg
+        (a)'s I1; re-run with leg (a) neutered the same three are red on leg
+        (b) alone, ``3 failed, 23 passed, 104 deselected in 131.79s
+        (0:02:11)``.
+
+      * ★ **Leg (e), the constructor pin -- PROVEN BOTH WAYS, 2026-09-20.**
+        Both runs are BYTE EDITS of `connectedstore/build.py` (pristine bytes
+        restored and `cmp`-verified afterwards), on the 3-param subset
+        ``-k "test_graph_remove_bulk_build_survivors and (object_wildcard or
+        residue_rich or wildcard_public)"`` -- chosen for the bridge corpus,
+        the residue-carrying boolean corpus, and the one whose last seed
+        leaves ZERO survivors, so the control is exercised on an empty
+        snapshot too. Subset, not the full 26: the arm costs ~170-280s for all
+        of them and this pin is per-cell, not per-corpus.
+
+          * M14, the mutation that used to be GREEN (`if bulk:` ->
+            `if False:`), i.e. the whole arm silently downgraded to the
+            incremental constructor::
+
+                E   AssertionError: bulk_build_drive: build_index ran its 'incremental' constructor, not 'bulk' -- index_v4/bulk_build.py never executed. ...
+                3 failed, 127 deselected in 1.49s     rc=1
+
+          * CONTROLLING THE INSTRUMENT -- the refusal above is only worth
+            something if `BuildReport.constructor` can ever say anything but
+            `'bulk'`. Make the label a constant instead (the else branch's
+            ``constructor = 'incremental'`` -> ``constructor = 'bulk'``): the
+            refusal goes quiet, as it must, and leg (e)'s control catches it::
+
+                E   AssertionError: [object_wildcard] CONTROL: build_index(bulk=False) reported constructor 'bulk', so `BuildReport.constructor` does not discriminate the two branches and leg (e) -- bulk_build_drive's refusal -- is an assertion that cannot fail.
+                3 failed, 127 deselected in 11.87s    rc=1
+
+          * Same subset, unmutated: ``3 passed, 127 deselected in 11.48s``
+            rc=0. Whole arm with leg (e) in place, unmutated:
+            ``26 passed, 104 deselected in 169.65s (0:02:49)`` rc=0.
+    """
+    from index_v4.processor import DeltaProcessor
+    from zanzibar_utils_v1 import parse_openfga_schema
+
+    schema_text, corpus_tuples, obj_wild = SCHEMAS[name]
+    ruleset = parse_openfga_schema(
+        schema_text, object_wildcard_shapes=frozenset(obj_wild))
+    boolean = ruleset.compiled is not None and bool(ruleset.compiled.plans)
+
+    n_compared = 0
+    n_state_rows = 0
+    n_derived_state = 0
+    for seed in SEEDS:
+        rng = random.Random(seed)
+        universe = list(corpus_tuples) + _extras(rng, corpus_tuples)
+        ops = _sequence(rng, universe)
+        # grid over the FULL universe: removed/never-present names stay probed
+        queries = queries_for(schema_text, universe)
+        assert_grid_nonvacuous(f'{name} seed={seed}', queries)
+        n_compared += len(queries)
+
+        session, widx, _proc, store_id, final = graphindex_drive_ops(
+            schema_text, ops, obj_wild)
+        assert len(final) < len(universe), 'sequence must net-remove something'
+        driven_state = _graph_state(session, widx)
+        driven_flags = _derived_edge_flags(session, store_id)
+        driven = [bool(widx.check(*q)) for q in queries]
+
+        # The OFFLINE bootstrap over the same survivors — a different
+        # constructor, not a replay of the same one.
+        final_tuples = sorted(final)
+        bsession, bwidx, bstore = bulk_build_drive(
+            schema_text, final_tuples, obj_wild)
+
+        # (a) the bulk-built index is internally sound on its own terms.
+        assert_wildcard_invariants(bwidx)
+        if boolean:
+            DeltaProcessor(bwidx, ruleset.compiled).audit_fixpoint()   # I9
+
+        bulk_state = _graph_state(bsession, bwidx)
+        bulk_flags = _derived_edge_flags(bsession, bstore)
+        bulk = [bool(bwidx.check(*q)) for q in queries]
+
+        (d_nodes, d_edges), d_res = driven_state
+        n_state_rows += sum(d_nodes.values()) + sum(d_edges.values())
+        n_derived_state += sum(c for k, c in driven_flags.items() if k[2])
+        n_derived_state += len(d_res)
+
+        # (b) state convergence of the two CONSTRUCTORS.
+        assert driven_state == bulk_state, (
+            f'[{name} seed={seed}] driven/BULK-BUILT STATE divergence on the '
+            f'post-removal survivor set (the offline bootstrap does not '
+            f'reproduce the state the logged write path is in):\n'
+            f'  driven nodes={driven_state[0][0]}\n  bulk   nodes={bulk_state[0][0]}\n'
+            f'  driven edges={driven_state[0][1]}\n  bulk   edges={bulk_state[0][1]}\n'
+            f'  driven residues={driven_state[1]}\n  bulk   residues={bulk_state[1]}')
+
+        # (c) the I5 `derived` stamp, which `snapshot_rows` does not carry.
+        assert driven_flags == bulk_flags, (
+            f'[{name} seed={seed}] driven/BULK-BUILT per-edge `derived` flag '
+            f'divergence (I5 provenance stamp):\n'
+            f'{_flag_diff(driven_flags, bulk_flags)}')
+
+        # (d) pointwise over the grid.
+        mism = [(queries[i], driven[i], bulk[i]) for i in range(len(queries))
+                if driven[i] != bulk[i]]
+        assert not mism, (
+            f'[{name} seed={seed}] driven/bulk-built grid disagreement:\n'
+            f'{_fmt(mism, "driven", "bulk")}')
+
+        bsession.close()
+        session.close()
+
+    # (e) CONTROL — see the docstring. `bulk_build_drive` has already refused
+    # above if `build_index` did not report the 'bulk' constructor; this is the
+    # proof that the label can ever say anything else, on the same survivors.
+    ctl = _incremental_constructor_label(schema_text, final_tuples, obj_wild)
+    assert ctl == 'incremental', (
+        f'[{name}] CONTROL: build_index(bulk=False) reported constructor '
+        f'{ctl!r}, so `BuildReport.constructor` does not discriminate the two '
+        f"branches and leg (e) -- bulk_build_drive's refusal -- is an "
+        f'assertion that cannot fail.')
+
+    # ANTI-VACUITY. The grid floor is the shared one; the STATE floors are this
+    # arm's own (see `_MIN_BULK_STATE_ROWS` above for why the grid floor does
+    # not cover it, and for where these numbers come from).
+    assert n_compared >= _MIN_SEQ_COMPARISONS, (
+        f'[{name}] ANTI-VACUITY: only {n_compared} (query x store) comparisons '
+        f'across {len(SEEDS)} seeds, floor {_MIN_SEQ_COMPARISONS}')
+    assert n_state_rows >= _MIN_BULK_STATE_ROWS, (
+        f'[{name}] ANTI-VACUITY: the bulk arm compared only {n_state_rows} '
+        f'graph state row(s) across {len(SEEDS)} seeds, floor '
+        f'{_MIN_BULK_STATE_ROWS}. Two EMPTY indexes compare equal and '
+        f'`bulk_build` returns early on an empty node set, so the state '
+        f'assertions above can pass having compared nothing.')
+    if boolean:
+        assert n_derived_state >= _MIN_BULK_DERIVED_STATE, (
+            f'[{name}] ANTI-VACUITY: a BOOLEAN corpus whose sweep produced '
+            f'{n_derived_state} derived-arm state row(s) (processor-stamped '
+            f'edges + residues), floor {_MIN_BULK_DERIVED_STATE} — '
+            f'`bulk_backfill.py` is the half of the bulk constructor this arm '
+            f'exists to reach, and it wrote nothing to compare.')

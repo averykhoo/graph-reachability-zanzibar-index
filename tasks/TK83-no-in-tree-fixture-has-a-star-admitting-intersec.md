@@ -2,7 +2,7 @@
 id: TK83
 title: no in-tree fixture has a star-admitting intersection with a derived dep
 brief: starred half-stale intersection diverges in the RESIDUE too, refuting 9.5; reachable only on a constructed fixture
-pri: NEXT
+pri: NOW
 size: S
 deps: []
 related: [TK74, TK77]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-18c
-moved: 2026-09-20e
-updated: 2026-09-20e
+moved: 2026-09-20f
+updated: 2026-09-20f
 closed:
 ---
 

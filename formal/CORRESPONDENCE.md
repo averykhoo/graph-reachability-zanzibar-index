@@ -1135,6 +1135,12 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   `tests/test_hypothesis.py::test_add_then_remove_restores_row_multiset`, not by
   any unit pin). Note the second was caught by the differential net and the first
   was not; what neither had was a model.
+  **2026-09-20 (TK80):** a third, `index_v4/wildcard.py::WildcardIndex.remove_node`,
+  which now REFUSES (`AdmissionRejected`) a node that owns or is recorded by a residue
+  — it runs no cascade, so deleting one committed a dead id into `neg`/`upos` (I6).
+  The refusal is an admission check in the façade, before any write and before
+  `_strip_bridges`; `index_v4/core.py::ReachabilityIndex.remove_node` is unchanged, so
+  nothing modeled moved and this stays inside the unmodeled region.
 * **The `Interner` / int32 id-recycling layer.** `setengine/engine.py::Interner`
   (`::Interner.acquire`, `::Interner.release`, `::Interner.get`, `::Interner.key`) with `::NodeSets`. Ids are
   recycled int32; the stable surrogate is the `(type, name, predicate)` key. The

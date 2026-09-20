@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-18b
-moved: 2026-09-20e
-updated: 2026-09-20e
-closed:
+moved: 2026-09-20f
+updated: 2026-09-20f
+closed: 2026-09-20f
 ---
 
 TODO: one paragraph -- what this item is and why it matters.
@@ -62,3 +62,71 @@ this promotion.** This is hardening plus the permanent positive test
 Left at `LATER` deliberately in the same pass: `TK71` (its next action is a measurement to
 settle its own scope), `TK79`, `TK44`, `TK3`, `TK85`, `TK88`. `NEXT` is capacity 3
 (`docs/README.md` sec 4) and is now full: `TK80`, `TK83`, `TK89`.
+
+### 2026-09-20f
+
+CLOSED. Map: docs/tk91-tk80-removal-coverage-2026-09-20.md (ACTIVE-PLAN -> freeze with TK91).
+
+DECISION (delegated per CLAUDE.md "Who decides", design panel + first-hand verification):
+FACADE REFUSAL in index_v4/wildcard.py ONLY. core.py is UNTOUCHED, so no modelled algorithm
+changed and all 696 CORRESPONDENCE.md anchors still resolve (anchor_check rc=0).
+
+WHY NOT THE CORE GUARD, so it is not re-derived. WildcardIndex.remove_node calls _strip_bridges
+BEFORE idx.remove_node and handles "the strip may already have implicit-GC'd the node" with an
+early return and no cascade -- so a guard below the facade can be reached too late, while the
+facade sits above every branch. Beyond that, a `return` guard at branch C would keep an implicit
+rc-0 node alive that a bulk build never creates -- MANUFACTURING EXACTLY THE LIVE-VS-BULK
+DIVERGENCE TK91 EXISTS TO DETECT -- and would disable the downstream repair that keys on the node
+being gone. A `raise` at C would turn routine remove_tuple traffic into write failures. All of
+that buys zero equivalence: the 10 observed hits gave 0 corruptions.
+
+HAZARD RE-OBSERVED FIRST-HAND on the pre-fix tree. It was NOT recoverable by copy -- the frozen
+doc tk74-staleness-net-2026-09-18.md 10.1/10.8 carries the RESULT and the I6 string but no schema,
+no tuple list, no call sequence, and the .scratch fixture it used is gone. Re-constructed from its
+invariants; observed on committed state at paranoia off:
+  InvariantViolation: I6: residue neg holds a dead node id 8 on node id=3 doc:x#viewer
+
+THREE WITNESS FINDINGS THAT CORRECT OR EXTEND THIS ROW:
+(i) The branch that COMMITS is B (core.py:883), instrumented -- not C. Not a contradiction of the
+    census, which counted branch-C hits under ordinary add/remove_edge traffic (0 corruptions).
+    Line map re-read 2026-09-20: 876=A, 883=B, 893=C, unmoved.
+(ii) THE HAZARD IS neg | upos, NOT JUST neg. Second victim (id 6, a upos subject) was
+    implicit=False with reference_count=3 and branch B deleted it anyway -- branch B has neither
+    an implicit check nor a refcount check. The guard keys on residue REFERENCE.
+(iii) CONTROL C3 IS LOAD-BEARING: the same unguarded branch deletes an UNREFERENCED node and
+    commits CLEAN, so the refusal had to be CONDITIONAL. Shipped as a real test.
+
+LANDED: WildcardIndex._residue_records_node (owner clause + ResidueRefV1 reverse index under the
+processor's liveness rule; duplicated not imported, because core->processor->wildcard->core is a
+real cycle) and the refusal in remove_node, raising AdmissionRejected (ValueError subclass -- a
+refusal, not an InvariantViolation which asserts proven corruption), placed BEFORE _strip_bridges
+and before any write so I12 rejection cleanliness holds.
+PIN: tests/test_reg_tk80_remove_node_residue.py, 11 tests.
+
+SWEEP: M0 attributed correctly. 13 mutations; GAPS_FOUND, both gaps proven-to-move and both closed:
+ - M2 dropping the liveness filter was GREEN -- the "agrees with the processor on every node" test
+   never reached the one case where they can differ. Closed by
+   ::test_a_dangling_residue_ref_does_not_count_as_a_recording.
+ - M10 dropping both store_id filters was GREEN. Closed by ::test_the_guard_is_scoped_to_its_own_store,
+   which needed a CO-TENANT fixture (two stores on one session/engine sharing one NodeV4 table);
+   make_wildcard_index cannot express it, and two isolated DBs would have proved nothing.
+(!) A GREEN SABOTAGE was found and fixed before the sweep: moving the refusal below _strip_bridges
+left the module `8 passed`, because _strip_bridges writes nothing for any node of the original
+fixture. A bridged fixture and ::test_the_refusal_runs_before_the_bridge_strip were added.
+
+ADJUDICATED A BOUNDARY, NOT A GAP: the guard reads the derived ResidueRefV1 index, not the
+ResidueV1 neg/upos JSON. DeltaProcessor._keys_referencing reads the same index under the same rule,
+so a JSON-reading guard would be a second divergent definition of "referenced"; an index out of
+sync with its JSON is already owned by invariants.py::_check_residue_rows -- VERIFIED BY RUNNING IT,
+not cited from memory: "I6: residue_ref index disagrees with neg|upos on node id=3 doc:x#viewer".
+(!) HONEST CAVEAT FOR THE NEXT SESSION: that check only runs when a paranoia tier is INSTALLED. At
+the production default (off) nothing compares the index to the JSON at write time. That is an
+argument for ZANZIBAR_PARANOIA=residue in production, not for widening this guard.
+
+(!) BEHAVIOUR CHANGE: remove_node followed by run_cascade in ONE transaction is now refused
+(pre-fix control C4, which used to self-repair). No in-tree caller does this; the sanctioned order
+is the reverse, and the refusal message names it.
+
+The board's "live correctness bugs: 0" is NOT disturbed. The severity paragraph stands: transient
+and repaired in-transaction on every shipped path. This is hardening plus the permanent positive
+test docs/sabotage-procedure.md requires.

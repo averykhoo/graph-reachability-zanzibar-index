@@ -11,9 +11,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-20
-moved: 2026-09-20e
-updated: 2026-09-20e
-closed:
+moved: 2026-09-20f
+updated: 2026-09-20f
+closed: 2026-09-20f
 ---
 
 The bulk bootstrap builds from the SURVIVING TUPLES of a snapshot; the live path replays a
@@ -122,3 +122,59 @@ can finally move it, which is why this row is `NOW`.
 UNVERIFIED: whether `test_built_index_equals_live_maintained`'s `_SCHEMA` is boolean (it has
 `blocked`/`public`, which suggests an exclusion) -- not checked, and it does not change the
 conclusion above.
+
+### 2026-09-20f
+
+CLOSED. Map: docs/tk91-tk80-removal-coverage-2026-09-20.md (ACTIVE-PLAN -> freeze with TK80).
+
+WHAT LANDED, and the row's own deliverable is only half of it.
+
+(1) The BULK ARM the row asked for:
+formal/conformance/test_conformance_remove.py::test_graph_remove_bulk_build_survivors,
+26 params x 5 SEEDS = 130 cells, reusing the module's own _sequence/_extras/_graph_state/grid
+so all arms traverse identical op streams. It closes the structural zero the row names --
+nothing anywhere bulk-built from a POST-REMOVAL survivor set. Five legs: (a) invariants +
+I9 audit_fixpoint on the bulk index, (b) _graph_state equality, (c) per-edge EdgeV4.derived
+equality (the I5 stamp snapshot_rows does not carry), (d) grid parity, (e) the constructor pin.
+Three anti-vacuity floors set AT the measured minimum, with dated provenance:
+_MIN_BULK_STATE_ROWS = 12, _MIN_BULK_DERIVED_STATE = 1, plus the shared grid floor.
+
+(!) THE ARM IS INERT AGAINST THIS ROW'S OWN MUTATION, BY CONSTRUCTION. Do not read it as the
+row's pin. Measured twice over: the bulk path never calls processor._live_keys_of (bulk_backfill
+has its OWN mirror; instrumented 0 calls on the bulk arm across all 26 corpora, all 170 from the
+driven arm), AND on a consistent store the mutation is a semantic no-op (clean vs mutated keyset
+dumps byte-identical, same sha, 536 names, diff rc=0). Stronger arms do not rescue it -- adding
+the derived flag and a bulk-side audit_fixpoint both stay green. INSTRUMENT CONTROL proving the
+arm is not merely vacuous: dropping the derived-computed recursion in the bulk mirror reddens it
+loudly -- 26/130 state mismatches, 107 grid, 26 I9 violations.
+
+(2) THE HALF THAT ACTUALLY CLOSES THE ROW, which the row never mentioned:
+tests/test_reg_tk91_live_keys_repair.py (5 tests). The leading `rel` in _live_keys_of is a REPAIR
+AFFORDANCE reachable only on an INCONSISTENT store -- which is exactly why it measured INERT
+across four modules on 2026-09-20d. On a store where derived state outlives its leaf:
+
+  CLEAN                                    MUTATED
+    live_keys_of(doc,viewer) = ['d1']        = []
+    after backfill(): check = False          check = True   <-- LIVE AUTHORIZATION FAIL-OPEN
+    audit_fixpoint() = OK                    audit_fixpoint() = OK  <-- I9 IS BLIND
+
+(!) I9 REPORTS OK UNDER THE MUTATION because it enumerates through the same crippled function.
+The pin is therefore asserted off the primitive, never routed through audit_fixpoint (the
+2026-09-13e lesson). Deleting `[rel]` now turns the module `4 failed, 1 passed`.
+
+SWEEPS: 3, each with an M0 control that flipped a pin's own claim; all 3 attributed correctly.
+tk91-repair-pin PINNED. tk91-bulk-arm GAPS_FOUND -> M14 closed: `if bulk:` -> `if False:` in
+connectedstore/build.py left the arm at `26 passed` while bulk_build ran 0 times instead of 130.
+build_index now returns a BuildReport (a tuple subclass, so every call site is untouched)
+carrying .constructor, assigned inside each branch with no default so a deleted assignment is an
+UnboundLocalError; bulk_build_drive refuses a non-'bulk' label. Leg (e) carries its own control
+that reddens if the label ever becomes a constant.
+
+NEW FINDING beyond the brief: the arm PINS bulk_build.py Phase P (closed-form path counts),
+which test_conformance_bulk_state.py documents as invisible to itself. Two of that module's
+"does NOT cover" bullets got dated CORRECTION entries appended in place.
+
+(!) STILL UNPINNED, deliberately -- index_v4/bulk_backfill.py:811 carries an UNPINNED DUPLICATE
+of the exact line just pinned. Deleting it leaves all four modules at `29 passed`. Scope was not
+widened. The hypothesis that it is unreachable by construction (build_index refuses to run on an
+index that already has state) is REASONED and NOBODY HAS PROVED IT. Live trap for the next session.

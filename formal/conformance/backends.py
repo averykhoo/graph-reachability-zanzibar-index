@@ -118,6 +118,18 @@ def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
     refused here (ZT-P4-7's rule: never silently shrink one side of a
     differential), not tolerated.
 
+    REFUSES, too, if `build_index` did not actually take its BULK branch
+    (`BuildReport.constructor`, `connectedstore/build.py`). The two
+    constructors are byte-identical in effect by design (P13), so no state
+    assertion in any caller of this drive can tell them apart: a flipped
+    default or a silent fallback would downgrade every one of them to a second
+    run of the incremental path while staying green. Measured 2026-09-20 —
+    `if bulk:` -> `if False:` left
+    `test_conformance_remove.py::test_graph_remove_bulk_build_survivors` at
+    `26 passed` with `bulk_build` called 0 times instead of 130. The control
+    that keeps this refusal from being an assertion that cannot fail lives in
+    that arm (`_incremental_constructor_label`).
+
     Returns `(session, widx, store_id)` like `graphindex_drive`; the caller owns
     closing the session.
     """
@@ -145,7 +157,21 @@ def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
             f"deduplicated, or a rejected write). Refusing to compare two "
             f"different stores.")
 
-    _cursor, widx, _ruleset = build_index(session, store_id, bulk=True)
+    report = build_index(session, store_id, bulk=True)
+    if report.constructor != 'bulk':
+        raise AssertionError(
+            f"bulk_build_drive: build_index ran its {report.constructor!r} "
+            f"constructor, not 'bulk' -- index_v4/bulk_build.py never "
+            f"executed. Every caller of this drive exists to pin the OFFLINE "
+            f"BULK bootstrap; because the two constructors are byte-identical "
+            f"in effect by design (P13), a flipped `bulk` default or a silent "
+            f"fallback in connectedstore/build.py would downgrade this "
+            f"differential to a second run of the incremental path and NOTHING "
+            f"else here would notice. Measured 2026-09-20: `if bulk:` -> "
+            f"`if False:` left test_conformance_remove.py::"
+            f"test_graph_remove_bulk_build_survivors at 26 passed while "
+            f"bulk_build ran 0 times instead of 130.")
+    _cursor, widx, _ruleset = report
     return session, widx, store_id
 
 

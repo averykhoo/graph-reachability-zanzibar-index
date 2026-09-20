@@ -21,7 +21,7 @@ from sqlalchemy import tuple_
 from sqlmodel import select
 
 from .core import ReachabilityIndex, _ThreadFlag
-from .models import EdgeV4, NodeV4, ResidueV1
+from .models import EdgeV4, NodeV4, ResidueRefV1, ResidueV1
 from zanzibar_utils_v1 import (AdmissionRejected, SchemaInfo,
                                norm_pred as _norm_pred,
                                validate_node_identifiers,
@@ -680,6 +680,31 @@ class WildcardIndex:
             # AdmissionRejected: removing a node the store never saw is a refusal.
             raise AdmissionRejected('Non-existent node cannot be removed') from e
 
+        # TK80 (2026-09-20): a node RECORDED BY a residue (or one that OWNS a residue
+        # row) cannot be removed through this API. `remove_node` runs no cascade, so
+        # nothing prunes the recording, and the COMMITTED state is then a residue
+        # vouching for a node id that no longer exists -- the ZT-P0-1 escalation class
+        # (under SQLite rowid reuse the dead id can later repoint at another
+        # principal). Observed pre-fix on committed state at the production paranoia
+        # default (`off`):
+        #     I6: residue neg holds a dead node id 8 on node id=3 doc:x#viewer
+        #
+        # AdmissionRejected, exactly like the `T:*` refusal above: a user-facing
+        # refusal on a public admin API, NOT proven corruption (which is what an
+        # `InvariantViolation` asserts). Conditional, not blanket: an UNREFERENCED
+        # node is still removable and commits clean (control C3).
+        #
+        # ⚠ The placement is load-bearing: this must run BEFORE `_strip_bridges`
+        # below, which can implicit-GC the node itself and take the early `return`.
+        # A check after the strip can be reached too late. Nothing has been written
+        # yet either (the store lock plus two reads), so the transaction is clean on
+        # rollback -- I12 rejection cleanliness.
+        if self._residue_records_node(node.id):
+            raise AdmissionRejected(
+                "node is recorded by a derived relation's residue and cannot be "
+                "removed directly (remove the tuples that record it -- the cascade "
+                "prunes the recording -- then remove the node)")
+
         neighbour_entities: set[tuple[str, str]] = set()
         if node.wildcard == '':
             node_id = node.id
@@ -834,6 +859,52 @@ class WildcardIndex:
         if cache is not None:
             cache[(o_type, relation, o_name)] = (stars, neg_ids, upos_ids)
         return stars, set(neg_ids), set(upos_ids)
+
+    def _residue_records_node(self, node_id: int) -> bool:
+        """Does any residue in this store depend on ``node_id``? (TK80 admission guard)
+
+        True when the node OWNS a residue row (``ResidueV1.object_node_id``) or is
+        RECORDED by one (``neg | upos``, served by the ``ResidueRefV1`` reverse index
+        under the same liveness filter the processor applies). Read-only; never interns.
+
+        ⚠ The second clause is a deliberate MIRROR of
+        ``DeltaProcessor._keys_referencing`` / ``._residue_references``
+        (``index_v4/processor.py``): the indexed seek on
+        ``(store_id, subject_node_id)`` plus the "the recording object node must still
+        exist" filter. It is duplicated rather than imported because
+        ``core -> processor -> wildcard -> core`` is a real import cycle. If
+        ``_keys_referencing`` ever changes its liveness rule this must follow, which is
+        why the agreement is pinned over every node of the fixture by
+        ``tests/test_reg_tk80_remove_node_residue.py::test_the_guard_agrees_with_the_processor_on_every_node``.
+        That pin is only as wide as its fixture, and a 2026-09-20 sweep showed the two
+        clauses it cannot reach -- the LIVENESS filter (no dangling ref row exists
+        there) and the ``store_id`` scoping (one store) -- so each is pinned
+        separately, at the state where it is the only thing that answers, by
+        ``::test_a_dangling_residue_ref_does_not_count_as_a_recording`` and
+        ``::test_the_guard_is_scoped_to_its_own_store`` in the same module.
+
+        The first clause is NOT subsumed by the second: it guards a different I6 clause
+        (``residue row N references a missing node M``) and a different victim -- the
+        derived-public object the residue hangs off, which is reachable through
+        ``remove_node`` whenever ``processor_writes`` is on
+        (``_assert_derived_exclusivity`` returns early then).
+        """
+        s = self.idx.session
+        sid = self.idx.store_id
+        if s.exec(
+            select(ResidueV1)
+            .where(ResidueV1.store_id == sid)
+            .where(ResidueV1.object_node_id == node_id)
+        ).first() is not None:
+            return True
+        for r in s.exec(
+            select(ResidueRefV1)
+            .where(ResidueRefV1.store_id == sid)
+            .where(ResidueRefV1.subject_node_id == node_id)
+        ).all():
+            if s.get(NodeV4, r.object_node_id) is not None:
+                return True
+        return False
 
     def _check_derived(self, s_pred: str, s_type: str, s_name: str,
                        relation: str, o_type: str, o_name: str) -> bool:

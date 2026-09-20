@@ -30,6 +30,93 @@ from here.
 
 ---
 
+## 2026-09-20f — `TK91` + `TK80` closed; in both, the row's own deliverable was the wrong half
+
+rows: `TK91` (CLOSED), `TK80` (CLOSED), `TK92` (NEW, `LATER`), `TK83` (promoted `NEXT` -> `NOW`, forced by the lint's exactly-one-`NOW` check).
+
+task lint: clean (13 checks, 207 task file(s) parsed), 30 warning(s)
+read: board only
+
+Literally: `board`, then `show TK91` / `show TK80`. Entered on a user instruction to take
+the top two items; did not re-rank at session start.
+
+### What landed
+
+**`TK91`.** The row asked for a BULK arm on the remove differential, and one landed:
+`formal/conformance/test_conformance_remove.py::test_graph_remove_bulk_build_survivors`,
+`26` params × `5` seeds, five legs (invariants + I9 on the bulk index; `_graph_state`
+equality; per-edge `EdgeV4.derived`, the I5 stamp `snapshot_rows` does not carry; grid
+parity; the constructor pin). Three anti-vacuity floors set **at** the measured minimum
+with dated provenance. It closes the structural zero the row names — nothing anywhere
+bulk-built from a post-removal survivor set.
+
+(!) **But the arm is INERT against the mutation `TK91` was opened for, by construction**,
+and that is measured twice over rather than inferred: the bulk path never calls
+`processor::_live_keys_of` (instrumented `0` calls on the bulk arm across all `26` corpora;
+`bulk_backfill.py` has its own mirror), and on a CONSISTENT store the mutation is a
+semantic no-op (clean vs mutated keyset dumps byte-identical, same sha, `536` names).
+An instrument control proves the arm is blind to that one mutation rather than vacuous:
+dropping the derived-computed recursion in the bulk mirror reddens it `26`/`130` state,
+`107` grid, `26` I9.
+
+**The half that actually closes the row is one the row never mentioned:**
+`tests/test_reg_tk91_live_keys_repair.py`. The leading `rel` in `_live_keys_of` is a
+REPAIR AFFORDANCE reachable only on an INCONSISTENT store — which is exactly why it
+measured INERT across four modules on 2026-09-20d. On a store where derived state outlives
+its leaf, deleting it leaves `check` True after a retracted grant (a live authorization
+FAIL-OPEN) **while `audit_fixpoint()` still reports OK, because I9 enumerates through the
+same crippled function**. The pin is therefore asserted off the primitive and never routed
+through `audit_fixpoint` (the 2026-09-13e lesson). The mutation now turns it
+`4 failed, 1 passed`.
+
+**`TK80`.** Decided (per `CLAUDE.md` § "Who decides") as a **façade refusal**:
+`index_v4/wildcard.py` only, `core.py` untouched, all `696` CORRESPONDENCE anchors still
+resolve. A guard at branch C was rejected on EQUIVALENCE grounds, not cost: it would keep
+an implicit rc-0 node alive that a bulk build never creates — manufacturing exactly the
+live-vs-bulk divergence `TK91` exists to detect.
+
+### Three things worth carrying
+
+1. **The `TK80` hazard was NOT recoverable by copy.** `docs/tk74-staleness-net-2026-09-18.md`
+   §10.1/§10.8 record the result and the I6 string but no schema, no tuple list, no call
+   sequence, and the `.scratch/` fixture is gone. It was re-constructed from its invariants
+   and **re-observed committing I6 on the pre-fix tree before the guard landed**. This is
+   the `.scratch/` rule collecting its debt a second time on the same axis.
+2. **The witness corrected its own row twice.** The committing branch is **B
+   (`core.py:883`)**, instrumented — not C (the census counted branch-C hits under ordinary
+   traffic, which produced `0` corruptions). And the hazard is **`neg | upos`**, not just
+   `neg`: the second victim was `implicit=False` with `reference_count=3` and branch B
+   deleted it anyway, having neither check.
+3. **A green sabotage, plus two sweep gaps, plus `M14`.** Before any sweep, moving the
+   `TK80` refusal below `_strip_bridges` left the module `8 passed` — `_strip_bridges`
+   writes nothing for any node of the original fixture; a bridged fixture fixed it. The
+   sweep then found `M2` (liveness filter) and `M10` (store scoping) green-but-proven-to-move;
+   both closed, `M10` needing a co-tenant fixture `make_wildcard_index` cannot express. And
+   `M14`: `if bulk:` -> `if False:` in `connectedstore/build.py` left the new arm at
+   `26 passed` while `bulk_build` ran `0` times instead of `130`. `build_index` now returns
+   a `BuildReport` (a `tuple` subclass, so every call site is untouched) carrying
+   `.constructor`, assigned inside each branch with no default so a deleted assignment is an
+   `UnboundLocalError`; leg (e) carries its own control that reddens if the label ever
+   becomes a constant.
+
+All three sweeps' `M0` controls attributed correctly, so all three tables are readable.
+
+Map (ACTIVE-PLAN, freeze when both rows' successors settle):
+[`docs/tk91-tk80-removal-coverage-2026-09-20.md`](../tk91-tk80-removal-coverage-2026-09-20.md)
+— §4.2 is the fail-open, §8.2 is what is still unpinned and why.
+
+Still owed: nothing skipped from the Rhythm. Two items handed forward rather than done,
+both filed rather than left in prose: **`TK92`** (`bulk_backfill.py:811` carries an unpinned
+duplicate of the `[rel]` line just pinned; the unreachable-by-construction defence is
+REASONED and unproved) and, recorded on `TK80`, that
+`invariants.py::_check_residue_rows` — which owns index-vs-JSON agreement — **only runs
+when a paranoia tier is installed**, so at the production default (`off`) nothing compares
+the `ResidueRefV1` index to its `ResidueV1` JSON at write time. That is an argument for
+`ZANZIBAR_PARANOIA=residue` in production, not for widening the new guard. `NEXT` holds
+`TK89` alone with two slots free; refilling it is the next session's call.
+
+---
+
 ## 2026-09-20e — `NEXT` refilled on coverage grounds; `.scratch` swept to empty; the two CLAUDE.md files deduplicated
 
 rows: `TK83` + `TK80` (promoted `LATER` -> `NEXT`, ranking argument recorded on each), `TK91` (its stated blocker REFUTED first-hand), `TK71` (held at `LATER`, reason recorded on `TK80`), `TK89` (untouched, still `NEXT`).

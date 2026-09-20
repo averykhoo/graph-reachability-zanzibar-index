@@ -207,9 +207,14 @@ def test_reg14_cheap_path_self_heals_a_missing_userset_node():
     silently no-opped and left the stale id behind. It now escalates to the full-object
     reconcile, which recomputes neg/upos wholesale from live candidates.
 
-    Driven by deleting the node behind the residue's back -- the state the GC guard now
-    prevents, but which ``ReachabilityIndex.remove_node`` (an admin API the processor
-    does not own) can still create."""
+    Driven by deleting the node behind the residue's back -- the state the GC guard
+    now prevents. Since TK80 (2026-09-20) the FACADE refuses to create it as well:
+    ``WildcardIndex.remove_node`` raises ``AdmissionRejected`` on a residue-recorded
+    node (``tests/test_reg_tk80_remove_node_residue.py``). What remains able to create
+    it is a DIRECT ``ReachabilityIndex.remove_node`` call below the facade -- which no
+    shipped caller makes, and which this test reaches by an even shorter route
+    (``idx._evict_node`` + ``session.delete``), so the heal below is still the second
+    barrier and not dead code."""
     g = _Harness(REG14_SCHEMA, paranoia=False)
     try:
         for raw in REG14_SETUP:
