@@ -11,6 +11,26 @@ first-hand `parse_crossable` **18** against this file's **17**, deliberately unr
 Live state is the task tree and `python scripts/gate_status.py` — never this file.
 Corrections are appended **dated at the top**, never edited into the body.
 
+⚠ **CORRECTION 2026-09-20g (`TK89`) — THIS FILE'S `parse_crossable` 17 IS NOT REPRODUCIBLE,
+AND `TK87`'S 18 IS.** The deliberately-unreconciled discrepancy named in the banner above is
+settled, and not in this file's favour. **MEASURED 2026-09-20g** in a `git worktree` at
+`399ea99` (this file's own commit), twice, `PYTHONHASHSEED=0`, byte-identical both times:
+`parse_total` **1661**, `parse_crossable` **18**, `_ensure/EFF` **46**, `CTL` **110**,
+`28 passed` — matching `tk87-swarm-churn-2026-09-19.md` §1's transcript character for
+character.
+
+The §"acceptance columns" table below records `3 -> 17`, and that `17` was measured *while*
+the change was being made — against an uncommitted working tree, not against `399ea99`. That
+tree cannot be recovered, so **which** late edit added the eighteenth crossable parse is
+unanswerable and is left unanswered. **Both numbers are honest; they are not two
+measurements of one tree.** Nothing else in the acceptance table is affected: `_ensure/EFF`
+46, `_sync/EFF` 0 and `CTL` 110 all reproduce.
+
+⚠ The one column that genuinely does NOT reproduce is `_ensure/raw`, which varies by up to
+**38** on an unchanged tree at a FIXED hash seed — filed as `TK93`, trap (c) in
+`formal/probes/tk77_crossable_census_2026-09-19.py`. No table in this file quotes it.
+Full write-up: [`tk89-census-reproducibility-2026-09-20.md`](tk89-census-reproducibility-2026-09-20.md).
+
 *Opened 2026-09-19c as ACTIVE-PLAN, as `TK77`'s FIRST ACTION: "measure `crossable_shapes`
 for every fixture in `tests/fga_schemas/` and publish the table". Every figure below was
 measured first-hand on its own dated section's date.*

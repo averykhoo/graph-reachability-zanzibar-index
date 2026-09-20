@@ -30,6 +30,115 @@ from here.
 
 ---
 
+## 2026-09-20g — `TK83` + `TK89` closed; one fixture earns its place, one diagnosis dies to its own fix
+
+rows: `TK83` (CLOSED), `TK89` (CLOSED), `TK93` (NEW, `NEXT`), `TK92` (promoted `LATER` -> `NOW`), `TK71` (promoted `LATER` -> `NEXT`).
+
+task lint: clean (13 checks, 208 task file(s) parsed), 29 warning(s)
+read: board only
+
+Literally: `board`, then `show TK83` / `show TK89`. Entered on a user instruction to take
+both items; did not re-rank at session start.
+
+### `TK83` — the star-admitting intersection is in the tree
+
+Map: [`docs/tk83-star-intersection-fixture-2026-09-20.md`](../tk83-star-intersection-fixture-2026-09-20.md).
+Probe: `formal/probes/tk83_star_intersection_2026-09-20.py`.
+
+`tests/fga_schemas/star_admitting_intersection.fga` is `demorgans_law_2.fga` with one token
+changed (line 21, `assigned: [user]` → `[user, user:*]`), transcribed from the row's own
+salvaged block. It is the only plan in the corpus with both a non-empty `Plan.deps` and a
+star-admitting leaf child. Driven 4-way through `test_matrix.py`, `test_reads.py`,
+`test_schema_ast.py` and `test_boolean_compile.py`, plus a golden and a new 11-pin module.
+
+`tk74-staleness-net` §9.5's *"the divergence is carried entirely in materialized closure
+edges"* is now **refuted from the tree** rather than from a gitignored file:
+`('role','authorized_user','r3')` carries `stars=[["user","..."]]` where the one-token twin
+has no residue row at that key at all, and `check(bob, access, doc:d2)` is `True` on one and
+`False` on the other — unanimous across graph, both set engines and the oracle. **Scope:
+this closes a REACHABILITY gap only.** `TK74`'s assurance gap and §10.5's FAIL-OPEN arm are
+untouched and unreproduced here; "live correctness bugs: 0" is undisturbed.
+
+**The sweep is the deliverable, and one row refuses to take credit.** Each production
+mutation ran twice over the same targets — WITH the fixture and WITHOUT (`-k "not
+star_admitting"`, 14 deselected = the pre-2026-09-20g corpus); `M0` attributed correctly to
+6 named pins. `P2` (intersection star fold → `fns[0](ctx)`) reddens WITH and leaves the
+pre-existing corpus at **`84 passed`** — that is the coverage bought. `P1` (`&` → `|`) is
+recorded as **already covered**: `test_matrix_4way_boolean` catches it on
+`boolean_wildcards.fga`, and *"the new module reddens"* is a weaker claim than *"only the
+new module reddens"*.
+
+⚠ **The sweep found a hole in the new module, which is the better finding.** On the main
+workload both children of the intersection are starred, so `&`, `|` and `fns[0]` coincide —
+`P6` step 2's quiet failure, an edit that moves nothing the pins look at. Workload B (one
+child starred) separates them; a module-only re-sweep then attributed all three mutations to
+the new pin. Its first draft aimed the ceiling at a leaf family's residue row and reddened —
+a `PClosureLeaf`'s stars live in the closure, not in `ResidueV1`. Instrument limit recorded:
+under `P1`/`P2` the red arrives as a fixture ERROR from `ParityEngine`'s internal unanimity
+check, so the pins are *reached* but what fires is the engine, not the `assert`.
+
+Two things found en route, both where this row had no reason to look. (1)
+`test_boolean_compile.py` split its fixtures with two hardcoded index slices; inserting at
+index 4 reddened **by luck** (the complement slice asserts no tainted relations) where
+appending at the end would have been silent — exactly how `owc_star_ttu.fga` spent its life
+in the weak leg. The split is now derived from the schema, with an anti-vacuity assert.
+Third time this tree has been bitten by a hand-maintained list beside a derivation. (2) The
+new fixture makes `demorgans_law_2` score "subsumed" too — mutual masking — and
+`KNOWN_SUBSUMED` means *retirement candidate*, so listing them would have invited deleting
+what just landed. New `MASKED_PAIRS` holds them out and the exemption is earned
+mechanically (M0–M4 all RED and attributed).
+
+⚠ **`M5` is INERT and it is a property, not a gap: the subsumption register is a REPORT, not
+a guard.** Widening its own exemption is caught by nothing, because a test cannot observe
+its own neutering. The fixture's real protection had to be structural, because — MEASURED —
+the symmetric difference of the two fixtures' `genswarm` features is **empty**, so both
+corpus floors stay green with the fixture deleted.
+
+### `TK89` — the census is reproducible; the trees differed
+
+Map: [`docs/tk89-census-reproducibility-2026-09-20.md`](../tk89-census-reproducibility-2026-09-20.md).
+Probe: `formal/probes/tk89_census_reproducibility_2026-09-20.py`.
+
+`17` vs `18` is **answered**: in a throwaway `git worktree` at `399ea99` the census
+reproducibly books **18**, byte-identical twice, alongside `parse_total` 1661,
+`_ensure/EFF` 46, `CTL` 110 and `28 passed` — `TK87`'s transcript character for character.
+`TK77`'s `17` was taken mid-change against an uncommitted tree that no longer exists. *Which*
+late edit added the eighteenth parse is unanswerable and is left unanswered. `TK87` was right
+not to average them. At HEAD the column is **24**, six runs, stable in both hash arms.
+
+Both candidates the row listed are refuted first-hand: the hypothesis example DB by a READ
+(the only `@given` tests carry `database=None, derandomize=True`), and attribution drift by
+a measurement (**there is no `<setup>` row at all** — `TOTAL` equals the module row every
+run, so there is only one bucket).
+
+⚠ **A different column is genuinely non-reproducible, and the diagnosis I nearly shipped was
+wrong.** `_ensure/raw` varies by up to 38 on one unchanged tree. The seeded arm agreed at
+6627 twice, so it was written up as `PYTHONHASHSEED` and a re-exec guard was added — then
+sabotaging that guard the only way a cross-run non-determinism can be sabotaged (**run it
+twice**) gave 6609 and 6627 from two identically-seeded runs. The guard was removed rather
+than kept as decoration; the tolerance is now printed into **every census table**, not just
+the docstring, because both historical tables were pasted from stdout. Filed as `TK93`.
+
+Two durable lessons, filed in [`docs/sabotage-procedure.md`](../sabotage-procedure.md)
+§ "A fix for a NON-DETERMINISM must be sabotaged ACROSS RUNS": **`n=2` cannot establish
+reproducibility, only refute it**, and **name what your control controls for** — this guard
+passed every *construction* check (it re-exec'd, printed the seed, honoured the opt-out) and
+not one of those verified that it worked.
+
+### Method note for the next session
+
+⚠ The harness reported a backgrounded 159 s pytest run as **"exit code 0"** while the log's
+last line read `1 failed, 197 passed`. Same standing footgun, background-job form. Read the
+log's last line, every time.
+
+⚠ The **Bash tool's heredocs silently strip one level of backslash escaping** — `f'\\n'`
+inside a `<<'PY'` heredoc reached the file as a real newline and broke a string literal twice.
+Use the `Edit` tool for anything containing backslashes.
+
+Still owed: nothing.
+
+---
+
 ## 2026-09-20f — `TK91` + `TK80` closed; in both, the row's own deliverable was the wrong half
 
 rows: `TK91` (CLOSED), `TK80` (CLOSED), `TK92` (NEW, `LATER`), `TK83` (promoted `NEXT` -> `NOW`, forced by the lint's exactly-one-`NOW` check).

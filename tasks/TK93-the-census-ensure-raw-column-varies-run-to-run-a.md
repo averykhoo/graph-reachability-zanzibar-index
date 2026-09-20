@@ -1,0 +1,87 @@
+---
+id: TK93
+title: the census _ensure/raw column varies run-to-run at a FIXED hash seed; mechanism unidentified
+brief: six runs one tree: 6589/6609/6617/6627; PYTHONHASHSEED refuted by its own fix failing sabotage
+pri: NEXT
+size: S
+deps: []
+related: [TK89, TK77, TK87]
+parent:
+labels: [infra]
+source: hand
+source_hash:
+created: 2026-09-20g
+moved: 2026-09-20g
+updated: 2026-09-20g
+closed:
+---
+
+`formal/probes/tk77_crossable_census_2026-09-19.py`'s `_ensure/raw` column varies run to run
+on an unchanged tree. **MEASURED 2026-09-20g**, six runs of the recorded `--pytest
+tests/test_generator_coverage.py` invocation:
+
+```
+PYTHONHASHSEED unset : 6617, 6589
+PYTHONHASHSEED=0     : 6627, 6627, 6609, 6627
+```
+
+Spread **38** (0.6%). Every other column held still in all six -- `parse_total` 1858,
+`parse_crossable` 24, `_ensure/EFF` 78, `_sync/raw` 44, `_sync/EFF` 20, `CTL` 166 -- and the
+crossable shape-set breakdown was byte-identical throughout.
+
+**Severity is bounded and stated so nobody over-reads it.** By the census's own trap (a) a
+raw count is NOT reach: both wrapped methods are called unconditionally and return at a
+guard. No acceptance table has ever quoted this column, so `TK77` and `TK87` are undisturbed
+and `TK89` closed on `parse_crossable`, which IS reproducible. This is an instrument defect,
+not a correctness one.
+
+## Ruled out already -- do not re-derive these
+
+* **`PYTHONHASHSEED`** -- REFUTED 2026-09-20g, and by a fix that failed its own sabotage.
+  A re-exec-seeded guard was added on the strength of two agreeing seeded runs, then the two
+  re-exec'd runs booked `6609` and `6627`. The guard was removed.
+  `docs/tk89-census-reproducibility-2026-09-20.md` sec 5.3a.
+* **The hypothesis example database** -- REFUTED by READ: the only `@given` tests in the
+  module carry `tests/test_generator_coverage.py::_SWARM_SETTINGS`, which sets
+  `database=None` and `derandomize=True`. Same doc sec 2.
+* **Attribution drift** (`::pytest_runtest_logstart` booking to the wrong row) -- REFUTED by
+  measurement: there is no `<setup>` row at all, `TOTAL` equals the module row in every run.
+  Same doc sec 5.2.
+
+## Candidates NOT yet examined
+
+1. **`id()`-keyed ordering.** `PYTHONHASHSEED` does not control the hash of an object
+   without `__hash__` -- that is its `id()`, i.e. its memory address. A `set` of such objects
+   iterates in an order that varies per run at ANY seed, which fits the observation exactly.
+   REASONED, unverified; check this first, it is the only candidate that predicts variation
+   at a fixed seed.
+2. **Unseeded `random`** anywhere in the module's call graph. `tests/test_generator_coverage.py`
+   uses `random.Random(0)` at `:1032`, but the graph reaches `tests/genswarm.py` and
+   `index_v4/`; nobody has swept for a bare `random.` call.
+3. **SQLAlchemy identity-map / GC-dependent work** on the `::_ensure_bridges` path, which is
+   what drives the raw count.
+
+## Read first
+
+- [`docs/tk89-census-reproducibility-2026-09-20.md`](../docs/tk89-census-reproducibility-2026-09-20.md)
+  sec 5.3a -- the refuted hash-seed diagnosis, and why its own fix is what refuted it.
+- `formal/probes/tk77_crossable_census_2026-09-19.py` -- trap (c) in the module docstring,
+  and traps (a)/(b) which bound how much this column ever mattered.
+- `formal/probes/tk89_census_reproducibility_2026-09-20.py` -- the two-arm harness; reuse it
+  rather than rewriting one, and note its table reader reports PARSE-FAIL rather than zeros.
+- `docs/sabotage-procedure.md` sec "Sweep the TEST MODULE with mutations" -- a fix for a
+  non-determinism has to be sabotaged ACROSS RUNS, which is the step that caught the wrong
+  diagnosis here.
+
+## Acceptance
+
+Localise it, or prove it unlocalisable and say what that costs. The useful next step is
+cheap and is a BISECTION, not a code read: run the census twice at a fixed seed over
+subsets of the module (`-k`) until one test's raw count is the one that moves. Attribution
+is by module today, so that bisection is the only way to get per-test resolution without
+changing the instrument.
+
+(!) Whatever the answer, do not "fix" it by widening trap (c) into a tolerance band on the
+column. A band is a number nobody re-measures.
+
+## Log

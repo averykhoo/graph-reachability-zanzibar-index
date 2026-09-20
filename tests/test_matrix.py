@@ -504,7 +504,15 @@ def _demorgan_pool(schema_text):
     return list(dict.fromkeys(out))     # dedup, keep order
 
 
-@pytest.mark.parametrize('fixture', ['demorgans_law_1.fga', 'demorgans_law_2.fga', 'demorgans_reverse.fga'])
+#: `star_admitting_intersection.fga` joined 2026-09-20g (`TK83`). It is
+#: `demorgans_law_2.fga` with `assigned: [user]` -> `[user, user:*]`, which is the only
+#: shape in the corpus where an intersection has BOTH a derived dep and a star-admitting
+#: leaf child -- the case `docs/tk74-staleness-net-2026-09-18.md` §9.5 generalised a false
+#: claim from because no fixture reached it. `_demorgan_pool` derives its pool from the
+#: schema, so the star enters the grid with no list to maintain here.
+@pytest.mark.parametrize('fixture', ['demorgans_law_1.fga', 'demorgans_law_2.fga',
+                                     'demorgans_reverse.fga',
+                                     'star_admitting_intersection.fga'])
 @pytest.mark.parametrize('ops', ALL_SETOPS, ids=lambda o: o.name)
 def test_demorgan_oracle_equals_setengine_equals_graph(load_fga_schema, fixture, ops):
     """The operational De Morgan check, 3 evaluators since the P7 flip: oracle, set

@@ -519,8 +519,12 @@ def test_grid_parity_boolean_wildcards(load_fga_schema, seed):
     _walk_and_compare(schema, _boolean_pool(), _boolean_grid(), seed)
 
 
+#: `star_admitting_intersection.fga` joined 2026-09-20g (`TK83`) -- see the note on
+#: `tests/test_matrix.py::test_demorgan_oracle_equals_setengine_equals_graph`. This is the
+#: walking (add/remove) leg for that shape; the matrix leg is the static one.
 @pytest.mark.parametrize('fixture', ['demorgans_law_1.fga', 'demorgans_law_2.fga',
-                                     'demorgans_reverse.fga'])
+                                     'demorgans_reverse.fga',
+                                     'star_admitting_intersection.fga'])
 @pytest.mark.parametrize('seed', [0, 1])
 def test_grid_parity_demorgans(load_fga_schema, fixture, seed):
     from zanzibar_utils_v1 import parse_schema_ast

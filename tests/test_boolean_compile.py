@@ -8,21 +8,74 @@ the delta processor in; the default path must stay byte-identical (guarded here 
 tests/test_compile_snapshot.py).
 """
 
+from pathlib import Path
+
 import pytest
 
 from zanzibar_utils_v1 import (
-    Entity, RelationalTriple, RewriteFilter, Rule, UnsupportedByGraphIndex,
+    Entity, Exclusion, Intersection, RelationalTriple, RewriteFilter, Rule, Union,
+    UnsupportedByGraphIndex,
     PClosureLeaf, PDerivedComputed, PDerivedTTU, PDerivedTuplesetTTU, PExclusion,
     PIntersection, PUnion,
     compute_taint, parse_openfga_schema, parse_schema_ast, unparse_schema_ast,
 )
 from tests.wildcard_helpers import make_wildcard_index
 
+#: A CURATED subset of `tests/fga_schemas/`, not the whole corpus -- so this list stays
+#: hand-written. What is no longer hand-written is the boolean/pure SPLIT.
+#:
+#: ⚠ Until 2026-09-20g the split was two hardcoded index slices, `ALL_FIXTURES[:4]` and
+#: `ALL_FIXTURES[4:]`, and adding `star_admitting_intersection.fga` (`TK83`) walked
+#: straight into them: inserted at index 4 it was BOTH missing from the boolean leg and
+#: routed into `test_pure_fixtures_identical_under_enable_boolean`, which asserts a
+#: schema has NO tainted relations. That one reddened -- loudly, by luck, because the
+#: complement slice happens to assert something a boolean schema violates. The other
+#: direction is the silent one: append a boolean fixture at the END and it simply never
+#: gets its boolean-specific assertions, green throughout. That is exactly how
+#: `owc_star_ttu.fga` spent its whole life in the weak leg
+#: (`tests/test_zanzibar_utils.py::test_boolean_fga_files_is_derived_not_hardcoded`),
+#: and it is the hand-maintained-list-beside-a-derivation pattern this tree has now been
+#: bitten by three times. Derived from the SCHEMA, order is no longer load-bearing.
 ALL_FIXTURES = ['boolean_wildcards.fga', 'demorgans_law_1.fga', 'demorgans_law_2.fga',
-                'demorgans_reverse.fga', 'confluence.fga', 'custom_roles.fga',
+                'demorgans_reverse.fga', 'star_admitting_intersection.fga',
+                'confluence.fga', 'custom_roles.fga',
                 'gdrive.fga', 'github.fga', 'master_store.fga', 'wildcards.fga']
 
-BOOLEAN_FIXTURES = ALL_FIXTURES[:4]
+
+def _is_boolean_fixture(name: str) -> bool:
+    """Does this fixture contain a boolean operator anywhere? Independent of the compiler:
+    an AST scan, the same derivation `tests/test_zanzibar_utils.py::_is_boolean_fixture`
+    uses. Deliberately NOT `rs.compiled.tainted` -- routing the split through the thing
+    under test means a taint-analysis bug reclassifies the fixtures that would have
+    caught it.
+    """
+    def walk(e):
+        yield e
+        if isinstance(e, (Union, Intersection)):
+            for c in e.children:
+                yield from walk(c)
+        elif isinstance(e, Exclusion):
+            yield from walk(e.base)
+            yield from walk(e.subtract)
+
+    ast = parse_schema_ast(
+        (Path(__file__).parent / 'fga_schemas' / name).read_text(encoding='utf-8'))
+    return any(isinstance(n, (Intersection, Exclusion))
+               for expr in ast.values() for n in walk(expr))
+
+
+BOOLEAN_FIXTURES = [f for f in ALL_FIXTURES if _is_boolean_fixture(f)]
+PURE_FIXTURES = [f for f in ALL_FIXTURES if not _is_boolean_fixture(f)]
+
+# ANTI-VACUITY. A derivation that returned `[]` would make one whole leg vanish into
+# `0 collected` and the module would still report green -- the failure mode the slices
+# were replaced to avoid, reintroduced one level up.
+assert BOOLEAN_FIXTURES and PURE_FIXTURES, (
+    f'the boolean/pure split collapsed: {BOOLEAN_FIXTURES} / {PURE_FIXTURES}')
+assert len(BOOLEAN_FIXTURES) + len(PURE_FIXTURES) == len(ALL_FIXTURES)
+assert {'boolean_wildcards.fga', 'demorgans_law_1.fga', 'demorgans_law_2.fga',
+        'demorgans_reverse.fga', 'star_admitting_intersection.fga'} == set(BOOLEAN_FIXTURES), (
+    f'the derivation lost or gained a known-boolean fixture: {BOOLEAN_FIXTURES}')
 
 
 def _raw(s_pred, s_type, s_name, rel, o_type, o_name):
@@ -158,7 +211,7 @@ def test_boolean_fixtures_compile(load_fga_schema, fixture):
             i for i, layer in enumerate(rs.compiled.strata) if key in layer)
 
 
-@pytest.mark.parametrize('fixture', ALL_FIXTURES[4:])
+@pytest.mark.parametrize('fixture', PURE_FIXTURES)
 def test_pure_fixtures_identical_under_enable_boolean(load_fga_schema, fixture):
     """Untainted relations compile byte-identically whether or not boolean compilation
     is enabled (§3.1: the taint gate, backed by the P0 snapshots)."""

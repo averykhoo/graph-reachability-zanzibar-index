@@ -2,7 +2,7 @@
 id: TK71
 title: test_conformance_enum.py asserts no admission-SURVIVAL floor, only the combinatorial count
 brief: split from TK69; its original 4d framing is REFUTED twice -- read the traps before sizing
-pri: LATER
+pri: NEXT
 size: S
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-16b
-moved: 2026-09-16b
-updated: 2026-09-16b
+moved: 2026-09-20g
+updated: 2026-09-20g
 closed:
 ---
 

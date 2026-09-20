@@ -710,6 +710,45 @@ Related standing rule: **prefer converting an `xfail` into a positive pin.** An 
 *is* a failure that passes, which is why `verify.sh` budgets them explicitly
 (`MAX_TESTS_XFAILED`) rather than tolerating them silently.
 
+### A fix for a NON-DETERMINISM must be sabotaged ACROSS RUNS (2026-09-20g, `TK89`)
+
+The usual sabotage — break the thing, watch it redden — **cannot see this class at all**,
+because the defect is not a wrong answer on one run, it is two runs disagreeing. So a guard
+against non-determinism can pass every test its author thinks to apply and still be wrong
+about what it fixes.
+
+`TK89` measured `_ensure/raw` at **6617** and **6589** in two back-to-back unseeded census
+runs, and at **6627** twice under `PYTHONHASHSEED=0`. `PYTHONHASHSEED` is unset repo-wide and
+`set` iteration order plausibly reaches a call count, so the diagnosis wrote itself: hash
+randomisation. A mechanical fix followed — the probe re-exec'd itself seeded — and it passed
+every *construction* check: it re-exec'd when unset, it did not when already set, the seed
+printed into the table. Every one of those verifies that the guard **runs**. None verifies
+that it **works**.
+
+The one sabotage that could was: run the fixed thing twice. Two identically-seeded runs
+booked **6609** and **6627**. The mechanism was refuted, and the guard was deleted rather
+than kept — machinery whose comment claims something false is worse than none, because the
+next reader trusts it.
+
+Two rules fall out.
+
+* ⚠ **`n=2` cannot establish reproducibility, only refute it.** Two runs that agree are
+  evidence of nothing; two that differ are proof. The seeded arm's `6627, 6627` was read as
+  stability and it was luck — the same arm later produced `6609`. Before writing "stable",
+  ask how many runs would have been needed to *see* the instability you are claiming is
+  absent, and say `n` out loud.
+* ⚠ **Name what your control controls for.** "The guard fires" and "the guard fixes it" are
+  different claims and the first is much easier to demonstrate, which is exactly why it gets
+  substituted. This is § "Sabotage your instrument too" one level up: the instrument here was
+  the *fix*, and its failure mode was succeeding at the wrong thing.
+
+The useful residue when the mechanism is not found: **write the tolerance where the number
+is produced, not where the code is read.** `TK89` printed the non-reproducibility warning
+into every census table, because a number gets transcribed into a document far more often
+than a probe gets re-read — both of the historical tables that started the item were pasted
+from stdout. That is § "Prefer a mechanical refusal to a doc warning" applied to a
+measurement rather than to a check.
+
 ## Evidence — what to record and where
 
 The sabotage is worthless if nobody can tell it happened. Record, at the point a

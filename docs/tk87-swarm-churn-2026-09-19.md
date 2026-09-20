@@ -10,6 +10,22 @@ Provenance labels: **MEASURED** (first-hand run this session), **READ** (first-h
 named `file::symbol`), **REASONED** (derived from a READ, not separately observed). Nothing
 here is agent-reported; no subagent was used.
 
+⚠ **CORRECTION 2026-09-20g (`TK89`) — §1'S FLAGGED DISCREPANCY IS CLOSED, AND §1 WAS
+RIGHT.** §1 recorded `parse_crossable` **18** against `TK77`'s **17** and refused to
+reconcile them arithmetically. **MEASURED 2026-09-20g** in a `git worktree` at `399ea99`,
+twice, `PYTHONHASHSEED=0`, byte-identical both times: **18**, alongside `parse_total`
+**1661**, `_ensure/EFF` **46**, `CTL` **110** and `28 passed` — this section's transcript,
+character for character. `TK77`'s `17` was taken mid-change against an uncommitted working
+tree that no longer exists; the two numbers are not two measurements of one tree, and
+"nobody has explained the difference" is now "the trees differed".
+
+⚠ One column in that transcript does NOT reproduce: `_ensure/raw` **6521** here, **6547** at
+seed 0 on the same commit, and `6589/6609/6617/6627` across six runs at HEAD — it varies at a
+FIXED hash seed and the mechanism is unidentified (`TK93`, trap (c) in
+`formal/probes/tk77_crossable_census_2026-09-19.py`). **§2's headline is untouched**:
+`_sync/raw` `0 -> 44` and `_sync/EFF` `0 -> 20` are both reproducible columns.
+Full write-up: [`tk89-census-reproducibility-2026-09-20.md`](tk89-census-reproducibility-2026-09-20.md).
+
 ---
 
 ## 1. The premise, re-measured before touching anything

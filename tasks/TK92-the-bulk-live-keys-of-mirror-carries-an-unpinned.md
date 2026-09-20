@@ -2,7 +2,7 @@
 id: TK92
 title: the bulk _live_keys_of mirror carries an unpinned copy of the line TK91 just pinned
 brief: deleting [rel] from bulk_backfill.py:811 leaves 4 modules at 29 passed; unreachable-by-construction is UNPROVED
-pri: LATER
+pri: NOW
 size: S
 deps: []
 related: [TK91]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-20f
-moved: 2026-09-20f
-updated: 2026-09-20f
+moved: 2026-09-20g
+updated: 2026-09-20g
 closed:
 ---
 

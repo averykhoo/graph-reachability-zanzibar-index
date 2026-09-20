@@ -232,7 +232,9 @@ def test_compile_pure_union_succeeds(load_fga_schema):
 # tests/test_boolean_compile.py).
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize('fixture', ['demorgans_law_1.fga', 'demorgans_law_2.fga', 'demorgans_reverse.fga'])
+@pytest.mark.parametrize('fixture', ['demorgans_law_1.fga', 'demorgans_law_2.fga',
+                                     'demorgans_reverse.fga',
+                                     'star_admitting_intersection.fga'])
 def test_compile_accepts_booleans(load_fga_schema, fixture):
     ast = parse_schema_ast(load_fga_schema(fixture))
     ruleset = compile_ruleset(ast, derive_schema_info(ast))

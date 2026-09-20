@@ -273,6 +273,30 @@ def _corpus():
 #: hide it from each other. (Checked: 0 features and 0 pairs are held by exactly two
 #: fixtures both on this list.)
 KNOWN_SUBSUMED = {'confluence', 'custom_roles', 'gdrive', 'github', 'master_store'}
+
+#: ★ A DIFFERENT THING FROM `KNOWN_SUBSUMED`, AND THE DISTINCTION IS LOAD-BEARING.
+#: Groups of fixtures that score "subsumed" ONLY because they mask each other -- the
+#: leave-one-out artifact `test_subsumption_register_is_current`'s own docstring names.
+#: `KNOWN_SUBSUMED` means "retirement candidate". These are the opposite: retiring EITHER
+#: member destroys the property the group exists for, and the register saying otherwise
+#: would be an invitation to delete it.
+#:
+#: Added 2026-09-20g (`TK83`). Landing `star_admitting_intersection.fga` -- which is
+#: `demorgans_law_2.fga` with one token changed -- made BOTH fixtures score subsumed at
+#: once, because each is the other's cover. Measured the same day: each member is NOT
+#: subsumed once the other is dropped, and dropping the two TOGETHER loses 6 co-occurring
+#: pairs. Both of those are asserted by `test_masked_groups_are_really_masked` rather than
+#: taken on trust, so a group cannot be parked here to silence a genuine subsumption.
+#:
+#: Each group names the test that makes retirement MECHANICALLY impossible -- a doc
+#: warning is not a guard, and `CLAUDE.md` requires a cited symbol to exist.
+#: `test_masked_groups_cite_a_live_guard` resolves the `file::symbol`.
+MASKED_PAIRS = {
+    frozenset({'demorgans_law_2', 'star_admitting_intersection'}):
+        'tests/test_star_admitting_intersection.py::'
+        'test_corpus_has_a_star_admitting_intersection_with_a_derived_dep',
+}
+_MASKED_MEMBERS = frozenset().union(*MASKED_PAIRS) if MASKED_PAIRS else frozenset()
 #: OPEN QUESTION (board row P11, ~1/2 session) -- the fixture-TRIPLE question.
 #: Pairwise scoring is what put these five here; a TRIPLE score is what would settle
 #: keep-or-delete. Completion criterion: score feature TRIPLES over these five against
@@ -319,14 +343,14 @@ def test_subsumption_register_is_current():
         if not (per[name] - other_f) and not (all_pairs[name] - other_p):
             subsumed.add(name)
 
-    newly = subsumed - KNOWN_SUBSUMED
+    newly = subsumed - KNOWN_SUBSUMED - _MASKED_MEMBERS
     assert not newly, (
         f'{sorted(newly)} became fully covered by other fixtures. Nothing is broken '
         f'and nothing must be deleted -- add them to KNOWN_SUBSUMED. They are now '
         f'retirement candidates, and if you DO retire one the corpus floors below will '
         f'tell you immediately whether it was really redundant.')
 
-    resurrected = KNOWN_SUBSUMED - subsumed
+    resurrected = KNOWN_SUBSUMED - subsumed - _MASKED_MEMBERS
     assert not resurrected, (
         f'{sorted(resurrected)} is listed as subsumed but now contributes something no '
         f'other fixture does -- probably because a fixture that covered it was removed '
@@ -340,6 +364,100 @@ def test_subsumption_register_is_current():
     #   add 'wildcards' to KNOWN_SUBSUMED ->
     #     E AssertionError: ['wildcards'] is listed as subsumed but now contributes
     #       something no other fixture does ...
+
+
+def test_masked_groups_are_really_masked():
+    """`MASKED_PAIRS` is an EXEMPTION from the register above, so it needs a bar of its
+    own -- otherwise it is a list you park a fixture on to make a red go away, which is
+    the hand-maintained-list-beside-a-glob pattern this file has already been bitten by
+    twice.
+
+    Three things are asserted per group, and each refuses a different abuse:
+
+      1. every member really does score subsumed today -- a group listed here that is NOT
+         subsumed is stale, and hiding it from the `resurrected` arm loses a real signal;
+      2. no member is subsumed once the REST OF ITS GROUP is dropped -- that is the
+         definition of mutual masking, and it is what distinguishes these from
+         `KNOWN_SUBSUMED`, where dropping all five at once still loses nothing;
+      3. dropping the whole group loses at least one feature or pair -- so the group is
+         not collectively dead weight, which masking alone would not rule out.
+
+    Measured 2026-09-20g for the one group: (1) both subsumed, (2) neither subsumed with
+    the other dropped, (3) 0 features and **6** pairs lost.
+    """
+    per = _corpus()
+    all_pairs = {k: _pairs(v) for k, v in per.items()}
+
+    def _is_subsumed(name, universe):
+        others = [k for k in universe if k != name]
+        assert others, f'{name}: nothing to score against'
+        of = set().union(*(per[k] for k in others))
+        op = set().union(*(all_pairs[k] for k in others))
+        return not (per[name] - of) and not (all_pairs[name] - op)
+
+    for group, guard in MASKED_PAIRS.items():
+        missing = group - set(per)
+        assert not missing, (
+            f'MASKED_PAIRS names {sorted(missing)}, which is not in the corpus. A group '
+            f'whose members were deleted is not an exemption, it is a stale list.')
+        assert len(group) >= 2, f'{sorted(group)}: a masked group needs >= 2 members'
+
+        for name in group:
+            assert _is_subsumed(name, list(per)), (
+                f'{name} is NOT subsumed by the rest of the corpus, so it does not need '
+                f'this exemption. Drop it from MASKED_PAIRS -- while it is listed, the '
+                f'register cannot report it and a real change goes unseen.')
+            solo = [k for k in per if k not in group or k == name]
+            assert not _is_subsumed(name, solo), (
+                f'{name} is still subsumed with the rest of {sorted(group)} dropped, so '
+                f'its subsumption is NOT a masking artifact -- some third fixture covers '
+                f'it. It belongs in KNOWN_SUBSUMED as a genuine retirement candidate.')
+
+        rest = [k for k in per if k not in group]
+        lost_f = set().union(*(per[k] for k in group)) - set().union(*(per[k] for k in rest))
+        lost_p = (set().union(*(all_pairs[k] for k in group))
+                  - set().union(*(all_pairs[k] for k in rest)))
+        assert lost_f or lost_p, (
+            f'dropping all of {sorted(group)} loses 0 features and 0 pairs, so the group '
+            f'is collectively redundant in this vocabulary. Masking is not enough to earn '
+            f'the exemption -- either these belong in KNOWN_SUBSUMED, or the property '
+            f'they carry is invisible here and {guard} is the only thing holding them.')
+
+
+def test_masked_groups_cite_a_live_guard():
+    """★ The exemption is only safe because something ELSE refuses the deletion.
+
+    A `MASKED_PAIRS` entry says "not a retirement candidate" and then points at the test
+    that enforces it. `CLAUDE.md` has a standing trap about this: the board carried a
+    "do not extend `test_fixture_earns_its_place`" warning for weeks against a test that
+    has never existed. A guard cited by a name that does not resolve is worse than no
+    guard, because it reads like one.
+
+    Resolved the cheap, mechanical way -- the file exists and defines the symbol.
+    """
+    root = Path(__file__).resolve().parents[1]
+    for group, guard in MASKED_PAIRS.items():
+        rel, _, symbol = guard.partition('::')
+        assert symbol, f'{sorted(group)}: guard {guard!r} names no ::symbol'
+        path = root / rel
+        assert path.exists(), (
+            f'{sorted(group)} cites {rel}, which does not exist. Restore the guard or '
+            f'move the group to KNOWN_SUBSUMED -- an unenforceable exemption is how a '
+            f'fixture gets deleted with everything green.')
+        src = path.read_text(encoding='utf-8')
+        assert f'def {symbol}(' in src, (
+            f'{sorted(group)} cites {guard}, but {rel} defines no such function. '
+            f'Renaming a guard without updating its citation retires it silently.')
+
+    # Sabotage, literal observed output (2026-09-20g) -- BOTH arms, because a guard check
+    # that has only ever passed is itself unverified:
+    #   point the entry at a nonexistent module ->
+    #     E AssertionError: ['demorgans_law_2', 'star_admitting_intersection'] cites
+    #       tests/test_no_such_module.py, which does not exist. ...
+    #   rename the cited symbol (append 'X') ->
+    #     E AssertionError: ['demorgans_law_2', 'star_admitting_intersection'] cites
+    #       tests/test_star_admitting_intersection.py::test_corpus_has_a_star_admitting_intersection_with_a_derived_depX,
+    #       but tests/test_star_admitting_intersection.py defines no such function. ...
 
 
 # --------------------------------------------------------------------------- #

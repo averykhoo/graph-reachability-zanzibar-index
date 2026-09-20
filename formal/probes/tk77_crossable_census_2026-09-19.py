@@ -7,7 +7,8 @@ WHAT IT MEASURES. A schema reaches the I14 crossing-middle machinery
 property over every corpus and generator in the repo, statically (sections 2-5 of the doc)
 and live (section 6).
 
-TWO INSTRUMENT TRAPS, both of which this probe exists to avoid -- read them before changing it.
+THREE INSTRUMENT TRAPS. (a) and (b) are what this probe was built to avoid; (c) is one it
+WALKED INTO and was caught by `TK89` -- read all three before changing it.
 
   (a) A RAW call count of ``_ensure_entity_middles`` / ``_sync_entity_middles`` is NOT reach.
       Both are called unconditionally (from ``::_ensure_bridges`` and from
@@ -22,6 +23,34 @@ TWO INSTRUMENT TRAPS, both of which this probe exists to avoid -- read them befo
       means "never reached" rather than "instrument dead". Without it, a patching mistake and
       a genuine coverage hole look identical.
 
+  (c) ⚠ `_ensure/raw` IS NOT REPRODUCIBLE RUN TO RUN, AND NOBODY KNOWS WHY YET. **Do not
+      difference it.** MEASURED 2026-09-20g (`TK89`), six runs of the `--pytest
+      tests/test_generator_coverage.py` invocation on ONE unchanged tree:
+
+          PYTHONHASHSEED unset : 6617, 6589
+          PYTHONHASHSEED=0     : 6627, 6627, 6609, 6627
+
+      Every other column held still in all six -- `parse_total` 1858, `parse_crossable` 24,
+      `_ensure/EFF` 78, `_sync/raw` 44, `_sync/EFF` 20, `CTL` 166 -- and the crossable
+      shape-set breakdown was byte-identical throughout. So the instrument is reproducible
+      on every column an acceptance table has ever quoted; this one column is not.
+
+      ⚠ **Hash randomisation is REFUTED as the cause, by a fix that failed its own
+      sabotage.** The first version of this trap blamed `PYTHONHASHSEED` (unset repo-wide,
+      so `set` iteration order varies per process) on the strength of two seeded runs that
+      agreed. A re-exec-seeded guard was added, and then the guard was sabotaged the only
+      way a cross-run non-determinism can be -- run it twice -- and the two seeded runs
+      booked **6609** and **6627**. The guard was removed rather than kept as decoration.
+      The `n=2` agreement was luck, and believing it would have shipped a wrong mechanism
+      with a mechanism-shaped fix attached.
+
+      The remaining trap is therefore a real one and is NOT closed: the column varies by up
+      to **38** (0.6%) with no known input changing. Trap (a) already says a raw count is
+      not reach, so nothing an acceptance table quotes is affected -- but a future session
+      reading a small delta off this column would be reading noise. Localising it is filed
+      as `TK93`. Write-up, including why the historical `17` vs `18` was NOT this:
+      `docs/tk89-census-reproducibility-2026-09-20.md`.
+
 The static half is deliberately CLOSED and RNG-free where it can be: ``genswarm.witness`` takes
 every enabled switch unconditionally, so enumerating all 65535 switch subsets is an exhaustive
 statement about that generator's config space rather than a sample.
@@ -29,6 +58,9 @@ statement about that generator's config space rather than a sample.
 USAGE
   python formal/probes/tk77_crossable_census_2026-09-19.py             # sections 2-5
   python formal/probes/tk77_crossable_census_2026-09-19.py --pytest <pytest args...>
+
+  The live `PYTHONHASHSEED` is printed into the census table so a transcribed number carries
+  its own provenance -- it does NOT make the run reproducible (trap (c)).
 """
 from __future__ import annotations
 
@@ -122,6 +154,12 @@ def pytest_runtest_logstart(nodeid, location):      # noqa: D103  (pytest hook)
 
 def pytest_sessionfinish(session, exitstatus):      # noqa: D103  (pytest hook)
     print('\n=== TK77 EFFECTIVE MIDDLES CENSUS (attributed) ===')
+    # ⚠ The warning travels WITH the table, not only in the docstring -- a number gets
+    # transcribed into a doc far more often than a probe gets re-read (trap (c)).
+    print(f"  PYTHONHASHSEED={os.environ.get('PYTHONHASHSEED')!r}   "
+          f"(!) `_ensure/raw` is NOT reproducible run-to-run and pinning this seed does "
+          f"NOT fix it -- observed 6589/6609/6617/6627 on one unchanged tree "
+          f"(TK89, 2026-09-20g). Do not difference that column. Every other column held.")
     print(f'{"module":40}' + ''.join(f'{c:>18}' for c in _COLS))
     for mod in sorted(BY_MOD):
         row = BY_MOD[mod]
