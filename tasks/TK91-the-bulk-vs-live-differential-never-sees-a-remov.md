@@ -1,8 +1,8 @@
 ---
 id: TK91
 title: the bulk-vs-live differential never sees a removal; one op in one history is the whole pin
-brief: bulk builds from survivors, live replays a history -- the differential is add-only but for one remove
-pri: LATER
+brief: MEASURED 2026-09-20d: dropping `rel` from _live_keys_of preds is INERT tree-wide -- removals are the hole
+pri: NOW
 size: M
 deps: []
 related: [TK78, TK87]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-20
-moved: 2026-09-20
-updated: 2026-09-20
+moved: 2026-09-20d
+updated: 2026-09-20d
 closed:
 ---
 
@@ -58,3 +58,28 @@ thinner-but-real gap that would otherwise ride along unranked.
   source; read it before widening anything.
 
 ## Log
+
+### 2026-09-20d
+
+MEASURED EVIDENCE, from `TK78`'s sabotage sweep -- this row no longer rests on an analogy
+with `TK87`, it has a named unpinned branch.
+
+`index_v4/processor.py::_live_keys_of` builds `preds = [rel] + <positive closure /
+derived-userset predicates>`. The leading `rel` -- the object's own PUBLIC family -- is the
+only entry that can enumerate an object whose derived state OUTLIVES the leaf that produced
+it, which is exactly a removal: drop the `parent` tuple and `('doc', 'access', d)` is no
+longer reachable through any storage family or recursion, but its public node still exists
+and still holds a stale derived edge for backfill to clean up.
+
+`READ 2026-09-20d`: deleting `rel` from that list left ALL FOUR of
+`tests/test_backfill_enumeration.py`, `tests/test_bulk_build.py`,
+`tests/test_invariants_derived.py` and
+`formal/conformance/test_conformance_bulk_state.py` GREEN. Every corpus they drive is
+add-only (the new module deliberately so -- bulk builds from SURVIVORS, live replays a
+HISTORY, and that is the divergence this row is about), so the branch cannot move. Per
+`docs/sabotage-procedure.md` that is reported INERT, not as a clean pin: the mutation is
+plausible and narrow, and nothing in the tree can see it.
+
+So the concrete first ask for whoever takes this row is smaller than the row's framing: a
+remove history that reddens that one deletion. The other three kind-drops in the same sweep
+were each caught somewhere; this one was not caught anywhere.

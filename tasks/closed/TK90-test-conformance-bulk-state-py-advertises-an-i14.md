@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-20
-moved: 2026-09-20
-updated: 2026-09-20
-closed:
+moved: 2026-09-20d
+updated: 2026-09-20d
+closed: 2026-09-20d
 ---
 
 `formal/conformance/test_conformance_bulk_state.py`'s module docstring tells the reader that
@@ -59,3 +59,24 @@ and all three still hold (see the `TK78` map §5a).
   what actually closed the hole, and why wiring in a corpus was not sufficient.
 
 ## Log
+
+### 2026-09-20d
+
+CLOSED by the dated correction the row asked for, at the site, on the 2026-09-06 paragraph in
+`formal/conformance/test_conformance_bulk_state.py`'s "what this does NOT cover" list. The
+measurement is left standing and the correction sits under it.
+
+What the correction says, all three cites re-verified FIRST-HAND before writing (the row's
+were a `TK78` pass's): `tests/test_bulk_build.py::_owc_star_ttu_tuples` (`:389`) is wired into
+`_CORPORA` (`:445`) and has non-empty `crossable_shapes`; `::_assert_r4bf_features` clause (g)
+(`:609-640`) pins the loop's PRODUCT structurally and mechanically refuses a masking corpus.
+So both halves of "pinned by NOTHING" are false, and `P22` (2026-09-16) is named.
+
+(!) ONE CLAUSE OF THE OLD PARAGRAPH SURVIVES AND THE CORRECTION SAYS WHICH. The sentence
+ABOVE the retracted one -- that none of THIS module's 25 in-fragment corpora compiles a
+non-empty `bridged_in_shapes` / `bridged_out_shapes`, so Phase B and the I14 loop are not
+reached HERE -- was not re-measured this session and is not retracted. The rot was entirely in
+the generalisation from "this module does not see it" to "nothing in the tree pins it".
+
+Found during `TK78`'s verification pass and closed with it. `TK88` is the same failure
+pointed the other way and remains open.

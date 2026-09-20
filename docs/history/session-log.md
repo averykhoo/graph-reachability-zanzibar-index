@@ -30,6 +30,88 @@ from here.
 
 ---
 
+## 2026-09-20d — `TK78` closed: the enumerator is pinned, and the sweep refuted its own map's headline
+
+rows: `TK78` (CLOSED — step (i) landed), `TK90` (CLOSED — the dated correction), `TK91` (promoted to `NOW`, measured evidence added), `TK89` (untouched, still `NEXT`).
+
+task lint: clean (13 checks, 206 task file(s) parsed), 31 warning(s)
+read: board only
+
+Literally: `board`, then `show TK78`, then its map
+[`docs/tk78-offline-bootstrap-audit-2026-09-20.md`](../tk78-offline-bootstrap-audit-2026-09-20.md)
+§§5–6, then the code. `show TK90` / `show TK91` before touching either. `HANDOFF.md` in full
+at write-back, not at start — the same honest token the 2026-09-20 entry used, and the same
+standing gap: the vocabulary has no token for *entered via the board and went straight to the
+NOW row's map*.
+
+**The task.** The previous session VERIFIED `TK78` and stopped there, leaving a decision and
+an ordered three-way split; its `NEXT ACTION` line said *"doc §6 step (i). Everything it needs
+is measured."* This session executed it.
+
+**LANDED: [`tests/test_backfill_enumeration.py`](../../tests/test_backfill_enumeration.py)**,
+three tests, green. `DeltaProcessor.backfill` visits exactly the keys `::_live_keys_of`
+enumerates and discards `self._bumped`, so its own docstring carries the offline path's whole
+correctness argument — *"backfill must reach them by ENUMERATION"* — and 2026-09-20 measured
+that `grep -rn '_bumped|_live_keys_of' tests/ formal/` returned **zero**. It now has an
+assertion that names it. The fixture is the deliverable as much as the assertion: `access` /
+`alias` / `deep` each carry EXACTLY ONE positive leaf, of kind `derived-ttu` /
+`derived-computed` / `derived-tupleset-ttu`, so the recursion is the only route to those
+objects, and `::test_fixture_keeps_the_enumeration_load_bearing` mechanically refuses a later
+edit that gives one of them a storage family and turns the pin vacuous.
+
+**Ground truth is "every key the cascade CHANGED", not "every key it scheduled", and that is a
+finding.** `READ`: the live cascade reconciles `('doc', 'deep', 'f1')` — a **folder** name
+under a doc relation — mapped in by `::_map_deltas_to_keys` off the `folder#ok` derived edge.
+The reconcile is a no-op and the enumerator is right not to reach it. A pin written the
+obvious way would have demanded the enumerator cover it and been wrong.
+`DeltaProcessor._check_cascade_fixpoint`'s docstring records the same asymmetry from the other
+side; this is the second independent sighting.
+
+**⚠ The sweep refuted the map's headline, which is the entry's real content.** The map's §5
+reasoned that because `bulk_backfill.py` carries its own copy of the enumerator,
+`tests/test_bulk_build.py` *"compares copy A against copy B and a SHARED under-enumeration
+cancels on both arms"*. That paragraph went into the previous session's banner as the finding.
+**Measured: it does not cancel.** With BOTH copies mutated, three of the four kind-drops redden
+`test_bulk_build_identical_to_incremental` itself (`-rf` attribution: `[boolean]`,
+`[demorgan]`). `REASONED`, not verified: the copies read different substrates — `processor.py`
+re-queries `node_v4` rows mid-backfill, `bulk_backfill.py` reads an in-memory `family_names`
+index seeded at load. The map now opens with that correction, dated, and §5's paragraph is
+marked superseded at the site. What survives is narrower and still worth the module: **no
+single existing module sees all four leaf kinds** — `test_bulk_build` misses `derived-computed`
+outright, the conformance module misses the other three, and which catches what is an accident
+of each module's corpora. `tests/test_invariants_derived.py` was green on every row.
+
+The sweep table (harness `.scratch/tk78_sweep.py`, throwaway; the table is tracked in the new
+module's docstring and in the map) carried an `M0` control, which attributed correctly to the
+single test whose claim it flipped, and an **inverse** control — widening the enumeration to
+recurse through NEGATIVE (subtrahend) leaves — which stayed green everywhere, as it should.
+
+**⚠ The one INERT row is `TK91`'s, and it upgrades that row from analogy to measurement.**
+Dropping `rel` — the object's own PUBLIC family — from `_live_keys_of`'s `preds` list moved
+**nothing** in any of the four modules. That entry exists for objects whose derived state
+outlives the leaf that produced it, which is exactly a removal; every corpus in play is
+add-only, so the branch cannot move. Reported INERT per
+[`docs/sabotage-procedure.md`](../../docs/sabotage-procedure.md) rather than read as a clean
+pin, and recorded on `TK91`, which is now `NOW`: it was `TK87`-by-analogy and it now has a
+named branch nothing in the tree can see.
+
+**Also landed, step (iii) / `TK90`:** the dated correction on
+`formal/conformance/test_conformance_bulk_state.py`'s *"pinned by NOTHING"* paragraph. All
+three cites (`_owc_star_ttu_tuples` `:389`, `_CORPORA` `:445`, clause (g) `:609-640`) were
+re-verified first-hand rather than inherited. The 2026-09-06 measurement is left standing, and
+the correction says explicitly which clause of the old paragraph SURVIVES — that none of *this
+module's* 25 corpora reaches Phase B or the I14 loop. The rot was entirely in the
+generalisation from "this module does not see it" to "nothing in the tree pins it".
+
+**Ranking.** `TK91` promoted to `NOW` over `TK89` on the `CLAUDE.md` § "Who decides" ground
+that equivalence is the primary consideration: `TK91` is a bulk≡live equivalence gap with a
+measured, unpinned branch, while `TK89` is instrument reproducibility. Overrule cheaply.
+
+Still owed: nothing skipped from the Rhythm. `TK78` §6 (ii) is `TK91` and stays open by
+design; `TK89` is untouched and still `NEXT`.
+
+---
+
 ## 2026-09-20 — `TK78` verified, not executed: a bump cannot go down-stratum, and the ENUMERATOR is the item
 
 rows: `TK78` (verified first-hand, decision recorded, NOT executed — the row's own FIRST ACTION was verification), `TK89` (NEW — the user's note named an unfiled loose end), `TK90` (NEW), `TK91` (NEW).

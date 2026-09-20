@@ -11,9 +11,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-18
-moved: 2026-09-20
-updated: 2026-09-20
-closed:
+moved: 2026-09-20d
+updated: 2026-09-20d
+closed: 2026-09-20d
 ---
 
 TODO: one paragraph -- what this item is and why it matters.
@@ -147,3 +147,58 @@ is TK88 pointed the other way -- a module advertising a hole it no longer has --
 worse, because the next session reads it and re-does P22.
 
 NEXT ACTION for whoever takes this row: doc sec 6 step (i). Everything it needs is measured.
+
+### 2026-09-20d
+
+CLOSED. Step (i) of the three-way split LANDED and step (iii) with it; (ii) is `TK91` and
+stays open. Map frozen at [`docs/tk78-offline-bootstrap-audit-2026-09-20.md`](../docs/tk78-offline-bootstrap-audit-2026-09-20.md),
+whose 2026-09-20d correction is the part to read.
+
+LANDED: `tests/test_backfill_enumeration.py` (3 tests, green). The offline path's whole
+correctness argument -- `_live_keys_of` reaches by ENUMERATION what `_fan_out` reaches by
+invalidation -- now has an assertion that says so. Fixture: `access` / `alias` / `deep` each
+carry EXACTLY ONE positive leaf, of kind `derived-ttu` / `derived-computed` /
+`derived-tupleset-ttu`, so the recursion is the only route to those objects;
+`::test_fixture_keeps_the_enumeration_load_bearing` mechanically refuses a later edit that
+gives one of them a storage family and quietly makes the pin vacuous.
+
+(!) DESIGN DECISION worth inheriting: ground truth is every key the live cascade's
+`reconcile` CHANGED, not every key it SCHEDULED. `READ` -- the cascade over-schedules,
+reconciling `('doc', 'deep', 'f1')`, a FOLDER name under a doc relation, mapped in by
+`::_map_deltas_to_keys` off the `folder#ok` derived edge. It is a no-op and the enumerator is
+right not to reach it. `DeltaProcessor._check_cascade_fixpoint`'s docstring records the same
+asymmetry from the other side.
+
+(!) THE MAP'S HEADLINE CLAIM WAS MEASURED FALSE, AND THE ROW SHOULD SAY SO. Doc sec 5
+reasoned that `tests/test_bulk_build.py` "compares copy A against copy B and a shared
+under-enumeration cancels on both arms". With BOTH copies of the enumerator mutated, three of
+the four kind-drops redden `test_bulk_build_identical_to_incremental` ITSELF (`-rf`
+attribution: `[boolean]`, `[demorgan]` for the derived-ttu drop). `REASONED`, unverified: the
+copies read different substrates -- `processor.py` re-queries `node_v4` rows mid-backfill,
+`bulk_backfill.py` reads an in-memory `family_names` index seeded at load. So the honest case
+for the new module is narrower than the row claimed and still real: NO SINGLE EXISTING MODULE
+SEES ALL FOUR KINDS. `test_bulk_build` misses `derived-computed` outright; the conformance
+module misses the other three; `tests/test_invariants_derived.py` was green on every row.
+
+SWEEP (`.scratch/tk78_sweep.py`, harness throwaway, table tracked in the module docstring and
+the map). RED = caught. Both copies mutated together unless marked.
+  drop derived-computed        new RED | bulk_build green | conformance RED (3 corpora)
+  drop derived-ttu             new RED | bulk_build RED (2) | conformance green
+  drop derived-tupleset-ttu    new RED | bulk_build RED (1) | conformance green
+  drop derived-userset pred    new RED | bulk_build RED (1) | conformance green
+  drop `rel` from preds        all green  -- INERT, see below
+  recurse through NEGATIVE     all green  -- inverse control, expected
+  M0 flip the pin's own claim  new RED, attributed to the one test; others green
+
+(!) THE INERT ROW IS `TK91`'s, AND IT IS NOW MEASURED RATHER THAN ARGUED. Dropping `rel` from
+`preds` moved nothing anywhere. That entry exists for objects enumerable only by their PUBLIC
+family -- derived state that outlives the leaf which produced it, i.e. a REMOVE. Every corpus
+in play is add-only, so the branch cannot move. Reported as inert per
+`docs/sabotage-procedure.md`, never read as a clean pin; recorded on `TK91`.
+
+ALSO LANDED (step (iii) / `TK90`): the dated correction at
+`formal/conformance/test_conformance_bulk_state.py`'s "pinned by NOTHING" paragraph. The
+2026-09-06 measurement is left standing; the correction names `P22`, `_owc_star_ttu_tuples`
+(`:389`, in `_CORPORA` `:445`) and clause (g) (`:609-640`), all re-verified first-hand here.
+
+STILL OPEN from this row's own analysis: `TK91` (remove histories, sec 6 (ii)).

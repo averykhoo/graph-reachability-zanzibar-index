@@ -11,7 +11,78 @@ Corrections append **dated at the top**. Freeze it when `TK78` closes.
 literal claims.** The row's headline — *"an unaudited second reconcile implementation"* —
 is materially wrong about where the risk is, and the question it names as *"the actual
 question"* is answered NO from the code. The real hole is one layer down and is stated in
-§5. Read §5 before planning anything.
+§5. Read §5 before planning anything — **and then the 2026-09-20d correction below, which
+measured §5's headline claim and found it false.**
+
+## Corrections appended 2026-09-20d — step (i) LANDED, and §5's headline claim is MEASURED FALSE
+
+*supersedes:* §5's ⚠ paragraph, *"the widest gate cannot see a gap here even in principle,
+because it compares two COPIES of the enumerator … a bug SHARED by both cancels on both arms
+and passes green."* That was `REASONED`, and it is **wrong when run**.
+
+**LANDED: [`tests/test_backfill_enumeration.py`](../tests/test_backfill_enumeration.py)** —
+§6 step (i), three tests, green. A fixture whose `access` / `alias` / `deep` each have
+exactly ONE positive leaf, of kind `derived-ttu` / `derived-computed` /
+`derived-tupleset-ttu`, so `_live_keys_of`'s recursion is the only way those objects can be
+found; `::test_fixture_keeps_the_enumeration_load_bearing` is a mechanical refusal of any
+later edit that gives one of them a storage family and makes the pin vacuous. The pin itself
+(`::test_live_keys_of_reaches_every_key_the_live_cascade_wrote`) takes ground truth from the
+live cascade and asserts the bootstrap enumeration covers it.
+
+⚠ **One design decision worth the next session's attention: ground truth is every key the
+live cascade's `reconcile` CHANGED, not every key it scheduled.** `READ` 2026-09-20 — the
+cascade over-schedules, reconciling `('doc', 'deep', 'f1')`, a **folder** name under a doc
+relation, mapped in by `::_map_deltas_to_keys` off the `folder#ok` derived edge. It is a
+no-op and the enumerator is right not to reach it. `DeltaProcessor._check_cascade_fixpoint`'s
+docstring records the same asymmetry from the other side.
+
+### The sweep (2026-09-20)
+
+The harness was a throwaway mutation script, gitignored and then deleted, per
+[`docs/sabotage-procedure.md`](sabotage-procedure.md) — **the table is the evidence**, and
+each row names its edit precisely enough to redo. Shape, if it is redone: apply one edit,
+run the four targets as separate `subprocess` calls reading `returncode` (never a shell
+pipe), restore in a `finally`, and assert the restore. It carried an `M0` control and an
+inverse control; the `M0` row below is what says the attribution worked.
+
+Both copies of the enumerator mutated together unless marked. RED = caught, green = missed.
+`tests/test_invariants_derived.py` was green on **every** row and is omitted.
+
+Cells name the failing parametrisations rather than counting them — a count here would be
+a coverage figure with no home to point at, and `doc_counts.py`'s prose refusal is right to
+reject one.
+
+| mutation (both copies) | new module | `test_bulk_build` | `conformance_bulk_state` |
+|---|---|---|---|
+| drop `derived-computed` | **RED** | green | **RED**: `[star_two_strata_churn]`, `[taint_computed_root_over_boolean]`, `[two_stratum_cascade]` |
+| drop `derived-ttu` | **RED** | **RED**: `[boolean]`, `[demorgan]` | green |
+| drop `derived-tupleset-ttu` | **RED** | **RED**: `[rc2_star_tupleset]` | green |
+| drop `derived-userset` from `preds` | **RED** | **RED**: `[derived_member]` | green |
+| drop `rel` from `preds` | green | green | green |
+| recurse through NEGATIVE leaves too *(inverse control)* | green | green | green |
+| `M0`: flip the new pin's own `missing == {}` *(control)* | **RED**, attributed to the one test carrying the claim | green | green |
+
+**So the shared-copy argument does not survive contact.** With *both* copies mutated,
+three of the four kind-drops redden `test_bulk_build_identical_to_incremental` **itself** —
+`VERIFIED` by `-rf` attribution, e.g. `[boolean]` and `[demorgan]` for the `derived-ttu`
+drop. `REASONED`, not verified: the copies read different substrates — `processor.py`
+re-queries `node_v4` rows mid-backfill, `bulk_backfill.py` reads an in-memory `family_names`
+index seeded at load and grown through the bulk phases — so the same textual edit does not
+delete the same keys.
+
+What survives, and is the honest case for the module: **no single existing module sees all
+four kinds.** `test_bulk_build` misses `derived-computed` outright, the conformance module
+misses the other three, and which one catches what is an accident of each module's corpora.
+The property also had no *name* anywhere (§5's grep-zero stands); a red arrived as an opaque
+state diff several layers from the enumerator.
+
+⚠ **`M5` is INERT, and the reason is `TK91`'s.** Dropping `rel` from `preds` left all four
+modules green. That entry exists for objects enumerable only by their PUBLIC family — state
+that outlives the leaf which produced it, i.e. a **remove**. Every corpus in play is add-only,
+so the branch cannot move. Per [`docs/sabotage-procedure.md`](sabotage-procedure.md) that is
+reported as inert, never read as a clean pin — and it is measured evidence for `TK91`
+(§6 (ii)), which now has a concrete unpinned branch to point at rather than an argument by
+analogy with `TK87`.
 
 ## Corrections appended 2026-09-20b — §5's premise was WRONG, and the census found doc-rot
 
@@ -184,6 +255,9 @@ reports nothing, and the discard in §2 means no bump survives to contradict it.
 Neither the discard at `:1832` nor the enumeration-completeness property is asserted
 anywhere. The docstring quoted in §2 — *"backfill must reach them by enumeration"* — is the
 load-bearing correctness argument of the whole offline path, and it is unpinned.
+
+⚠ **SUPERSEDED 2026-09-20d — the closing claim of this paragraph is measured FALSE; see the
+correction at the top. The two-copies READ below is still accurate.**
 
 ⚠ **And the widest gate cannot see a gap here even in principle, because it compares two
 COPIES of the enumerator.** `READ`: `index_v4/bulk_backfill.py::_live_keys_of` (`:808`) is a

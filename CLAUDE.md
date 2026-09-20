@@ -208,8 +208,35 @@ IVM delta processor.
   here have come in low repeatedly — `P3`'s re-verified "~123 sites / 7 files" budget was
   live **~136 / 8** on 2026-08-28, the gap being the pin module its own session created.
 - **This is standing permission**: no need to ask before spawning read-only agents for
-  work of that shape. `ultracode` / the `Workflow` tool is a DIFFERENT and much heavier
-  thing (scripted fan-out, dozens of agents) and still takes a per-request opt-in.
+  work of that shape.
+- **`ultracode` / the `Workflow` tool also has STANDING APPROVAL as of 2026-09-20d (user
+  instruction), whenever it is more helpful than plain subagents.** This REPLACES the
+  previous "per-request opt-in" rule here and in the machine-wide `~/.claude/CLAUDE.md`,
+  which was updated the same day. It is still the heavy instrument — scripted fan-out, dozens of agents — so the test is
+  unchanged and is about SHAPE, not permission: use it when the work is a genuine fan-out
+  with a reconcile step (a census across many files, N independent verifications of N
+  claims, a mutation sweep over a module), and a plain `Agent` call or an inline grep when
+  it is not. Do not reach for it to make coupled work "go faster"; that is the same
+  parallelism fallacy this section opens with, only more expensive.
+- ⚠ **EVERY delegated unit PERSISTS ITS OWN OUTPUT BEFORE IT RETURNS — agents and
+  workflow minions alike** (rule added 2026-09-20d, user instruction, from repeated
+  UNRESUMABLE losses when the API went flaky or a session limit landed mid-fan-out).
+  A report that exists only in a returned message dies with the session that asked for it,
+  and a twelve-agent sweep that dies at agent eleven has to be paid for twice.
+  * **The instruction goes IN THE PROMPT, not in your head**: every spawn tells the agent
+    where to write and to write it **before** returning — `.scratch/<topic>/<agent>.md`
+    for working notes, one file per agent so two writers never share a filename (the
+    2026-09-10 gate trap, one level up).
+  * **Incrementally, not at the end.** An agent that appends each finding as it lands
+    leaves a partial result a later session can use; one that buffers and writes last
+    leaves nothing when it is the one that dies.
+  * ⚠ **`.scratch/` is gitignored, so it survives a session and NOT a machine** — the
+    moment a result is evidence (a sweep table, a census, an adjudication) it is copied
+    into a tracked file, same hour, per § SCOUTING IS A DELIVERABLE. `.scratch/` is the
+    crash bag; it is not where findings live.
+  * **The orchestrating session owns the cleanup.** Delete the run's `.scratch/` directory
+    once its conclusions are in a tracked file, in the same session — say in the final
+    message if you deliberately leave one behind, and name it.
 - ⚠ **Delegation does not transfer judgement.** A subagent's report is evidence, not a
   finding. Contradicted reports get reconciled, not averaged; and anything headed for
   `formal/history/` (append-only), a gate pin, or a golden gets verified first-hand

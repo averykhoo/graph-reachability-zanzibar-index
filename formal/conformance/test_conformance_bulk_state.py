@@ -60,6 +60,18 @@ What this does NOT cover, said plainly:
     The I14 loop is pinned by NOTHING: the same sabotage left every
     `build_index` caller in `tests/` green, because no bulk-built corpus in
     the tree has a crossable shape (evidence in the test docstring).
+    (!) CORRECTION 2026-09-20 (TK90) -- BOTH HALVES of the previous sentence
+    were true on 2026-09-06 and are FALSE now; `P22` closed exactly this on
+    2026-09-16 (`docs/p22-i14-corpus-masking-2026-09-16.md`).
+    `tests/test_bulk_build.py::_owc_star_ttu_tuples` IS a corpus with
+    non-empty `crossable_shapes`, wired into `_CORPORA`, and
+    `::_assert_r4bf_features` clause (g) pins the loop's PRODUCT structurally
+    -- including a mechanical refusal of a corpus whose concrete
+    `viewer(folder, _)` grants would MASK the loop. What is still true, and is
+    all this bullet should now be read for, is the sentence ABOVE it: no
+    corpus in THIS module's 25 reaches Phase B or the I14 loop, so this
+    module does not see them. The 2026-09-06 measurement is left standing
+    rather than edited (`docs/README.md`: correct at the site, dated).
   * **The materialized CLOSURE — Phase P's path counts and the pure-indirect
     rows.** The canonical form is `extract_sql_state`'s, and its P1 keeps only
     rows with `direct_edge_count > 0`; `indirect_edge_count` is never read.
