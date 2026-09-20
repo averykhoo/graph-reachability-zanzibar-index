@@ -2,7 +2,7 @@
 id: TK83
 title: no in-tree fixture has a star-admitting intersection with a derived dep
 brief: starred half-stale intersection diverges in the RESIDUE too, refuting 9.5; reachable only on a constructed fixture
-pri: LATER
+pri: NEXT
 size: S
 deps: []
 related: [TK74, TK77]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-18c
-moved: 2026-09-19c
-updated: 2026-09-19c
+moved: 2026-09-20e
+updated: 2026-09-20e
 closed:
 ---
 
@@ -37,3 +37,53 @@ NOT A LIVE BUG. Needs a constructed fixture plus deliberate fault injection -- s
 THE ITEM. Add a star-admitting intersection fixture to tests/fga_schemas/ so the case stops being unreachable, and let the matrix/hypothesis campaign cover it. Starting point: .scratch/tk74d-starisect/star_isect.fga (gitignored -- copy it into the tree, do not cite it as evidence).
 
 TRAP: do NOT write "the residue always differs" -- 2 of 4 star-tight arms show the diff, the other 2 have no residue on either side at that op prefix. That a GENERAL starred intersection diverges is REASONED, not measured.
+
+### 2026-09-20e
+
+PROMOTED LATER -> NEXT on coverage-hole grounds, and the STARTING POINT IS NOW IN THIS ROW
+so it stops depending on a gitignored file.
+
+Ranked above `TK71` (the other `S` assurance-gap candidate) because this row is already
+MEASURED and its action needs no further scoping: the divergence is real, one arm is
+FAIL-OPEN, and the work is "put the fixture in the tree and let the matrix/hypothesis
+campaign reach it". `TK71`'s own next action is still a measurement to settle its own scope
+((a) vs (b), and the `== 132` pin), so it stays `LATER`.
+
+(!) SALVAGE, 2026-09-20e. This row's only starting point was
+`.scratch/tk74d-starisect/star_isect.fga` -- gitignored, i.e. already lost by the repo's own
+rule. Verified present and transcribed here first-hand (28 lines, `wc -l`). It is a starting
+point, NOT evidence: copy it into `tests/fga_schemas/`, do not cite this block as a result.
+
+    model
+      schema 1.1
+
+    type user
+
+    type attr
+      relations
+        define _all_users: [user:*]
+        define has_attr: [user]
+        define missing_user: _all_users but not has_attr
+
+    type cond
+      relations
+        define _all_users: [user:*]
+        define requires: [attr]
+        define user_missing_requirement: missing_user from requires
+        define user_met_requirement: _all_users but not user_missing_requirement
+
+    type role
+      relations
+        define assigned: [user, user:*]
+        define match_any: [cond]
+        define role_user_met: user_met_requirement from match_any
+        define authorized_user: assigned and role_user_met
+
+    type doc
+      relations
+        define associated_role: [role]
+        define access: authorized_user from associated_role
+
+The one token that matters versus the in-tree `demorgans_law_2.fga` is `assigned: [user,
+user:*]` -- that is what makes the intersection star-admitting and the half-stale case
+reachable.

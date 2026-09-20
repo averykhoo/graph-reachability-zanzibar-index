@@ -30,6 +30,93 @@ from here.
 
 ---
 
+## 2026-09-20e — `NEXT` refilled on coverage grounds; `.scratch` swept to empty; the two CLAUDE.md files deduplicated
+
+rows: `TK83` + `TK80` (promoted `LATER` -> `NEXT`, ranking argument recorded on each), `TK91` (its stated blocker REFUTED first-hand), `TK71` (held at `LATER`, reason recorded on `TK80`), `TK89` (untouched, still `NEXT`).
+
+task lint: clean (13 checks, 206 task file(s) parsed), 31 warning(s)
+read: board only
+
+Literally: `board`, then `show TK91` / `show TK89`, then `show TK80` / `TK83` / `TK71` to rank them. No code changed; docs + tree ops only.
+
+**(!) `TK91`'s own stated blocker is refuted, and that is the session's most useful finding.**
+Its 2026-09-20d entry said the honest version is expensive because "`graphindex_drive`
+replays a tuple LIST, so a removal arm needs the corpus format to carry ops" — the row told
+the next session to check exactly that before building anything, and the check pays off.
+`formal/conformance/backends.py:283::graphindex_drive_ops` already drives interleaved
+add/remove streams AND returns the surviving accepted set, which is precisely the snapshot a
+bulk build consumes; `test_conformance_remove.py:428::test_graph_remove_sequences` already
+compares removal-driven state against a fresh rebuild at full state level plus grid plus
+oracle. So removals-converge-to-a-rebuild is well pinned — **for the INCREMENTAL rebuild**.
+The hole is one arm wide: nothing anywhere bulk-builds from a post-removal survivor set
+(`tests/test_bulk_build.py` has ZERO remove ops, grepped). The cheap shape is therefore the
+honest one, inverting the row's menu: add a bulk arm to the EXISTING remove-sequence test.
+Full detail on the `TK91` row.
+
+**The ranking.** `NEXT` is capacity 3 (`docs/README.md` §4) and held only `TK89`, so two
+slots. `TK80` and `TK83` took them: both `S`, both already MEASURED, and neither has a
+design decision left in it. `TK80` is the current `NOW`'s own axis one level down (the
+remove path's unguarded node-delete at `core.py:884`); `TK83` has an arm that is FAIL-OPEN.
+`TK71` was the third candidate and stayed `LATER` because its next action is still a
+measurement to settle its own scope. (!) Promoting `TK80` does NOT disturb the board's
+"live correctness bugs: 0" — its severity paragraph stands; this is hardening plus the
+permanent positive test `docs/sabotage-procedure.md` requires.
+
+**A SALVAGE, and the reason the sweep below cannot take credit for it.** `TK83`'s only
+stated starting point was `.scratch/tk74d-starisect/star_isect.fga` — gitignored, i.e.
+already lost by this repo's own rule, and in the delete set of the sweep that ran the same
+hour. All 28 lines are now transcribed into the `TK83` row, which is tracked. It was found
+by READING the row while ranking it, roughly an hour before the audit agent classified that
+directory; so the agent's `SALVAGE: 0` is a zero over a tree this session had already
+salvaged from. Treat the 0 as "nothing FURTHER", not as proof the bag was clean.
+
+**`.scratch/` swept: 346 entries / 112,997,059 bytes → 2 entries.** Audited by a read-only
+subagent under the new machine-wide procedure (below); the session did the deleting. Three
+of its load-bearing claims were verified first-hand before acting, because the delete is not
+recoverable from git: `formal/history/PROOF_STATUS.md:5284-5290` does carry the
+`163 occurrences across 18 modules` figure that `P7` rests on (and says in-line that it was
+transcribed out of `.scratch/` for exactly that reason); `tests/test_stored_cache_scope.py:200`
+does carry the literal `[SABOTAGE ACTIVE] S4 … came back GREEN` transcript that `CLAUDE.md`
+cites as the 2026-08-20b recurrence; and commit `66655d7` exists, so the 14M `head-66655d7.tar`
+is a reconstructible `git archive`. Six entries were 94% of the bytes and all six were
+literal tree copies. Deleted to the **Recycle Bin**, verified present there via
+`Shell.Application` — not `rm -rf`. `.scratch/_audit-2026-09-20e/report.md` (137 lines) is
+deliberately left in place so the classification is reviewable; it is the only thing there.
+
+**The two `CLAUDE.md` files were duplicating each other, measured not eyeballed.** Overlap
+with `~/.claude/CLAUDE.md`, by shared unique words on the repo side: **Delegation 67%**
+(252/378), record-keeping/`.scratch` 37%, assurance-traps vs the five footguns 25%,
+git/commit/push 12%. Only Delegation was genuinely redundant — and the two copies had
+already drifted in wording, which is the failure mode. This file's Delegation section is now
+a pointer plus the four things true only here (the `P3` ~123-vs-live-~136/8 sizing miss;
+that § SCOUTING IS A DELIVERABLE is stricter than the machine rule; the first-hand list —
+`formal/history/`, a gate pin, a golden, `audited_theorems.txt`; and one-file-per-agent as
+the 2026-09-10 gate trap one level up). The 2026-08-28 user-preference date and the
+2026-09-20d `ultracode` date are kept HERE on purpose: the machine file states the rule
+without this repo's provenance. 465 → 444 lines. The other three overlaps were LEFT
+deliberately — there the machine file states a rule and this file states the dated incident,
+which is the correct split, not duplication.
+
+**New machine-wide standing instruction**, added to `~/.claude/CLAUDE.md` §`.scratch/` (not
+here — it applies to any repo with a scratch dir, and putting it there rather than here is
+itself the dedupe): a session finding a `.scratch/` bigger than its own run sends a
+read-only subagent to audit it first, under four classes (DERIVABLE / SUPERSEDED / SALVAGE /
+UNCLEAR) where SUPERSEDED requires the agent to NAME AND QUOTE the tracked file. Two rules
+in it are the ones that matter: **the agent audits, the session deletes** (an agent that
+does both leaves no reviewable step), and **exclude the agent's own report directory** or it
+classifies its work-in-progress as garbage.
+
+Gate: all ten phases re-run on this tree and GREEN — `lean` PASSED (holes=0, audits=617,
+pinned=617), `conf-tile:1/5`…`5/5`, `tests-tile:1/4`…`4/4`, one phase per command to its own
+`mktemp` log with the verdict ECHOED rather than read off a wrapper's exit status.
+`gate_status.py`: *the ten-phase gate is COVERED on this tree*. No algorithm changed, so no
+fuzz sweep is owed. This paragraph replaced a "Still owed: the gate" line written before the
+run — the edit stales only `t2a`, so `lean` alone was re-run after it and the tiles (`t2c`,
+which excludes `*.md`) still hold.
+
+Still owed: nothing.
+
+
 ## 2026-09-20d — `TK78` closed: the enumerator is pinned, and the sweep refuted its own map's headline
 
 rows: `TK78` (CLOSED — step (i) landed), `TK90` (CLOSED — the dated correction), `TK91` (promoted to `NOW`, measured evidence added), `TK89` (untouched, still `NEXT`).

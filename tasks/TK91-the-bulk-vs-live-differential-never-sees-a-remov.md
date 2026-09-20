@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-20
-moved: 2026-09-20d
-updated: 2026-09-20d
+moved: 2026-09-20e
+updated: 2026-09-20e
 closed:
 ---
 
@@ -83,3 +83,42 @@ plausible and narrow, and nothing in the tree can see it.
 So the concrete first ask for whoever takes this row is smaller than the row's framing: a
 remove history that reddens that one deletion. The other three kind-drops in the same sweep
 were each caught somewhere; this one was not caught anywhere.
+
+### 2026-09-20e
+
+THIS ROW'S STATED BLOCKER IS REFUTED. Read this before sizing the item -- the 2026-09-20d
+entry says the honest version is non-trivial because "graphindex_drive replays a tuple LIST,
+so a removal arm needs the corpus format to carry ops, not tuples". That is no longer true,
+and the row told the next session to check exactly this.
+
+`READ 2026-09-20e`, first-hand:
+
+* `formal/conformance/backends.py:283::graphindex_drive_ops` already drives an interleaved
+  `('add'|'remove', tup)` stream through the real graph index, with poison semantics mirrored
+  from the set-engine driver -- AND it RETURNS the surviving accepted set (`present`), which
+  is precisely the snapshot input a bulk build needs. The machinery the row asks whether to
+  build exists.
+* `formal/conformance/test_conformance_remove.py:428::test_graph_remove_sequences` already
+  compares the removal-driven state against a FRESH rebuild over that survivor set, at full
+  state level (nodes, edges, `EdgeV4.derived` flags, residues -- via `::_graph_state`) plus
+  the grid plus the oracle, over seeded sequences with an anti-vacuity floor.
+
+So "removals converge to a rebuild" is WELL pinned -- for the INCREMENTAL rebuild. The fresh
+arm at `:453` is `graphindex_drive_ops(schema_text, [('add', t) for t in final_tuples], ...)`,
+i.e. write-by-write through `GraphDriver`. The bulk constructor is never the comparand.
+
+THE HOLE, restated one arm wide: nothing anywhere bulk-builds from a POST-REMOVAL survivor
+set. `tests/test_bulk_build.py` contains ZERO remove ops (grepped 2026-09-20e -- no
+`'remove'`, no `remove_tuple`); `formal/conformance/test_conformance_bulk_state.py` names the
+gap itself in its "does NOT cover" list; the only coverage is
+`tests/test_connectedstore_build.py:41`, one history with one remove.
+
+SO THE CHEAPER SHAPE IS THE HONEST ONE, which inverts this row's own menu: add a BULK arm to
+the EXISTING `test_graph_remove_sequences` -- reusing its ops corpora, seeds, `_graph_state`
+and grid -- rather than building a removal arm into the bulk-state module. That also gives
+the row's measured-INERT branch (`processor.py::_live_keys_of`'s leading `rel`) a corpus that
+can finally move it, which is why this row is `NOW`.
+
+UNVERIFIED: whether `test_built_index_equals_live_maintained`'s `_SCHEMA` is boolean (it has
+`blocked`/`public`, which suggests an exclusion) -- not checked, and it does not change the
+conclusion above.

@@ -191,56 +191,35 @@ IVM delta processor.
     was written into four docstring sites as one module's test count (it collects **12**).
     Get a count from `pytest <target> -q --collect-only`, never from a run's tail.
 
-## Delegation — subagents are for CONTEXT, not for parallelism
-- **The default working pattern (user preference, stated 2026-08-28): push bulky READING
-  into subagents and keep only their conclusions.** The purpose is to minimize context
-  bloat and token consumption so a session can run longer and get more done — **not** to
-  make things happen at once. Wall-clock parallelism is a side effect, never the
-  justification, and citing it as one leads to delegating cheap lookups (pure overhead)
-  and to splitting coupled work that then needs reconciling.
-- **The test before delegating:** *would doing this inline flood the context with file
-  contents?* Census sweeps, "find every call site of `X` and classify it", "verify these
-  seven claims against the live tree" — delegate, and take back a table. A single-fact
-  lookup where the file and symbol are already known — do it inline.
-- **Ask agents for verdicts plus `file::symbol` evidence, never file dumps.** An agent
-  that returns prose has spent the tokens without buying the certainty; one that returns
-  MATCHES / DIFFERS with line numbers is re-checkable. Worth doing because sizing claims
-  here have come in low repeatedly — `P3`'s re-verified "~123 sites / 7 files" budget was
-  live **~136 / 8** on 2026-08-28, the gap being the pin module its own session created.
-- **This is standing permission**: no need to ask before spawning read-only agents for
-  work of that shape.
-- **`ultracode` / the `Workflow` tool also has STANDING APPROVAL as of 2026-09-20d (user
-  instruction), whenever it is more helpful than plain subagents.** This REPLACES the
-  previous "per-request opt-in" rule here and in the machine-wide `~/.claude/CLAUDE.md`,
-  which was updated the same day. It is still the heavy instrument — scripted fan-out, dozens of agents — so the test is
-  unchanged and is about SHAPE, not permission: use it when the work is a genuine fan-out
-  with a reconcile step (a census across many files, N independent verifications of N
-  claims, a mutation sweep over a module), and a plain `Agent` call or an inline grep when
-  it is not. Do not reach for it to make coupled work "go faster"; that is the same
-  parallelism fallacy this section opens with, only more expensive.
-- ⚠ **EVERY delegated unit PERSISTS ITS OWN OUTPUT BEFORE IT RETURNS — agents and
-  workflow minions alike** (rule added 2026-09-20d, user instruction, from repeated
-  UNRESUMABLE losses when the API went flaky or a session limit landed mid-fan-out).
-  A report that exists only in a returned message dies with the session that asked for it,
-  and a twelve-agent sweep that dies at agent eleven has to be paid for twice.
-  * **The instruction goes IN THE PROMPT, not in your head**: every spawn tells the agent
-    where to write and to write it **before** returning — `.scratch/<topic>/<agent>.md`
-    for working notes, one file per agent so two writers never share a filename (the
-    2026-09-10 gate trap, one level up).
-  * **Incrementally, not at the end.** An agent that appends each finding as it lands
-    leaves a partial result a later session can use; one that buffers and writes last
-    leaves nothing when it is the one that dies.
-  * ⚠ **`.scratch/` is gitignored, so it survives a session and NOT a machine** — the
-    moment a result is evidence (a sweep table, a census, an adjudication) it is copied
-    into a tracked file, same hour, per § SCOUTING IS A DELIVERABLE. `.scratch/` is the
-    crash bag; it is not where findings live.
-  * **The orchestrating session owns the cleanup.** Delete the run's `.scratch/` directory
-    once its conclusions are in a tracked file, in the same session — say in the final
-    message if you deliberately leave one behind, and name it.
-- ⚠ **Delegation does not transfer judgement.** A subagent's report is evidence, not a
-  finding. Contradicted reports get reconciled, not averaged; and anything headed for
-  `formal/history/` (append-only), a gate pin, or a golden gets verified first-hand
-  before it is written.
+## Delegation — the repo-specific half
+**The rule itself lives in `~/.claude/CLAUDE.md` § Delegation and is NOT restated here**
+(deduplicated 2026-09-20e, user instruction — the two copies were ~67% the same text and
+had already drifted in wording). The underlying preference is the user's, **stated
+2026-08-28**, and the `ultracode` / `Workflow` standing approval is **2026-09-20d** — both
+dates are load-bearing and are kept here because the machine-wide file states the rule
+without this repo's provenance. That section is auto-loaded every session and carries:
+the purpose (context, never parallelism) and the test for when to delegate; verdicts plus
+`file::symbol` instead of file dumps; standing permission for read-only agents; standing
+approval for `ultracode` / the `Workflow` tool as of 2026-09-20d; the requirement that
+every delegated unit persists its own output incrementally before returning, one file per
+agent; the `.scratch/` audit-and-sweep procedure; and that delegation does not transfer
+judgement. Read it there. What follows is only what is true HERE and nowhere else.
+
+- **The sizing claims in this repo have come in LOW, repeatedly — that is why the
+  `file::symbol` rule is not optional.** `P3`'s re-verified "~123 sites / 7 files" budget
+  was live **~136 / 8** on 2026-08-28, and the gap was the pin module its own session had
+  just created. An agent that returns prose has spent the tokens without buying the
+  certainty.
+- **`.scratch/` here is governed by § SCOUTING IS A DELIVERABLE above, which is stricter
+  than the machine-wide rule**: a measurement lands in a TRACKED file the same hour, in the
+  ACTIVE-PLAN shape, labelled first-hand READ / REASONED / UNVERIFIED. The machine note says
+  "copy evidence out of the crash bag"; this repo additionally says where it goes and what
+  it must be labelled.
+- **The things that get verified FIRST-HAND before an agent's report is written down are
+  named here**: anything headed for `formal/history/` (append-only), a gate pin, a golden,
+  or an `audited_theorems.txt` entry. Contradicted reports get reconciled, not averaged.
+- ⚠ **One file per agent is the 2026-09-10 gate trap one level up** — two writers on one
+  filename is exactly how a passing run's exit code ended up beside a failing run's log.
 
 ## Running things
 - Conda env named after the folder: `graph-reachability-zanzibar-index`; on this machine it
