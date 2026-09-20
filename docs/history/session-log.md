@@ -30,6 +30,104 @@ from here.
 
 ---
 
+## 2026-09-20 — `TK78` verified, not executed: a bump cannot go down-stratum, and the ENUMERATOR is the item
+
+rows: `TK78` (verified first-hand, decision recorded, NOT executed — the row's own FIRST ACTION was verification), `TK89` (NEW — the user's note named an unfiled loose end), `TK90` (NEW), `TK91` (NEW).
+
+task lint: clean (13 checks, 206 task file(s) parsed), 32 warning(s)
+read: board only
+
+⚠ Literally: `board`, then `show TK88` / `show TK84` / `show TK83` / `show P24` to place what
+the user's pasted note described, then `show TK78`. `HANDOFF.md` was read at WRITE-BACK, not
+at start — the board's banner is its `## Banner` section, so this is the honest token. (The
+standing "no token for *entered via `show`*" gap in `HANDOFF.md` § Still owed has a sibling:
+there is no token for *entered from a note the user pasted*, which is what happened here.)
+
+**The task, in two halves.** The user pasted the previous session's closing note and asked
+that anything in it not already filed be filed and prioritized, then that work continue at
+the top of the board.
+
+**Half one — the unfiled thing was the instrument, and it is now `TK89`.** `TK88` was
+already filed; the loose end was the other one the note flagged: *"the `parse_crossable` 17
+vs 18 disagreement … is recorded unreconciled, on purpose."* It appears in two CLOSED task
+files and one doc, and in no open row — i.e. the ACCEPTANCE INSTRUMENT behind `TK77` and
+`TK87` (`formal/probes/tk77_crossable_census_2026-09-19.py`) books two different numbers for
+one tree from one command, and nothing tracked that. Filed `NEXT`, `S`, with three candidate
+mechanisms ranked and a cheap discriminator: the hypothesis example DB is the leading
+candidate (`READ`: `tests/test_generator_coverage.py:685` and `:691` are `@given`,
+`.hypothesis/` exists in the tree, and `-p no:cacheprovider` disables pytest's cache but not
+hypothesis's), attribution by last-STARTED test is second (`::pytest_runtest_logstart` sets
+the module the counters attribute to, so a parse at collection or teardown books elsewhere),
+and the re-export rebinding loop third. Check the `<setup>` row and the TOTAL before the
+module row: if the TOTAL is stable it is attribution, if it moves it is the DB. It was
+deliberately NOT promoted over the standing `NOW`, whose rank the previous session recorded
+reasoning for.
+
+**Half two — `TK78`, whose first action the row itself defined as verifying two subagent
+readings first-hand.** Both are literally CONFIRMED, and both needed correcting anyway:
+`index_v4/bulk_backfill.py` has no quiescence check, but its two `InvariantViolation` raises
+are CYCLE guards (`::_topo` `:243`, `::_add_edge_existence` `:255`) and its one `while` is
+Kahn, not a fixpoint loop; and `::DeltaProcessor.backfill` does discard `self._bumped`, but
+it is at `:1820-1832` today rather than the row's `:1714-1726` (`:1694` is now the tail of
+`::_settle`) — the line numbers rotated under the `TK72`/`TK87` edits, exactly as the
+scouting rule warns.
+
+**The row's "actual question" is answered NO.** It asks whether a discarded bump can land on
+a LOWER stratum, and asks for a construction or a proof it cannot. It cannot, from two
+first-hand facts: `zanzibar_utils_v1.py::_stratify` (`:2064`) is Kahn layering over
+`plan.deps`, so a dependent's stratum is strictly greater and a residual cycle raises
+`CyclicDerivedDependency`; and in `::_plan_deps_and_fanout` (`:2002-2052`) every
+`dependents.setdefault(k, ...)` is immediately preceded by `dep(k)` in all four branches, so
+`dependents` is exactly a subset of reverse(`deps`), while `::_fan_out` reads `dependents`
+and nothing else. Discarding the bumps loses no ordering. The discard is also DELIBERATE,
+not an oversight: `::_live_keys_of` (`:1783`) documents that *"backfill must reach them by
+ENUMERATION"* where live maintenance uses dependents-invalidation.
+
+**And the headline overstates the risk while missing it.** "A second reconcile
+implementation" is wrong about the semantics — `bulk_backfill::_reconcile` calls the SAME
+compiled `plan.check_fn` / `plan.stars_fn` closures the live processor does, and says so:
+*"Only state ACCESS is mirrored."* What IS duplicated is the enumerator, and that is where
+the hole is: `::_live_keys_of` ≡ `::_fan_out` is the offline path's entire correctness
+argument, `grep -rn '_bumped|_live_keys_of' tests/ formal/ --include=*.py` returns **zero**,
+and `bulk_backfill.py` carries its own copy at `:808` — so `tests/test_bulk_build.py`
+compares copy A against copy B, and a defect shared by both cancels on both arms and passes
+green. Map: [`docs/tk78-offline-bootstrap-audit-2026-09-20.md`](../tk78-offline-bootstrap-audit-2026-09-20.md)
+(ACTIVE-PLAN; its Corrections section records that my own pre-census §5 was wrong and how).
+
+**A census was delegated and then reconciled first-hand**, per the standing rule that a
+subagent report is evidence rather than a finding. Its best result survived checking and is
+now on the row: the most-cited gate is MISLABELLED —
+`tests/test_bulk_build.py::test_bulk_build_identical_to_incremental` is offline-vs-offline,
+because `build_index(bulk=False)` is a leaf-only `add_tuple` replay plus one `backfill()`
+with no per-write cascade (`connectedstore/build.py:92-107`, whose own comment says *"This
+IS the identity gate's reference side"*). The genuine live differentials are
+`formal/conformance/test_conformance_bulk_state.py::test_state_bulkbuild_vs_pythongraph`
+(verified live at `formal/conformance/backends.py:88`),
+`tests/test_invariants_derived.py::test_backfill_vs_live_equivalence` (`:220`, the only pin
+of `backfill()` itself), and `tests/test_connectedstore_build.py::test_built_index_equals_live_maintained`.
+
+**Two spin-offs filed rather than folded in.** `TK90`: a GATED module,
+`formal/conformance/test_conformance_bulk_state.py`, still tells the reader the I14
+crossable-middle loop is *"pinned by NOTHING"* on a paragraph stamped "Measured 2026-09-06",
+and `P22` closed exactly that on 2026-09-16 — `TK88`'s shape pointed the other way, and
+worse, because a session planning offline-bootstrap assurance reads it and re-does `P22`.
+`TK91`: the bulk↔live differential is add-only but for one `remove` in one history
+(`tests/test_connectedstore_build.py:41`), while bulk builds from SURVIVING TUPLES and the
+live arm replays a HISTORY — `TK87`'s shape one level up.
+
+**Decision recorded on the row** (`CLAUDE.md` § "Who decides"): the enumerator pin first,
+remove-histories second and separately, the docstring correction immediately; with the
+sabotage that must accompany the first — drop one `spec.kind` branch from `::_live_keys_of`
+and watch `tests/test_bulk_build.py` stay GREEN — and the warning that the fixture must have
+a dependent with no positive leaf of its own or the pin is vacuous. Two such fixtures exist
+and neither is in a live differential today.
+
+Still owed: `TK78` is VERIFIED but NOT EXECUTED — its map's §6 step (i) is the next action
+and everything it needs is measured. No write-back step was skipped. The items under
+`HANDOFF.md` § Still owed are untouched and carry forward.
+
+---
+
 ## 2026-09-19f — the swarm can REMOVE: `_sync/EFF` `0 → 20`, and a sweep caught my own pin claiming nothing
 
 rows: `TK87` (CLOSED — the churn pass landed), `TK77` (CLOSED — its acceptance column is non-zero on both halves; its census is now FROZEN), `TK72` (CLOSED — three call sites, a false docstring, and an AST census that refuses a silent revert), `TK88` (NEW — the module says it is RED and has been green for five weeks), `TK78` (promoted `NOW`, reasoning on the row).
