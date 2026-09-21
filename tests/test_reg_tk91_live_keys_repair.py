@@ -116,17 +116,28 @@ S1 is the mutation this module exists for; the surviving test is the fixture gua
 reads the plan rather than the enumerator and is correctly indifferent to it. S2 confirms
 the instrument fails when it should.
 
-(!) THE DUPLICATE IS STILL UNPINNED, DELIBERATELY. ``index_v4/bulk_backfill.py:811``
-carries its own ``preds = [rel] + [...]`` mirror. Measured first-hand 2026-09-20: the same
-byte-level deletion applied to the MIRROR leaves this module plus
-``tests/test_backfill_enumeration.py``, ``tests/test_bulk_build.py`` and
-``tests/test_invariants_derived.py`` at ``29 passed``. That is NOT an oversight here --
-REASONED from ``connectedstore/build.py::build_index``, which "refuses to run on an index
-that already has state", the bulk path only ever backfills a pre-backfill state it
-constructed itself, so its ``[rel]`` term has no inconsistent store to repair and may be
-unreachable by construction. UNVERIFIED: nobody has proved that. Do not delete the mirror's
-term on the strength of this paragraph, and do not assume it is guarded because this file
-exists.
+(!) THE DUPLICATE IS PINNED ELSEWHERE, AND THE HYPOTHESIS THIS PARAGRAPH USED TO CARRY
+IS REFUTED. ``index_v4/bulk_backfill.py:811`` carries its own ``preds = [rel] + [...]``
+mirror. Measured first-hand 2026-09-20: the same byte-level deletion applied to the MIRROR
+leaves this module plus ``tests/test_backfill_enumeration.py``,
+``tests/test_bulk_build.py`` and ``tests/test_invariants_derived.py`` at ``29 passed``.
+
+This file used to explain that green with a REASONED, explicitly UNVERIFIED guess: that
+because ``connectedstore/build.py::build_index`` "refuses to run on an index that already
+has state", the bulk path's ``[rel]`` term had no inconsistent store to repair and might be
+**unreachable by construction**. **``TK92`` REFUTED IT on 2026-09-21.** The defence is
+about inconsistent stores and says nothing about the other way the public family gets a
+node: a stored USERSET SUBJECT ``group:eng#member`` interns ``(member, group, eng)`` during
+the bulk LOAD. Where ``member`` is itself derived, the mirror's ``[rel]`` term is the only
+thing that enumerates ``eng`` -- measured, ``['eng', 'ops']`` against ``['ops']`` for the
+rest of ``preds``. No schema in the 26-entry conformance corpus pairs a derived relation
+with a userset subject, which is why four whole modules could not see it.
+
+The term is nonetheless INERT on the bulk path -- a rel-exclusive name has no positive-leaf
+state, so it reconciles to nothing -- so the mirror is a harmless superset rather than a
+second copy of this file's fail-open. It stays. The refutation itself is pinned by
+``tests/test_reg_tk92_bulk_rel_term.py``; the adjudication is
+``docs/tk92-bulk-rel-term-2026-09-21.md``.
 """
 
 import json

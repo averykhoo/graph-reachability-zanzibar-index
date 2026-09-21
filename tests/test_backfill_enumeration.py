@@ -81,6 +81,19 @@ only by their PUBLIC family -- state that outlives the leaf which produced it, i
 REMOVE. The corpus here is add-only by design (above), so the branch cannot move, and an
 inert mutation is reported as inert rather than read as a clean pin. It is measured
 evidence for TK91 (remove histories), not a hole this module should have closed.
+
+(!) CORRECTION 2026-09-21 (TK92): the paragraph directly above gives the right verdict
+for the wrong reason, and the reason matters. "The corpus here is add-only, so the branch
+cannot move" treats a REMOVE as the only way an object lands in its public family. It is
+not. A stored USERSET SUBJECT ``group:eng#member`` interns ``(member, group, eng)`` at
+LOAD time, on an add-only corpus, and where ``member`` is itself derived the ``rel`` entry
+is then the only thing that enumerates ``eng`` -- measured 2026-09-21,
+``_live_keys_of('group','member')`` returns ``['eng','ops']`` against ``['ops']`` for the
+rest of ``preds``. The actual reason this corpus cannot move the branch is narrower: NO
+schema in ``formal/conformance/corpus.py::SCHEMAS`` (all 26 censused) pairs a derived
+relation with a userset subject. The branch is reached but INERT there -- a rel-exclusive
+name has no positive-leaf state, so it reconciles to nothing. See
+``tests/test_reg_tk92_bulk_rel_term.py`` and ``docs/tk92-bulk-rel-term-2026-09-21.md``.
 """
 
 import json

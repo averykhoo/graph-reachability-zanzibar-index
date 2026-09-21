@@ -2,7 +2,7 @@
 id: TK93
 title: the census _ensure/raw column varies run-to-run at a FIXED hash seed; mechanism unidentified
 brief: six runs one tree: 6589/6609/6617/6627; PYTHONHASHSEED refuted by its own fix failing sabotage
-pri: NEXT
+pri: NOW
 size: S
 deps: []
 related: [TK89, TK77, TK87]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-20g
-moved: 2026-09-20g
-updated: 2026-09-20g
+moved: 2026-09-21
+updated: 2026-09-21
 closed:
 ---
 

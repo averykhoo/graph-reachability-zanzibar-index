@@ -30,6 +30,84 @@ from here.
 
 ---
 
+## 2026-09-21 — `TK92` CLOSED: the bulk `[rel]` term is REACHABLE and INERT, and the row's two outcomes were both wrong
+
+rows: `TK92` (CLOSED), `TK94` (NEW, `NEXT`), `TK93` (promoted `NEXT` -> `NOW`).
+
+task lint: clean (13 checks, 209 task file(s) parsed), 29 warning(s)
+read: board only
+
+Entered on a user instruction to explain `TK92`/`TK71`/`TK93` and then take `TK92`, the
+only `NOW` row. Literally: `board`, then `show` on all three.
+
+**The row asked which of two honest outcomes held for the leading `rel` in
+`index_v4/bulk_backfill.py:811`'s `preds`: unreachable-by-construction dead code, or a
+reachable unpinned copy of the `TK91` fail-open. NEITHER. It is reachable AND inert.**
+
+**What the standing defence missed.** It argued from `connectedstore/build.py::build_index`
+refusing a store that already has state — which is about INCONSISTENT stores, and says
+nothing about the other way a node lands in the public family. A stored USERSET SUBJECT
+`group:eng#member` interns `(member, group, eng)` during the bulk LOAD, on an add-only
+build. Where `member` is itself derived, the `[rel]` term is the only thing that enumerates
+`eng`. MEASURED first-hand: `_live_keys_of('group','member')` returns `['eng','ops']` where
+the rest of `preds` returns `['ops']`.
+
+**Why four whole modules measured it inert — a census, not a guess.** Over all 26
+`formal/conformance/corpus.py::SCHEMAS`, four use a userset subject at all and in EVERY one
+the referenced `group.member` is plain-direct. **The intersection with the derived relations
+is empty across all 26.** The corpora cannot reach the branch, so their green never said
+anything about it. `tests/test_backfill_enumeration.py`'s "the corpus is add-only, so the
+branch cannot move" was the right verdict for the wrong reason and now carries a dated
+correction; the explicitly-UNVERIFIED hypothesis in
+`tests/test_reg_tk91_live_keys_repair.py`'s docstring is REFUTED and rewritten in place.
+
+**Why it is nonetheless inert, so the term STAYS.** `preds`' second term sees only POSITIVE
+leaves, so the sharp case is an object with SUBTRAHEND-only state. Three arms measured
+(blocked-only + userset subject; blocked-only alone; no state + userset subject): built
+state byte-identical with and without the term, and identical to `bulk=False`, in all three.
+REASONED and labelled: a rel-exclusive name has no positive-leaf state of any of the five
+`LeafSpec.kind` values, and positive leaves are the only candidate generators in
+`_reconcile`. Deleting it would also break the mirror's stated lockstep with
+`DeltaProcessor` for zero gain.
+
+**Landed:** [`tests/test_reg_tk92_bulk_rel_term.py`](../../tests/test_reg_tk92_bulk_rel_term.py),
+4 pins — the refutation, a ceiling control holding the test's model of `preds` in lockstep
+with the shipped body, a fixture guard, and `bulk == bulk=False` on an input class the
+corpus has never contained. Map:
+[`docs/tk92-bulk-rel-term-2026-09-21.md`](../tk92-bulk-rel-term-2026-09-21.md).
+
+⚠ **The pin is asserted on what the enumerator RETURNED, not on a consequence of it,
+because the consequence is nothing.** A state-comparison pin here is GREEN under the very
+mutation the row exists for — verified, the identity arm stayed green under `S1` — and
+would have read exactly like a clean pin. This is the 2026-09-13e lesson arriving from the
+other direction: not "don't route through a helper" but "don't route through an effect the
+mutation does not have".
+
+⚠ **The sweep earned its keep again, and this time the masked mutation was MINE.** 11
+monkeypatches + 2 byte-level sabotages. `M_ID` (the reconstruction with nothing changed)
+green = the harness is faithful. 5 of 10 caught; 4 UNREACHABLE on this fixture (no
+computed/TTU leaf, no wildcard node — verified by READING the plans, not inferred); 1
+REACHED and MASKED (`M10`) and deliberately not pinned. **`M3` — drop the `spec.positive`
+filter — was GREEN on the first pass while being reached the whole time**, because the
+`blocked` family was a SUBSET of the `allowed` family, so dropping the filter enumerated the
+same names. ONE tuple (`u9 blocked group:qa`, a group nothing enumerates) makes the filter
+load-bearing and `M3` caught. The single sabotage would never have found it.
+
+**Scope, stated so nobody over-reads it.** The processor's copy is untouched and still the
+`TK91` fail-open. "Live correctness bugs: 0" is undisturbed — this was an assurance question
+from the start, and the answer is that the assurance was adequate **for the wrong reason**,
+which is worth exactly as much as knowing it is adequate.
+
+**`TK94` filed, not started:** zero of 26 `SCHEMAS` pair a derived relation with a userset
+subject, so every generated and enumerated conformance arm is blind to the class — not just
+the bulk identity gate. One new corpus entry would widen several modules at once, but
+`test_conformance_enum.py` enumerates every store up to a bound, so the cost there is
+combinatorial, not additive. Sized `M` for that reason.
+
+`TK93` promoted to `NOW` at write-back (closing `TK92` left the board with none).
+
+Still owed: nothing from this session's own work. The carried items below are untouched.
+
 ## 2026-09-20g — `TK83` + `TK89` closed; one fixture earns its place, one diagnosis dies to its own fix
 
 rows: `TK83` (CLOSED), `TK89` (CLOSED), `TK93` (NEW, `NEXT`), `TK92` (promoted `LATER` -> `NOW`), `TK71` (promoted `LATER` -> `NEXT`).
