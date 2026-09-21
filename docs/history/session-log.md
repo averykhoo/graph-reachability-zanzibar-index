@@ -30,6 +30,107 @@ from here.
 
 ---
 
+## 2026-09-21b — `TK93` CLOSED: `_ensure/raw` is a FUNCTION of the hash seed, and the refutation was refuted
+
+rows: `TK93` (CLOSED), `TK95` (NEW, `NEXT`), `TK94` (promoted `NEXT` -> `NOW`).
+
+task lint: clean (13 checks, 210 task file(s) parsed), 29 warning(s)
+read: board only
+
+Autonomous "do the next task" session. Literally: `board`, then `show TK93` (the only
+`NOW`), then the two probes and the `TK89` doc the row's **Read first** names.
+
+**The row's own premise was wrong, and that is the finding.** It reads "varies run to run at
+a FIXED hash seed; mechanism unidentified". MEASURED 2026-09-21b, 20 seeded runs on one
+tree: **seed 0 -> `6617` (x9), seed 1 -> `6627` (x5), seed 2 -> `6609` (x4), seed 3 ->
+`6605` (x2), with ZERO within-seed variation.** `TK89`'s `{6589, 6609, 6617, 6627}` — read
+there as four runs at one seed — is four SEEDS. It is a deterministic function of
+`PYTHONHASHSEED`.
+
+**The tree is byte-identical to the one `TK89` measured**, so the two sets of numbers are
+comparable and they contradict: `git diff 4af2c05..HEAD` is empty over
+`tests/test_generator_coverage.py`, `tests/genswarm.py`, `tests/conftest.py`, `index_v4/`,
+`zanzibar_utils_v1.py`, `setengine/`, `connectedstore/` and the census probe. `6609` and
+`6627` are exactly what seeds **2** and **1** book today — i.e. the two "identically-seeded"
+runs that killed the hash-seed diagnosis were not at the seed they claimed. **The deleted
+re-exec guard was aimed at the right mechanism; its EVIDENCE failed, not its target.**
+
+⚠ **The fourth lesson, and it is the one worth carrying: a sabotage that REDDENS has still
+told you nothing until you check the instrument was in the state you think it was.** "Run it
+twice and the numbers differ" refutes reproducibility without identifying what varied, and
+on 2026-09-20g it was read as identifying the seed as innocent. The missing control was one
+line — run at two DIFFERENT fixed seeds and watch the value move. That separates "the seed
+does nothing" from "the seed was not set", and nothing in the earlier run could. `TK89`'s
+own three lessons (`n=2` cannot establish reproducibility; sabotage a non-determinism ACROSS
+runs; name what your control controls for) all survive intact.
+
+**WHERE, at per-test resolution.** Two tests of the 31 —
+`::test_dense_regime_finds_no_fail_open_divergence` and
+`::test_sparse_regime_finds_no_fail_closed_divergence` — and every moving call is on one
+path, `wildcard.py:600/601:_add_tuple_trusted <- :563:add_tuple`. Not `:415`
+(`_sync_entity_middles`' re-ensure), not `:540` (the migration walk): both seed-invariant.
+So: write volume, not a different entity walk. The row's acceptance proposed a `-k`
+bisection; attributing by full nodeid + caller chain is the same answer for one run instead
+of log(31).
+
+**WHY.** `zanzibar_utils_v1.py::RuleSet.apply` yields its rewrite fan-out out of a **set**
+(`seeds`, or the `unprocessed.pop()` worklist), and `tests/parity.py::_GraphSide.apply`
+consumes it inside ONE `try` that rolls back on `ValueError`. When a fan-out member is
+refused, how many `add_tuple` calls already completed is the raiser's POSITION in a set
+iteration order. The arithmetic closes exactly, which is what makes it an identification
+rather than a correlation: raw tuples POSED is **`7499` at every seed**, aborts are
+invariant at **`21`**, and only their position moves — dense `+3` completed writes -> `+6`
+raw, sparse `+2` -> `+4`. The decisive arm: `--sorted-fanout` (same writes, deterministic
+order, nothing else) gives `6627` at all four seeds with `0 MOVED` in **every** cell.
+
+**REMEDY — mechanical, and not the tolerance band the row forbids.** Within a seed the
+column is EXACT, so what is owed is provenance, welded where it cannot be lost: the live
+seed is now part of the column NAME. A pasted table reads `_ensure/raw@seed=0`, or
+`_ensure/raw@UNSEEDED` when nobody set one, so two tables at different seeds cannot be
+silently differenced by a reader who never opened the probe. Both `TK77`'s and `TK87`'s
+tables were pasted from stdout, which is exactly why the warning had to move out of the
+docstring and into the data.
+
+**Landed:** [`formal/probes/tk93_ensure_raw_bisect_2026-09-21.py`](../../formal/probes/tk93_ensure_raw_bisect_2026-09-21.py)
+(per-nodeid/per-caller attribution, the `--seeds` between-seed arm, the `--sorted-fanout`
+mechanism arm, the abort census, four instrument controls, and a RAN verdict block);
+trap (c) of the census probe rewritten — **it asserted the opposite** — plus the printed
+warning and the seeded column header; a dated correction at the top of
+[`docs/tk89-census-reproducibility-2026-09-20.md`](../tk89-census-reproducibility-2026-09-20.md);
+map [`docs/tk93-ensure-raw-seed-dependence-2026-09-21.md`](../tk93-ensure-raw-seed-dependence-2026-09-21.md).
+
+**Instrument controls, because the previous session's instrument is what failed.**
+Conservation (per-nodeid sums to an independently-kept TOTAL) held in every run; a missing
+JSON prints `INSTRUMENT FAILURE` rather than zeros; `rc` and `passed=31` travel with every
+number. Two more that are specific to this item: **cross-instrument** — the `tk77` census,
+with a different patch set, books `6617` at seed 0 in three runs, identical to this probe's;
+and **instrument stability** — seed 0 books `6617` both before and after the `add_tuple`,
+`RuleSet.apply` and abort wrappers were added.
+
+**SCOPE.** No production code changed. Nothing observable moves: `31 passed` at four seeds
+and under the sorted arm, same decision, same rollback, every other census column
+seed-invariant. Sorting the fan-out is an INSTRUMENT here and is explicitly not proposed as
+a fix — it costs the live write path and buys nothing observable. "Known live correctness
+bugs: 0" is undisturbed and `TK77`/`TK87`/`TK89`'s acceptance columns are untouched.
+
+**Split out as `TK95` (`NEXT`, `S`) rather than bolted on.** All `21` aborts land at fan-out
+position `>= 2` — not one at position 1 — so every refused fan-out leaves a completed prefix
+whose CONTENTS move with the seed, and correctness rests entirely on the rollback undoing
+exactly that prefix. No test drives one fan-out in two orders and compares. It is evidently
+fine (`31 passed` at four seeds, and the set engine agrees on every query) but that is a
+run-wide consequence, not a pin — and a run-wide green cannot tell a correct rollback from a
+lucky one. `TK93`'s acceptance was localisation; this is new work, not a half-finished half
+of it.
+
+**`TK94` promoted `NEXT` -> `NOW`** (closing `TK93` left the board with none), ranked above
+`TK71` and `TK95` because it is a whole schema class no generated or enumerated conformance
+arm can reach — a hole in the equivalence net itself — where the other two are assertion
+strength and a pin on a path already green at four seeds. Reasoning is on the row.
+
+Still owed: nothing skipped from the Rhythm. `TK95` carries the one open thread.
+
+---
+
 ## 2026-09-21 — `TK92` CLOSED: the bulk `[rel]` term is REACHABLE and INERT, and the row's two outcomes were both wrong
 
 rows: `TK92` (CLOSED), `TK94` (NEW, `NEXT`), `TK93` (promoted `NEXT` -> `NOW`).

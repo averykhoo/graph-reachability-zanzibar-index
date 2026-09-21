@@ -2,7 +2,7 @@
 id: TK94
 title: no conformance schema pairs a derived relation with a userset subject (0 of 26)
 brief: censused 2026-09-21: the class TK92 needed exists nowhere in SCHEMAS; enum cost is combinatorial
-pri: NEXT
+pri: NOW
 size: M
 deps: []
 related: [TK92]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-21
-moved: 2026-09-21
-updated: 2026-09-21
+moved: 2026-09-21b
+updated: 2026-09-21b
 closed:
 ---
 
@@ -71,3 +71,7 @@ would have guessed from reading.
   entries the graph arms take.
 
 ## Log
+
+### 2026-09-21b
+
+Promoted NEXT -> NOW at the 2026-09-21b write-back (closing TK93 left the board with no NOW). Ranked above TK71 and the new TK95 on the primary consideration: this is a whole SCHEMA CLASS that no generated or enumerated conformance arm can reach, i.e. a hole in the equivalence net itself, where TK71 is an assertion-strength question and TK95 is an outcome-equivalence pin on a path already known green at four hash seeds. The M sizing and the combinatorial cost in test_conformance_enum.py are the reason it is ranked first rather than deferred again -- it has been the cheapest-to-defer item twice now.

@@ -11,9 +11,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-20g
-moved: 2026-09-21
-updated: 2026-09-21
-closed:
+moved: 2026-09-21b
+updated: 2026-09-21b
+closed: 2026-09-21b
 ---
 
 `formal/probes/tk77_crossable_census_2026-09-19.py`'s `_ensure/raw` column varies run to run
@@ -85,3 +85,54 @@ changing the instrument.
 column. A band is a number nobody re-measures.
 
 ## Log
+
+### 2026-09-21b
+
+LOCALISED, and the row's premise was wrong: this is not a run-to-run drift, it is a
+deterministic FUNCTION OF `PYTHONHASHSEED`. MEASURED 2026-09-21b, 20 seeded runs on a
+dependency set byte-identical to TK89's (`git diff 4af2c05..HEAD` empty over the census's
+whole import surface): seed 0 -> `6617` (x9), seed 1 -> `6627` (x5), seed 2 -> `6609` (x4),
+seed 3 -> `6605` (x2), ZERO within-seed variation. TK89's `{6589,6609,6617,6627}` is four
+SEEDS, not four runs -- `6609` and `6627` are exactly what seeds 2 and 1 book today, so the
+two "identically-seeded" runs that refuted the hash-seed diagnosis were not at the seed they
+claimed. The deleted re-exec guard was aimed at the right mechanism; its EVIDENCE failed,
+not its target.
+
+The row's candidate (1) (`id()`-keyed ordering, "the only candidate that predicts variation
+at a fixed seed") is refuted with it: there is no variation at a fixed seed to predict.
+Candidates (2) unseeded `random` and (3) SQLAlchemy/GC were never examined and no longer
+need to be.
+
+WHERE: two tests of the 31 (`::test_dense_regime_finds_no_fail_open_divergence`,
+`::test_sparse_regime_finds_no_fail_closed_divergence`), entirely through
+`wildcard.py:600/601:_add_tuple_trusted <- :563:add_tuple`. Not `:415`, not `:540`.
+
+WHY: `zanzibar_utils_v1.py::RuleSet.apply` yields its rewrite fan-out out of a `set`;
+`tests/parity.py::_GraphSide.apply` consumes it in ONE `try` that rolls back on ValueError.
+Raw tuples POSED is `7499` at every seed and the abort count is invariant at `21` -- only
+the raiser's POSITION in the fan-out moves, and 2x the completed-prefix delta accounts for
+the column exactly (dense +3 writes -> +6 raw; sparse +2 -> +4). The decisive arm:
+`--sorted-fanout` gives `6627` at all four seeds with `0 MOVED` in every cell.
+
+REMEDY, and it is not the tolerance band the row forbids: within a seed the column is EXACT,
+so the fix is provenance, made mechanical -- the live seed is now welded onto the column
+NAME (`_ensure/raw@seed=0`, or `@UNSEEDED`), so a pasted table cannot be silently differenced
+against one taken at another seed. Trap (c) is rewritten (it asserted the opposite) and
+TK89's doc carries a dated correction at the top; its three lessons survive and gain a
+fourth: a sabotage that reddens has still told you nothing until you check the instrument
+was in the state you think it was -- "run it twice and the numbers differ" refutes
+reproducibility without identifying what varied, and the missing control was one line (run
+at two DIFFERENT fixed seeds and watch the value move).
+
+SCOPE: nothing observable moves -- `31 passed` at four seeds and under the sorted arm, same
+decision, same rollback, every other census column seed-invariant. No production code
+changed; sorting the fan-out is an instrument here, NOT proposed as a fix. "Known live
+correctness bugs: 0" is undisturbed, and TK77/TK87/TK89's acceptance columns are untouched.
+
+SPLIT OUT as `TK95` (NEXT, S): all `21` aborts land at fan-out position >= 2, so every one
+leaves a completed prefix whose CONTENTS move with the seed, and no test drives one fan-out
+in two orders to pin that the post-rollback store is identical. It is evidently fine and
+that is a run-wide consequence, not a pin.
+
+Map: `docs/tk93-ensure-raw-seed-dependence-2026-09-21.md`. Probe (with a RAN verdict block):
+`formal/probes/tk93_ensure_raw_bisect_2026-09-21.py`.

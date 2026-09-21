@@ -13,6 +13,44 @@ Probe: `formal/probes/tk89_census_reproducibility_2026-09-20.py`.
 
 ---
 
+## ⚠ CORRECTION 2026-09-21 (`TK93`) — §5.3a's headline is REFUTED: the seed IS the mechanism
+
+**§5.3a says "the seed is not the mechanism" and that `PYTHONHASHSEED` is refuted. That is
+wrong, and the body below is deliberately left standing as the record of how.** `TK93`
+measured, on a dependency set byte-identical to the one below (`git diff 4af2c05..HEAD` is
+empty over `tests/test_generator_coverage.py`, `tests/genswarm.py`, `tests/conftest.py`,
+`index_v4/`, `zanzibar_utils_v1.py`, `setengine/`, `connectedstore/` and the census probe):
+
+| `PYTHONHASHSEED` | `_ensure/raw` | runs |
+|---|---|---|
+| `0` | **6617** | 9 |
+| `1` | **6627** | 5 |
+| `2` | **6609** | 4 |
+| `3` | **6605** | 2 |
+
+Zero within-seed variation. The set `{6589, 6609, 6617, 6627}` §5.3a treats as four runs at
+one seed is four SEEDS. The mechanism is `zanzibar_utils_v1.py::RuleSet.apply` yielding its
+fan-out out of a `set`, truncated mid-fan-out by an `AdmissionRejected` in
+`tests/parity.py::_GraphSide.apply`; `docs/tk93-ensure-raw-seed-dependence-2026-09-21.md`
+has the evidence, including the `sorted`-fan-out arm that removes the seed dependence
+entirely.
+
+**What actually went wrong here is worth more than the number.** The deleted re-exec guard
+was aimed at the RIGHT mechanism. What refuted it was two nominally-seeded runs booking
+`6609` and `6627` — which are exactly what seeds **2** and **1** book today, i.e. those two
+runs were not at the seed they claimed, and the guard's own effect was never verified. So
+§5.3a's three carried lessons survive intact (`n=2` cannot establish reproducibility; a fix
+for a non-determinism must be sabotaged across runs; name what your control controls for) —
+and they acquire a fourth, which is the one this correction exists for:
+
+> **A sabotage that reddens has still told you nothing until you check that the instrument
+> was in the state you think it was.** "Run it twice and the numbers differ" refutes
+> reproducibility; it does not identify what varied. The missing control was one line: run
+> at two DIFFERENT fixed seeds and check the value moves, which separates "the seed does
+> nothing" from "the seed was not set".
+
+---
+
 ## 1. The premise
 
 `formal/probes/tk77_crossable_census_2026-09-19.py` is the acceptance instrument `TK77` and

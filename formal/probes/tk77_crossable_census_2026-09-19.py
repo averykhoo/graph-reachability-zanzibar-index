@@ -23,33 +23,41 @@ WALKED INTO and was caught by `TK89` -- read all three before changing it.
       means "never reached" rather than "instrument dead". Without it, a patching mistake and
       a genuine coverage hole look identical.
 
-  (c) ⚠ `_ensure/raw` IS NOT REPRODUCIBLE RUN TO RUN, AND NOBODY KNOWS WHY YET. **Do not
-      difference it.** MEASURED 2026-09-20g (`TK89`), six runs of the `--pytest
-      tests/test_generator_coverage.py` invocation on ONE unchanged tree:
+  (c) ⚠ `_ensure/raw` IS A FUNCTION OF `PYTHONHASHSEED`. **Exact within one seed, MEANINGLESS
+      across two.** `TK93`, MEASURED 2026-09-21, twenty runs on one unchanged tree:
 
-          PYTHONHASHSEED unset : 6617, 6589
-          PYTHONHASHSEED=0     : 6627, 6627, 6609, 6627
+          seed 0 : 6617  (x9 -- 3 through this probe, 3 through it as the census, 3 more)
+          seed 1 : 6627  (x5)
+          seed 2 : 6609  (x4)
+          seed 3 : 6605  (x2)
 
-      Every other column held still in all six -- `parse_total` 1858, `parse_crossable` 24,
-      `_ensure/EFF` 78, `_sync/raw` 44, `_sync/EFF` 20, `CTL` 166 -- and the crossable
-      shape-set breakdown was byte-identical throughout. So the instrument is reproducible
-      on every column an acceptance table has ever quoted; this one column is not.
+      Zero within-seed variation in any of them. The four values TK89 recorded
+      (`6589/6609/6617/6627`) are four seeds, not four runs.
 
-      ⚠ **Hash randomisation is REFUTED as the cause, by a fix that failed its own
-      sabotage.** The first version of this trap blamed `PYTHONHASHSEED` (unset repo-wide,
-      so `set` iteration order varies per process) on the strength of two seeded runs that
-      agreed. A re-exec-seeded guard was added, and then the guard was sabotaged the only
-      way a cross-run non-determinism can be -- run it twice -- and the two seeded runs
-      booked **6609** and **6627**. The guard was removed rather than kept as decoration.
-      The `n=2` agreement was luck, and believing it would have shipped a wrong mechanism
-      with a mechanism-shaped fix attached.
+      ⚠ **THIS TRAP SAID THE OPPOSITE UNTIL 2026-09-21 AND THE OLD TEXT IS THE FINDING.** It
+      read "NOT REPRODUCIBLE RUN TO RUN, AND NOBODY KNOWS WHY" and "hash randomisation is
+      REFUTED as the cause, by a fix that failed its own sabotage". The refutation rested on
+      two nominally-seeded runs booking 6609 and 6627 -- which is exactly what seeds 2 and 1
+      book today, so those runs were not at the seed they claimed. The guard that was deleted
+      was aimed at the right mechanism; what failed was its evidence, not its target.
 
-      The remaining trap is therefore a real one and is NOT closed: the column varies by up
-      to **38** (0.6%) with no known input changing. Trap (a) already says a raw count is
-      not reach, so nothing an acceptance table quotes is affected -- but a future session
-      reading a small delta off this column would be reading noise. Localising it is filed
-      as `TK93`. Write-up, including why the historical `17` vs `18` was NOT this:
-      `docs/tk89-census-reproducibility-2026-09-20.md`.
+      THE MECHANISM (first-hand, `TK93`): `zanzibar_utils_v1.py::RuleSet.apply` yields its
+      rewrite fan-out out of a **set** (`seeds`, or the `unprocessed.pop()` worklist), and
+      `tests/parity.py::_GraphSide.apply` consumes it inside one `try` that rolls back on
+      `ValueError`. When one member of a fan-out is refused, how many `add_tuple` calls
+      already completed is the raiser's POSITION in a set iteration order. Measured: the
+      number of raw tuples posed (`RuleSet.apply` calls) is **7499 at every seed**, and the
+      number of aborts per test is invariant too (11 dense / 10 sparse) -- only their
+      position moves, and the completed-write delta accounts for the column exactly.
+      Forcing `sorted` fan-out order makes every column seed-independent (6627 at all four
+      seeds). The decision, the rollback and the store state are unaffected; only the
+      counter sees it.
+
+      SO: quote this column WITH its seed (the table's header now carries it), compare only
+      at equal seeds, and do not average across seeds. Trap (a) still applies -- it is a raw
+      count, not reach. Write-up:
+      `docs/tk93-ensure-raw-seed-dependence-2026-09-21.md`; the superseded diagnosis and why
+      it survived a sabotage: `docs/tk89-census-reproducibility-2026-09-20.md` sec 5.3a.
 
 The static half is deliberately CLOSED and RNG-free where it can be: ``genswarm.witness`` takes
 every enabled switch unconditionally, so enumerating all 65535 switch subsets is an exhaustive
@@ -59,8 +67,10 @@ USAGE
   python formal/probes/tk77_crossable_census_2026-09-19.py             # sections 2-5
   python formal/probes/tk77_crossable_census_2026-09-19.py --pytest <pytest args...>
 
-  The live `PYTHONHASHSEED` is printed into the census table so a transcribed number carries
-  its own provenance -- it does NOT make the run reproducible (trap (c)).
+  The live `PYTHONHASHSEED` is printed into the census table AND welded onto the
+  `_ensure/raw` column header, so a transcribed number carries its own provenance. Setting
+  it DOES make that column reproducible (trap (c), rewritten 2026-09-21); leaving it unset
+  gives a number comparable with nothing, and the header then says `@UNSEEDED`.
 """
 from __future__ import annotations
 
@@ -88,6 +98,18 @@ _CUR = ['<setup>']
 
 _COLS = ('parse_total', 'parse_crossable',
          '_ensure/raw', '_ensure/EFF', '_sync/raw', '_sync/EFF', 'CTL')
+
+
+def _cols_header() -> tuple[str, ...]:
+    """The column NAMES, with the live seed welded onto the one that depends on it.
+
+    A mechanical anti-transcription device, and the response to trap (c) that is not a
+    doc warning: a pasted table then reads `_ensure/raw@seed=0`, so two tables taken at
+    different seeds cannot be silently differenced by a reader who never opened this
+    file. `@UNSEEDED` marks a run whose value is comparable with nothing at all."""
+    seed = os.environ.get('PYTHONHASHSEED')
+    tag = f'@seed={seed}' if seed is not None else '@UNSEEDED'
+    return tuple(c + tag if c == '_ensure/raw' else c for c in _COLS)
 
 
 def _bump(key: str, n: int = 1) -> None:
@@ -157,14 +179,18 @@ def pytest_sessionfinish(session, exitstatus):      # noqa: D103  (pytest hook)
     # ⚠ The warning travels WITH the table, not only in the docstring -- a number gets
     # transcribed into a doc far more often than a probe gets re-read (trap (c)).
     print(f"  PYTHONHASHSEED={os.environ.get('PYTHONHASHSEED')!r}   "
-          f"(!) `_ensure/raw` is NOT reproducible run-to-run and pinning this seed does "
-          f"NOT fix it -- observed 6589/6609/6617/6627 on one unchanged tree "
-          f"(TK89, 2026-09-20g). Do not difference that column. Every other column held.")
-    print(f'{"module":40}' + ''.join(f'{c:>18}' for c in _COLS))
+          f"(!) `_ensure/raw` IS A FUNCTION OF THIS SEED -- exact within one seed, "
+          f"meaningless across two (TK93, 2026-09-21: seed 0/1/2/3 -> "
+          f"6617/6627/6609/6605, zero within-seed variation in 20 runs). Compare only at "
+          f"equal seeds; the column header carries the seed for that reason. Every other "
+          f"column is seed-invariant.")
+    # Width 20, not 18: `_ensure/raw@seed=<n>` is 19 characters and an 18-wide field
+    # runs it into the column to its left, which is how a header stops being readable.
+    print(f'{"module":40}' + ''.join(f'{c:>20}' for c in _cols_header()))
     for mod in sorted(BY_MOD):
         row = BY_MOD[mod]
-        print(f'{mod:40}' + ''.join(f'{row[c]:>18}' for c in _COLS))
-    print(f'{"TOTAL":40}' + ''.join(f'{STATS[c]:>18}' for c in _COLS))
+        print(f'{mod:40}' + ''.join(f'{row[c]:>20}' for c in _COLS))
+    print(f'{"TOTAL":40}' + ''.join(f'{STATS[c]:>20}' for c in _COLS))
     print('  crossable shape-sets seen at parse, by module:')
     for (mod, shapes), n in sorted(CROSS.items()):
         print(f'    {mod:40} {list(shapes)} x{n}')
