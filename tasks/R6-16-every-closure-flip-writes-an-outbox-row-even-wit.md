@@ -1,7 +1,7 @@
 ---
 id: R6-16
 title: every closure flip writes an outbox row even with no boolean consumer (1.00 row/edge)
-brief:
+brief: CO-DESIGN TRIPLE with R6-7 + R6-8, ~16 symbols over 3 modules; may SIMPLIFY the Lean model
 pri: LATER
 size: L
 deps: []

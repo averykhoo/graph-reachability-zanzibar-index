@@ -108,6 +108,38 @@ could (no write tool, blocked redirection), so both reported in-message only. Ei
 dispatch an agent that can write, or make the orchestrating session the persister and write
 on receipt — done here.
 
+**Continuation (same session, after the first commit `d5a1605`).** User asked for two things:
+make `R6-16`/`R6-7`/`R6-8` point at each other, and close `R6-19` if I was confident it was no
+good.
+
+* **The triple now points three ways, and the asymmetry was the whole bug.** `R6-16` already
+  carried `related: [R6-7, R6-8]`, but `R6-7` and `R6-8` both had **empty** `related` — so the
+  co-design trap was invisible from the two cheap ends, which are exactly the ends a session
+  picks up. Both now relate back to `R6-16` and to each other. All three also gained a `brief`
+  (they had none, so the board showed nothing): *"CO-DESIGN TRIPLE … take all three in one
+  session or none"*.
+* ★ **`R6-19` was NOT closed, because measuring it first reversed the answer.** Its step (1) —
+  the duplicate-evaluation rate owed since it was self-filed on 2026-08-18 — was cheap, so it
+  was run rather than guessed: `benchmarks/probe_r6_19_dup_eval.py` (tracked), demorgans_law_2
+  bulk build at scale 40. **93.4% of `check_fn` evaluations are duplicates** — nowhere near the
+  "near zero" this row set as its own decline condition. The split that decides it: **27.9%
+  repeat WITHIN one `_reconcile`** (soundly memoizable) and **65.6% across** reconcile calls,
+  which is the fixpoint legitimately re-asking. Against the call site's 25.4% cum, the sound
+  part is worth **~7% of a bulk build — above the 5.0% ceiling at which `R6-14` was declined**.
+* **The same run refuted step (3)'s cross-call form empirically.** 80 of 340 pairs flip
+  `False → True` within one build, so a `(subject) → bool` memo held across `_reconcile` calls
+  would serve a stale answer. The trap said that argument "has not been made"; it is now
+  evidence, and only the intra-reconcile memo survives.
+* ⚠ **Instrument control again, and it mattered twice.** `_reconcile_subject_edge` is also
+  called from the edge-apply path (`bulk_backfill.py:801`) outside any `_reconcile`; bucketing
+  those with the previous reconcile would have **invented** memoizable duplicates. The probe
+  scopes each one alone. That count is **0** on this corpus — honest here, but not proof the
+  path never fires, so the corpus is the next thing to widen.
+
+**The transferable point:** the row's stated decline rule and its real disposition pointed
+opposite ways, and only the measurement distinguished them. A "pretty sure" close would have
+retired a ~7% item on a 2.0% figure that describes a different quantity.
+
 Still owed: three subagent claims remain **UNVERIFIED** and are flagged in place in the map —
 `R6-5`'s stale audit call-site line numbers, `R6-1`'s third `self.check(...)` site, and
 `R6-18`'s row naming `WildcardIndex.check` where the probe is in `::_check_internal`. The

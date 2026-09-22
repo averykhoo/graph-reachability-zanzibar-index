@@ -30,7 +30,7 @@ Ranked by *honest* value, not by headline percentage.
 | `R6-9` | 4.51 SELECTs / 17.7% | **measures SELECTs the fix does not delete** | no anchors | Marginal — fix the instrument first |
 | `R6-5` | 32.7% ORM construction | **26.8% of it is R6-4's** [M] → ~23.9 pts | unmodelled (§7.3) | Yes, but split the design |
 | `R6-16` | 1.00 row/edge | real; **drags R6-7+R6-8 in** | **modelled — and a SIMPLIFICATION candidate** | Only as the triple |
-| `R6-19` | cum 25.4% / self 2.0% | 2.0% ceiling; likely a **decline** | none (bulk unmodelled) | **Yes — to CLOSE it** |
+| `R6-19` | cum 25.4% / self 2.0% | **MEASURED 2026-09-22b: 27.9% soundly memoizable, ~7% of a bulk build** | none (bulk unmodelled) | **Yes -- and it SURVIVES** |
 | `R6-1` | 91.4% of lookup | ceiling, not a win; **fix refuted** | anchored closures; §7 owed | No — needs a measurement session first |
 
 ## The measured correction: `R6-5`'s 32.7% is not `R6-5`'s
@@ -74,6 +74,46 @@ probe. *Control your instrument as well as your subject* —
   ~8.8 percentage points**; they cannot be added.
 * This is the `R6-10`/`R6-19` decomposition trap recurring, on the two rows the audit's own
   traps section did not cover. **`R6-4` is the better true win of the pair.**
+
+## Correction appended 2026-09-22b — `R6-19` was measured and it SURVIVES
+
+The user asked for `R6-19` to be closed if I was confident it was no good. Step (1) — the
+duplicate-evaluation rate this row has owed since 2026-08-18 — was cheap to run, and it
+**reversed the verdict**, so the row stays open. Probe:
+`benchmarks/probe_r6_19_dup_eval.py` (tracked), demorgans_law_2 bulk build at scale 40.
+
+```
+total plan.check_fn evaluations : 5,168
+distinct (plan, key) pairs      : 340
+redundant evaluations           : 4,828 (93.4% of all evaluations)
+pairs whose ANSWER CHANGED      : 80
+_reconcile calls observed       : 140
+evaluations OUTSIDE a _reconcile: 0 (0.0%)
+redundant WITHIN one _reconcile : 1,440 (27.9%)   <- memoizable
+redundant ACROSS _reconcile     : 3,388 (65.6%)   <- fixpoint re-asking, NOT memoizable
+```
+
+* **The row's own decline condition is not met.** It says *"if it is near zero on real corpora
+  the item is finished, declined"*. 93.4% is not near zero, and neither is the sound part,
+  27.9%. Against the call site's 25.4% cum that is **~7% of a bulk build — above the 5.0%
+  ceiling at which `R6-14` was declined**, so the round's own standard does not retire it.
+* **The trap's soundness worry is now evidence, not suspicion.** 80 of 340 pairs flip
+  `False → True` within one build, so a `(subject) → bool` memo held ACROSS `_reconcile` calls
+  would serve a stale answer — step (3)'s cross-call form is **refuted empirically**, and that
+  is exactly the 65.6%. Only the intra-reconcile memo survives, and it still owes the
+  interleaved-write argument, because `_reconcile_subject_edge` mutates and stores residues
+  within one reconcile too.
+* ⚠ **Instrument control, and a corpus limit.** `_reconcile_subject_edge` is also called from
+  the edge-apply path (`bulk_backfill.py:801`) outside any `_reconcile`; bucketing those with
+  the previous reconcile would have **invented** memoizable duplicates. The probe gives each
+  such evaluation its own scope id so it can never pair. On this corpus that count is **0** —
+  the workload does not exercise that path, so the split is honest here but is **not** proof
+  the path never fires. Widening the corpus is the obvious next refinement.
+
+**Net:** step (1) discharged, step (3)'s cross-call form refuted, and the item now has a
+measured basis it has never had since it was self-filed. Remaining scope is narrower and
+better defined: an intra-reconcile memo worth ≤ 27.9% of evaluations, owing the
+interleaved-write argument.
 
 ## The Lean audit
 

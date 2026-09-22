@@ -1,11 +1,11 @@
 ---
 id: R6-8
 title: delta verifier runs one BFS per flipped PAIR instead of per distinct source (11.0%)
-brief:
+brief: CO-DESIGN TRIPLE with R6-16 + R6-7: take all three in one session or none -- see R6-16
 pri: LATER
 size: ?
 deps: []
-related: []
+related: [R6-7, R6-16]
 parent: R6
 labels: [perf]
 source: docs/perf-round6-audit-2026-08.md

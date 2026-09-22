@@ -82,3 +82,46 @@ outside the two-phase workflow -- no finder wrote it, no verifier adversarially 
 is the only R6 row with no adversarial review.
 
 Full audit: docs/r6-sizing-census-2026-09-22.md
+
+STEP (1) IS DONE, AND IT SAVES THE ROW RATHER THAN CLOSING IT. The user asked this session to
+close R6-19 if I was "pretty sure" it was no good. Measuring first was cheap and the measurement
+REVERSED the answer, so it is not closed.
+
+Probe: `benchmarks/probe_r6_19_dup_eval.py` (tracked), demorgans_law_2 bulk build at scale 40,
+980 raw tuples. It wraps every compiled `plan.check_fn` and counts (plan, key) multiplicity,
+answer stability, and -- the part that decides the item -- whether a duplicate falls inside ONE
+`_reconcile` invocation or across two. Literal output:
+
+  total plan.check_fn evaluations : 5,168
+  distinct (plan, key) pairs      : 340
+  redundant evaluations           : 4,828 (93.4% of all evaluations)
+  pairs whose ANSWER CHANGED      : 80
+  _reconcile calls observed       : 140
+  evaluations OUTSIDE a _reconcile: 0 (0.0%)
+  redundant WITHIN one _reconcile : 1,440 (27.9%)   <- memoizable
+  redundant ACROSS _reconcile     : 3,388 (65.6%)   <- fixpoint re-asking, NOT memoizable
+
+THE DECLINE CONDITION IS NOT MET. This row says "if it is near zero on real corpora the item is
+finished, declined". 93.4% is not near zero, and even the SOUND part -- 27.9% -- is not. Taking
+the call site's 25.4% cum, a perfect intra-reconcile memo is worth roughly 7% of a bulk build,
+which is ABOVE the 5.0% ceiling at which R6-14 was declined. So the round's own standard does not
+retire this one.
+
+AND THE TRAP'S SOUNDNESS WORRY IS NOW EVIDENCE, NOT SUSPICION. 80 of 340 pairs change their
+answer (False -> True) within a single build, so a `(subject) -> bool` memo held ACROSS
+`_reconcile` calls would serve a stale answer. That is step (3) refuted empirically for the
+cross-call form -- which is exactly the 65.6%. What survives is the intra-reconcile memo only,
+and it still owes the interleaved-write argument, because `_reconcile_subject_edge` mutates and
+stores residues WITHIN one reconcile too (see the 2026-09-22b correction above).
+
+INSTRUMENT CONTROL: `_reconcile_subject_edge` is also called from the edge-apply path
+(`bulk_backfill.py:801`) outside any `_reconcile`, which would have invented memoizable
+duplicates by bucketing them with the previous reconcile. The probe gives every such evaluation
+its own scope id so it can never pair. On this corpus that count is 0 -- i.e. the workload does
+not exercise that path, so the split is honest here but the corpus is NOT proof the path never
+fires. A wider corpus is the obvious next refinement.
+
+NET: step (1) discharged, step (3)'s cross-call form refuted, and the item now has a measured
+basis it has never had since it was self-filed in 2026-08-18. Remaining scope is narrower and
+better defined: an intra-reconcile memo worth <= 27.9% of evaluations, owing the interleaved-write
+argument. Still do step (2) -- the hoist -- with the soundness note above, not as a free win.
