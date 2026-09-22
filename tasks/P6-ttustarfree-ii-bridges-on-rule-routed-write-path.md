@@ -12,7 +12,7 @@ source: board
 source_hash: 1c868fadf76b
 created: 2026-08-20b
 moved: 2026-09-17c
-updated: 2026-09-17c
+updated: 2026-09-22
 closed:
 ---
 
@@ -2090,3 +2090,34 @@ PARKED AT A DOCUMENTED BOUNDARY -- `NOW` -> `LATER`, by USER DECISION 2026-09-15
 ### 2026-09-17b
 
 Back to NOW now that TK70 closes the TK69/TK70 admission-divergence pair. Stage 2 is at step 4prime with its ordered map already written (docs/p6-step4prime-scout-2026-09-15.md, "Ordered sub-steps for 4prime"). Nothing in TK70 touched the Lean fragments: graph write admission is unmapped on both sides, and ZT-P5-NEW`s three-leg inertness argument transfers verbatim (the guard precondition is still bridged_in n bridged_out != empty, unsatisfiable in both modeled fragments) -- recorded on the new CORRESPONDENCE.md sec 8.1 TK70 bullet. Step 4prime resumes exactly where 2026-09-15b left it.
+
+### 2026-09-22
+
+MECHANICAL: the `P6` bullet in `HANDOFF.md`'s `## Still owed` was DELETED by the 2026-09-22
+Still-owed disposition. Nothing about this row's state changed; `moved` deliberately holds.
+
+The bullet was half duplicate and half STALE, and both halves are recorded here so the
+deletion is reviewable:
+
+- **(b) is a verbatim duplicate.** "the prose-repair surface is >=16 sites across 8 modules
+  plus `formal/CORRESPONDENCE.md`, of which `:1313-1320` is highest priority because it is
+  the gate-anchored LIVING map and self-contradicts `:956-985` in the same file" is
+  `docs/p6-step4prime-scout-2026-09-15.md:414`, near-verbatim, with the full site list this
+  row's pointer already reaches. Also `:353` sub-step 10 carries the `CORRESPONDENCE.md`
+  half. Nothing was lost.
+- **(a) was REFUTED SEVEN DAYS BEFORE IT WAS READ.** The bullet claimed the four "this
+  lemma becomes FALSE under the twin" verdicts are "reasoned, never kernel -- no agent in
+  the sweep was permitted to run `lake`". That is contradicted by this row's own
+  `2026-09-15c` log entry ("BLOCKER 1 IS KERNEL-SETTLED -- all four REASONED verdicts
+  CONFIRMED, a FIFTH added") and by the scouting doc's own correction section
+  ("Corrections appended 2026-09-15c (first) -- blockers 1 and 4 are KERNEL-SETTLED", with
+  the rc=0 artifact at `formal/probes/p6_partiv_blocker1_kernel_2026-09-15.lean`). A
+  session that read the note and not the row would have re-derived a settled blocker.
+
+This is the concrete harm the note's missing checker allows, and it is the worked example
+on `TK97` (lint check 15: a Still-owed bullet may never survive two sessions). The row and
+the scouting doc were correct throughout; only the note was wrong.
+
+The resume point is UNCHANGED and remains this row's `2026-09-15d` entry:
+`docs/p6-step4prime-scout-2026-09-15.md` sec "Ordered sub-steps for 4'", step 1. `P6` stays
+`LATER` -- parked 2026-09-15d by user decision, which this session did not touch.

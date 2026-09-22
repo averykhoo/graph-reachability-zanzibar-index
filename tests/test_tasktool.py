@@ -1811,11 +1811,33 @@ def test_shipped_config_is_measured_not_an_example():
     protecting -- "an address that is already a name is unresolvable by grep": every
     minted-shape token found OUTSIDE `tasks/` must RESOLVE to an id the corpus knows.
     That keeps the discriminating power (under prefix "T" the formal docs are full of
-    `T1`/`T4`/`T7` that resolve to nothing) and it is measurable today. Exactly one token
-    does not resolve -- `TK99`, a deliberately hypothetical id in `scripts/task.py`'s own
-    comment about retired ids -- and it is pinned BY NAME with `==`, not tolerated by a
-    `<=`: a second unresolvable token is red, and so is this one disappearing without the
-    pin being reviewed. Zero headroom, the same contract as `MIN_TESTS_ALL`.
+    `T1`/`T4`/`T7` that resolve to nothing) and it is measurable today.
+
+    THE EXPECTATION IS NOW THE EMPTY SET, AND IT USED TO BE `{TK99}`. The one tolerated
+    token was a deliberately hypothetical id inside `scripts/task.py`'s comment on where an
+    id comes from. That exception was a TIME BOMB rather than a fact: the series mints
+    upward, so it was going to resolve the day the corpus reached 99 -- which happened on
+    2026-09-22, when a real `TK99` row was filed and this pin went RED on its token
+    DISAPPEARING. That is precisely what the `==` was chosen to catch, and the review it
+    demanded concluded: an exception that any future mint can silently delete is weaker than
+    no exception at all. The comment now reads `P3` -- the id that sentence is already about,
+    so it reads better and is unmintable by construction -- and the invariant is the strict
+    one: EVERY minted-shape token outside `tasks/` resolves to an id the corpus knows. Zero
+    headroom and zero exceptions, the same contract as `MIN_TESTS_ALL`.
+
+    SABOTAGE ON THE STRENGTHENED FORM (2026-09-22), because a pin whose expectation was just
+    widened to `set()` could pass by scanning nothing. A throwaway `docs/*.md` carrying one
+    invented token of the minted shape (the prefix followed by four digits) reddened it; the
+    observed message named that token and the file it was first seen in, and deleting the
+    file returned it to green. The `scanned > 100` assertion above is the instrument control
+    for the other half -- a scan that walks nothing also reports `set()`.
+
+    THE TOKEN IS DESCRIBED HERE AND NOT QUOTED, AND THAT IS ITSELF THE EVIDENCE. This file
+    is a `.py` inside the scan, so pasting the literal sabotage token into this docstring
+    puts it in the corpus and reddens this pin FOREVER -- observed on 2026-09-22, when the
+    first draft of this paragraph did exactly that and the failure then reported the token
+    against this file rather than against the probe. A sabotage record must not re-arm the
+    thing it documents; describe an unresolvable token, never spell one.
     """
     tasks = os.path.join(LIVE_TREE, 'tasks')
     assert os.path.isdir(tasks), (
@@ -1868,12 +1890,13 @@ def test_shipped_config_is_measured_not_an_example():
                         unresolved.add(token)
                         where.setdefault(token, os.path.join(base, name))
     assert scanned > 100, 'the collision scan saw only %d files -- it went blind' % scanned
-    assert unresolved == set(['TK99']), (
-        'id_prefix %r: the set of minted-shape tokens that resolve to NO task changed. '
-        'Expected exactly {TK99} (the hypothetical id in scripts/task.py\'s retired-ids '
-        'comment). Got %s, first seen at %s. A new entry means the prefix now names '
-        'something that is not a task -- an address that is already a name.'
-        % (cfg['id_prefix'], sorted(unresolved),
+    assert unresolved == set(), (
+        'id_prefix %r: %d minted-shape token(s) outside tasks/ resolve to NO task. Expected '
+        'NONE -- every such token is an address, and an address that names nothing is '
+        'unresolvable by grep. Got %s, first seen at %s. Fix the citation, or file the id; '
+        'do NOT re-add a named exception here, because an exception any future mint can '
+        'delete is weaker than none (that is how the {TK99} form died on 2026-09-22).'
+        % (cfg['id_prefix'], len(unresolved), sorted(unresolved),
            dict((t, where[t]) for t in sorted(unresolved))))
 
     # 6 days is the longest observed gap between two working days in docs/history; a

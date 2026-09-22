@@ -3388,7 +3388,7 @@ def op_new(store, args):
 
     # THE ID COMES FROM THE SOURCE WHEN THE SOURCE HAS ONE. A board row was already
     # addressed -- `P3` is `P3` in the ledger, in `formal/HANDOFF.md`, and in every
-    # citation ever written -- so minting `TK52` for a row that said `TK99` would file a
+    # citation ever written -- so minting `TK52` for a row that said `P3` would file a
     # task that answers to a name nobody uses and leave the row looking unfiled forever
     # (observed while writing sync_accept.py case B: the mint succeeded, and the very next
     # `sync --check` reported the row as NEW *and* the fresh task as CORPUS-ONLY). The

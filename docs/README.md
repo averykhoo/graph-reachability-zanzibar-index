@@ -151,13 +151,32 @@ ranking argument happens once at write time instead of being re-derived every se
 | `HOLD` | deferred by an explicit recorded decision (→ pointer) | unbounded |
 | `SOMEDAY` | revisit only on a concrete need | unbounded |
 
+**`ASK-*` rows use the same vocabulary, with one added convention** (decided with the user
+2026-09-22). An `ASK-<n>` is a question only the USER can answer — a fact to find, a
+requirement to gather, a priority call — as opposed to an engineering decision the model
+should simply take (`CLAUDE.md` § "Who decides"). It sits at `LATER` by default; promoting
+one to `NEXT` means **the session must raise it with the user, in chat, at least once that
+session**. `NEXT`'s cap of 3 therefore bounds the standing nags at three, and an `ASK-*`
+competes for those slots on the same terms as any other row. Filing rules and the `asks`
+view: [`../tasks/README.md`](../tasks/README.md) § "The `ASK-*` series".
+
 **Emoji are category badges, never degree:**
 
 | badge | meaning | budget |
 |---|---|---|
 | 🟢 / 🔴 | gate state — banner only | 1 |
 | ⚠ | a trap: acting without reading this line produces WRONG work | at most 10 in `HANDOFF.md` (`handoff_lint.py::WARN_BUDGET`) |
-| 🧭 | waiting on a user decision (the line must name the decision) | as needed |
+| 🧭 | points at an open `ASK-*` row — the ROW carries the question, the line carries the id | at most 3 (one per `NEXT` ASK) |
+
+⚠ **The compass badge DRIFTED, and the cause is this section's own heading.** It read
+"waiting on a user decision (the line must name the decision)" with a budget of "as
+needed" — the only badge in this table with no checker, where `⚠` has `WARN_BUDGET`
+(`handoff_lint.py::check_warn_budget`) and `★` is enforced dead (`::check_no_stars`). A
+census on 2026-09-22 found **zero** live uses that were actually user decisions: both
+instances in `HANDOFF.md` (`:22`, `:25`) had decayed into meaning "see also", while the two
+genuine ones sat in `formal/history/PROOF_STATUS.md` (frozen, never read for state) and a
+CLOSED `P3` file. An unbounded signal does not rank — which is what the heading says. It is
+now a POINTER to an `ASK-*` id, bounded by `NEXT`'s cap, with the question on the row.
 
 `★` and `★★` are **retired** from the two handoff files ([`HANDOFF.md`](../HANDOFF.md) and
 [`formal/HANDOFF.md`](../formal/HANDOFF.md)) and are removed from other living docs as

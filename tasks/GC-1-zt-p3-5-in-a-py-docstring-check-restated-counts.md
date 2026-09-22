@@ -12,7 +12,7 @@ source: hand
 source_hash:
 created: 2026-09-10b
 moved: 2026-09-10b
-updated: 2026-09-10b
+updated: 2026-09-22
 closed:
 ---
 
@@ -88,3 +88,7 @@ outside that one function may be both narrower and stronger than a general perce
 pattern.
 
 ## Log
+
+### 2026-09-22
+
+MECHANICAL: the `HANDOFF.md` `## Still owed` bullet that pointed here ("A percentage still has no mechanical guard -- now FILED as `GC-1`") was DELETED by the 2026-09-22 Still-owed disposition as a SECOND COPY. This row is the single home and its state is unchanged; `moved` deliberately holds. The bullet added nothing this row does not already carry, including why widening the check is not free. Context: `TK97` (lint check 15).

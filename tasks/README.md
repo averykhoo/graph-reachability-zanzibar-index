@@ -84,3 +84,23 @@ miscategory is permanent.
 
 Ids are never reused. If `new` refuses one as retired, that is the registry working:
 re-filing a dead id merges two items' histories under one address.
+
+## The `ASK-*` series — questions only the user can answer
+
+**`ASK-<n>` is the id series for work only the USER can do**: a fact to find, a requirement
+to gather, a priority call. File it with `task.py new --id ASK-1 "<question>"`. It is not a
+schema feature — it is the `--id` escape above used deliberately, exactly as `P` / `R6` /
+`HS` / `ZT` are. Decided with the user 2026-09-22; the build work is `TK96`.
+
+* **`LATER` by default; `NEXT` means "remind me every session."** A session that sees an
+  `ASK-*` at `NEXT` must raise it with the user, in chat, at least once that session.
+  `NEXT` is capped at 3, so there are at most three standing nags.
+* **Keep it narrow.** An engineering call the model should simply take — "mechanise this
+  ratchet or not" — is a plain `TK` row. [`../CLAUDE.md`](../CLAUDE.md) § "Who decides" is
+  the test. A series that accepts everything is a series nobody reads.
+* **A blocked row declares `deps: [ASK-<n>]`.** `ready` then excludes it automatically, and
+  `close` sweeps the id out of every `deps` cell — so answering the question unblocks the
+  work in one op. An ASK with no dependents is just a question; one with dependents is a
+  hard blocker, and the dep graph tells them apart with no new field.
+* **Never a `## Still owed` bullet.** A question for the user is durable by nature; that
+  section of [`../HANDOFF.md`](../HANDOFF.md) is a depth-one baton, not a backlog (`TK97`).

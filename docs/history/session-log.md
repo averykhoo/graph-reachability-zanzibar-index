@@ -30,6 +30,103 @@ from here.
 
 ---
 
+## 2026-09-22 — `## Still owed` had no checker and became a backlog; `ASK-*` is the new user-question channel
+
+rows: `TK96` (NEW, `NEXT`), `TK97` (NEW), `TK98` (NEW), `TK99` (NEW), `TK100` (NEW), `P6` (comment, mechanical), `GC-1` (comment, mechanical).
+
+task lint: clean (13 checks, 215 task file(s) parsed), 29 warning(s)
+read: board + note
+
+Entered on a user question about how this repo's session harness works — what the agent is
+given at init, and where it finds things. That produced a decision and two findings, and the
+two findings turn out to be the same mechanism twice.
+
+**THE DECISION: `ASK-*`, a channel for work only the USER can do.** The user asked where to
+flag fact-finding and requirements-gathering they must do themselves. Decided with them: an
+`ASK-<n>` id series filed as ordinary rows via `task.py new --id`, needing NO schema change —
+`P` / `R6` / `HS` / `ZT` are precedent. `LATER` by default; `NEXT` means "raise it in chat
+every session", bounded at three by `NEXT`'s existing cap. A blocked row declares
+`deps: [ASK-n]`, so `ready` excludes it meanwhile and `close` unblocks it in one op — the dep
+graph distinguishes a question from a blocker with no new field. Filed as `TK96` (`NEXT`): the
+`asks` view, a board footer line, and an `asked:` receipt line that makes the nag fail-red
+rather than remembered. Rules in `tasks/README.md` § "The `ASK-*` series"; vocabulary in
+`docs/README.md` § 4.
+
+**FINDING 1 — the `🧭` badge was already the drifted predecessor of exactly that channel.**
+`docs/README.md` § 4 documents it as "waiting on a user decision (the line must name the
+decision)", budget "as needed". Censused first-hand: of four live uses, the two in `HANDOFF.md`
+(`:22`, `:25`) had decayed into meaning "see also", and the two genuine ones sat in
+`formal/history/PROOF_STATUS.md` (frozen, never read for state) and a CLOSED `P3` file — zero
+live correct uses. It is the ONLY badge in that table with no checker (`⚠` has `WARN_BUDGET`,
+`★` is enforced dead by `check_no_stars`), and the section is titled "Signals rank only if they
+are bounded". The file's own thesis, demonstrated on the file. Corrected: the badge now POINTS
+AT an `ASK-*` id with the question on the row, and both banner misuses are now `→`.
+
+**FINDING 2 — `## Still owed` had become a backlog, by the same mechanism.**
+`docs/tree-sole-authority-spec-2026-08-29.md:95-102` scopes it to "the verbatim skipped Rhythm
+actions" and bans item blocks by name. Censused first-hand at `HANDOFF.md:30-50`: **20 lines of
+a 60-line note, and 0 of 5 bullets qualified.** Two said "Unfiled" in their own text, one was a
+second copy of `GC-1` (which exists, at `LATER`), one was a finding, one was an item block.
+`grep` of `scripts/` for the string returns NOTHING — no checker — whereas the Banner's
+deliberately-WEAK first-line rule (`task.py::check_banner`) is enough to keep the Banner
+rewritten every session. Watched live across `2026-09-21b` → `2026-09-22`: the banner was
+rewritten and all five bullets stayed BYTE-IDENTICAL.
+
+**The worst of the five was actively misleading.** The `P6` bullet called the four "this lemma
+becomes FALSE under the twin" verdicts "reasoned, never kernel" — contradicted by `P6`'s own
+`2026-09-15c` log entry ("BLOCKER 1 IS KERNEL-SETTLED — all four CONFIRMED") and by the
+scouting doc's own correction section, with the rc=0 artifact at
+`formal/probes/p6_partiv_blocker1_kernel_2026-09-15.lean`. Seven days stale when read: a session
+trusting the note over the row would have re-derived a settled blocker. Its other half was a
+verbatim duplicate of `docs/p6-step4prime-scout-2026-09-15.md:414`.
+
+**THE USER'S ORIGINAL DESIGN WAS NOT TOO RESTRICTIVE.** They recalled intending the note to be
+ephemeral and cleared every session, and asked whether that survived. It did — "Rewritten every
+session, never appended" (spec `:97`), "`HANDOFF.md` is rewritten whole every session"
+(`docs/README.md` § 6). Never relaxed, only unenforced. But Banner and Still owed have DIFFERENT
+lifecycles: the Banner is REPLACE (N overwrites N−1, nothing lost, it is state-of-play), while
+Still owed is CONSUME (N writes it FOR N+1, which executes and DELETES it — a queue of depth
+one). A literal "clear it every session" would delete the baton, which is probably why it was
+written as the softer "rewritten every session" and why nobody could enforce it on the one
+section whose job is to survive exactly one handoff. `TK97` carries the checkable form: a bullet
+carries a session key, that key is the current or immediately-previous ledger entry, and a
+bullet surviving two sessions is backlog that must be filed. All five of today's bullets go red
+under it — it would have fired on day one of the drift.
+
+**FILING `TK99` DETONATED A PIN, AND THE PIN WAS RIGHT.** `tests-tile:3/4` went RED on
+`test_shipped_config_is_measured_not_an_example`, whose expectation was
+`unresolved == set(['TK99'])` — exactly one minted-shape token outside `tasks/` allowed to
+resolve to nothing, being a hypothetical id inside `scripts/task.py`'s own comment. Filing a
+real `TK99` made that token RESOLVE, so the set went empty and the `==` reddened on the token
+DISAPPEARING, which its docstring says in as many words is the point. Reviewed and decided
+(`CLAUDE.md` § "Who decides"): the exception was a TIME BOMB, not a fact — the series mints
+upward, so it was always going to resolve on reaching 99. An exception any future mint can
+silently delete is weaker than no exception. The comment now reads `P3` (the id that sentence
+is already about, and unmintable by construction) and the pin is the strict form,
+`unresolved == set()`: every minted-shape token outside `tasks/` resolves to a known id. Zero
+exceptions, same contract as `MIN_TESTS_ALL`. Not adapted-to-fit — strengthened.
+
+**The sabotage caught its own INSTRUMENT, which is the reusable lesson.** A throwaway
+`docs/*.md` carrying one invented minted-shape token reddened the strengthened pin and naming
+the probe file; deleting it returned green. But the FIRST run's evidence was worthless twice
+over: the `grep` used to read the verdict matched the docstring echoed in pytest's own source
+traceback rather than the assertion message, and the draft docstring had pasted the literal
+sabotage token into `tests/test_tasktool.py` — a file INSIDE the scan — which would have
+reddened this pin forever and made the failure point at the test instead of the probe. Both
+were caught by reading the `^E ` line instead of a grep of convenience. **A sabotage record
+must not re-arm the thing it documents: describe an unresolvable token, never spell one.**
+That is now in the test's docstring, where the next person to widen this pin will meet it.
+
+DISPOSED, with every deletion recorded where it went: `TK98` (receipt vocabulary, carried
+unfiled since `2026-09-07b`), `TK99` (`MIN_TESTS_ALL` hand-ratchet, which `min_tasks_parsed`
+already solved mechanically) and `TK100` (`TT-8` fence leftover) filed as rows; `GC-1` and `P6`
+each got a `--mechanical` comment naming what was deleted and why, so `moved` holds and the
+deletions stay reviewable. Nothing was dropped.
+
+No production code changed and no `formal/lean/` source touched — docs and tree only.
+
+Still owed: Nothing.
+
 ## 2026-09-21b — `TK93` CLOSED: `_ensure/raw` is a FUNCTION of the hash seed, and the refutation was refuted
 
 rows: `TK93` (CLOSED), `TK95` (NEW, `NEXT`), `TK94` (promoted `NEXT` -> `NOW`).
