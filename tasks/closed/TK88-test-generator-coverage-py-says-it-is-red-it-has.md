@@ -11,9 +11,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-19f
-moved: 2026-09-19f
-updated: 2026-09-19f
-closed:
+moved: 2026-09-22c
+updated: 2026-09-22c
+closed: 2026-09-22c
 ---
 
 `tests/test_generator_coverage.py` announces in three places that it is expected to be RED,
@@ -48,3 +48,31 @@ green at `0838bcf` and what they are controls FOR now.
 - `git log --oneline -S"RC1" --all -- tests/test_ttu_tupleset_parent_types.py` -- the fix.
 
 ## Log
+
+### 2026-09-22c
+
+CLOSED 2026-09-22c. All five stale sites corrected in place, in the shape the row prescribed
+(a dated correction line, history kept, nothing deleted):
+
+* module docstring -- the "EXPECTED TO BE RED" paragraph is now indented under a
+  "[2026-08-10, HISTORICAL]" marker, preceded by a correction saying the module is green
+  since `0838bcf` and why the stale claim mattered (a module that announces its own redness
+  is one whose GENUINE red reads as normal).
+* the sabotage table row -- "RC1/RC2 (live, unfixed)" is now "(live, unfixed AS OF
+  2026-08-10)" with the fix commit and the note that the row records what the controls DID
+  detonate, not open work.
+* the section-5 banner -- "THEY ARE RED TODAY" replaced, and it now says what the two tests
+  are controls FOR now: anti-vacuity guards that each regime still drives enough pressure of
+  its own kind to detonate an RC1/RC2-shaped divergence if one is reintroduced.
+* both test docstrings -- "CURRENTLY RED (positive control)" -> "GREEN since `0838bcf`
+  (positive control; RED on 2026-08-10, and this docstring said CURRENTLY RED until
+  2026-09-22c)".
+
+MEASURED 2026-09-22c: `pytest tests/test_generator_coverage.py -q --collect-only` collects
+31, not the 28 the row recorded on 2026-09-19f -- the module grew between the two dates, so
+the row's figure was a date-stamped reading and not a floor. Grep for the three stale
+phrasings now returns only lines inside dated corrections or quoted history.
+
+Found and fixed as the second of two "cheap honesty defects" in the 2026-09-22c goal census
+(docs/goal-census-2026-09-22.md sec 5); the first was docs/perf-next-round.md still saying
+round 6 had landed nothing.

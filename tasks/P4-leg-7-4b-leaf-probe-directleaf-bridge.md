@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 015e6dd88c0d
 created: 2026-08-16
-moved: 2026-09-06b
-updated: 2026-09-06b
+moved: 2026-09-22c
+updated: 2026-09-22c
 closed:
 ---
 
@@ -61,3 +61,32 @@ Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`cre
 ### 2026-09-06b
 
 Board cell appended 2026-09-05b: 'Unblocked 2026-09-05b (P3 closed; deps swept)'. Task summary + brief now carry it (the 2026-09-05b Log entry already had the re-scope detail). Diff source: git 51642dc -> HEAD.
+
+### 2026-09-22c
+
+2026-09-22c -- **P4 is STEP 2 of the goal chosen this session** ("make the assurance surface
+honest and legible, not wider"; map docs/goal-census-2026-09-22.md). Not re-ranked: NEXT is at
+its cap of 3 and TK94 owns NOW, so this is recorded here rather than promoted, and the sequence
+lives in the banner.
+
+The decision the goal makes for this chain, so a later session does not re-litigate it:
+**P4 -> P5 (+P14) IS the formal milestone, and the fragment stops widening after it.** The
+formal census (2026-09-22c, agent leg, spot-verified) found the proof artefact has no debt at
+all -- zero sorry, zero axiom, zero admit, zero native_decide, 617 audited names on the three
+standard axioms, statements and definitions byte-pinned. Nobody needs to "finish the proofs."
+What is unfinished is WIDTH, and width is an open-ended long tail: seven of ten W4Fragment
+fields are SILENT (test_w4fragment_scope_pin.py:2 -- "a SILENT NARROWING, and nothing in this
+repo could see it"), CORRESPONDENCE.md sec 7.3 lists about a dozen live Python surfaces with no
+Lean model at all, and every widening row's own notes say finishing it does not end the queue.
+
+So the T2a chain was picked because it is the one CLOSED thing in reach: three M rows, deps [],
+evidence already in hand (formal/probes/d3_negedgefree_postflip_2026-09-05.lean measures
+negFree := true on the model's own write leg, and the sabotage control reproduces the old kill).
+Landing it retires W4NarrowT2a and buys one clean sentence -- all six headline theorems hold
+under the same two bundles, with no theorem-specific extra carry. Today graph_reached_inv is the
+odd one out, carrying a third bundle whose stated justification was already retired 2026-09-05
+while the carry survived.
+
+After it lands: P15 / P16 / P25-option-2 / DW-1 are assurance work to be ranked against product
+risk, NOT "the rest of the proof." P6 stays parked (user decision 2026-09-15d) and this does not
+touch it -- P6 blocks only P7 and P25 option 1.

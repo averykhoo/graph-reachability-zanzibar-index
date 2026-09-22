@@ -12,13 +12,27 @@ CONSTRUCTION — not by seed luck, and not fixable by raising `max_examples`. Bo
 2026-08-10 divergences (RC1, RC2) came through that hole, and the campaign had no
 coverage assertion at all, so "we fuzz broadly" was an unchecked claim.
 
-★★★ THIS MODULE IS EXPECTED TO BE RED UNTIL RC1/RC2 ARE FIXED. ★★★
-`test_sparse_regime_finds_no_fail_closed_divergence` and
-`test_dense_regime_finds_no_fail_open_divergence` are the positive controls the design
-called for: they detonate the two live, unfixed graph-index divergences pinned by
-`tests/test_ttu_tupleset_parent_types.py`, from switch COMBINATIONS rather than
-transcribed schemas. They must go GREEN the day the fix lands, and if they do not, the
-fix is incomplete. Everything else in this file is green today.
+★ CORRECTED 2026-09-22c (TK88). THE WHOLE MODULE IS GREEN AND HAS BEEN SINCE `0838bcf`.
+The paragraph below was written 2026-08-10 when RC1/RC2 were live; it is kept because it
+is the provenance of the regime design, but READ IT AS HISTORY. Measured 2026-09-19f:
+this module is `28 passed`, `tests/test_ttu_tupleset_parent_types.py` is `12 passed`, and
+the sparse/dense driven sweeps find `FO=0 fc=0` over all 96 driven configs. A module that
+announces its own redness is one whose GENUINE red reads as normal — the house failure
+mode pointed backwards — which is why this correction is here and not a deletion.
+
+  [2026-08-10, HISTORICAL] THIS MODULE IS EXPECTED TO BE RED UNTIL RC1/RC2 ARE FIXED.
+  `test_sparse_regime_finds_no_fail_closed_divergence` and
+  `test_dense_regime_finds_no_fail_open_divergence` are the positive controls the design
+  called for: they detonate the two live, unfixed graph-index divergences pinned by
+  `tests/test_ttu_tupleset_parent_types.py`, from switch COMBINATIONS rather than
+  transcribed schemas. They must go GREEN the day the fix lands, and if they do not, the
+  fix is incomplete. Everything else in this file is green today.
+
+They went green the day the fix landed, which is the outcome that paragraph demanded.
+What the two tests are controls FOR NOW: that the sparse regime still drives enough
+fail-CLOSED pressure, and the dense regime enough fail-OPEN pressure, to detonate a
+divergence of the RC1/RC2 shape if one is reintroduced. They are anti-vacuity guards, not
+outstanding bugs.
 
 --------------------------------------------------------------------------------
 MEASURED, 2026-08-10, on this machine
@@ -123,7 +137,12 @@ own docstring; this is the map, including the THREE checks that were found HOLLO
     S11 `swarm_op_pool` returns [] (comparison set empty) -> RED  ("NO config driven")
     S12 typed pool table reverted (design's sabotage 8)   -> the predicted floor did NOT
                                                               fire. REFUTED; recorded.
-    RC1/RC2 (live, unfixed)                               -> RED  (both sweeps)
+    RC1/RC2 (live, unfixed AS OF 2026-08-10)              -> RED  (both sweeps)
+                                                             FIXED at `0838bcf`; both
+                                                             sweeps GREEN since. The row
+                                                             records what the controls
+                                                             DID detonate, not open work
+                                                             (corrected 2026-09-22c, TK88).
 
 Note S5, S8 and S12 honestly. `docs/sabotage-procedure.md` says a session that exposes a
 hollow check is a GOOD session, so they are recorded rather than papered over:
@@ -758,10 +777,13 @@ def test_swarm_all_on_stratum_covers_the_legacy_shape():
 # ===========================================================================
 # 5. THE DRIVEN SWEEP — two regimes
 #
-#   ★★★ THE TWO TESTS BELOW ARE THE POSITIVE CONTROLS, AND THEY ARE RED TODAY. ★★★
-#   They detonate RC1 and RC2 (`tests/test_ttu_tupleset_parent_types.py`), which are
-#   live and deliberately unfixed. Do not weaken them, do not xfail them
-#   (`MAX_TESTS_XFAILED=0`), do not skip them. They go GREEN with the fix.
+#   ★ THE TWO TESTS BELOW ARE THE POSITIVE CONTROLS. THEY WERE RED ON 2026-08-10 AND
+#   ARE GREEN NOW — RC1/RC2 were fixed at `0838bcf` (corrected 2026-09-22c, TK88; the
+#   line here read "THEY ARE RED TODAY" for about five weeks after they went green).
+#   They detonated RC1 and RC2 (`tests/test_ttu_tupleset_parent_types.py`). They now
+#   stand as anti-vacuity guards: each regime must still drive enough pressure of its
+#   own kind to detonate a divergence of that shape if one is reintroduced. Do not
+#   weaken them, do not xfail them (`MAX_TESTS_XFAILED=0`), do not skip them.
 # ===========================================================================
 
 def _sweep(regime, k):
@@ -812,7 +834,8 @@ def _assert_non_vacuous(rep, regime):
 
 
 def test_sparse_regime_finds_no_fail_closed_divergence():
-    """★ CURRENTLY RED (positive control). Property guarded: no schema the enumerator
+    """★ GREEN since `0838bcf` (positive control; it was RED on 2026-08-10 and this
+    docstring said CURRENTLY RED until 2026-09-22c, TK88). Property guarded: no schema the enumerator
     can build makes the graph index UNDER-grant relative to the oracle.
 
     THE DRIVING DISCIPLINE IS THE POINT. Sparse = subsets of size 1..3 of the candidate
@@ -867,8 +890,9 @@ def test_sparse_regime_finds_no_fail_closed_divergence():
 
 
 def test_dense_regime_finds_no_fail_open_divergence():
-    """★★ CURRENTLY RED (positive control), and this is the design's OWN ADMITTED GAP,
-    closed. Property guarded: no schema the enumerator can build makes the graph index
+    """★★ GREEN since `0838bcf` (positive control; RED on 2026-08-10, and this docstring
+    said CURRENTLY RED until 2026-09-22c, TK88), and this is the design's OWN ADMITTED
+    GAP, closed. Property guarded: no schema the enumerator can build makes the graph index
     OVER-grant relative to the oracle.
 
     `docs/design/generator-coverage/README.md` §6.7 says out loud: *"the subset-driving

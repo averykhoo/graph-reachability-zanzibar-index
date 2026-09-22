@@ -11,8 +11,8 @@ labels: [perf]
 source: board
 source_hash: b895d453a044
 created: 2026-08-21
-moved: 2026-09-22b
-updated: 2026-09-22b
+moved: 2026-09-22c
+updated: 2026-09-22c
 closed:
 ---
 
@@ -163,3 +163,37 @@ R6-16. Breaking the triple needs an explicit recorded decision.
 BUDGET, measured from `.gate-runs/ledger.tsv`: the ten-phase gate is 1779 s across ten commands
 and must run after the write-back, so it is one full gate per session. R6-6 was declared size S
 and consumed a whole session. One id end-to-end per sitting, or two only if R6-11 + R6-9.
+
+### 2026-09-22c
+
+2026-09-22c -- **PERF IS DEPRIORITIZED BY A GOAL DECISION, WITH A REASON. This is not an
+abandonment and not a judgement on the work, which is unusually well instrumented.** The user
+asked for a goal rather than a task and chose "make the assurance surface honest and legible,
+not wider" over perf; the evidence is docs/goal-census-2026-09-22.md, the perf leg is sec 4.
+
+The one fact that decided it, measured first-hand 2026-09-22c: **there is no performance
+target.** An exhaustive grep for SLA / p99 / p95 / latency target / throughput target /
+production deployment / customer over docs/, tasks/, benchmarks/ and README.md returns zero
+substantive hits (the only p99 hits are a sabotage fixture id). The two profiling workloads are
+synthetic fixtures under in-memory SQLite and cProfile, and R6_PROFILE_2026-08-17.md itself
+says both invalidate the seconds column. So a win here cannot currently be shown to be worth
+anything to anyone outside the repo -- which is a statement about the MISSING TARGET, not about
+the measurements.
+
+Two consequences worth carrying into whenever this reopens:
+
+1. **The honest first move is TK34 (the nightly canary), not an R6-N row.** The round has landed
+   two real multiples and has no regression tripwire behind them. TK34 is fully specified at
+   docs/gate-runbook.md:752-762 and has never been built. A tripwire is also the cheapest thing
+   that would give perf work an external referent.
+2. **docs/perf-next-round.md was corrected this session and had been wrong for five weeks** --
+   it said round 6 "landed nothing" and still listed R6-10 and R6-6 as the first two items to
+   land, both closed in August. A session starting from the living perf doc would have re-opened
+   two closed items. The landing order there is now struck and captioned, and the 2026-09-22b
+   corrections (the R6-5 / R6-4 overlap, R6-9's mis-keyed instrument, the R6-16+R6-7+R6-8 unit)
+   are linked from it.
+
+Standing state if it reopens: the two unimpeached large measured wins are R6-4 and R6-18. Four
+of the ten open children had their prose corrected 2026-09-22b for describing a surface the code
+does not have, and three more had headline figures downgraded, overlapped or reclassified as
+ceilings -- that, rather than the percentages, is the diminishing-return signal.

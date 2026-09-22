@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-21
-moved: 2026-09-21b
-updated: 2026-09-21b
+moved: 2026-09-22c
+updated: 2026-09-22c
 closed:
 ---
 
@@ -75,3 +75,45 @@ would have guessed from reading.
 ### 2026-09-21b
 
 Promoted NEXT -> NOW at the 2026-09-21b write-back (closing TK93 left the board with no NOW). Ranked above TK71 and the new TK95 on the primary consideration: this is a whole SCHEMA CLASS that no generated or enumerated conformance arm can reach, i.e. a hole in the equivalence net itself, where TK71 is an assertion-strength question and TK95 is an outcome-equivalence pin on a path already known green at four hash seeds. The M sizing and the combinatorial cost in test_conformance_enum.py are the reason it is ranked first rather than deferred again -- it has been the cheapest-to-defer item twice now.
+
+### 2026-09-22c
+
+2026-09-22c -- TK94 is now STEP 1 OF A CHOSEN GOAL, not just the top-ranked row. The user
+asked for a goal rather than a task ("not like what task to do, but what goal to achieve --
+correctness, perf, etc"), three read-only censuses were run (perf / equivalence / formal),
+and the user chose: **make the assurance surface HONEST AND LEGIBLE, not wider.** Map and
+full evidence: docs/goal-census-2026-09-22.md.
+
+Why TK94 is step 1, in the goal's own terms. The project has ~115k lines of Lean plus tests
+around 12.5k lines of implementation (measured 2026-09-22c, census sec 1), and NEITHER
+assurance system can state which inputs it covers. On the Lean side that is the silent
+narrowing -- test_w4fragment_scope_pin.py:2 says the bundle is "a SILENT NARROWING, and
+nothing in this repo could see it", LOUD 0 / SILENT 7 / MIXED 3. On the test side it is this
+row: an EMPTY corpus cell, not a thin one. Of the eighteen holes censused, TK94 is the only
+one where the class is absent outright rather than under-sampled, and because all four arms
+(enumerated, generated, remove, bulk) draw from SCHEMAS, one entry widens four at once.
+
+The precedent that decides the ranking: the last by-construction corpus hole of exactly this
+shape -- the hardcoded `parent` tupleset in tests/test_hypothesis.py -- is where BOTH
+2026-08-10 divergences (RC1, RC2) were hiding. By-construction holes are empirically where
+this repo's real bugs have lived.
+
+The steps after this one, so the goal is resumable if this row stalls: (2) land the T2a chain
+P4 -> P5 (+P14) as THE formal milestone and stop widening the fragment -- three M rows,
+deps [], evidence already in hand -- which buys the sentence "all six headline theorems hold
+under the same two bundles, with no theorem-specific extra carry"; (3) make the silent
+narrowing visible, ideally machine-checked rather than a doc.
+
+Explicitly NOT the goal: perf. Censused first-hand 2026-09-22c -- there is no SLA, no p99, no
+throughput budget, no customer workload and no production deployment anywhere in docs/,
+tasks/, benchmarks/ or README.md, so a perf win is currently unfalsifiable as value. That is
+a deprioritization with a reason, not an abandonment; it is recorded on the R6 parent too.
+
+Nothing about this row's own first action or traps changes: size the new SCHEMAS entry
+against the test_conformance_enum.py bound BEFORE adding it (combinatorial, not additive),
+re-measure MIN_CONF_ALL / MIN_TESTS_ALL rather than estimating, and say per module which
+branch each new arm reaches -- a new arm that passes is not evidence that it ran.
+
+Filed alongside: TK101, hole H4 (object-wildcard WRITES are unenumerable -- _tuple_space
+emits "*" only as a subject), which had lived in TK71's traps since 2026-09-16b with no
+owner of its own.

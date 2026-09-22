@@ -30,6 +30,95 @@ from here.
 
 ---
 
+## 2026-09-22c — a GOAL was chosen: honest coverage over width; neither assurance system can say what it covers
+
+rows: TK88 (closed), TK101 (new), TK94, P4, R6.
+
+`task lint: clean (13 checks, 216 task file(s) parsed), 29 warning(s)`
+
+`read: board + note`
+
+User asked for a **goal, not a task** — verbatim, "not like what task to do, but what goal to
+achieve - correctness, perf, etc". Three read-only censuses were dispatched (perf /
+equivalence / formal), their load-bearing claims were re-verified first-hand, and the
+transcription is [`docs/goal-census-2026-09-22.md`](../goal-census-2026-09-22.md)
+(ACTIVE-PLAN). **The user chose: make the assurance surface HONEST AND LEGIBLE, not wider.**
+
+**The finding that decided it.** Measured this session: product code is ~12.5k lines, and the
+two assurance systems around it are ~50k lines of tests and ~65k lines of Lean, plus ~63k of
+docs and ~6.7k of process tooling — roughly 15:1. **Neither system can state which inputs it
+covers.** On the Lean side that is the silent narrowing, which the repo already says out loud
+at `formal/conformance/test_w4fragment_scope_pin.py:2` — the bundle is *"a SILENT NARROWING,
+and nothing in this repo could see it"*, classified LOUD 0 / SILENT 7 / MIXED 3, i.e. Python
+accepts, runs and answers on schemas the headline theorem says nothing about, with no operator
+signal. On the test side it is `TK94`: an **empty** corpus cell, not a thin one.
+
+**What is NOT wrong, confirmed independently.** Live correctness bugs in shipped evaluation
+code: 0, from a sweep of all 77 open rows. Proof debt: 0 — zero `sorry`, zero `axiom`, zero
+`admit`, zero `native_decide`, 617 audited names on the three standard axioms, statements and
+definitions byte-pinned. `pytest.mark.xfail` appears nowhere and `MAX_TESTS_XFAILED=0`. Nobody
+needs to finish the proofs; what is unfinished is width, and width is an open-ended long tail
+(`CORRESPONDENCE.md` §7.3 lists about a dozen live Python surfaces with no Lean model at all).
+
+**Perf was ranked out, with a reason, and the reason is recorded on `R6`.** There is no
+performance target: an exhaustive grep for SLA / p99 / p95 / latency target / throughput target
+/ production deployment / customer over `docs/`, `tasks/`, `benchmarks/` and `README.md`
+returns zero substantive hits. The two profiling workloads are synthetic fixtures under
+in-memory SQLite and cProfile, and `R6_PROFILE_2026-08-17.md` says both invalidate the seconds
+column. So a win there is currently unfalsifiable as value — a statement about the missing
+target, not about the measurements, which are unusually careful. If it reopens, the honest
+first move is `TK34` (the never-built canary), not an `R6-N` row.
+
+**The three-step goal, recorded on the rows so it survives this session:** (1) `TK94` — close
+the empty cell; one `SCHEMAS` entry widens four arms at once, and the precedent is that the
+last by-construction hole of this shape, the hardcoded `parent` tupleset in
+`tests/test_hypothesis.py`, is where **both** 2026-08-10 divergences were hiding. (2) `P4` →
+`P5` (+`P14`) as **the** formal milestone, after which the fragment stops widening — three M
+rows, `deps: []`, evidence in hand — buying the sentence *all six headline theorems hold under
+the same two bundles, with no theorem-specific extra carry*. (3) make the silent narrowing
+visible, ideally machine-checked rather than a doc. `P6` stays parked (user decision
+2026-09-15d); nothing here touches it.
+
+**Two cheap honesty defects found and FIXED this session**, both of which would have misled the
+next session whatever direction was chosen:
+
+* [`docs/perf-next-round.md`](../perf-next-round.md) — the self-described *living home for perf
+  work* still said round 6 had **landed nothing** and still listed `R6-10` then `R6-6` as the
+  first two items to land. Both closed in August; the file had been wrong for five weeks, so a
+  perf session starting from it would have re-opened two closed items. The landing order is now
+  struck and captioned as a 2026-08-17 plan rather than a status, and the 2026-09-22b
+  corrections are linked from it.
+* `TK88`, **closed** — `tests/test_generator_coverage.py` announced its own redness in five
+  places ("EXPECTED TO BE RED", "THEY ARE RED TODAY", two "CURRENTLY RED" docstrings, and a
+  sabotage-table row) about five weeks after `0838bcf` made it green. A module that announces
+  its own redness is one whose genuine red reads as normal — the house failure mode pointed
+  backwards. Fixed in the shape the row prescribed: dated corrections in place, history kept
+  and marked historical, nothing deleted. Measured while closing: the module collects **31**,
+  not the **28** the row recorded on 2026-09-19f — a date-stamped reading, not a floor.
+
+**`TK101` filed**: hole H4, object-wildcard **writes** are unenumerable —
+`test_conformance_enum.py::_tuple_space` emits `"*"` only in the subject position, so no
+enumerated store contains one at any bound. It had lived inside `TK71`'s traps since
+2026-09-16b with no owner, which made it invisible to `ready` and to the board. Filing it
+immediately detonated lint check 14: the `## Read first` pointer was written as a glob
+(`tasks/TK71-*.md`) and resolved to nothing. The check earned its keep on a row minutes old.
+
+⚠ **A delegation limit worth carrying, and it is now the third session to hit it.** The
+read-only `Explore` profile has no `Write` tool, so the standing rule that *every delegated
+unit persists its own output before returning* cannot be satisfied by it — already recorded at
+[`docs/r6-sizing-census-2026-09-22.md:255-263`](../r6-sizing-census-2026-09-22.md). One of the
+three agents said so explicitly and handed its report back unpersisted; the other two found a
+way. The session persisted all three on receipt. **Dispatch a write-capable agent, or plan to
+persist on receipt — do not assume the prompt's instruction is sufficient.**
+
+Still owed: **nothing**. Every Rhythm step executed — session-log entry, banner, five tree ops
+(`close TK88`, `new TK101`, `comment TK94`/`P4`/`R6`), `task.py lint`, `handoff_lint.py`, gate,
+commit. The gitignored `.scratch/goal-census/` (three agent reports plus two message bodies)
+was deleted after this entry landed; its conclusions are in
+[`docs/goal-census-2026-09-22.md`](../goal-census-2026-09-22.md) and on the rows.
+
+---
+
 ## 2026-09-22b — `R6` audited: four rows describe code that is not there; `R6-16` may SIMPLIFY the Lean model
 
 rows: R6, R6-1, R6-4, R6-5, R6-7, R6-8, R6-9, R6-11, R6-16, R6-18, R6-19.

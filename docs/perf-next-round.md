@@ -3,7 +3,9 @@
 The living home for perf work. **The active worklist is the round-6 CANDIDATE
 list**: [`perf-round6-audit-2026-08.md`](perf-round6-audit-2026-08.md) — 18
 code-verified but **UNMEASURED** findings plus 16 unverified leads from the
-2026-08-15 two-backend audit; nothing from it has landed. The measured
+2026-08-15 two-backend audit; **two of its ids have landed** (see the round-6
+bullet below — this clause read "nothing from it has landed" until 2026-09-22c,
+five weeks after the first one closed). The measured
 optimization arc ran rounds 1–5 and **round 5 concluded that worklist was
 exhausted** for everything the then-current harnesses could measure — the last
 two candidates (N13, N14) were assessed and declined on a fresh 2026-07-16
@@ -20,7 +22,10 @@ measurement/gate hygiene.
   candidates (N13, N14) and declined both on a fresh profile; the assessment
   record (with both candidate write-ups verbatim) is retired in
   [`docs/history/perf-round5-2026-07.md`](history/perf-round5-2026-07.md).
-- Round 6 (opened 2026-08-15) has **landed nothing**: a 24-agent,
+- Round 6 (opened 2026-08-15) has **landed `R6-10` (closed 2026-08-20b) and
+  `R6-6` (closed 2026-08-24d)**; their measured before/after live in
+  [`benchmarks/results/PERF_ANALYSIS.md`](../benchmarks/results/PERF_ANALYSIS.md)
+  "Applied", not here. It opened with a 24-agent,
   adversarially-verified audit of both backends produced the candidate list in
   [`perf-round6-audit-2026-08.md`](perf-round6-audit-2026-08.md). Per
   "Reopening a round" below, each item needs its motivating measurement —
@@ -29,9 +34,10 @@ measurement/gate hygiene.
   **The measurement half is now done for ALL EIGHTEEN (2026-08-17)**:
   [`benchmarks/results/R6_PROFILE_2026-08-17.md`](../benchmarks/results/R6_PROFILE_2026-08-17.md),
   instruments `benchmarks/profile_r6.py` (reads) and `benchmarks/profile_r6_write.py`
-  (write / cascade / bulk / space). **Land in this order:** `R6-10` (59.8% of
-  incremental boolean write time — the headline) → `R6-6` (4.75 → 1.75 statements
-  per `check`) → `R6-11` (cache torn down ~4× per reconcile — **not the 8× filed**,
+  (write / cascade / bulk / space). ⚠ **The order below is the 2026-08-17 plan and
+  its first two entries are DONE — struck here 2026-09-22c, after the list had
+  carried them as to-do for five weeks. Do not read a landing order as a status.**
+  ~~`R6-10`~~ → ~~`R6-6`~~ → `R6-11` (cache torn down ~4× per reconcile — **not the 8× filed**,
   a cProfile `@contextmanager` artifact corrected 2026-08-21; one-line fix) →
   `R6-5` (32.7% ORM construction) → `R6-4` (30.1% and growing) → `R6-9` (4.51
   point SELECTs per write) → `R6-18` (53.1% off the biggest table) → `R6-16`
@@ -39,6 +45,15 @@ measurement/gate hygiene.
   which read those rows as paranoia's worklist) → `R6-7`+`R6-8` (gate-only, but
   per-commit cost grows **14×** over 336 commits) → `R6-1` (91.4% ceiling;
   prototype the two-tier memo first — the naive one is a correctness bug).
+  ⚠ **Corrections measured 2026-09-22b, read them before sizing off the shares
+  above** ([`docs/r6-sizing-census-2026-09-22.md`](r6-sizing-census-2026-09-22.md)):
+  `R6-5`'s and `R6-4`'s headline shares **OVERLAP and cannot be added** — most of
+  `R6-5`'s block is `R6-4`'s residue rows; `R6-9`'s instrument is mis-keyed, so the
+  fix cannot move its own headline; `R6-11`'s and `R6-16`'s wins are unmeasured
+  (only their churn/row-count is); and `R6-16`+`R6-7`+`R6-8` are ONE unit — taking
+  the two cheap checkers without the emit gate makes `verify_outbox_deltas`
+  silently vacuous. Four of the open rows had their prose corrected that session
+  for describing a surface the code does not have.
   **Declined on an upper bound:** `R6-15` (topo sort is 0.9% of a bulk build),
   `R6-12` (1.00× intra-run), `R6-14` (5.0%), `R6-2` (24% of a non-bottleneck at
   the price of a Lean model change). **Unreachable by any benchmarked workload:**
