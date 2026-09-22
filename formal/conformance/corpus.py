@@ -689,6 +689,102 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
          mk_tuple("...", "user", "bob", "banned", "doc", "d1")],
         (),
     ),
+    # ---------------------------------------------------------------------
+    # TK94 (2026-09-22) -- a DERIVED relation as the predicate of a STORED
+    # USERSET SUBJECT. Censused 2026-09-21 while closing `TK92`: of the then-26
+    # `SCHEMAS` entries, ZERO paired the two. Four used a userset subject at all
+    # (`group_userset`, `wildcard_group_member`, `taint_union_userset_arm`,
+    # `residue_rich`) and in every one the referenced `group.member` is a plain
+    # direct relation, so the intersection with each schema's compiled `plans`
+    # keys was empty across all 26.
+    #
+    # NOT a new shape for the harness as a whole -- `TTU_USERSET_SCHEMAS::
+    # derived_userset` (2026-07-27) is the same class. What it is new for is
+    # every arm that involves the GRAPH INDEX: that entry is spec-side only
+    # (`test_conformance_spec.py`), so the class had never reached the add/remove
+    # churn legs, the driven-vs-fresh-build state comparison, or the
+    # bulk-vs-incremental identity. Both entries are kept: this one's store is
+    # built for those legs (see the per-tuple roles below), that one's for the
+    # spec grid. Map: `docs/tk94-derived-userset-corpus-2026-09-22.md`.
+    #
+    # SCOPE -- `SCHEMAS` yes, `GRAPH_FRAGMENT` **NO**, and the reason is a NAMED
+    # `W4Fragment` field rather than a judgement call:
+    # `FullScope.lean::W4Fragment.term` is a conjunction whose `NoStoreSubjectR`
+    # half forbids exactly a stored userset subject naming a derived relation.
+    # Python ADMITS it (probe `term.NoStoreSubjectR/derived-userset-subject:
+    # ADMITTED (added=True)`, `test_w4fragment_scope_pin.py:83`), so the field is
+    # classified SILENT there -- no theorem routed through `graph_correct` says
+    # anything about this corpus, and zcli would not refuse it (it gates on
+    # runtime admission rc 2 and drained-ness rc 3, never on the fragment).
+    # Placing it in `GRAPH_FRAGMENT` would silently compare two models no theorem
+    # relates: the ZT-P3-3 mistake described at the top of that block.
+    #
+    # What `SCHEMAS` membership alone buys is scope-clean, arm by arm:
+    #   * spec legs (`test_conformance_random.py`, `test_conformance_remove.py`
+    #     `test_remove_sequences`/`test_full_churn_restores`,
+    #     `test_conformance_spec.py`) -- `sem` is a pure function of the final
+    #     store with no fragment hypotheses, so it is the reference for every
+    #     stratifiable schema;
+    #   * the three GRAPH legs of `test_conformance_remove.py`
+    #     (`test_graph_remove_sequences`, `test_graph_full_churn_restores`,
+    #     `test_graph_remove_bulk_build_survivors`) -- they parametrize over
+    #     `sorted(SCHEMAS)`, not `GRAPH_FRAGMENT`, and compare the graph index
+    #     against the ORACLE and against a fresh add-only build. Their own
+    #     docstring: "(Scope: sem/Lean deferred)". No Lean claim, which is the
+    #     same licence `TTU_USERSET_SCHEMAS` already grants the python-only
+    #     differentials on `wildcard_userset` / `derived_tupleset_ttu`.
+    # The Lean-claiming gates exclude it BY CONSTRUCTION, not by promise:
+    # `test_conformance_graph/state/bulk_state.py` parametrize over
+    # `GRAPH_FRAGMENT`, and `test_conformance_remove_graph.py::_REMOVABLE` is
+    # built from it and additionally asserts `_THEOREM_BACKED` membership.
+    #
+    # Compiled, measured 2026-09-22: 2 strata, and the leaf shape is byte-for-byte
+    # the one `tests/test_reg_tk92_bulk_rel_term.py` had to hand-build --
+    #   ('doc','viewer')   [('viewer.0','closure',True), ('viewer.1','derived-userset',True)]
+    #   ('group','member') [('member.0','closure',True), ('member.1','closure',False)]
+    # Three backends on the corpus store, 2026-09-22: 364-query grid, 9 True,
+    # oracle == set engine, real graph index 0 mismatches against the oracle.
+    #
+    # EVERY TUPLE IS LOAD-BEARING (the `TK92` sweep lesson: a masked mutation
+    # reads exactly like a clean pin):
+    #   * `alice allowed g1` -- positive-leaf state; alice IS a `member` of g1.
+    #   * `bob allowed g1` + `bob blocked g1` -- the discriminating pair. bob is
+    #     excluded, so `viewer@d1` must be False for him; drop `blocked` and he
+    #     flips, which is what makes the exclusion arm more than decoration.
+    #   * `carol blocked g3` -- SUBTRAHEND-ONLY, and deliberately not a userset
+    #     subject, so nothing enumerates g3. This is what makes the
+    #     `spec.positive` filter in `_live_keys_of` load-bearing: `TK92`'s sweep
+    #     M3 (drop the filter) was GREEN until its fixture gained exactly this
+    #     name, because without it the subtrahend family is a SUBSET of the
+    #     positive one.
+    #   * `g1#member viewer d1` -- the class itself: a stored userset subject
+    #     whose predicate is derived.
+    #   * `g2#member viewer d2` -- REL-EXCLUSIVE. g2 carries no `member` state at
+    #     all; it is interned during the LOAD because it is a stored subject, and
+    #     the leading `rel` term of `_live_keys_of` is the only thing that
+    #     enumerates it (`TK92`'s refutation). d2 must be a SEPARATE object from
+    #     d1 or the discrimination collapses -- d1 is reachable through g1 anyway.
+    #   * `carol viewer d2` -- the `[user]` direct arm, so `viewer` carries a
+    #     `closure` leaf alongside the `derived-userset` one.
+    "derived_userset_subject": (
+        """
+        type user
+        type group
+          define allowed: [user]
+          define blocked: [user]
+          define member: allowed but not blocked
+        type doc
+          define viewer: [user, group#member]
+        """,
+        [mk_tuple("...", "user", "alice", "allowed", "group", "g1"),
+         mk_tuple("...", "user", "bob", "allowed", "group", "g1"),
+         mk_tuple("...", "user", "bob", "blocked", "group", "g1"),
+         mk_tuple("...", "user", "carol", "blocked", "group", "g3"),
+         mk_tuple("member", "group", "g1", "viewer", "doc", "d1"),
+         mk_tuple("member", "group", "g2", "viewer", "doc", "d2"),
+         mk_tuple("...", "user", "carol", "viewer", "doc", "d2")],
+        (),
+    ),
 }
 
 # ---------------------------------------------------------------------------

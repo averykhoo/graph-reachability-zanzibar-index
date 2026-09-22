@@ -30,6 +30,115 @@ from here.
 
 ---
 
+## 2026-09-22d — `TK94` closed, and executing it refuted two of its own premises; both gate floors had drifted
+
+rows: TK94 (closed), TK102 (new), P4 (-> NOW).
+
+`task lint: clean (13 checks, 217 task file(s) parsed), 29 warning(s)`
+
+`read: board + note`
+
+Step 1 of the goal chosen on 2026-09-22c. Landed
+`formal/conformance/corpus.py::SCHEMAS['derived_userset_subject']` — the first corpus entry
+pairing a DERIVED relation (`member: allowed but not blocked`) with a stored userset subject
+(`doc.viewer: [user, group#member]`). Map, with every figure and its provenance:
+[`docs/tk94-derived-userset-corpus-2026-09-22.md`](../tk94-derived-userset-corpus-2026-09-22.md)
+(FROZEN at the close).
+
+**Scouting the row refuted two of its own premises, and both are corrected in place** (a
+dated correction is appended to [`docs/goal-census-2026-09-22.md`](../goal-census-2026-09-22.md),
+whose `TK94` row carried them):
+
+1. **The class was not unseen by the whole conformance surface.**
+   `corpus.py::TTU_USERSET_SCHEMAS['derived_userset']` has been exactly this shape since
+   2026-07-27 — spec-side only (`test_conformance_spec.py`). So the accurate sentence is the
+   row's own title: absent from `SCHEMAS`, and therefore from every arm involving the GRAPH
+   INDEX. The ranking survives; the framing did not.
+2. **"One `SCHEMAS` entry widens four arms at once" is wrong for two of them.**
+   `test_conformance_enum.py:197` parametrizes over its own six-name `_SHAPES` dict (`:136`),
+   and `test_conformance_generated.py:150` over `SEEDS` — neither reads `SCHEMAS`. The row's
+   first trap ("the enum cost is combinatorial") is therefore conditioned on separately adding
+   the name to `_SHAPES`, which this item did not do. The realised cost was ADDITIVE.
+
+**The scope decision, taken rather than deferred** (`CLAUDE.md` § "Who decides"): `SCHEMAS`
+yes, `GRAPH_FRAGMENT` **no**. The class is outside `FullScope.lean::W4Fragment` by a NAMED
+field — `term`'s `NoStoreSubjectR` half forbids exactly a stored userset subject naming a
+derived relation, and Python ADMITS such a write, so `test_w4fragment_scope_pin.py` classifies
+it SILENT (probe line `:83`). zcli does not gate on the fragment, so `GRAPH_FRAGMENT`
+membership would silently compare two models no theorem relates — the ZT-P3-3 mistake, for the
+third time. What `SCHEMAS` alone buys is scope-clean: the spec legs compare `sem`, which
+carries no fragment hypotheses, and the three GRAPH legs of `test_conformance_remove.py`
+compare the graph index against the ORACLE and a fresh add-only build ("Scope: sem/Lean
+deferred"). The exclusion is COMPUTED, not promised — graph/state/bulk_state parametrize over
+`GRAPH_FRAGMENT`, and `test_conformance_remove_graph.py::_REMOVABLE` is built from it plus a
+`_THEOREM_BACKED` assertion.
+
+**The row's third trap — "a new arm that passes is not evidence that it ran" — answered
+mechanically.** Tracked probe
+[`formal/probes/tk94_new_arm_reach_2026-09-22.py`](../../formal/probes/tk94_new_arm_reach_2026-09-22.py)
+drives the real gate path at the same five seeds and asks, per corpus, whether the leading
+`rel` term of `index_v4/bulk_backfill.py::_BulkBackfill._live_keys_of` ever enumerated a name
+the positive-leaf half did not. Over all 27 entries: the new corpus is the ONLY True (seed 0,
+`('group','member')`, rel-only `['g1','g2','x_group_2']`); eighteen corpora CALL that function
+between 5 and 15 times across the seeds and never get an exclusive name; nine never call it.
+So the branch `TK91` hypothesised unreachable and `TK92` refuted from `tests/` is now reached
+by the conformance gate, by exactly one corpus.
+
+⚠ **The probe's INSTRUMENT lied first, in the direction that reads as a finding.** Run 1
+reported eight corpora `SKIPPED` on a `TypeError`. It was the wrapper: the shipped
+`_live_keys_of` RECURSES through `self._live_keys_of` and unions the result into a set, and
+the wrapper returned a `list`. Eight "could not measure" rows would have passed for a property
+of those corpora. This is the `GL-1` lesson again (control your instrument, not only your
+subject); the fix is commented at the line that caused it.
+
+**The pin, and the shape that would have failed by passing.**
+`test_conformance_nary_strata.py::test_schemas_carries_a_derived_userset_subject` asserts (a)
+some `SCHEMAS` corpus stores a userset subject over a derived relation, and (b) some such
+subject object carries NO state of its own — the rel-exclusive shape. (b) is the load-bearing
+half: without it the corpus reaches the branch and cannot discriminate it, which is the state
+all 26 predecessors were in. **The floor is over `SCHEMAS` specifically**; written over the
+harness-wide corpora it would stay green with the entry deleted, rescued by the spec-side
+twin. Sabotage S1 is that control. `CLEAN 20 passed`; S1 (delete the entry) / S2 (delete only
+the rel-exclusive tuple) / S3 (invert the helper) each `1 failed, 19 passed`, each naming its
+own claim; restored `20 passed`.
+
+**S0 is recorded because it is the easy mistake here.** The first cut of S1 RENAMED the dict
+key rather than deleting the entry, and came back green — correctly, since the floor tests the
+CLASS and not the name. A mutation that does not move the property under test reads exactly
+like a clean pin (`docs/sabotage-procedure.md`, the `P6` step-2 lesson).
+
+**BOTH GATE FLOORS HAD SILENTLY STOPPED BEING ZERO-HEADROOM, and the row's second trap —
+re-measure rather than estimate — is what found it.** Before this session: `MIN_CONF_ALL`
+`546` against live `572`, `MIN_CONF_HEAVY` `104` against `130`, `MIN_TESTS_ALL` `1209` against
+live `1279`. `TK94` adds nothing under `tests/`, so all of that slack had accumulated
+unratcheted — the same leak the `MIN_CONF_ALL` comment block has warned about since 2026-09-06b,
+found the same way. All four ratcheted to live (`582` = `135` + `447`, and `1279`) with the
+instrument check the prior ratchets set as precedent — floor one above live, literal failure
+observed, restored:
+
+    FAIL: formal/conformance/ collects only 582 test(s); the gate floor is 583.
+    FAIL: tests/ collects only 1279 test(s); the gate floor is 1280.
+
+both rc 1. The `tests/` repair is unrelated to this corpus and says so in `verify.sh`.
+
+**Same-commit count hygiene.** `formal/FINAL_REVIEW.md`'s generated block regenerated with
+`python -m formal.conformance.doc_counts --generate` (never by hand);
+`doc_counts::check_corpus_count_prose` flagged three `26 corpora` sites
+(`test_conformance_remove.py:602`, `:725`, `docs/tk92-bulk-rel-term-2026-09-21.md:77`), each
+re-dated with a pastness word — a bare date is not enough, because *"measured `<date>` over
+all 26 corpora"* still reads as a current coverage claim. `doc_counts --check` now reports
+`0 stale claim(s)`.
+
+**Deferred with a row rather than a sentence.** `TK102` (`LATER`, `M`): take the corpus into
+`test_conformance_enum.py::_SHAPES` — the one widening whose cost genuinely is combinatorial,
+and which needs its own runtime budget against the phase cap. One item left flagged as
+UNVERIFIED in the map: `formal/probes/p6_inbridge_stability_2026-09-12.lean:478` claims a
+property INERT "on all 26 `corpus.SCHEMAS`" — a `P6` scope claim no checker sees, unknown at
+27. `P6` is parked, so it is flagged and left.
+
+`P4` promoted `LATER` -> `NOW`: closing `TK94` left the board with no `NOW`, and `P4` is step
+2 of the goal as already recorded on that row.
+
 ## 2026-09-22c — a GOAL was chosen: honest coverage over width; neither assurance system can say what it covers
 
 rows: TK88 (closed), TK101 (new), TK94, P4, R6.

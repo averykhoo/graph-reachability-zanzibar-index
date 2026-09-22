@@ -2,7 +2,7 @@
 id: P4
 title: leg 7 4b -- leaf-probe <-> directLeaf bridge
 brief: Unblocked 2026-09-05b (P3 closed; deps swept); bridge target is the live leaf-routed write path
-pri: LATER
+pri: NOW
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 015e6dd88c0d
 created: 2026-08-16
-moved: 2026-09-22c
-updated: 2026-09-22c
+moved: 2026-09-22d
+updated: 2026-09-22d
 closed:
 ---
 
@@ -90,3 +90,7 @@ while the carry survived.
 After it lands: P15 / P16 / P25-option-2 / DW-1 are assurance work to be ranked against product
 risk, NOT "the rest of the proof." P6 stays parked (user decision 2026-09-15d) and this does not
 touch it -- P6 blocks only P7 and P25 option 1.
+
+### 2026-09-22d
+
+Promoted LATER -> NOW at the 2026-09-22d write-back: TK94 (step 1 of the chosen goal) closed and left the board with no NOW, and P4 is step 2 as already recorded on this row and in docs/goal-census-2026-09-22.md. deps [] and the evidence is in hand. This is the ranking the goal note states, not a new decision.

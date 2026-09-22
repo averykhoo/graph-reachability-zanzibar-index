@@ -74,7 +74,8 @@ Four corpora use a userset subject at all, and in **none** of them is the refere
 relation derived — `group.member` is a plain direct relation in every one. **The
 intersection is empty across all 26.** That is the mechanism behind
 `tests/test_reg_tk91_live_keys_repair.py`'s "INERT across four whole modules" and the
-`26 corpora × 5 seeds` byte-identical result in
+`26 corpora × 5 seeds` byte-identical result (measured 2026-09-20, when there were 26
+of them; `SCHEMAS` has grown since -- TK94) in
 [`docs/tk91-tk80-removal-coverage-2026-09-20.md`](tk91-tk80-removal-coverage-2026-09-20.md)
 §4.2: the corpora cannot reach the branch, so their green says nothing about it.
 

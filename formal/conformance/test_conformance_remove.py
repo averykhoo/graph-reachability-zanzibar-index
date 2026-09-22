@@ -599,8 +599,10 @@ def test_graph_full_churn_restores(name):
 #     per cell.
 #   * derived-arm state (processor-stamped `derived` edges + symbolic residues)
 #     over the sweep, MINIMUM over the 17 boolean corpora = 1
-#     (`nary_intersection`: 1 derived edge, 0 residues). 13 of 26 corpora carry
-#     a derived edge at all; 5 carry residues.
+#     (`nary_intersection`: 1 derived edge, 0 residues). Measured 2026-09-20, when
+#     13 of the 26 corpora THEN in `SCHEMAS` carried a derived edge at all and 5
+#     carried residues. `SCHEMAS` has grown since (TK94), and the floor is on the
+#     SWEEP rather than per cell, so those figures are provenance, not a live count.
 _MIN_BULK_STATE_ROWS = 12
 _MIN_BULK_DERIVED_STATE = 1
 
@@ -722,7 +724,8 @@ def test_graph_remove_bulk_build_survivors(name):
         `extract_sql_state`'s P2 drops exactly those rows, which is why
         `test_conformance_bulk_state.py` records its Phase-B coverage as nil.
         Do not read more into this than the number: 2 rows on 1 corpus, and
-        `crossable_shapes` is EMPTY on all 26 corpora, so `bulk_build.py`'s
+        `crossable_shapes` was EMPTY, measured 2026-09-16 over all 26 corpora THEN
+        in `SCHEMAS`, so `bulk_build.py`'s
         I14 crossable-middle loop is still reached by nothing in this file
         (it is pinned by `tests/test_bulk_build.py::_assert_r4bf_features`
         clause (g), per `P22`).

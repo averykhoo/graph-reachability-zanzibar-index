@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-07b
-moved: 2026-09-08
-updated: 2026-09-08
+moved: 2026-09-22d
+updated: 2026-09-22d
 closed:
 ---
 
@@ -101,3 +101,17 @@ the first place.
 Also still true and worth carrying: the table on this row is a subagent's and is marked
 UNVERIFIED. `TK59` re-measured two of its neighbours' claims this session and both moved,
 so re-verify before acting on any row of it.
+
+### 2026-09-22d
+
+DEMOTED OUT OF THE HANDOFF BANNER 2026-09-22d (budget overflow, the defined move -- same as TK67 on 2026-09-19f). The banner line is preserved verbatim below so nothing is lost; the row is now its only home.
+
+  "TK66: a sweep found 17 forward-binding directives that live only in formal/history/ and no
+   live file surfaces (P4s was one). The table on that row is a subagents, explicitly
+   UNVERIFIED -- read the line before acting. Now probably an EXTENSION of check 14 rather
+   than its own mechanism (noted on the row). The FoldAdmits 21 move, 3 MUST STAY trap and
+   its 2026-09-12 narrowing were demoted out of this banner into TK67 on 2026-09-19f (budget
+   overflow, the defined move) -- task.py show TK67."
+
+Nothing about the item changed; it lost a banner line, not a status. The demotion was forced
+by the 2026-09-22d entry (TK94 close + the gate-floor drift repair), which needed a line.

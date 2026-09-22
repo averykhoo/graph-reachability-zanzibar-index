@@ -3,6 +3,29 @@
 **ACTIVE-PLAN** (`docs/README.md` §3). Corrections append **dated at the top**. Freeze when a
 direction is chosen and its first item closes.
 
+## Correction, 2026-09-22d (appended; the body below is as-written)
+
+**`TK94`'s row in the table below overstates the hole in two ways, and executing the item
+is what found it.** Both are first-hand READ, and the full argument with the line cites is
+[`docs/tk94-derived-userset-corpus-2026-09-22.md`](tk94-derived-userset-corpus-2026-09-22.md).
+
+1. **The class was not unseen by the whole conformance surface.**
+   `corpus.py::TTU_USERSET_SCHEMAS['derived_userset']` has been exactly this shape since
+   2026-07-27. It is spec-side only (`test_conformance_spec.py`), so the accurate sentence
+   is the narrower one the row's title makes: it was absent from `SCHEMAS`, and therefore
+   from every arm that involves the **graph index**. That is still the equivalence-relevant
+   half, so the ranking stands; the phrasing does not.
+
+2. **"The enumerated, generated, remove AND bulk arms all draw from that corpus" is wrong
+   for the first two.** `test_conformance_enum.py:197` parametrizes over its own six-name
+   `_SHAPES` dict (`:136`), and `test_conformance_generated.py:150` parametrizes over
+   `SEEDS` and never imports `SCHEMAS`. So the "cost is combinatorial" note in the cost
+   column is conditioned on separately adding the name to `_SHAPES`, which the item did not
+   do. The realised cost was **additive and small**: conformance `572 -> 582` collected
+   (`+9` corpus parametrizations, `+1` new floor test), `tests/` unchanged.
+
+Neither correction changes the chosen goal or the three steps.
+
 Asked by the user 2026-09-22: *"not what task to do, but what goal to achieve — correctness,
 perf, etc."* Three read-only censuses were dispatched (perf / equivalence / formal); their raw
 reports are in the gitignored `.scratch/goal-census/{perf,equivalence,formal}.md` and this file

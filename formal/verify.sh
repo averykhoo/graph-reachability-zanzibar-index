@@ -406,7 +406,23 @@ GATE_LOCK_HELD=1
 #   block warns about, caught by measuring a clean checkout: 520 against 515);
 #   +26 test_conformance_bulk_state.py (P17: bulk build vs Python-graph state over
 #   every GRAPH_FRAGMENT corpus, plus the coverage pin).
-MIN_CONF_ALL=546
+# Re-measured 2026-09-22 with `pytest formal/conformance/ -q --collect-only`: 582.
+#   This is a GROWTH bump AND a DRIFT REPAIR in one, and the split matters:
+#   +26 were ALREADY unratcheted before this session (live 572 against a floor of
+#   546 on a clean checkout of d0deced) -- i.e. 26 conformance tests could have been
+#   DELETED with the gate staying green. Same leak the 2026-09-06b block above warns
+#   about, found the same way: by measuring instead of assuming.
+#   +10 are TK94's: +9 corpus parametrizations from the new
+#   `corpus.py::SCHEMAS['derived_userset_subject']` entry (1 random, 5 remove, 3 spec
+#   -- enum and generated do NOT parametrize over SCHEMAS, see
+#   docs/tk94-derived-userset-corpus-2026-09-22.md §2) and +1 for
+#   `test_conformance_nary_strata.py::test_schemas_carries_a_derived_userset_subject`.
+#   instrument check (the floor is live, not decorative): with MIN_CONF_ALL=583 and
+#   MIN_CONF_REST=448, `bash formal/verify.sh conf-tile:1/5` fails at the global
+#   collection floor -- observed literally:
+#     FAIL: formal/conformance/ collects only 582 test(s); the gate floor is 583.
+#   and rc=1. Restored to 582, which then passes.
+MIN_CONF_ALL=582
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -528,7 +544,20 @@ MIN_CONF_ALL=546
 #   mechanical ratchet here -- the equivalent of tasks/config.json's min_tasks_parsed --
 #   is now the fourth piece of evidence for itself and is NOT fixed in this change.
 #   Re-measured with `pytest tests/ -q --collect-only` -> `1209 tests collected`.
-MIN_TESTS_ALL=1209
+# Re-measured 2026-09-22 with `pytest tests/ -q --collect-only`: 1279. This is a PURE
+#   DRIFT REPAIR -- TK94 added nothing under `tests/` (measured: no module under
+#   tests/ reads `formal.conformance.corpus` at all; the only reference into that
+#   package is `tests/test_admission_rejected.py:410`, which imports `backends`), so
+#   all 70 of the slack accumulated unratcheted and 70 tests could have been DELETED
+#   with the gate staying green. Repaired here because TK94's own trap says to
+#   re-measure this knob rather than estimate it, and measuring it is what found the
+#   drift. The conformance side had drifted too, by 26 -- see MIN_CONF_ALL.
+#   instrument check (the floor is live, not decorative): with MIN_TESTS_ALL=1280,
+#   `bash formal/verify.sh tests-tile:1/4` fails at the global collection floor --
+#   observed literally:
+#     FAIL: tests/ collects only 1279 test(s); the gate floor is 1280.
+#   and rc=1. Restored to 1279, which then passes.
+MIN_TESTS_ALL=1279
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -588,8 +617,15 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 # 2026-09-06b: HEAVY_CONF re-measured at 104 (unchanged); test_sorry_scan.py's +5 and
 # test_conformance_bulk_state.py's +26 are both REST: 546 - 104 = 442. (The identity
 # check below is what caught this -- the first MIN_CONF_ALL ratchet left it at 515.)
-MIN_CONF_HEAVY=104
-MIN_CONF_REST=442
+# 2026-09-22: BOTH re-measured, and HEAVY had drifted hardest -- `pytest
+# formal/conformance/test_conformance_remove.py -q --collect-only` -> `135 tests
+# collected`, against a floor of 104, so 31 of the gate's heaviest tests could have
+# been deleted silently. 5 of the 31 are TK94's new corpus parametrizations; the
+# other 26 accumulated unratcheted. REST measured the same way with
+# `--ignore=formal/conformance/test_conformance_remove.py` -> `447 tests collected`,
+# and 135 + 447 == 582 == MIN_CONF_ALL, which the identity check below re-asserts.
+MIN_CONF_HEAVY=135
+MIN_CONF_REST=447
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

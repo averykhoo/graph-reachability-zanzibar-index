@@ -27,19 +27,19 @@ number INTO it over restating it.
 
 | quantity | value |
 |---|---|
-| `formal/conformance/` collected | **572** |
+| `formal/conformance/` collected | **582** |
 | `tests/` collected | **1279** |
-| whole-repo suite | **1851** |
-| differential conformance tests | **501** across **14** files |
+| whole-repo suite | **1861** |
+| differential conformance tests | **511** across **14** files |
 | gate-tooling conformance tests | **71** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **617** |
 | audit identity pin (`audited_theorems.txt`) | **617** |
 | headline definition pin | **266** rows (**257** declarations + ambient) |
 | `CORRESPONDENCE.md` anchors | **696** (**388** Python + **308** Lean) |
-| `corpus.SCHEMAS` | **26** |
+| `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
-| spec-scope corpora (four dicts) | **35** = 26 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=546 (=104+442), `MIN_TESTS_ALL`=1209, `EXPECTED_MIN_AUDITS`=460 |
+| spec-scope corpora (four dicts) | **36** = 27 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=582 (=135+447), `MIN_TESTS_ALL`=1279, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
 Driven fresh over all **25** `GRAPH_FRAGMENT` corpora through the real graph
@@ -61,16 +61,16 @@ Per conformance file:
 
 | file | tests | kind |
 |---|---|---|
-| `test_conformance_remove.py` | 130 | differential |
-| `test_conformance_spec.py` | 105 | differential |
+| `test_conformance_remove.py` | 135 | differential |
+| `test_conformance_spec.py` | 108 | differential |
 | `test_conformance_state.py` | 56 | differential |
 | `test_conformance_graph.py` | 51 | differential |
 | `test_sorry_scan.py` | 44 | tooling |
 | `test_conformance_generated.py` | 40 | differential |
+| `test_conformance_random.py` | 27 | differential |
 | `test_conformance_bulk_state.py` | 26 | differential |
-| `test_conformance_random.py` | 26 | differential |
 | `test_conformance_remove_graph.py` | 23 | differential |
-| `test_conformance_nary_strata.py` | 19 | differential |
+| `test_conformance_nary_strata.py` | 20 | differential |
 | `test_w4fragment_scope_pin.py` | 15 | tooling |
 | `test_runner_retry.py` | 7 | tooling |
 | `test_conformance_enum.py` | 6 | differential |

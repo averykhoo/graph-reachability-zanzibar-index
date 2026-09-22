@@ -823,3 +823,187 @@ def test_multi_stratum_three_way(name, ops):
         f"[{name}/{ops.name}] oracle/graph-index disagreement on a >= 3-stratum "
         f"schema — the multi-stratum cascade is a GENUINE FINDING here:\n"
         f"{_fmt(mism, 'oracle', 'graph')}")
+
+
+# --------------------------------------------------------------------------- #
+# (e) TK94 -- the SCHEMAS-side coverage floor for a DERIVED relation used as the
+#     predicate of a STORED USERSET SUBJECT.
+#
+# Censused 2026-09-21 while closing `TK92`: of the then-26 `SCHEMAS` entries,
+# ZERO paired the two, so every `SCHEMAS`-parametrized arm -- and in particular
+# the three GRAPH legs of `test_conformance_remove.py` -- had never run on the
+# class. `TK92` had to hand-build a fixture in `tests/` to refute `TK91`'s
+# unreachability hypothesis at all.
+#
+# (!) THE FLOOR IS OVER `SCHEMAS` SPECIFICALLY, NOT OVER THE HARNESS-WIDE CORPORA,
+# and that is the whole point. `TTU_USERSET_SCHEMAS::derived_userset` (2026-07-27)
+# is the same SHAPE but is spec-side only (`test_conformance_spec.py`), so a floor
+# written over `_all_corpora()` would stay GREEN with the `SCHEMAS` entry deleted --
+# an assurance step that fails by passing, this project's house failure mode.
+# Sabotage S1 below is exactly that check.
+# --------------------------------------------------------------------------- #
+
+_DERIVED_USERSET_SUBJECT = "derived_userset_subject"
+
+
+def _stored_userset_subjects_over_derived(schema_text, tuples):
+    """`[(subject_type, subject_name, subject_predicate)]` for every stored tuple whose
+    subject predicate names a DERIVED (boolean-tainted) relation of the schema.
+
+    Derivedness is read from the COMPILED ruleset (`RuleSet.compiled.plans` keys), not
+    from the schema text, so a relation that stops being derived -- e.g. its `but not`
+    arm is dropped -- takes this floor red rather than quietly satisfying it.
+    """
+    compiled = parse_openfga_schema(schema_text).compiled
+    if compiled is None:
+        return []
+    derived = set(compiled.plans)
+    return [(t.subject_type, t.subject_name, t.subject_predicate)
+            for t in tuples
+            if t.subject_predicate not in ("...", "*")
+            and (t.subject_type, t.subject_predicate) in derived]
+
+
+def test_schemas_carries_a_derived_userset_subject():
+    """At least one `SCHEMAS` corpus stores a userset subject whose predicate is a
+    DERIVED relation, and at least one such subject object carries NO state of its own.
+
+    Two claims, because the second is what `TK92` showed the first does not imply:
+
+      (a) the class is present in `SCHEMAS` at all -- the census that was `0 of 26` on
+          2026-09-21;
+      (b) some such subject object appears as the OBJECT of no stored tuple, so it is
+          interned during the bulk LOAD purely because it is a stored subject and has
+          no positive-leaf state. That is the only shape under which the leading `rel`
+          term of `index_v4/bulk_backfill.py::_BulkBackfill._live_keys_of` enumerates a
+          name nothing else does (`TK92`, `tests/test_reg_tk92_bulk_rel_term.py`).
+
+    Claim (b) is the load-bearing half. Without it the corpus RUNS the line and learns
+    nothing from it, which is the state all 26 pre-existing corpora were in -- measured
+    2026-09-22 over every `SCHEMAS` entry at the real gate driver
+    (`formal/probes/tk94_new_arm_reach_2026-09-22.py`): eighteen corpora call
+    `_live_keys_of` between 5 and 15 times across the five seeds and NONE of them ever
+    gets a rel-exclusive name; nine never call it; `derived_userset_subject` is the
+    only True.
+
+    SCOPE (!): `SCHEMAS` is asserted, `GRAPH_FRAGMENT` is asserted AGAINST. The class is
+    outside `FullScope.lean::W4Fragment` by a named field -- `term`'s `NoStoreSubjectR`
+    half forbids a stored userset subject naming a derived relation, and Python ADMITS
+    such a write (`test_w4fragment_scope_pin.py:83`, classified SILENT). zcli does not
+    gate on the fragment, so `GRAPH_FRAGMENT` membership would silently compare two
+    models no theorem relates -- the ZT-P3-3 mistake.
+
+    SABOTAGE (2026-09-22, `docs/sabotage-procedure.md`), LITERAL observed output; each
+    run is `pytest formal/conformance/test_conformance_nary_strata.py -q`, one byte-level
+    edit per run, restored between runs (`.scratch/tk94/sabotage.py`):
+
+      * CLEAN: `20 passed in 1.88s`, rc 0. RESTORED after the last run: `20 passed in
+        2.45s`, rc 0 -- so every red below is attributable to its own edit.
+
+      * S0 -- THE FIRST ATTEMPT WAS A GREEN THAT WAS CORRECT, and it is recorded because
+        it is the easy mistake here. Renaming the dict key
+        (`"derived_userset_subject"` -> `"_TK94_DISABLED_derived_userset_subject"`)
+        returned `20 passed in 1.88s`, rc 0. That is not a hole: this floor tests the
+        CLASS, not the name, so a rename is not a weakening at all. The mutation had to
+        be re-cut as a real deletion. *Say what the edit was supposed to move, and check
+        it moved* -- `docs/sabotage-procedure.md`, the P6 step-2 lesson.
+
+      * S1 -- DELETE the `derived_userset_subject` entry from `SCHEMAS` (schema and
+        tuples), the narrowest plausible weakening and the one this floor exists for. It
+        is ALSO the control that the floor is not satisfied by the spec-side twin, which
+        is left in place::
+
+            E  AssertionError: NO `SCHEMAS` corpus stores a userset subject whose
+               predicate is a derived relation -- the 0-of-26 census TK94 was filed for
+               has returned. `TTU_USERSET_SCHEMAS::derived_userset` does NOT satisfy
+               this: it is spec-side only, so the graph arms still never see the class.
+            E  assert {}
+            FAILED ...::test_schemas_carries_a_derived_userset_subject
+            1 failed, 19 passed in 1.94s
+
+      * S2 -- keep the entry, delete ONLY its `g2#member viewer d2` tuple (the
+        rel-exclusive subject). Claim (a) survives; claim (b) is the one that must fire::
+
+            E  AssertionError: [['derived_userset_subject']] every derived-userset
+               subject object also carries state of its own (['g1']) -- the bulk
+               mirror's leading `rel` term is REACHED but never exclusive, so this
+               corpus does not discriminate it (TK92). Add a subject object with no
+               tuples of its own.
+            E  assert {}
+            FAILED ...::test_schemas_carries_a_derived_userset_subject
+            1 failed, 19 passed in 2.05s
+
+        S2 is the sharp one. S1 alone would be satisfied by any corpus of the shape,
+        including one that cannot tell the branch apart -- which is the state `TK92`
+        found four whole modules in.
+
+      * S3 -- the INSTRUMENT control: invert `_stored_userset_subjects_over_derived`'s
+        filter to `in ("...", "*")`, so the helper reports BARE subjects as
+        derived-userset ones. Without this arm, a green above could be the helper
+        matching nothing rather than the corpus being right::
+
+            E  AssertionError: NO `SCHEMAS` corpus stores a userset subject whose
+               predicate is a derived relation ...
+            E  assert {}
+            FAILED ...::test_schemas_carries_a_derived_userset_subject
+            1 failed, 19 passed in 2.21s
+
+        (!) S3's message is IDENTICAL to S1's, because both end at an empty `found`.
+        The two are distinguishable only by which edit was applied, not by the output --
+        so read this list, not the failure text, when this test goes red.
+
+    NOT SWEPT, and said rather than implied: this is one test appended to a module of
+    twenty, and the mutation sweep above covers its own predicate and helper only, not
+    the module. `docs/sabotage-procedure.md` asks for a module-wide sweep when a module
+    is ADDED; this floor joins an existing one.
+    """
+    from formal.conformance.corpus import TTU_USERSET_SCHEMAS
+
+    found: dict[str, list] = {}
+    for name in sorted(SCHEMAS):
+        schema_text, tuples, _ow = SCHEMAS[name]
+        subs = _stored_userset_subjects_over_derived(schema_text, tuples)
+        if subs:
+            found[name] = subs
+
+    assert found, (
+        "NO `SCHEMAS` corpus stores a userset subject whose predicate is a derived "
+        "relation -- the 0-of-26 census TK94 was filed for has returned. "
+        "`TTU_USERSET_SCHEMAS::derived_userset` does NOT satisfy this: it is "
+        "spec-side only, so the graph arms still never see the class.")
+
+    # (b) somewhere among them, a subject object with no state of its own.
+    stateless_anywhere = {}
+    for name, subs in found.items():
+        _schema_text, tuples, _ow = SCHEMAS[name]
+        objects = {(t.object_type, t.object_name) for t in tuples}
+        stateless = sorted(sn for (st, sn, _sp) in subs if (st, sn) not in objects)
+        if stateless:
+            stateless_anywhere[name] = stateless
+    assert stateless_anywhere, (
+        f"[{sorted(found)}] every derived-userset subject object also carries state of "
+        f"its own ({sorted({sn for subs in found.values() for (_st, sn, _sp) in subs})}) "
+        f"-- the bulk mirror's leading `rel` term is REACHED but never exclusive, so "
+        f"this corpus does not discriminate it (TK92). Add a subject object with no "
+        f"tuples of its own.")
+
+    # SCOPE: in SCHEMAS, and deliberately NOT in GRAPH_FRAGMENT.
+    for name in found:
+        assert name not in GRAPH_FRAGMENT, (
+            f"[{name}] stores a userset subject over a derived relation and has leaked "
+            f"into GRAPH_FRAGMENT. `FullScope.lean::W4Fragment.term`'s `NoStoreSubjectR` "
+            f"half is FALSE for such a store, and zcli would NOT refuse it (it gates on "
+            f"admission rc 2 / drained-ness rc 3, never on the fragment), so the Lean "
+            f"graph/state/bulk gates would compare two models no theorem relates -- the "
+            f"ZT-P3-3 mistake. Keep it in SCHEMAS only; the python-to-python remove legs "
+            f"are what it is there for.")
+
+    # The spec-side twin still exists and is still NOT in SCHEMAS -- if it were, the
+    # floor above would be satisfied by a corpus with no graph arms at all.
+    assert "derived_userset" in TTU_USERSET_SCHEMAS, (
+        "`TTU_USERSET_SCHEMAS::derived_userset` is gone -- the spec-side half of this "
+        "class went with it")
+    assert "derived_userset" not in SCHEMAS, (
+        "`derived_userset` was moved into SCHEMAS. That is not automatically wrong, but "
+        "it enrols an out-of-W4Fragment shape in every SCHEMAS-parametrized arm and its "
+        "store was never built for them -- re-adjudicate, do not just delete this line.")
