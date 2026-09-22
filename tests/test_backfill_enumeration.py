@@ -89,11 +89,20 @@ not. A stored USERSET SUBJECT ``group:eng#member`` interns ``(member, group, eng
 LOAD time, on an add-only corpus, and where ``member`` is itself derived the ``rel`` entry
 is then the only thing that enumerates ``eng`` -- measured 2026-09-21,
 ``_live_keys_of('group','member')`` returns ``['eng','ops']`` against ``['ops']`` for the
-rest of ``preds``. The actual reason this corpus cannot move the branch is narrower: NO
-schema in ``formal/conformance/corpus.py::SCHEMAS`` (all 26 censused) pairs a derived
-relation with a userset subject. The branch is reached but INERT there -- a rel-exclusive
-name has no positive-leaf state, so it reconciles to nothing. See
-``tests/test_reg_tk92_bulk_rel_term.py`` and ``docs/tk92-bulk-rel-term-2026-09-21.md``.
+rest of ``preds``. The actual reason this corpus cannot move the branch is narrower: as
+censused 2026-09-21, NO schema in ``formal/conformance/corpus.py::SCHEMAS`` THEN paired a
+derived relation with a userset subject. The branch is reached but INERT there -- a
+rel-exclusive name has no positive-leaf state, so it reconciles to nothing.
+
+(!) **THAT SENTENCE IS NO LONGER TRUE OF `SCHEMAS`, and the change is the point.**
+``TK94`` added ``SCHEMAS['derived_userset_subject']`` on 2026-09-22, the first corpus of
+the class, so the conformance bulk arm now DOES reach the branch rel-exclusively -- and,
+measured over all 27 corpora that day, it is the only one that does
+(``formal/probes/tk94_new_arm_reach_2026-09-22.py``). Nothing about THIS module's own
+fixture or its conclusions changed; what changed is the claim about the corpus next door,
+which is why it is corrected here rather than left to read as current forever. See
+``tests/test_reg_tk92_bulk_rel_term.py``, ``docs/tk92-bulk-rel-term-2026-09-21.md`` and
+``docs/tk94-derived-userset-corpus-2026-09-22.md``.
 """
 
 import json

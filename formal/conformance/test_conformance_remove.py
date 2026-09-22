@@ -714,10 +714,14 @@ def test_graph_remove_bulk_build_survivors(name):
         `indirect_edge_count`, so Phase P's closed-form path counts ARE
         compared here; `test_conformance_bulk_state.py`'s canonical form
         (`extract_sql_state`, P1) drops them and says so.
-      * this module parametrizes over all 26 `SCHEMAS`, and the one corpus
-        in `SCHEMAS` minus `GRAPH_FRAGMENT` — `object_wildcard` — is the ONLY
-        corpus in either set with a non-empty `bridged_in_shapes` /
-        `bridged_out_shapes` (`bridged_out = [('folder', 'viewer')]`). Its
+      * this module parametrizes over every `SCHEMAS` entry, and as measured
+        2026-09-20 `object_wildcard` was the ONLY corpus in either set with a
+        non-empty `bridged_in_shapes` / `bridged_out_shapes`
+        (`bridged_out = [('folder', 'viewer')]`). `SCHEMAS` minus
+        `GRAPH_FRAGMENT` is no longer that one corpus alone — TK94 added
+        `derived_userset_subject` on 2026-09-22, deliberately outside the
+        fragment — but it declares no wildcard shape, so the bridge-row claim
+        below is unchanged. Do not restate the set size here; it rots. Its
         bulk-built survivor indexes carry `2` BRIDGE rows across the 5 seeds
         (a row whose target is a `w_any` node or whose source is a `w_all`
         node), and `snapshot_rows` filters nothing, so they are compared here.

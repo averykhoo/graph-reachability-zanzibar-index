@@ -136,6 +136,19 @@ UNVERIFIED in the map: `formal/probes/p6_inbridge_stability_2026-09-12.lean:478`
 property INERT "on all 26 `corpus.SCHEMAS`" — a `P6` scope claim no checker sees, unknown at
 27. `P6` is parked, so it is flagged and left.
 
+**Two LIVE comments still asserted the closed hole in the present tense, and no checker could
+see either** -- they say "26 `SCHEMAS`" / "all 26 censused", not "26 corpora", so
+`doc_counts::check_corpus_count_prose` is blind to them; they were found by reading, while
+sweeping this session's scratch directory before deleting it.
+`formal/conformance/test_conformance_remove.py:717` claimed `object_wildcard` was the only
+corpus in `SCHEMAS` minus `GRAPH_FRAGMENT` (it is now one of two), and
+`tests/test_backfill_enumeration.py:93` asserted flatly that NO `SCHEMAS` schema pairs a
+derived relation with a userset subject -- the exact claim `TK94` closed forty minutes
+earlier. Both corrected: the first no longer restates a set size at all, the second keeps its
+own conclusions and says plainly that the sentence about the corpus next door stopped being
+true and why. This is the `TK88` defect shape (a module asserting a state of the world that
+has moved), and the fix cost a second full ten-phase run, which is the honest price.
+
 `P4` promoted `LATER` -> `NOW`: closing `TK94` left the board with no `NOW`, and `P4` is step
 2 of the goal as already recorded on that row.
 
