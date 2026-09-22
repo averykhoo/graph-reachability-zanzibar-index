@@ -11,8 +11,8 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-15
-moved: 2026-08-21
-updated: 2026-08-21
+moved: 2026-09-22b
+updated: 2026-09-22b
 closed:
 ---
 
@@ -44,3 +44,34 @@ closed:
 ### 2026-08-21
 
 **Migrated by `migrate.py`, and this row is a CORRECTION.** The first migration pass classified every id whose disposition string was not literally `closed` as retired, which wrote this live item into `retired-ids.txt` — an irreversible sink, since `task.py` refuses to re-mint a retired id. Its true disposition (`MOTIVATED, unlanded`) is taken from `docs/perf-round6-audit-2026-08.md`, the audit that owns these ids, not from the `R6` board row’s summary prose (which undercounts the land list by one and overcounts the declines by one). `parent: R6` makes the round a rollup: closing the last child is what reports that `R6` itself can close. **`created` (`2026-08-15`) is RECORDED, not approximated** — it is the date the audit doc that minted these ids states for itself; `moved` is the `R6` board row’s value.
+
+### 2026-09-22b
+
+2026-09-22b LEAN VERDICT: representation only, NO def edit -- but the full ten-phase gate plus a
+fuzz sweep are still owed, because the change rewrites the probe query and the schema of the
+modelled state. Anchor census this session: `EdgeV4` 9, `_check_internal` 9, `bulk_build` 9 --
+all heavily anchored, so nothing here may be RENAMED, but the Lean model states path-count
+arithmetic over a pure `DirectGraph : V -> V -> Nat` and has no notion of a surrogate PK. The
+governing precedent is `CORRESPONDENCE.md` sec 7's P2-batching entry: a change that alters HOW
+rows are fetched or written, without changing which flips occur or their order, is "below the
+model's abstraction level; no Lean change".
+
+WORTH IT IF THE MIGRATION IS ACCEPTED. The 53.1% (57.7 -> 27.0 bytes/row at 200k rows) is real
+and is the one open row whose measurement is ALREADY INSTRUMENTED --
+`benchmarks/profile_r6_write.py` carries the A/B harness that builds the WITHOUT ROWID
+composite-PK variant and prints the bytes/row compare. No new benchmark owed. The single biggest
+cost is a HAND-WRITTEN PostgreSQL migration authored against no migration framework (no alembic
+in the repo), with nothing in-tree to test it.
+
+UNVERIFIED, re-grep before starting: a subagent census this session reports that this row and the
+audit both name `wildcard.py::WildcardIndex.check` as the probe site, while the live
+`select(EdgeV4.id)` probe is in `::WildcardIndex._check_internal` -- and that the audit's TK47
+banner lists this row's quoted blocks as deliberately left verbatim. Not re-verified first-hand.
+If true, a session reading this row alone greps the wrong function.
+
+CASCADE COLLISION: this row rewrites the probe that `CORRESPONDENCE.md` maps
+`processor.py::_EvalContext.leaf_check` onto, so R6's standing "not parallel-safe with P6 on the
+cascade read path" trap binds it DIRECTLY. P6 is parked at LATER, so dormant, not resolved.
+Keep store-id interning OUT of scope -- it is a separate, much larger item.
+
+Full audit: docs/r6-sizing-census-2026-09-22.md

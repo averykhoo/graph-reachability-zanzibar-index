@@ -11,8 +11,8 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-18
-moved: 2026-08-21
-updated: 2026-08-21
+moved: 2026-09-22b
+updated: 2026-09-22b
 closed:
 ---
 
@@ -50,3 +50,35 @@ closed:
 ### 2026-08-21
 
 **Migrated by `migrate.py`, and this row is a CORRECTION.** The first migration pass classified every id whose disposition string was not literally `closed` as retired, which wrote this live item into `retired-ids.txt` — an irreversible sink, since `task.py` refuses to re-mint a retired id. Its true disposition (`MOTIVATED, unlanded`) is taken from `docs/perf-round6-audit-2026-08.md`, the audit that owns these ids, not from the `R6` board row’s summary prose (which undercounts the land list by one and overcounts the declines by one). `parent: R6` makes the round a rollup: closing the last child is what reports that `R6` itself can close. **`created` (`2026-08-18`) is RECORDED, not approximated** — but it is recorded by a DIFFERENT source than the other thirteen children: the audit doc states `2026-08-15` for itself and explicitly disclaims this id (*"NOT a product of the 2026-08-15 audit — no finder wrote it, no verifier adversarially reviewed it"*). `2026-08-18` is the filing date its own `### R6-19` entry heading carries. `moved` is the `R6` board row’s value.
+
+### 2026-09-22b
+
+CORRECTION 2026-09-22b: step (2)'s claim that the `_residue_state` hoist "needs no soundness
+argument at all" is WRONG AS WRITTEN, verified first-hand.
+
+`index_v4/bulk_backfill.py::_BulkBackfill._residue_state` (`:390`) returns FRESH COPIES --
+`return e.stars, set(e.neg), set(e.upos)` -- and the loop body in `::_reconcile_subject_edge`
+MUTATES AND WRITES BACK: `(neg.add if want_neg else neg.discard)(skey)` then
+`self._store_residue(o_type, rel, o_name, stars, neg, upos)` (`:706-707`, dated 2026-09-22).
+So today each subject reads a snapshot that INCLUDES the previous subject's committed `neg`
+change; hoisting the read out of the loop replaces per-subject snapshots with one shared mutable
+set across the whole loop. That may well be equivalent -- but it is an argument, not a no-op,
+and it is the sizing-comes-in-low pattern appearing inside the CHEAPEST sub-step of the cheapest
+row. `formal/conformance/test_conformance_bulk_state.py` is the differential gate that would
+catch a residue-ordering change.
+
+WORTH IT, BUT TO CLOSE IT. The honest framing is already on this row: the call site is the
+DENOMINATOR, and optimizing inside it has a 2.0% self ceiling. Step (1) is "instrument the
+duplicate-evaluation rate -- if it is near zero on real corpora the item is finished, DECLINED".
+It overlaps already-declined R6-14 (5.0% ceiling). Scope a session to step (1) only; do not
+drift into step (3), the memo. This is the cheapest row to close and the worst to optimize.
+
+LEAN: zero cost. `_reconcile_subject_edge` has ZERO `CORRESPONDENCE.md` anchors (mechanical
+census this session); the bulk build/backfill path has no Lean model, being pinned by a
+Python-to-Python differential identity gate instead.
+
+PROVENANCE TRAP (unchanged, restated because it bears on the decline): self-filed 2026-08-18
+outside the two-phase workflow -- no finder wrote it, no verifier adversarially reviewed it. It
+is the only R6 row with no adversarial review.
+
+Full audit: docs/r6-sizing-census-2026-09-22.md

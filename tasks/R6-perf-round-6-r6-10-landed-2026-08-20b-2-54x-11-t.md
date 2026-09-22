@@ -11,8 +11,8 @@ labels: [perf]
 source: board
 source_hash: b895d453a044
 created: 2026-08-21
-moved: 2026-09-15d
-updated: 2026-09-15d
+moved: 2026-09-22b
+updated: 2026-09-22b
 closed:
 ---
 
@@ -122,3 +122,44 @@ Board row + block rewritten 2026-08-31b (restored to NEXT after P20 closed; N15-
 `NEXT` -> `LATER`, to make room for `P22`. Not a judgement on this row: the 2026-09-15d session was redirected by the user to edge cases and bugs, which produced a CONFIRMED equivalence break (`TK69`) and made `P22` actionable with a concrete candidate input. Correctness work outranks perf work under that instruction. Nothing here is stale, blocked or wrong -- the `R6-*` children are untouched and this row resumes as it stood.
 
 (!) The standing note still holds and matters more now, not less: this row is NOT parallel-safe with `P6` on the cascade read path. `P6` is parked at `LATER` as of the same session, so that collision is dormant rather than resolved -- re-check it if `P6` restarts.
+
+### 2026-09-22b
+
+2026-09-22b: A CORRECTNESS/EXPECTATIONS + LEAN AUDIT OF EVERY OPEN CHILD LANDED, at user
+request ("look into the correctness and expectations for each r6 option ... and audit whether it
+breaks the lean model and by how much, or whether it could allow simplifying the lean model").
+Map: docs/r6-sizing-census-2026-09-22.md (ACTIVE-PLAN). Corrections are logged on each child's
+own row under session 2026-09-22b; this entry is the index.
+
+THE HEADLINE: four rows described a surface or a number the code does not have. R6-9's
+instrument is mis-keyed, so the fix cannot move its own headline figure. R6-16 names one emit
+site and has six. R6-19 calls its cheapest sub-step argument-free when the code mutates and
+stores back between iterations. R6-11's owed CORRESPONDENCE edit was already landed by R6-10.
+
+MEASURED: R6-5's 32.7% is not R6-5's. One profile run serves both R6-4 and R6-5 (the
+`target_graph_lookup` banner is literally "[R6-4, R6-5]") and the 32.7% is SQLAlchemy's generic
+`_instance` line. Per-class attribution gives 6,000 ResidueV1 (26.8%, R6-4's scan) vs 16,410
+NodeV4+EdgeV4 (73.2%). The two headline numbers OVERLAP BY ~8.8 POINTS AND CANNOT BE ADDED.
+R6-4 is the better true win of the pair. Probe `.scratch/r6-decomp/probe_instance_by_class.py`;
+its deduped total reconciles EXACTLY to the profile's recorded 22,410, which is the instrument
+control -- its first run said 38,820 and the disagreement is what exposed a double-registered
+listener.
+
+LEAN, by mechanical anchor census: zero cost for R6-8 (0 anchors), R6-9 (0), R6-19 (0);
+no def edit but a sec 7 log for R6-7 (scopes a modelled PREDICATE) and R6-1; representation-only
+for R6-18; unmodelled sec 7.3 surface for R6-5; genuinely modelled for R6-4 and R6-16.
+
+STAR THE ONE THING WORTH TRYING FIRST: R6-16 may SIMPLIFY the Lean model rather than complicate
+it. `GraphIndex/LeafRules.lean::writeRulesRaw_untaintedSchema` is already stated at hypothesis
+`forall d in S.defs, isDerived S d.1 = false` -- exactly R6-16's "schema boolean-ness" gate --
+and proves a write path collapses under it. If emission is gated the same way, the
+logged/unlogged distinction should collapse for pure-union stores, retiring a branch of
+reasoning instead of adding one. REASONED, not attempted in Lean. See the R6-16 row.
+
+STRUCTURAL: R6-16 + R6-7 + R6-8 are ONE unit (~16 symbols, three modules), not three rows. A
+session picking "two small ones" off the tail picks R6-7 and R6-8 and unknowingly takes on
+R6-16. Breaking the triple needs an explicit recorded decision.
+
+BUDGET, measured from `.gate-runs/ledger.tsv`: the ten-phase gate is 1779 s across ten commands
+and must run after the write-back, so it is one full gate per session. R6-6 was declared size S
+and consumed a whole session. One id end-to-end per sitting, or two only if R6-11 + R6-9.

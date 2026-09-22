@@ -30,6 +30,91 @@ from here.
 
 ---
 
+## 2026-09-22b — `R6` audited: four rows describe code that is not there; `R6-16` may SIMPLIFY the Lean model
+
+rows: R6, R6-1, R6-4, R6-5, R6-7, R6-8, R6-9, R6-11, R6-16, R6-18, R6-19.
+
+`task lint: clean (13 checks, 215 task file(s) parsed), 29 warning(s)`
+
+`read: board + note`
+
+User asked (verbatim) to "look into the correctness and expectations for each r6 option …
+then we update r6 with the correct info so we know what's worth working on", and to "audit
+whether it breaks the lean model and by how much, or whether it could allow simplifying the
+lean model". Map:
+[`docs/r6-sizing-census-2026-09-22.md`](../r6-sizing-census-2026-09-22.md) (ACTIVE-PLAN).
+Every child's correction is logged on its own row under session key `2026-09-22b`; the `R6`
+parent carries the index. **Nothing was landed and no code changed** — this is a
+scouting/adjudication session, per `CLAUDE.md` § SCOUTING IS A DELIVERABLE.
+
+**Four rows describe a surface or a number the code does not have**, all verified
+first-hand:
+
+* **`R6-9`'s instrument is mis-keyed, so the fix cannot move its own headline number.**
+  `benchmarks/profile_r6_write.py:198` keys the verdict on `func='_db_node'`, but
+  `core.py::ReachabilityIndex._db_node` resolves by
+  `(predicate, entity_type, entity_name, wildcard)` while the two SELECTs the fix deletes
+  are an inline `select(NodeV4).where(NodeV4.id == node_id)` in the write tail
+  (`core.py:886-888`). Re-key before landing; that is this round's **fourth** instrument
+  correction.
+* **`R6-16` names one emit site and has six** — `:550/:578/:600` in
+  `_add_db_edges_unsafe`, `:664/:676/:696` in `_add_indirect_edges_batch_unsafe`, which the
+  row never mentions.
+* **`R6-19` calls its cheapest sub-step argument-free and it is not.**
+  `bulk_backfill.py::_BulkBackfill._residue_state` returns fresh copies while the loop
+  mutates and stores back (`:706-707`), so hoisting shares one mutable set across subjects.
+* **`R6-11`'s owed `CORRESPONDENCE.md` edit was already landed by `R6-10`** — `:355`/`:370`
+  read "TWO perf caches"; the real edit is TWO → THREE, in two places.
+
+★ **MEASURED: `R6-5`'s 32.7% is not `R6-5`'s.** One profile run serves both rows (the
+`target_graph_lookup` banner is literally `[R6-4, R6-5]`) and the figure is SQLAlchemy's
+*generic* `_instance` line. Per-class attribution
+(`benchmarks/probe_r6_instance_by_class.py`, an `InstanceEvents.load` counter per
+mapped class) splits it **6,000 `ResidueV1` (26.8%, `R6-4`'s scan) vs 16,410
+`NodeV4`+`EdgeV4` (73.2%)**. The two headline numbers **overlap by ~8.8 points and cannot be
+added**; `R6-4` is the better true win of the pair. **The instrument controls itself**: the
+deduped total is exactly **22,410**, reconciling to the profile's own recorded line. Its
+first run said **38,820** because `dir(index_v4.models)` exposes `NodeV4`/`EdgeV4`/`StoreV4`
+under two names each and it registered two listeners per class — the disagreement with an
+existing figure is what exposed it.
+
+★ **`R6-16` may SIMPLIFY the Lean model rather than complicate it, and nobody had asked.**
+Emission *is* modelled (`CORRESPONDENCE.md:317`/`:327` → `writeLoggedOne`/`pushDelta`), so
+the audit is right that conditional emission changes the modelled write algorithm. But the
+verifier requires the gate derive from "schema boolean-ness", and
+`GraphIndex/LeafRules.lean::writeRulesRaw_untaintedSchema` is already stated at hypothesis
+`∀ d ∈ S.defs, isDerived S d.1 = false` — exactly that condition — and proves a write path
+collapses under it. **Hypothesis (REASONED, not attempted):** gating emission the same way
+should make the logged/unlogged distinction collapse for pure-union stores, retiring a
+branch of reasoning instead of adding one. Highest-value experiment in the round.
+
+**Lean cost, by mechanical anchor census:** zero for `R6-8` (0 anchors), `R6-9` (0),
+`R6-19` (0); §7 log but no def edit for `R6-7` (it scopes a modelled *predicate*) and
+`R6-1`; representation-only for `R6-18`; unmodelled §7.3 surface for `R6-5`; genuinely
+modelled for `R6-4` and `R6-16`.
+
+**Structural:** `R6-16` + `R6-7` + `R6-8` are **one unit, not three rows** (~16 symbols,
+three modules) — the co-design trap is verbatim on `R6-16`. A session picking "two small
+ones" off the tail picks `R6-7` and `R6-8` and unknowingly takes on `R6-16`.
+
+**Budget, measured from `.gate-runs/ledger.tsv`:** the ten-phase gate is **1779 s across ten
+commands** and must run after the write-back, so it is one full gate per session. `R6-6` was
+declared `size: S` and consumed a whole session. **One id per sitting, or two only if
+`R6-11` + `R6-9`.**
+
+⚠ **Process finding: a read-only subagent cannot satisfy the persist-before-return rule.**
+Both census agents were told to write `.scratch/r6-sizing/<agent>.md` incrementally; neither
+could (no write tool, blocked redirection), so both reported in-message only. Either
+dispatch an agent that can write, or make the orchestrating session the persister and write
+on receipt — done here.
+
+Still owed: three subagent claims remain **UNVERIFIED** and are flagged in place in the map —
+`R6-5`'s stale audit call-site line numbers, `R6-1`'s third `self.check(...)` site, and
+`R6-18`'s row naming `WildcardIndex.check` where the probe is in `::_check_internal`. The
+`R6-16` Lean-simplification hypothesis is reasoned, not attempted.
+
+---
+
 ## 2026-09-22 — `## Still owed` had no checker and became a backlog; `ASK-*` is the new user-question channel
 
 rows: `TK96` (NEW, `NEXT`), `TK97` (NEW), `TK98` (NEW), `TK99` (NEW), `TK100` (NEW), `P6` (comment, mechanical), `GC-1` (comment, mechanical).

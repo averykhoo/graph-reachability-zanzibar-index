@@ -11,8 +11,8 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-15
-moved: 2026-08-21
-updated: 2026-08-21
+moved: 2026-09-22b
+updated: 2026-09-22b
 closed:
 ---
 
@@ -46,3 +46,35 @@ closed:
 ### 2026-08-21
 
 **Migrated by `migrate.py`, and this row is a CORRECTION.** The first migration pass classified every id whose disposition string was not literally `closed` as retired, which wrote this live item into `retired-ids.txt` — an irreversible sink, since `task.py` refuses to re-mint a retired id. Its true disposition (`MOTIVATED, unlanded`) is taken from `docs/perf-round6-audit-2026-08.md`, the audit that owns these ids, not from the `R6` board row’s summary prose (which undercounts the land list by one and overcounts the declines by one). `parent: R6` makes the round a rollup: closing the last child is what reports that `R6` itself can close. **`created` (`2026-08-15`) is RECORDED, not approximated** — it is the date the audit doc that minted these ids states for itself; `moved` is the `R6` board row’s value.
+
+### 2026-09-22b
+
+2026-09-22b LEAN VERDICT + the standing refusal, restated because the percentage keeps
+attracting sessions.
+
+LEAN: no def change IF standalone `check` answers are preserved, but a sec 7 entry is owed
+regardless. `CORRESPONDENCE.md` sec 2 pins `SetEngine/Eval.lean::SetEngineModel.check`
+answer-for-answer against `SetEngine.check` and states it is explicitly NOT an algorithm twin;
+it anchors the closures `::SetEngine.check.sat`, `.sat_expr`, `.direct_leaf`,
+`.member_via_usersets`, `.ttu_leaf` -- RENAMING ANY OF THEM FAILS `verify.sh lean`, and the
+two-tier promotion logic lands inside `.sat`. Forward `lookup` is unmodelled (sec 7 P1/N17);
+`_instances_of_type` has zero anchors.
+
+DO NOT LAND THIS FROM THE 91.4%. That figure proves `check` DOMINATES; it does not prove sharing
+ELIMINATES, and the redundant fraction is UNMEASURED. The naive shared memo is a correctness bug
+by the audit's own counterexample (`x: [user] but not y` / `y: [user] but not x`): the lowlink
+guard is `if my_low >= depth:`, so it memoizes a frame that is the root of its own cycle -- a
+root-context cycle-broken answer, not a root-independent truth. This is the only fix in the
+round that was REFUTED OUTRIGHT while the finding stood.
+
+SO THE FIRST DELIVERABLE IS A MEASUREMENT SESSION, not a change session: instrument the
+redundant fraction, then prototype the two-tier design behind it. Realistically two sittings
+minimum, three likely. The hard part is proving the clean-sharing promotion rule sound against
+non-monotone Exclusion on a schema class (`CyclicDerivedDependency`, ruleset-less) the engine
+deliberately admits; `tests/test_lookup_oracle.py` is what would go red.
+
+UNVERIFIED, for the next session to re-grep before sizing: a subagent census this session
+reported THREE `self.check(...)` sites in `setengine/engine.py` (`:1544`/`:1599`/`:1624`) where
+this row's evidence block names two. Not re-verified first-hand.
+
+Full audit: docs/r6-sizing-census-2026-09-22.md

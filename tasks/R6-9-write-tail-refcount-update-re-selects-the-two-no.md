@@ -11,8 +11,8 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-15
-moved: 2026-08-21
-updated: 2026-08-21
+moved: 2026-09-22b
+updated: 2026-09-22b
 closed:
 ---
 
@@ -42,3 +42,24 @@ closed:
 ### 2026-08-21
 
 **Migrated by `migrate.py`, and this row is a CORRECTION.** The first migration pass classified every id whose disposition string was not literally `closed` as retired, which wrote this live item into `retired-ids.txt` — an irreversible sink, since `task.py` refuses to re-mint a retired id. Its true disposition (`MOTIVATED, unlanded`) is taken from `docs/perf-round6-audit-2026-08.md`, the audit that owns these ids, not from the `R6` board row’s summary prose (which undercounts the land list by one and overcounts the declines by one). `parent: R6` makes the round a rollup: closing the last child is what reports that `R6` itself can close. **`created` (`2026-08-15`) is RECORDED, not approximated** — it is the date the audit doc that minted these ids states for itself; `moved` is the `R6` board row’s value.
+
+### 2026-09-22b
+
+MEASURED THIS SESSION: the instrument is mis-keyed, so landing this fix cannot move its own
+headline number. `benchmarks/profile_r6_write.py:198` keys the R6-9 verdict on
+`_find(rows, func='_db_node', file_frag='index_v4/core.py')` and prints
+"_db_node point SELECTs ... <- R6-9". But `index_v4/core.py::ReachabilityIndex._db_node`
+(`:965`) resolves by (predicate, entity_type, entity_name, wildcard) -- it is the identity
+SELECT shared by `node` and `cached_concrete_node`. The two SELECTs this row deletes are an
+INLINE `select(NodeV4).where(NodeV4.store_id == ...).where(NodeV4.id == node_id)` in the write
+tail of `::ReachabilityIndex._add_direct_edge_unsafe_impl` (`core.py:886-888`, dated
+2026-09-22). They are not `_db_node` calls. The per-table `node_v4` statement counter in the
+same printout is what drops ~2/write.
+
+ACTION: re-key the instrument BEFORE landing, and treat that as its own gated step per
+`docs/sabotage-procedure.md` sec "A MEASUREMENT is an assurance step too" -- it would be this
+round's FOURTH instrument correction. Do not let a session claim the win off the unchanged
+`_db_node` line. Lean: `_db_node` and `_load_nodes` have ZERO `CORRESPONDENCE.md` anchors
+(mechanical census this session), so no Lean work is owed.
+
+Full audit: docs/r6-sizing-census-2026-09-22.md

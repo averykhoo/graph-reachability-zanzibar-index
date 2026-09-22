@@ -11,8 +11,8 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-15
-moved: 2026-08-21
-updated: 2026-08-21
+moved: 2026-09-22b
+updated: 2026-09-22b
 closed:
 ---
 
@@ -46,3 +46,27 @@ closed:
 ### 2026-08-21
 
 **Migrated by `migrate.py`, and this row is a CORRECTION.** The first migration pass classified every id whose disposition string was not literally `closed` as retired, which wrote this live item into `retired-ids.txt` — an irreversible sink, since `task.py` refuses to re-mint a retired id. Its true disposition (`MOTIVATED, unlanded`) is taken from `docs/perf-round6-audit-2026-08.md`, the audit that owns these ids, not from the `R6` board row’s summary prose (which undercounts the land list by one and overcounts the declines by one). `parent: R6` makes the round a rollup: closing the last child is what reports that `R6` itself can close. **`created` (`2026-08-15`) is RECORDED, not approximated** — it is the date the audit doc that minted these ids states for itself; `moved` is the `R6` board row’s value.
+
+### 2026-09-22b
+
+2026-09-22b LEAN VERDICT (mechanical anchor census): no def edit, but a sec 7 divergence log IS
+owed. `_check_outbox_sanity` and `check_invariants` each have 1 `CORRESPONDENCE.md` anchor --
+to `GraphIndex/State.lean::Quiescent` and `::Inv` respectively. Scoping the checker to `id > wm`
+narrows a MODELLED WHOLE-STATE PREDICATE, which is why the log entry is owed even though
+evaluation semantics are untouched and the names survive, so `verify.sh lean` stays green.
+
+As isolated code this is the cheapest change in the round -- 4 touch points, one file
+(`index_v4/invariants.py`), no migration. BUT R6-16's co-design trap forbids taking it alone
+("Take all three in one session, or take none of them"), because `ParanoiaGuard.before_commit`
+passes the watermark only to `verify_outbox_deltas`; gating emission without gating this
+consumer makes the checker silently vacuous. A solo win here needs an explicit recorded decision
+to break the triple.
+
+Two things to carry into a sitting: the 20.7% is GATE WALL-CLOCK, not production (PARANOIA FULL
+never runs in production but IS the `tests/` default), and the fix removes the unbounded-growth
+term while the checker stays O(live store) per commit. Direct callers (tests, the `bulk_build`
+one-shot verification) must keep `after_id=0` -- a small but real caller sweep. Sabotage is
+mandatory: insert a malformed row ABOVE the watermark and watch the existing I10 pin in
+`tests/test_invariants_derived.py` go red.
+
+Full audit: docs/r6-sizing-census-2026-09-22.md

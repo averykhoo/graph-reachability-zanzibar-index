@@ -11,8 +11,8 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-15
-moved: 2026-08-24b
-updated: 2026-08-24b
+moved: 2026-09-22b
+updated: 2026-09-22b
 closed:
 ---
 
@@ -54,3 +54,38 @@ closed:
 ### 2026-08-24b
 
 related-edge sweep (trial finding F1): added `related: [R6-7, R6-8]`, and CORRECTED the second trap. It claimed 'the vocabulary has no mutual edge (lint rejects the cycle)' -- true of `deps`, false of `related`, which docs/tasktool-spec.md defines as untyped, symmetric-ish and deliberately NOT cycle-checked. The co-design requirement still lives in the traps of all three files: `related` navigates, it cannot say 'simultaneity'.
+
+### 2026-09-22b
+
+TWO CORRECTIONS, both verified first-hand 2026-09-22b.
+
+(1) THIS ROW DESCRIBES HALF ITS OWN SURFACE. The row and the audit index name
+`index_v4/core.py::ReachabilityIndex._add_db_edges_unsafe` as the emit site.
+`grep -n "self\._emit(" index_v4/core.py` returns SIX: `:550`/`:578`/`:600` inside
+`_add_db_edges_unsafe` (which starts `:506`) and `:664`/`:676`/`:696` inside
+`::ReachabilityIndex._add_indirect_edges_batch_unsafe` (`:602`), which this row does not
+mention anywhere. Line numbers dated 2026-09-22.
+
+(2) THE LEAN COST MAY BE A CREDIT, NOT A DEBIT -- and nobody has asked this in this round.
+Emission IS modelled: `CORRESPONDENCE.md:317` maps `_emit`/`_flush_outbox` to
+`GraphIndex/Cascade.lean::GraphState.writeLoggedOne`/`::writeLoggedRules` ("delta row per
+accepted flip", unconditional), and `:327` maps `DeltaOutboxV1` to `::pushDelta`/`::nextDeltaId`.
+So the audit is right that conditional emission changes the modelled write algorithm. BUT the
+verifier requires the gate derive from "schema boolean-ness", and the fragment can ALREADY
+state exactly that: `GraphIndex/LeafRules.lean::writeRulesRaw_untaintedSchema` is stated at
+hypothesis `forall d in S.defs, isDerived S d.1 = false` -- i.e. "no derived key" -- and proves
+the write path collapses under it.
+
+HYPOTHESIS (REASONED, not attempted in Lean): if emission is gated on untainted-ness, then on
+an untainted schema the logged and unlogged write paths become provably equal, so the
+`writeLoggedRules`/`writeRulesRaw` distinction COLLAPSES for pure-union stores -- retiring a
+branch of reasoning rather than adding one. That is the single most valuable experiment in this
+round: it converts this row's Lean cost from a debit into a possible credit. Try it BEFORE
+sizing the triple.
+
+The co-design trap is unchanged and was re-verified verbatim on this row: "Take all three in
+one session, or take none of them." `invariants.py::ParanoiaGuard.before_commit` calls
+`verify_outbox_deltas` at FULL tier on ALL schemas, so gating emission without gating that
+consumer makes the verifier silently vacuous.
+
+Full audit: docs/r6-sizing-census-2026-09-22.md

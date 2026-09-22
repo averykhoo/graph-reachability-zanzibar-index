@@ -11,8 +11,8 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-15
-moved: 2026-08-21
-updated: 2026-08-21
+moved: 2026-09-22b
+updated: 2026-09-22b
 closed:
 ---
 
@@ -48,3 +48,34 @@ closed:
 ### 2026-08-21
 
 **Migrated by `migrate.py`, and this row is a CORRECTION.** The first migration pass classified every id whose disposition string was not literally `closed` as retired, which wrote this live item into `retired-ids.txt` — an irreversible sink, since `task.py` refuses to re-mint a retired id. Its true disposition (`MOTIVATED, unlanded`) is taken from `docs/perf-round6-audit-2026-08.md`, the audit that owns these ids, not from the `R6` board row’s summary prose (which undercounts the land list by one and overcounts the declines by one). `parent: R6` makes the round a rollup: closing the last child is what reports that `R6` itself can close. **`created` (`2026-08-15`) is RECORDED, not approximated** — it is the date the audit doc that minted these ids states for itself; `moved` is the `R6` board row’s value.
+
+### 2026-09-22b
+
+2026-09-22b: MEASURED ZERO LEAN COST, and this is the cheapest real win in the round on its own
+merits.
+
+Mechanical anchor census this session: `verify_outbox_deltas` and `bfs_reaches` have ZERO
+occurrences in `formal/CORRESPONDENCE.md` (grep -c = 0 for both). The only mention anywhere under
+`formal/` is one line of prose in `formal/SEMANTICS.md:562`. Neither symbol is a gate anchor, so
+`verify.sh lean` cannot see this change at all -- no Lean def edit, no sec 7 entry, nothing owed.
+That makes it the ONLY open R6 row with a genuinely zero Lean bill.
+
+`size: ?` on this row is an UNSET FIELD, not a measured size. On surface evidence it is an S and
+is SMALLER than R6-7: two symbols in one file (`verify_outbox_deltas` ~47 lines plus its nested
+`bfs_reaches` closure), with two ready-made sabotage pins already in the tree
+(`tests/test_outbox.py::test_delta_verifier_catches_seeded_closure_bug` and
+`::test_delta_verifier_catches_false_removal_claim`).
+
+THE (s,s) TRAP IS REAL AND IS THE WHOLE RISK. `bfs_reaches` opens `seen = {src}` and returns
+True only on a `m == dst` NEIGHBOUR hit, so today `(s,s)` is True only via an actual cycle. A
+rewrite that tests membership in `seen` instead returns True for every `(s,s)` unconditionally
+and silently destroys the corruption case the verifier exists to catch -- an assurance step that
+fails by passing. Sabotage against both existing pins before trusting the rewrite.
+
+THE BLOCKER IS NOT THE CODE, IT IS THE CO-DESIGN TRAP. R6-16 says verbatim "Take all three in
+one session, or take none of them", and R6-16 is ~10 symbols across five modules with a modelled
+algorithm change. A session wanting this win alone must first get an explicit recorded decision
+to break the triple. Note the 11.0% is GATE WALL-CLOCK, not production latency: PARANOIA FULL
+never runs in production but IS the `tests/` default.
+
+Full audit: docs/r6-sizing-census-2026-09-22.md
