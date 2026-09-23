@@ -1158,6 +1158,23 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   (`tests/snapshots/`, byte-identity for untainted compilation) — not by any
   theorem about the compiler.
 
+  **★ 2026-09-23 (`P4`) — one clause of this entry is no longer theorem-free.** The
+  `PClosureLeaf` arm is the one that differs most visibly: Python probes the INDEX at the
+  minted leaf name (`_compile_check_fn` → `index_v4/processor.py::_EvalContext.leaf_check`
+  → `index_v4/wildcard.py::WildcardIndex._check_internal`), while Lean's `evalE` `.direct`
+  arm reads the STORE at the public relation (`Spec/Semantics.lean::directLeaf`). The two
+  are now machine-checked to agree row for row at three allocations —
+  `GraphIndex/Exec.lean::P4Bridge.bridge_holds_Sw` (storage leaf at index 0),
+  `::P4Bridge.bridge_holds_SwU` (index **2**, the index Python really mints) and
+  `::P4Bridge.bridge_holds_SwF` (two storage leaves, a fan-out) — each pinning the number
+  of rows where BOTH sides answered `true`, with `::P4Bridge.bridge_needs_the_leaf_name_Sw`
+  and `::P4Bridge.bridge_is_per_leaf_SwF` as the discriminating controls.
+  ⚠ **These are WITNESS pins and the general statement is still owed** — an arm at a
+  concrete witness is defeq-blind to a mutation preserving the witness's value (`TK68`).
+  The other four plan-leaf kinds (`PDerivedComputed`, `PDerivedUserset`, `PDerivedTTU`,
+  `PDerivedTuplesetTTU`) are untouched by this and remain netted only. `task.py show P4`
+  carries the shape and the residual cost.
+
 * **★ The DERIVED TTU THROUGH-SHAPE — Python bridges it from the CASCADE, and no Lean
   fragment reaches it (added 2026-09-13, `P6` step 0).** A schema can declare a
   star-tupleset through-shape whose through-*relation* is derived — `folder#approver`

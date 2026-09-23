@@ -1316,4 +1316,169 @@ theorem reachedByW3d2E_untOccCount_admitted_nonvacuous :
          objNode ⟨"doc", "d1"⟩ (leafPred "viewer" 0)) = 1 :=
   reachedByW3d2E_untOccCount_leaf_pinned
 
+/-! ## ★ `P4` / leg 7 step 4b — the leaf-probe ↔ `directLeaf` bridge, at three allocations
+
+**What this block is, and what it deliberately is not.** Scope doc §8.1 (2026-08-05) owed a
+bridge
+
+>     probeNonDerived σ ⟨s, leafPred R i, o⟩  =  directLeaf rec s T q rs o.type o.name R
+
+for every `.storage rs` leaf at allocation index `i`, *"once `checkFn` reads a leaf node
+instead of the store"*. **That premise never fired inside this model and cannot**: every
+route by which a name reaches `rec` is closed against leaf names by a `GraphAdmission`
+field (`computedRefsNotLeaf`, `directRestrNotLeaf`, `ttuNotLeaf`), so `checkFn`/`checkFnR`
+still evaluate the RAW def and `evalE`'s `.direct` arm still reads the **store** at the
+**public** relation. The tree took the *refusal* route, not the *bridge* route.
+
+The bridge is nonetheless real and unproved — as a **Lean↔Python** obligation, not a
+fragment one. Python's compiled plan does exactly what §8.1 assumed:
+`zanzibar_utils_v1.py::_compile_check_fn` sends a `PClosureLeaf` to
+`index_v4/processor.py::_EvalContext.leaf_check`, which probes the index **at the minted
+leaf name**. `CORRESPONDENCE.md` §7.3 records that whole layer as netted by the
+differential matrix and *"not by any theorem about the compiler"*. These pins are the first
+machine-checked evidence against that gap: at three allocations the leaf probe and the
+spec's `directLeaf` agree **row for row**.
+
+They are WITNESS pins, not the theorem. An arm instantiated at a concrete witness is
+defeq-blind to a mutation that preserves the witness's value (`TK68`, 2026-09-13e), so the
+general statement is still owed; `task.py show P4` carries its shape and residual cost.
+
+**Non-vacuity and the two discriminating controls are in the statements, not in prose.**
+`bothTrue` counts rows where BOTH sides answered `true` — a tally of `⟨n, n, 0⟩` would be
+agreement by universal denial and would prove nothing. `bridge_needs_the_leaf_name_*`
+re-points the PROBE at the public relation and the agreement drops; `bridge_is_per_leaf_SwF`
+cross-pairs leaf `i`'s name with leaf `j`'s restrictions and it drops again. Without those
+two, a `bridgeTally` that ignored its `pairs` argument entirely would pass. -/
+
+/-- `(rows compared, rows where the two sides agreed, rows where BOTH said `true`)`. The
+    third field is the anti-vacuity number and is pinned in every statement below. -/
+structure BridgeTally where
+  rows : Nat
+  agree : Nat
+  bothTrue : Nat
+deriving Repr, DecidableEq
+
+/-- `(allocation index, merged restriction list)` for every `.storage` leaf of `(ty, R)` —
+    exactly the positions `Leaf.lean::rawWriteRels` routes a raw write onto. ⚠ The merge is
+    load-bearing: `Leaf.lean::pureLeaves` folds every pure `Direct` arm of a maximal pure
+    subtree into ONE storage leaf, so this is NOT a per-`.direct`-arm enumeration and the
+    bridge cannot be stated per arm. -/
+def storageLeaves (S : Schema) (ty R : String) : List (Nat × List Restriction) :=
+  match S.lookup (ty, R) with
+  | none => []
+  | some e => (persistedLeaves S ty e).zipIdx.filterMap fun pi =>
+      match pi.1 with
+      | .storage rs => some (pi.2, rs)
+      | _ => none
+
+/-- The instrument. BOTH axes are parameters — the predicate the graph side probes and the
+    restriction list the spec side is given — which is what lets the controls below
+    re-point one axis without touching the comparison itself. -/
+def bridgeTally (σ : GraphState) (T : Store) (o : ObjectRef) (R : String)
+    (pairs : List (String × List Restriction)) (subs : List SubjectRef) : BridgeTally :=
+  pairs.foldl (fun acc pr =>
+      subs.foldl (fun a s =>
+          let l := GraphModel.probeNonDerived σ ⟨s, pr.1, o⟩
+          let r := directLeaf (GraphModel.graphRec σ s) s T ⟨s, R, o⟩ pr.2 o.type o.name R
+          { rows := a.rows + 1
+            agree := a.agree + (if l == r then 1 else 0)
+            bothTrue := a.bothTrue + (if l && r then 1 else 0) })
+        acc)
+    ⟨0, 0, 0⟩
+
+namespace P4Bridge
+
+def d1 : ObjectRef := ⟨"doc", "d1"⟩
+
+/-- Leaf `i`'s minted NAME against leaf `i`'s own restrictions — the bridge. -/
+def pairsLeaf (S : Schema) : List (String × List Restriction) :=
+  (storageLeaves S "doc" "approver").map (fun ir => (leafPred "approver" ir.1, ir.2))
+
+/-- CONTROL: the PUBLIC name against the same restrictions — the re-addressing undone. -/
+def pairsPublic (S : Schema) : List (String × List Restriction) :=
+  (storageLeaves S "doc" "approver").map (fun ir => ("approver", ir.2))
+
+/-- CONTROL: leaf `i`'s name against leaf `j`'s restrictions, every ordered `i ≠ j`. -/
+def pairsCross (S : Schema) : List (String × List Restriction) :=
+  let ls := storageLeaves S "doc" "approver"
+  ls.flatMap fun ir =>
+    (ls.filter (fun jr => jr.1 != ir.1)).map fun jr => (leafPred "approver" ir.1, jr.2)
+
+/-- Corpus for `Sw`/`SwU`: two grants on the DERIVED public relation, a wildcard `viewer`
+    and a `banned` row, so the union and exclusion arms are both live. -/
+def corpus12 : List Tuple :=
+  [⟨⟨"user", "bob", BARE⟩, "banned", d1⟩,
+   ⟨⟨"user", STAR, BARE⟩, "viewer", d1⟩,
+   ⟨⟨"user", "bob", BARE⟩, "approver", d1⟩,
+   ⟨⟨"user", "alice", BARE⟩, "approver", d1⟩]
+
+/-- Corpus for `SwF`: `alice` fans out onto BOTH storage leaves, `employee:carol` onto the
+    second only (`LeafWitness.swF_fanout` / `::swF_second_only`). -/
+def corpusF : List Tuple :=
+  [⟨⟨"user", "bob", BARE⟩, "banned", d1⟩,
+   ⟨⟨"user", "alice", BARE⟩, "approver", d1⟩,
+   ⟨⟨"employee", "carol", BARE⟩, "approver", d1⟩]
+
+/-- Subject grids. Written out rather than derived from the corpus so a reader can see that
+    they carry a granted subject, a denied one, a star and a userset. -/
+def grid12 : List SubjectRef :=
+  [⟨"user", "bob", BARE⟩, ⟨"user", "alice", BARE⟩, ⟨"user", STAR, BARE⟩,
+   ⟨"user", "nobody", BARE⟩, ⟨"user", "alice", "viewer"⟩]
+
+def gridF : List SubjectRef :=
+  [⟨"user", "alice", BARE⟩, ⟨"employee", "carol", BARE⟩, ⟨"user", "bob", BARE⟩,
+   ⟨"user", STAR, BARE⟩, ⟨"employee", "nobody", BARE⟩]
+
+/-- The run, tallied. The `drainedB` component is decided in the SAME statement so a tally
+    from one state can never be paired with a drainedness claim about another. -/
+def tallyOf (S : Schema) (corpus : List Tuple)
+    (pairs : List (String × List Restriction)) (grid : List SubjectRef) :
+    Option (Bool × BridgeTally) :=
+  (graphRunOps S (corpus.map GraphOp.add)).map fun p =>
+    (drainedB S p.1, bridgeTally p.1 p.2 d1 "approver" pairs grid)
+
+/-- **THE BRIDGE HOLDS at `LeafWitness.Sw`** — storage leaf at index 0. Five rows, five
+    agreements, and **two** of them are genuine two-sided grants, so the agreement is not
+    universal denial. -/
+theorem bridge_holds_Sw :
+    tallyOf LeafWitness.Sw corpus12 (pairsLeaf LeafWitness.Sw) grid12
+      = some (true, ⟨5, 5, 2⟩) := by decide
+
+/-- **…and at `LeafWitness.SwU`, whose storage leaf is at index 2** — the index Python
+    really mints (scope doc §11.5, control C2). An index-0-only pin would pass for the
+    general fact while a hardcoded-index bridge was wrong. -/
+theorem bridge_holds_SwU :
+    tallyOf LeafWitness.SwU corpus12 (pairsLeaf LeafWitness.SwU) grid12
+      = some (true, ⟨5, 5, 2⟩) := by decide
+
+/-- **…and at `LeafWitness.SwF`, which has TWO storage leaves with overlapping
+    restrictions** — ten rows, ten agreements, three two-sided grants. This is the shape a
+    single raw write fans out across. -/
+theorem bridge_holds_SwF :
+    tallyOf LeafWitness.SwF corpusF (pairsLeaf LeafWitness.SwF) gridF
+      = some (true, ⟨10, 10, 3⟩) := by decide
+
+/-- **CONTROL 1 — the bridge is about the MINTED NAME.** Probe the public relation instead
+    and the agreement drops 5 → 3 with the two-sided grants gone entirely. A `bridgeTally`
+    that ignored its `pairs` argument, or a model that had not re-addressed the write,
+    would reproduce `bridge_holds_Sw` here. -/
+theorem bridge_needs_the_leaf_name_Sw :
+    tallyOf LeafWitness.Sw corpus12 (pairsPublic LeafWitness.Sw) grid12
+      = some (true, ⟨5, 3, 0⟩) := by decide
+
+/-- …the same control at the index-2 allocation. -/
+theorem bridge_needs_the_leaf_name_SwU :
+    tallyOf LeafWitness.SwU corpus12 (pairsPublic LeafWitness.SwU) grid12
+      = some (true, ⟨5, 3, 0⟩) := by decide
+
+/-- **CONTROL 2 — the bridge is PER LEAF, not per family.** Cross-pair each leaf's name
+    with the OTHER leaf's restrictions and two rows flip (both at `employee:carol`, the
+    subject the two leaves disagree about). Without this, a bridge that merely matched the
+    family as a whole would pass `bridge_holds_SwF`. -/
+theorem bridge_is_per_leaf_SwF :
+    tallyOf LeafWitness.SwF corpusF (pairsCross LeafWitness.SwF) gridF
+      = some (true, ⟨10, 8, 2⟩) := by decide
+
+end P4Bridge
+
 end Zanzibar

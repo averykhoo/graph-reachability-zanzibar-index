@@ -199,34 +199,15 @@ ANSWERED: NO-BLOCK. Read `history/PROOF_STATUS.md` 2026-08-16 and scope-doc §11
   UNMOVED. Re-measured: *"17 of 25 corpora mint indices 1 AND 2"* overstates the index-2
   breadth 3.4× — index ≥1 in 17, index 2 in **5**.
 
-**2026-08-15 — LEG 7 4c-PRE: 4c-as-scoped REFUTED by corpus measurement; the leaf
-ALLOCATION is modeled, `publicOfLeaf` is in (index-agnostic), the raw write is a measured
-FAN-OUT. Read `history/PROOF_STATUS.md` 2026-08-15 and scope-doc §11.6 (the revised step
-plan) BEFORE attempting 4c.** ⚠ **Its allocation half is SUPERSEDED by the 2026-08-16 block
-above; §11.6's cone estimate is refuted and its index-breadth figure is stale.**
-
-* **The kill, made before the cone was paid:** the 76 P6-dropped rows span leaf indices
-  0–2 in **17 of 25** corpora (every non-first boolean arm gets its own leaf), so the
-  2026-08-14 `rawWriteRel`-index-0 model could never meet `P6 → 0 / compared → 265` —
-  and a raw write **fans out** to every matching storage leaf, so it was wrong in arity
-  too. Both facts are now Lean pins (`LeafWitness.swU_routes`, `swF_fanout`).
-  The flip met that target exactly on 2026-09-05 (`history/PROOF_STATUS.md` 2026-09-05b §7).
-* **`Leaf.lean` is reworked while still unwired**: `persistedLeaves` (the pre-order
-  allocation — derived refs and non-pure TTU arms consume NO index),
-  `leafPublic`/`publicOfLeaf` (dot-free prefix, never `".0"`; `publicOfLeaf_rawWriteRels`
-  is the (α) feeder for `affectedKeys`), `rawWriteRels`/`rawWriteTuples`/`writeDirectRaw`
-  (the filtered fan-out). Five sabotages, each red attributable, controls green. Audits
-  501 → **520**; headline statements/definitions UNMOVED.
-* **4c is NOT a caller re-point.** The dropped rows are mostly RULE-copied closure
-  leaves and the index depends on WHICH ARM produced the copy — provenance
-  `rewriteClosure` does not carry (shape-identical members route to `viewer.0` vs
-  `viewer.1`). The rule layer must mint leaf-indexed targets for tainted keys (Python
-  bakes them into `RewriteFilter.rewrite_relation`). Revised order: **4c-i** rules with
-  leaf provenance (under `RulesWrite`, cone ≈ the whole GraphIndex tree) → **4c-ii**
-  caller re-point + (α) row move (`d.leaf = true` stays the LEADING conjunct;
-  `foldAdmitsB`/`FoldAdmits` lockstep covers **21 of 24 sites**; three stay σ0-side — `PROOF_STATUS.md:4897`, `TK67`) → 4b/5/6/7; 4c-ii + 7 still co-land.
-* Toolchain: `String.contains` does not kernel-reduce — leaf-layer defs stay
-  `toList`-based or `decide` pins stall.
+**2026-08-15 — LEG 7 4c-PRE is RETIRED from this file (2026-09-23).** Its allocation half was
+already marked SUPERSEDED by the 2026-08-16 block above, its cone estimate refuted and its
+index-breadth figure stale; 4c-i and 4c-ii have both LANDED (2026-08-16, 2026-09-05), and its
+closing "→ 4b/5/6/7; 4c-ii + 7 still co-land" is refuted outright — 4b's premise turned out to
+be false and 7 co-landed with the flip. The block is provenance now: read
+`history/PROOF_STATUS.md` 2026-08-15 and scope-doc §11.6/§11.7, which it cited itself, and
+`docs/p4-leaf-probe-bridge-2026-09-23.md` for what became of 4b.
+⚠ The one still-live line it carried, kept here because nothing else states it: **`String.contains`
+does not kernel-reduce** — leaf-layer defs stay `toList`-based or `decide` pins stall.
 
 ## House rules (non-negotiable, user-adjudicated)
 
@@ -510,6 +491,24 @@ extra `W4NarrowT2a` bundle, and a Direct-arm store provably fails it, so T2a sta
 exactly where T2b (since 2026-08-05) no longer is. Leg 7's flip retired the justification,
 not the bundle; what is owed is proof work, not a design decision. Full statement, the two
 obligations and the post-flip probe: the T2a caveat at the top of this file.
+⚠ **2026-09-23 — three corrections to that caveat, all measured.** (i) Its `State.lean:706`
+cite for `Inv.negEdgeFree` is stale by 11 lines (`:717-730`, field at `:724-725`), as is the
+same cite in `W4NarrowT2a`'s docstring and on row `P5`; (ii) that docstring's "hypothesis in
+exactly four places" undercounts — ten `Inv`-preservation declarations exist today, four of
+them on the leaf/bridged write path and all gated on `ResidueEmpty`, so they say nothing
+about the hard `negEdgeFree` case; (iii) `graph_reached_inv` has **ZERO proof consumers**
+(whole-tree grep; every other hit is prose or an `Audit.lean` `#print axioms`), so
+**weakening it cannot go red** — a dual positive witness at `Sd`/`Td` is owed alongside any
+`hN` removal. The residual cost is now measured rather than estimated:
+`CascadeStrataInv.lean::reconcileStarsKeyDR_row_edge_consistent`'s `hco : ComputedOnly e`
+binder (exactly one call site) plus the three-lemma `edgeHyg1_*` re-point; no `_d` twin
+exists. ⚠ And `P5`'s FIRST action is a measurement, not the proof: the "obstacle is gone"
+probe runs at `LeafWitness.Sw` while `outside_narrow_t2a` refutes at `Sd`/`Td`, which has
+neither a union arm nor a wildcard — the two halves have never been measured at one store.
+**`P4` does NOT block this** (`deps` edge removed 2026-09-23): §8.1's bridge premise is
+false — `checkFn` never reads a leaf node and `GraphAdmission.computedRefsNotLeaf` refuses
+the schemas that would make it — so 4b became a `CORRESPONDENCE.md` §7.3 item, landed as six
+`Exec.lean::P4Bridge` witness pins. Map: `docs/p4-leaf-probe-bridge-2026-09-23.md`.
 
 **Optional assurance-widening** is inventoried and ranked in `FINAL_REVIEW.md` §4, and every
 item still open there now carries a task (`P15`–`P19`, plus `P9` and `SD-1`). That

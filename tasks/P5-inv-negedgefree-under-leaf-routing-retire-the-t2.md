@@ -1,18 +1,18 @@
 ---
 id: P5
 title: Inv.negEdgeFree under leaf routing; retire the T2a caveat
-brief: PROOF work, not a design call: T2a did NOT widen with P3; negEdgeFree is the only clause; probe with LeafWitness.Sw/tw
-pri: LATER
+brief: NOW 2026-09-23: P4 dep removed (measured); residual = one hco binder + 3 edgeHyg1 re-points; run D3 probe at Sd/Td FIRST
+pri: NOW
 size: M
-deps: [P4]
+deps: []
 related: []
 parent:
 labels: [formal]
 source: board
 source_hash: ab020841d395
 created: 2026-08-16
-moved: 2026-09-06b
-updated: 2026-09-06b
+moved: 2026-09-23
+updated: 2026-09-23
 closed:
 ---
 
@@ -48,3 +48,7 @@ Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`cre
 ### 2026-09-06b
 
 Board cell rewritten 2026-09-05b: re-scoped to PROOF work (T2a did not widen with P3; D.3 probe re-run says negFree := true; negEdgeFree is the only clause; Sd/Td witness vacuous, use LeafWitness.Sw/tw). Task summary, Traps and brief now carry it; the 2026-09-05b Log entry already had the detail. Diff source: git 51642dc -> HEAD.
+
+### 2026-09-23
+
+The dep on P4 is REMOVED this session, measured not assumed. Inv (GraphIndex/State.lean:717-730, NOT :706 -- that cite is stale by 11 lines) is a statement about nodes/edges/residue and NReaches only: negEdgeFree at :724-725 says no neg members subject node reaches the rows key node. It mentions no store, no evalE, no directLeaf and no probe, so the leaf-probe <-> directLeaf bridge cannot discharge any part of it. Confirmed the other way too: probeNonDerived and directLeaf occur ZERO times in CascadeStrataEdge.lean and CascadeStrataInv.lean, the two files owning EdgeHyg1 and the lemma that produces negEdgeFree. P4 -> P5 was a PLAN ordering from scope doc section 7, not a proof dependency, and the landed architecture severed it (see P4s 2026-09-23 note: the tree took the refusal route, not the bridge route). RESIDUAL COST of retiring W4NarrowT2a, measured: hN.computedOnly threads CascadeStrataEdge.lean::edgeHyg1_runCascade2 :178 -> ::edgeHyg1_reconcileJobsLR :140 -> ::edgeHyg1_applyLoggedR :86, which at :115 feeds CascadeStrataInv.lean::reconcileStarsKeyDR_row_edge_consistent :418 (hco : ComputedOnly e binder at :422, EXACTLY ONE call site). That lemma plus the three-lemma edgeHyg1 re-point is the work; no edgeHyg1_*_d twin exists (grep returns nothing), while writeLeg_inedges_eq_of_unmapped :4342 and removeLeg_inedges_eq_of_unmapped :4374 are already there taking neither ComputedOnly nor StoreValidRules. TRAP, first action not last: the d3_negedgefree_postflip_2026-09-05 probe runs at LeafWitness.Sw (union arm, wildcard viewer) while outside_narrow_t2a refutes at Sd/Td which has NEITHER -- the obstacle-is-gone measurement and the bundle-still-bites refutation are at two different stores, and the probe has never been run at Sd/Td. ALSO: graph_reached_inv has ZERO proof consumers (whole-tree grep 2026-09-23; every other hit is prose or Audit.lean #print axioms), so weakening it cannot go red -- a dual positive witness at Sd/Td is owed alongside any hN removal. Map: docs/p4-leaf-probe-bridge-2026-09-23.md.

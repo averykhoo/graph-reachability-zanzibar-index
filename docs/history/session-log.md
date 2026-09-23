@@ -30,6 +30,86 @@ from here.
 
 ---
 
+## 2026-09-23 — `P4` executed: its premise is FALSE, six witness pins landed, and `P5`/`P14` never depended on it
+
+rows: P4 (comment, → `LATER`, re-scoped), P5 (dep removed, → `NOW`), P14 (dep removed).
+
+`task lint: clean (13 checks, 217 task file(s) parsed), 29 warning(s)`
+
+`read: board + note`
+
+**`P4`'s stated premise never fired and cannot.** Scope doc
+[`leaf-family-split-scope-2026-08-05.md`](../../formal/history/leaf-family-split-scope-2026-08-05.md)
+§8.1 owed the leaf-probe ↔ `directLeaf` bridge *"once `checkFn` reads a leaf NODE instead of
+the store"*. It does not: `ReconcileWrite.lean::GraphState.checkFn` (`:72`) and
+`CascadeStrata.lean::GraphState.checkFnR` (`:113`) evaluate the RAW def, and `evalE`'s
+`.direct` arm calls `Spec/Semantics.lean::directLeaf` (`:65`), which reads the STORE at the
+PUBLIC relation. Every route by which a name could reach `rec` is closed against leaf names
+by a `GraphAdmission` field — `computedRefsNotLeaf` (`CascadeStable.lean:783`),
+`directRestrNotLeaf`, `ttuNotLeaf` — and `FullScope.lean::sxLeafRef_other_admission_fields_hold`
+(`:985`) proves no other field would notice the difference. **The tree took the REFUSAL
+route, not the BRIDGE route**, at 4c-ii step 10, and nobody wrote that down; it is why 4b
+sat unstartable for seven weeks.
+
+**The obligation is real anyway — it moved from the fragment to the Lean↔Python map.**
+Python's compiled plan does exactly what §8.1 assumed: `zanzibar_utils_v1.py::_compile_check_fn`
+(`:1940`) sends a `PClosureLeaf` to `index_v4/processor.py::_EvalContext.leaf_check` (`:146`),
+which probes the INDEX at the minted leaf name. `formal/CORRESPONDENCE.md` §7.3 recorded that
+whole layer as netted by the differential matrix and *"not by any theorem about the
+compiler"*.
+
+**Landed.** (i) The attack-first run house rule 2 requires:
+`formal/probes/p4_leaf_probe_bridge_2026-09-23.lean`, rc=0 — **NO-KILL**, zero disagreements
+at three allocations. (ii) **Six `by decide` witness pins**, `GraphIndex/Exec.lean`
+namespace `P4Bridge`: `bridge_holds_Sw` (storage leaf index 0), `bridge_holds_SwU` (index
+**2**, the index Python really mints), `bridge_holds_SwF` (two leaves, a fan-out), plus the
+discriminating controls `bridge_needs_the_leaf_name_Sw`/`_SwU` (probe the public name:
+agreement 5 → 3, `bothTrue` → 0) and `bridge_is_per_leaf_SwF` (cross-pair leaf *i*'s name
+with leaf *j*'s restrictions: 10 → 8). Each pins a `BridgeTally` whose third field counts
+rows where **both** sides answered `true`, so agreement-by-universal-denial cannot pass.
+Audited, standard axioms only; identity pin `617` → `623`. (iii) `CORRESPONDENCE.md` §7.3
+updated — the `PClosureLeaf` clause names the pins and says in the same breath that the
+other four plan-leaf kinds are still netted only.
+
+⚠ **Sabotage record: the attribution control passed and BOTH write-leg mutations were caught
+upstream.** M0 (flip `bridge_holds_Sw`'s own `rows` 5 → 4) reddened exactly one declaration,
+`Exec.lean:1445`. M1 (un-flip the logged write leg) never reached the file —
+`Cascade.lean:757` fails first on the logged/unlogged `EvalEq` coupling. M2 (hardcode the
+leaf index at 0 in `rawWriteRels`) never reached it either — six declarations inside
+`Leaf.lean` fail first (`:743`, `:746`, `:1034`, `:1067`, `:1074`, `:1216`), three of them
+*after* their own pins were re-stated to match. The honest reading is a **scope** statement:
+the leaf-routed WRITE leg is so densely pinned that no mutation of it survives to be
+evaluated here, so these pins are evidence about the **READ** side — exactly the side §7.3
+says is unmodelled. The two in-statement controls, not M1/M2, are what certifies them.
+
+**★ `P5` and `P14` never depended on `P4`, and both edges are removed** — which makes the
+goal's formal milestone startable today. `GraphIndex/State.lean::Inv` (`:717-730`) is a
+statement about `nodes`/`edges`/`residue` and `NReaches` only; `probeNonDerived` and
+`directLeaf` occur **zero** times in `CascadeStrataEdge.lean` and `CascadeStrataInv.lean`,
+the two files owning `EdgeHyg1` and the lemma that produces `negEdgeFree`. `P4` → `P5` was a
+PLAN ordering from §7, not a proof dependency. Residual cost of retiring `W4NarrowT2a`,
+measured: `CascadeStrataInv.lean::reconcileStarsKeyDR_row_edge_consistent`'s `hco :
+ComputedOnly e` binder (`:422`, exactly one call site) plus the three-lemma `edgeHyg1_*`
+re-point; no `_d` twin exists. ⚠ And a trap nobody had flagged: the *"obstacle is gone"*
+probe runs at `LeafWitness.Sw` while the refutation that keeps the bundle biting
+(`outside_narrow_t2a`) is at `Sd`/`Td` — **the probe has never been run at `Sd`/`Td`**, and
+that is `P5`'s first action. `graph_reached_inv` has **zero proof consumers**, so weakening
+it cannot go red; a dual positive witness at `Sd`/`Td` is owed alongside any `hN` removal.
+
+Cite rot found en route, all stale as of today: scope doc §8.1's `graphRec` at
+`ReconcileWrite.lean:47-48` → `:49-50`; `State.lean:706` for `Inv.negEdgeFree` → `:717-730`
+(field at `:724-725`), repeated in the scope doc, in `P5`'s row and in `W4NarrowT2a`'s
+docstring; and that docstring's "exactly four places" for the `Inv` chain — ten
+`Inv`-preservation declarations exist today, four of them on the leaf/bridged write path and
+all gated on `ResidueEmpty`, so they say nothing about the hard `negEdgeFree` case.
+
+Map: [`docs/p4-leaf-probe-bridge-2026-09-23.md`](../p4-leaf-probe-bridge-2026-09-23.md)
+(ACTIVE-PLAN).
+
+Still owed: **Nothing.**
+
+---
+
 ## 2026-09-22d — `TK94` closed, and executing it refuted two of its own premises; both gate floors had drifted
 
 rows: TK94 (closed), TK102 (new), P4 (-> NOW).

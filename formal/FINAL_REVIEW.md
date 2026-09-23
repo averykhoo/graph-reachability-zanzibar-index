@@ -32,10 +32,10 @@ number INTO it over restating it.
 | whole-repo suite | **1861** |
 | differential conformance tests | **511** across **14** files |
 | gate-tooling conformance tests | **71** across **4** files |
-| audited theorems (`#print axioms` in `Audit.lean`) | **617** |
-| audit identity pin (`audited_theorems.txt`) | **617** |
+| audited theorems (`#print axioms` in `Audit.lean`) | **623** |
+| audit identity pin (`audited_theorems.txt`) | **623** |
 | headline definition pin | **266** rows (**257** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **696** (**388** Python + **308** Lean) |
+| `CORRESPONDENCE.md` anchors | **704** (**390** Python + **314** Lean) |
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **36** = 27 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |

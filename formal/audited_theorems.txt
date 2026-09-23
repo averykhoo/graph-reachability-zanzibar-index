@@ -74,6 +74,12 @@ MemberSet.ext_normalize
 MemberSet.ext_union
 MemberSet.mem_ext_union
 NReaches.mono_subset
+P4Bridge.bridge_holds_Sw
+P4Bridge.bridge_holds_SwF
+P4Bridge.bridge_holds_SwU
+P4Bridge.bridge_is_per_leaf_SwF
+P4Bridge.bridge_needs_the_leaf_name_Sw
+P4Bridge.bridge_needs_the_leaf_name_SwU
 Schema.isStarTuplesetThrough
 T0aCounter.fuel_stable_step_false
 T0aCounter.not_storeDeclared

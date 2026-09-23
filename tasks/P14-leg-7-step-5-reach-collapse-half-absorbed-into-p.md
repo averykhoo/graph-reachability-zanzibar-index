@@ -4,15 +4,15 @@ title: leg 7 step 5, reach-collapse half ONLY -- classification half landed with
 brief: P3 closed 2026-09-05b: the absorbed classification half landed with it; only the reach-collapse half remains
 pri: LATER
 size: M
-deps: [P4]
+deps: []
 related: []
 parent:
 labels: [formal]
 source: board
 source_hash: 5984b012cc7a
 created: 2026-08-20b
-moved: 2026-09-06b
-updated: 2026-09-06b
+moved: 2026-09-23
+updated: 2026-09-23
 closed:
 ---
 
@@ -41,3 +41,7 @@ Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`cre
 ### 2026-09-06b
 
 Board cell appended 2026-09-05b: 'P3 closed 2026-09-05b -- the absorbed half landed with it; only this reach-collapse half remains'. Task summary, title and brief now carry it. Diff source: git 51642dc -> HEAD.
+
+### 2026-09-23
+
+The dep on P4 is REMOVED this session, same measurement as P5s 2026-09-23 note: the leaf-probe <-> directLeaf bridge touches neither of the files this items reach-collapse half lives in (probeNonDerived and directLeaf occur ZERO times in CascadeStrataEdge.lean and CascadeStrataInv.lean). P4 -> P14 was a plan ordering from scope doc section 7 step 5, not a proof dependency. Still owed here, unchanged and still un-resized against the landed tree: re-partition DerNode/UntaintedShadow and re-prove the reach-collapse family. Note before sizing: much of the leaf-side classification already landed with the 2026-09-05 flip (CascadeStable.lean carries LeafNode, bare_is_leafPred and rewriteClosureL_extras_leafNode today), so the 2026-08-05 scope estimate is an upper bound, not a measurement. Map: docs/p4-leaf-probe-bridge-2026-09-23.md.

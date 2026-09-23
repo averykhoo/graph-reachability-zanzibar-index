@@ -2131,4 +2131,36 @@ namespace Zanzibar
 #print axioms WideWitness.unbridged_still_rejected
 #print axioms WideWitness.gate_conjunct_widens
 
+-- ★ `P4` / leg 7 step 4b (2026-09-23) — the leaf-probe ↔ `directLeaf` bridge, at three
+-- allocations. These are WITNESS pins, not the theorem: §8.1's bridge was owed for the day
+-- `checkFn` would read a leaf NODE, and that day never came inside this model — every route
+-- by which a name reaches `rec` is closed against leaf names by a `GraphAdmission` field, so
+-- the tree took the REFUSAL route and `evalE`'s `.direct` arm still reads the STORE at the
+-- PUBLIC relation. The bridge survives as a Lean↔Python obligation instead: Python's compiled
+-- plan really does probe the minted leaf name (`zanzibar_utils_v1.py::_compile_check_fn` →
+-- `index_v4/processor.py::_EvalContext.leaf_check`), and `CORRESPONDENCE.md` §7.3 records that
+-- whole layer as netted by the differential matrix and by no theorem at all.
+-- ★ NON-VACUITY IS IN THE STATEMENT: each tally pins `bothTrue`, the number of rows where BOTH
+-- sides answered `true`, so agreement-by-universal-denial cannot pass. TWO DISCRIMINATING
+-- CONTROLS are permanent pins rather than prose — `bridge_needs_the_leaf_name_*` re-points the
+-- probe at the public relation (agreement 5 → 3, `bothTrue` → 0) and `bridge_is_per_leaf_SwF`
+-- cross-pairs leaf i's name with leaf j's restrictions (10 → 8).
+-- ⚠ SABOTAGE RECORD, 2026-09-23 — the attribution control passed and BOTH write-leg mutations
+-- were caught UPSTREAM, so these pins are evidence about the READ side only. M0 (flip
+-- `bridge_holds_Sw`'s own `rows` 5 → 4) reddened exactly one declaration, `Exec.lean:1445`.
+-- M1 (un-flip the logged write leg: seed `writeLoggedRules` with `[t]` instead of
+-- `rawWriteTuples S t`) never reached this file — `Cascade.lean:757` fails first on the
+-- logged/unlogged `EvalEq` coupling to `writeRulesRaw`. M2 (hardcode the leaf index at 0 in
+-- `rawWriteRels`) also never reached it — six declarations inside `Leaf.lean` fail first
+-- (`:743`, `:746`, `:1034`, `:1067`, `:1074`, `:1216`), three of them after their own pins were
+-- re-stated to match. An attribution list means "at least these", never "only these"
+-- (`P6` step 3a, 2026-09-13d).
+-- Standard axioms only:
+#print axioms P4Bridge.bridge_holds_Sw
+#print axioms P4Bridge.bridge_holds_SwU
+#print axioms P4Bridge.bridge_holds_SwF
+#print axioms P4Bridge.bridge_needs_the_leaf_name_Sw
+#print axioms P4Bridge.bridge_needs_the_leaf_name_SwU
+#print axioms P4Bridge.bridge_is_per_leaf_SwF
+
 end Zanzibar
