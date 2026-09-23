@@ -1,8 +1,8 @@
 ---
 id: TK104
 title: decidable GraphAdmission: the other half of the headline premise has no decider
-brief: W4Fragment is decided (DW-1); GraphAdmission is not -- RewriteRanked is an existential
-pri: LATER
+brief: NOW 2026-09-23e: last half of goal step 3; size first -- classify GraphAdmission fields LOUD/SILENT
+pri: NOW
 size: M
 deps: []
 related: [DW-1]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-23d
-moved: 2026-09-23d
-updated: 2026-09-23d
+moved: 2026-09-23e
+updated: 2026-09-23e
 closed:
 ---
 
@@ -47,3 +47,8 @@ widened to the full premise. It is assurance, ranked against product risk under 
 - `formal/lean/ZanzibarProofs/GraphIndex/FragmentDecide.lean` -- the Bool + exact `_iff` pattern to copy
 
 ## Log
+
+### 2026-09-23e
+
+Promoted LATER -> NOW 2026-09-23e at DW-1 close: this row is now the only owner of goal step 3 (docs/goal-census-2026-09-22.md, 2026-09-23e correction). The W4Fragment half is decided in Lean AND reported in Python (zanzibar_utils_v1.py::w4_fragment_report, differential-pinned).
+FIRST ACTION is sizing, not proof: classify each GraphAdmission field LOUD / SILENT / MIXED the way formal/conformance/test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE does for W4Fragment. Reuse formal/conformance/w4_scope_probes.py as the probe-fixture shape. The DW-1 plan claimed GraphAdmission is largely mirrored by Python compile and write refusals; that is UNVERIFIED, and the classification is what verifies it. If most fields turn out LOUD, the decider may be worth less than the classification; decide after sizing.

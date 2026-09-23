@@ -225,6 +225,10 @@ _VALID_CLASSIFICATIONS = frozenset({"LOUD", "SILENT", "MIXED"})
 #   evidence       -- a `file::symbol` citation (or a repo path) that a reader can
 #                     grep. Bare line numbers are banned: they go stale here fast.
 #   note           -- REQUIRED for MIXED (names the loud sub-case); optional otherwise.
+#   reported_by    -- the `file::symbol` an operator CALLS to learn whether their input
+#                     violates this field (`DW-1` step 4, 2026-09-23). It does not change
+#                     `classification`, which is about the WRITE path: the report is opt-in,
+#                     so a violation is still accepted without a signal unless someone asks.
 W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
     "computedOrDirect": {
         "demands": (
@@ -233,6 +237,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "derived definition is out of scope."
         ),
         "classification": "SILENT",
+        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
         "evidence": "zanzibar_utils_v1.py::_build_plan_tree",
         "note": (
             "`_build_plan_tree.build` compiles a TTU under a derived def straight into a "
@@ -248,6 +253,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "(`[user]`), never a userset restriction (`[group#member]`)."
         ),
         "classification": "SILENT",
+        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
         "evidence": "zanzibar_utils_v1.py::_build_plan_tree",
         "note": (
             "An untainted userset restriction folds into the `pure` closure leaf and a "
@@ -262,6 +268,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "`[user:*]` on a boolean relation is out of scope."
         ),
         "classification": "SILENT",
+        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
         "evidence": "zanzibar_utils_v1.py::_build_plan_tree",
         "note": (
             "Probe `directArmsConcrete/star-direct-arm` "
@@ -277,6 +284,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "ComputedOnly, i.e. only the top derived definition may carry a `direct` arm."
         ),
         "classification": "SILENT",
+        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
         "evidence": "zanzibar_utils_v1.py::compile_boolean_schema",
         "note": (
             "Probe `computedOnlyOperands/direct-one-stratum-down` "
@@ -291,6 +299,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "`but not` shape."
         ),
         "classification": "SILENT",
+        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
         "evidence": "zanzibar_utils_v1.py::_build_plan_tree",
         "note": (
             "A union-reachable direct arm compiles to a `PUnion` over a `PClosureLeaf`; "
@@ -304,6 +313,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "derived operands have no derived operands of their own."
         ),
         "classification": "SILENT",
+        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
         "evidence": (
             "formal/conformance/test_conformance_nary_strata.py::test_nary_corpus_encoding"
         ),
@@ -326,6 +336,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "fails` pins that."
         ),
         "classification": "MIXED",
+        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
         "evidence": "zanzibar_utils_v1.py::_build_plan_tree",
         "note": (
             "LOUD sub-case: a wildcard userset over a DERIVED relation raises "
@@ -343,6 +354,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "no stored tuple has a wildcard OBJECT (`doc:*`)."
         ),
         "classification": "MIXED",
+        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
         "evidence": "setengine/engine.py::SetEngine._validate",
         "note": (
             "LOUD sub-case, and only this one: a wildcard-OBJECT write on an UNDECLARED "
@@ -360,6 +372,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "reads as its tupleset."
         ),
         "classification": "SILENT",
+        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
         "evidence": "zanzibar_utils_v1.py::_validate_ttu_tuplesets",
         "note": (
             "The opposite of a refusal: `_validate_ttu_tuplesets` rejects USERSET "
@@ -376,6 +389,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "(NoStoreSubjectR)."
         ),
         "classification": "MIXED",
+        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
         "evidence": "zanzibar_utils_v1.py::_validate_ttu_tuplesets",
         "note": (
             "LOUD sub-case, and it is NARROWER than it looks: `_validate_ttu_tuplesets` "
@@ -586,9 +600,8 @@ def test_every_scope_row_is_well_formed(field):
     sub-case, because "some of it raises" is not actionable on its own.
     """
     row = W4FRAGMENT_SCOPE[field]
-    assert set(row) <= {"demands", "classification", "evidence", "note"}, (
-        f"{field}: unexpected key(s) {sorted(set(row) - {'demands', 'classification', 'evidence', 'note'})}"
-    )
+    keys = {"demands", "classification", "evidence", "note", "reported_by"}
+    assert set(row) <= keys, f"{field}: unexpected key(s) {sorted(set(row) - keys)}"
 
     demands = row.get("demands", "")
     assert isinstance(demands, str) and len(demands.strip()) >= 40, (
@@ -623,6 +636,34 @@ def test_every_scope_row_is_well_formed(field):
         assert "LOUD" in note, (
             f"{field} is MIXED but its note never says which sub-case is LOUD: {note!r}"
         )
+
+
+@pytest.mark.parametrize("field", sorted(W4FRAGMENT_SCOPE))
+def test_every_field_is_reported_and_has_a_rerunnable_probe(field):
+    """`DW-1` step 4 (2026-09-23): each row's `reported_by` RESOLVES to the production
+    report, that report actually emits the field, and the field has at least one
+    re-runnable probe in `w4_scope_probes.py` that fails it.
+
+    The report's per-field verdict is pinned against Lean's decider in
+    `test_conformance_fragment.py::test_production_report_equals_lean`; this test only
+    makes sure the scope pin points at it and cannot name a symbol that does not exist.
+    The probe link is what replaced this module's docstring, where the 2026-08-31 probe
+    inputs had survived only as labels."""
+    import zanzibar_utils_v1
+    from formal.conformance.w4_scope_probes import SCOPE_PROBES
+
+    reported_by = W4FRAGMENT_SCOPE[field].get("reported_by", "")
+    path, _, symbol = reported_by.partition("::")
+    assert path == "zanzibar_utils_v1.py" and callable(getattr(zanzibar_utils_v1, symbol, None)), (
+        f"{field}: reported_by {reported_by!r} does not resolve to a callable in "
+        f"zanzibar_utils_v1.py")
+    assert field in zanzibar_utils_v1.W4_FRAGMENT_FIELDS, (
+        f"{field}: the report named by reported_by does not emit this field")
+    probes = [label for label, (_s, _t, _ow, exp) in SCOPE_PROBES.items()
+              if re.match(rf"{re.escape(field)}[./]", label) and field in exp]
+    assert probes, (
+        f"{field}: no scope probe labelled `{field}/...` or `{field}.<half>/...` fails "
+        f"this field. Add one to formal/conformance/w4_scope_probes.py.")
 
 
 def test_mixed_and_loud_rows_are_the_minority_and_that_is_the_finding():

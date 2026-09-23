@@ -2370,3 +2370,180 @@ def unparse_schema_ast(ast: SchemaAST) -> str:
     return '\n'.join(lines)
 
 
+
+
+# ---------------------------------------------------------------------------
+# W4Fragment scope report (DW-1 step 3) -- SAYS which inputs the proofs cover
+# ---------------------------------------------------------------------------
+#
+# Every headline theorem (`Zanzibar.graph_correct` and its siblings) is stated under
+# `(hA : GraphAdmission S T) (hF : W4Fragment S T)`, so `W4Fragment` IS the scope of the
+# graph index's proved guarantee. Seven of its ten fields are SILENT in the backends
+# (`formal/conformance/test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE`): a schema or store
+# outside them is accepted and answered, and its correctness rests on the differential net
+# (matrix, oracle, conformance), not on a theorem. This function is the operator-facing
+# twin of the Lean decider `FragmentDecide.lean::w4FragmentB` (proved exact by
+# `w4FragmentB_iff`). It REPORTS scope and changes no behaviour: nothing calls it on a
+# write path, and it never raises on an out-of-fragment input.
+#
+# It is a hand-written MIRROR, and a mirror drifts (`W4Fragment` has been reshaped three
+# times). What stops it from saying "covered" when the proof does not is
+# `formal/conformance/test_conformance_fragment.py`, which compares this report field
+# for field with Lean's `zcli mode="fragment"`. If that differential goes red, fix THIS
+# function to agree with Lean. Do not edit the decider to agree with Python.
+#
+# Scope of the report: the `W4Fragment` half ONLY. `GraphAdmission` has no decider
+# (`RulesSaturate.lean::RewriteRanked` is an existential; task row TK104), so
+# `in_fragment=True` means "inside W4Fragment", not "the theorem applies".
+
+#: The ten `W4Fragment` fields, in declaration order (`FullScope.lean::W4Fragment`).
+W4_FRAGMENT_FIELDS: tuple[str, ...] = (
+    'computedOrDirect', 'directArmsBare', 'directArmsConcrete', 'computedOnlyOperands',
+    'noUnionDirects', 'twoStrata', 'wsBare', 'bareStar', 'ttuStarFree', 'term',
+)
+
+
+@dataclass(frozen=True)
+class W4FragmentReport:
+    """Per-field verdict of `W4Fragment` at one (schema, store). ``fields`` is ordered as
+    `W4_FRAGMENT_FIELDS`; ``tainted`` is the derived-relation set the fields quantify over
+    (`compute_taint`, pinned equal to Lean's `taintedKeys`)."""
+    fields: tuple[tuple[str, bool], ...]
+    tainted: frozenset[tuple[str, str]]
+
+    @property
+    def failures(self) -> tuple[str, ...]:
+        """The fields that do NOT hold, in declaration order."""
+        return tuple(name for name, ok in self.fields if not ok)
+
+    @property
+    def in_fragment(self) -> bool:
+        """True iff all ten fields hold (the `W4Fragment` half of the premise only)."""
+        return not self.failures
+
+
+def _w4_children(e: Expr) -> tuple[Expr, ...]:
+    if isinstance(e, (Union, Intersection)):
+        return e.children
+    if isinstance(e, Exclusion):
+        return (e.base, e.subtract)
+    return ()
+
+
+def _w4_computed_or_direct(e: Expr) -> bool:
+    # ReconcileCorrect.lean::ComputedOrDirect -- no TTU leaf anywhere.
+    if isinstance(e, TTU):
+        return False
+    return all(_w4_computed_or_direct(c) for c in _w4_children(e))
+
+
+def _w4_computed_only(e: Expr) -> bool:
+    # ReconcileCorrect.lean::ComputedOnly -- only Computed leaves.
+    if isinstance(e, (TTU, Direct)):
+        return False
+    return all(_w4_computed_only(c) for c in _w4_children(e))
+
+
+def _w4_directs_all(e: Expr) -> list[Direct]:
+    # ReconcileCorrect.lean::exprDirectsAll -- Direct leaves through ANY nesting.
+    if isinstance(e, Direct):
+        return [e]
+    return [d for c in _w4_children(e) for d in _w4_directs_all(c)]
+
+
+def _w4_directs_union(e: Expr) -> list[Direct]:
+    # RulesSound.lean::exprDirects -- Direct leaves through UNIONS ONLY. Walking
+    # Intersection/Exclusion here (i.e. using `_w4_directs_all`) is the trap the DW-1
+    # plan names: it wrongly fails every canonical `[user] but not banned` definition.
+    if isinstance(e, Direct):
+        return [e]
+    if isinstance(e, Union):
+        return [d for c in e.children for d in _w4_directs_union(c)]
+    return []
+
+
+def _w4_computed_refs(e: Expr) -> list[str]:
+    # ReconcileCorrect.lean::computedRefs
+    if isinstance(e, Computed):
+        return [e.relation]
+    return [r for c in _w4_children(e) for r in _w4_computed_refs(c)]
+
+
+def _w4_ttu_arms(e: Expr) -> list[TTU]:
+    # RulesWrite.lean::exprArms, TTU arms only -- through unions only.
+    if isinstance(e, TTU):
+        return [e]
+    if isinstance(e, Union):
+        return [t for c in e.children for t in _w4_ttu_arms(c)]
+    return []
+
+
+def _w4_tuple_fields(tup) -> tuple[str, str, str, str, str, str]:
+    """`(subject_predicate, subject_type, subject_name, relation, object_type,
+    object_name)` from a `TupleV1` / `OracleTuple`-shaped object or a plain 6-sequence;
+    a ``None`` / ``...`` predicate is the bare ``'...'``."""
+    if hasattr(tup, 'subject_name'):
+        sp, st, sn = tup.subject_predicate, tup.subject_type, tup.subject_name
+        rel, ot, on = tup.relation, tup.object_type, tup.object_name
+    else:
+        sp, st, sn, rel, ot, on = tup
+    if sp is None or sp is Ellipsis:
+        sp = '...'
+    return sp, st, sn, rel, ot, on
+
+
+def w4_fragment_report(schema: 'SchemaAST | str', tuples=()) -> W4FragmentReport:
+    """Report, field by field, whether ``(schema, tuples)`` lies inside `W4Fragment`.
+
+    ``schema`` is a raw `SchemaAST` (`parse_schema_ast`; `SetEngine.ast` retains one) or
+    DSL text. It must be the AST, not a `RuleSet`: compilation folds a TTU inside a
+    derived definition into a closure leaf, which loses `computedOrDirect`. ``tuples`` is
+    the store. The store fields quantify over every tuple, so an empty store reports the
+    schema half only.
+
+    Pure, and it never raises on an out-of-scope input. See the section comment above for
+    what the result does and does not mean, and for the Lean differential that pins it."""
+    ast = parse_schema_ast(schema) if isinstance(schema, str) else schema
+    tuples = [_w4_tuple_fields(t) for t in tuples]
+    tainted = compute_taint(ast)
+    derived = [(key, expr) for key, expr in ast.items() if key in tainted]
+
+    def derived_operands(key: tuple[str, str], expr: Expr) -> list[Expr]:
+        # the definitions of `expr`'s DERIVED computed operands (same object type)
+        return [ast[(key[0], r)] for r in _w4_computed_refs(expr)
+                if (key[0], r) in tainted and (key[0], r) in ast]
+
+    # TTU rewrite arms of the UNTAINTED definitions (RulesWrite.lean::schemaRewrites):
+    # (object_type, tupleset relation, target relation).
+    rewrites = [(key[0], t.tupleset_rel, t.target_rel)
+                for key, expr in ast.items() if key not in tainted
+                for t in _w4_ttu_arms(expr)]
+    tupleset_keys = {(ot, ts) for (ot, ts, _tr) in rewrites}
+    derived_names = {rel for (_t, rel) in tainted}
+
+    fields = {
+        'computedOrDirect': all(_w4_computed_or_direct(e) for _k, e in derived),
+        'directArmsBare': all(r.predicate == '...' for _k, e in derived
+                              for d in _w4_directs_all(e) for r in d.restrictions),
+        'directArmsConcrete': all(not r.wildcard for _k, e in derived
+                                  for d in _w4_directs_all(e) for r in d.restrictions),
+        'computedOnlyOperands': all(_w4_computed_only(op) for k, e in derived
+                                    for op in derived_operands(k, e)),
+        'noUnionDirects': all(not _w4_directs_union(e) for _k, e in derived),
+        'twoStrata': all((k[0], r) not in tainted for k, e in derived
+                         for op in derived_operands(k, e) for r in _w4_computed_refs(op)),
+        # ReconcileStars.lean::declaredWildcardShapes -- every wildcard restriction in
+        # the WHOLE schema (both taint classes) is bare.
+        'wsBare': all(r.predicate == '...' for e in ast.values()
+                      for d in _w4_directs_all(e) for r in d.restrictions if r.wildcard),
+        # BareStarCorrect.lean::BareStarStore
+        'bareStar': all((sn != '*' or sp == '...') and on != '*'
+                        for sp, _st, sn, _rel, _ot, on in tuples),
+        # RulesBareStar.lean::TtuStarFree
+        'ttuStarFree': all(sn != '*' or (ot, rel) not in tupleset_keys
+                           for _sp, _st, sn, rel, ot, _on in tuples),
+        # NoTtuTarget /\ NoStoreSubjectR, both keyed on the derived relation NAME only.
+        'term': (all(tr not in derived_names for (_ot, _ts, tr) in rewrites)
+                 and all(sp not in derived_names for sp, *_rest in tuples)),
+    }
+    return W4FragmentReport(tuple((f, fields[f]) for f in W4_FRAGMENT_FIELDS), tainted)

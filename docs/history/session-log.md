@@ -30,6 +30,52 @@ from here.
 
 ---
 
+## 2026-09-23e — `DW-1` CLOSED: Python reports `W4Fragment` per field, differential-pinned to Lean's decider
+
+rows: DW-1 (closed), TK104 (→ `NOW`, brief, comment).
+
+`task lint: clean (13 checks, 219 task file(s) parsed), 30 warning(s)`
+
+`read: board only`
+
+**"Finish the next task" → `DW-1` step 3, the board's `NOW`.** Steps 3 and 4 both landed,
+so the row closed. The map is now FROZEN:
+[`docs/dw1-decidable-w4fragment-2026-09-23.md`](../dw1-decidable-w4fragment-2026-09-23.md).
+Its 2026-09-23e block carries every literal result.
+
+* **Step 3 — `zanzibar_utils_v1.py::w4_fragment_report(schema, tuples)`:**
+  - A pure per-field report (`W4FragmentReport`: `fields`, `failures`, `in_fragment`,
+    `tainted`). No behaviour changes: nothing calls it on a write path, and it never raises.
+  - It is held to Lean's `zcli mode="fragment"` field for field and on the tainted set
+    (`test_conformance_fragment.py` (D)), over every curated corpus plus the new probe
+    fixtures.
+  - A field-list pin ties its field list and order to the fields parsed from
+    `FullScope.lean`. `tests/test_w4_fragment_report.py` covers the tuple-carrier surface,
+    which the differential cannot see.
+* **The scope pin's 2026-08-31 probes are re-runnable again**
+  (`formal/conformance/w4_scope_probes.py`). Their inputs had survived only as labels. Each
+  has a hand-derived expected failure list, (E) holds Lean and the report to it, and (F)
+  re-checks the recorded ADMITTED / RAISED outcome.
+  - ⚠ **The hand derivation was wrong twice. Lean and Python agreed with each other both
+    times.** A userset restriction over a derived relation taints its holder. And the
+    "mixed member types" raise needs the tupleset's only member type to carry a PLAIN
+    relation that shares its name with a derived one; the first reconstruction compiled.
+    Both are dated in the fixtures.
+* **Sweep:** 19 mutations with an M0 attribution control. 17 went red. M13 is EQUIVALENT by
+  construction, because untainted definitions hold no boolean node. **M16 was INERT**: no
+  probe had a derived operand after the first computed ref. A probe was added and M16 then
+  went red.
+* **Step 4:** `W4FRAGMENT_SCOPE` gained a `reported_by` column. A new test resolves it and
+  requires a re-runnable probe for every field. Three sabotages went red.
+* **Decision:** no fourth classification value. The report is opt-in, so the write path is
+  still SILENT, and saying otherwise would overclaim.
+* **Re-rank:** `TK104` (`GraphAdmission`, the other premise half) is `NOW` as the last
+  owner of goal step 3. Its first action is SIZING: classify its fields LOUD/SILENT.
+
+Still owed: nothing.
+
+---
+
 ## 2026-09-23d — `DW-1` sized and steps 1+2 landed: `W4Fragment` is DECIDED, and zcli reports it
 
 rows: DW-1 (comment, size `M`, brief), TK104 (NEW, `LATER`), P21 (comment).

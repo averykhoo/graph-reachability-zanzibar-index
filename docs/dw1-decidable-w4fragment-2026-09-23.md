@@ -1,8 +1,9 @@
 # `DW-1` — a decidable `W4Fragment`, sized per field, and the ordered plan
 
-**ACTIVE-PLAN** (`docs/README.md` §3). Opened 2026-09-23d. Corrections append **dated at the
-top**; the body is as-measured and is provenance, not a living status. Freeze when `DW-1`
-closes. Live state is `python scripts/task.py show DW-1`, never this file. Every figure below
+**FROZEN 2026-09-23e, at `DW-1`'s close — provenance, not a living document.** Status lines
+below are as-of-then and several may now be false; live state: `HANDOFF.md` + the session
+ledger. Corrections are appended dated at the top, never edited into the body. (Was
+ACTIVE-PLAN from 2026-09-23d, `docs/README.md` §3.) Live state is `python scripts/task.py show DW-1`, never this file. Every figure below
 was measured on `2026-09-23` against HEAD `0ef89ab`.
 
 Provenance labels: **READ** (verified first-hand, `file::symbol`), **REASONED**, **PROBED**
@@ -10,6 +11,111 @@ Provenance labels: **READ** (verified first-hand, `file::symbol`), **REASONED**,
 census (called *agent L* for the Lean side and *agent P* for the Python side below). Anything
 marked READ-by-agent was read by that agent and **not** re-read by the session. The session
 re-read the citations marked **READ (session)**.
+
+## Progress, 2026-09-23e: steps 3 and 4 LANDED, and `DW-1` closes (appended; the body below is as-written)
+
+Everything in this block was MEASURED this session, against HEAD `8b3ab46` plus the
+session's diff, with the `zcli` that `8b3ab46` built.
+
+- **Step 3: `zanzibar_utils_v1.py::w4_fragment_report(schema, tuples)`.**
+  - It is a pure per-field report, `W4FragmentReport` with `fields` / `failures` /
+    `in_fragment` / `tainted`, placed after `unparse_schema_ast`. It changes no behaviour:
+    nothing calls it on a write path, and it never raises on an out-of-scope input
+    (`tests/test_w4_fragment_report.py` pins a compile-RAISED schema being *reported*).
+  - It takes the raw AST or DSL text. Tuples may be `TupleV1`, `OracleTuple` or plain
+    6-sequences, and `...` / `Ellipsis` / `None` all read as bare.
+  - Each field helper cites the Lean definition it mirrors. The union-only walk for
+    `noUnionDirects` carries the S2 trap in a comment.
+- **The probe fixtures: `formal/conformance/w4_scope_probes.py::SCOPE_PROBES`.** These
+  are the scope pin's 2026-08-31 probe labels re-created as inputs. The originals survived
+  only as labels.
+  - There are 12 schema-side and 5 store-side probes, plus 1 added by the sweep (M16).
+    Each field is the ONLY failure of at least one probe.
+  - `expected_failures` was hand-derived from the Lean definitions (REASONED) before
+    either decider was run.
+  - **The hand derivation was wrong twice. Both errors were the hand's**, and Lean and
+    Python agreed with each other on the first run:
+    - `wsBare/wildcard-userset-over-DERIVED`: a userset restriction over a derived
+      relation taints its holder, so the probe also fails `directArmsBare`,
+      `directArmsConcrete` and `noUnionDirects`.
+    - `term.NoTtuTarget/mixed-member-types`: the first reconstruction (`parent: [org,
+      team]`) COMPILED. The raising corner is the one `_validate_ttu_tuplesets`' comment
+      names: the tupleset's only member type has a PLAIN `member`, while another type's
+      `member` is derived. Both Python's refusal and `NoTtuTarget` compare names only.
+  - `PYTHON_OUTCOME` re-checks ADMITTED / RAISED for every schema-side probe. All 13
+    match the 2026-08-31 record.
+- **The differential lives in `formal/conformance/test_conformance_fragment.py`:**
+  - (D) the report equals Lean per field and on `tainted`, over the 36 corpora and 18
+    probes;
+  - (E) each probe's verdict equals the hand derivation, by both sides;
+  - (F) `PYTHON_OUTCOME` still holds;
+  - `test_production_field_list_is_the_lean_structure` requires the production field list,
+    the module's own `W4_FIELDS` and the fields parsed from `FullScope.lean` to be ONE
+    list in one order.
+  - The first run was green (`182 passed`), so the sweep below followed.
+- **Step 4: `test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE` gained a `reported_by`
+  column.** `test_every_field_is_reported_and_has_a_rerunnable_probe` requires three
+  things of each row: `reported_by` resolves to a callable in `zanzibar_utils_v1.py`, that
+  report emits the field, and at least one probe labelled `<field>/` or `<field>.<half>/`
+  fails it.
+- **Decision (the session's):** the classification vocabulary did NOT gain a fourth value,
+  and SILENT stays SILENT. Classification describes the WRITE path. The report is opt-in,
+  so an out-of-scope write is still accepted with no signal unless someone asks. A
+  "REPORTED" value would claim more than the code does. The plan's step 4 allowed a fourth
+  value; it did not require one.
+
+**Mutation sweep of step 3, literal.** One anchored edit each. The file was restored and
+byte-compared after every run. Targets: `test_conformance_fragment.py` +
+`tests/test_w4_fragment_report.py`. Baseline `186 passed` (`189` after M16's probe).
+
+    M0  rc=1 2 failed   CONTROL: flip twoStrata/three-strata's expectation to ()
+        test_scope_probes_are_not_vacuous
+        test_scope_probe_verdict_matches_the_hand_derivation[twoStrata/three-strata]
+    M1  rc=1 7 failed   computedOrDirect: TTU leaf allowed
+    M2  rc=1 2 failed   directArmsBare: union-only walk
+    M3  rc=1 2 failed   directArmsConcrete: union-only walk
+    M4  rc=1 2 failed   computedOnly: Direct leaf allowed
+    M5  rc=1 15 failed  noUnionDirects via exprDirectsAll (the S2 trap)
+    M6  rc=1 3 failed   twoStrata: skip first ref
+    M7  rc=1 5 failed   wsBare: derived defs only
+    M8  rc=1 3 failed   bareStar: object-star clause dropped
+    M9  rc=1 4 failed   bareStar: userset-star clause dropped
+    M10 rc=1 2 failed   ttuStarFree: (ot, rel) key swapped
+    M11 rc=1 5 failed   term: NoTtuTarget half dropped
+    M12 rc=1 4 failed   term: NoStoreSubjectR half dropped
+    M13 rc=0 186 passed schemaRewrites arms also walk inter/excl -- EQUIVALENT, not inert:
+                        compute_taint taints every def containing a boolean node, so an
+                        UNTAINTED def (the only kind the arms are read from) has none
+    M14 rc=1 4 failed   schemaRewrites: taint filter dropped
+    M15 rc=1 1 failed   tuple normalisation: Ellipsis not mapped
+        test_every_bare_predicate_spelling_is_the_bare_predicate   (the differential is
+        BLIND to this one -- corpus tuples arrive pre-normalised -- which is why the
+        tests/ module exists)
+    M16 rc=0 186 passed derived operands: first ref only.  INERT on first run: every
+                        probe's derived operand was its def's FIRST computed ref. Fixed
+                        by adding probe computedOnlyOperands/derived-operand-second;
+                        re-run: rc=1 2 failed (that probe, in (D) and (E))
+    M17 rc=1 1 failed   (F) instrument: flip one PYTHON_OUTCOME entry
+    M18 rc=1 1 failed   production field ORDER swapped
+        test_production_field_list_is_the_lean_structure
+
+M0 attributed correctly: it named the probe whose claim was flipped, plus the anti-vacuity
+test, because `twoStrata` then had no isolating probe. That is an honest second red. Every
+field mutation reddened at least one (D) row naming a probe for that field.
+
+**Sabotage of step 4, literal** (target `test_w4fragment_scope_pin.py`, baseline `25 passed`):
+
+    S4a rc=1 1 failed  bareStar row cites w4_fragment_reports (nonexistent)
+        ...::test_every_field_is_reported_and_has_a_rerunnable_probe[bareStar]
+    S4b rc=1 1 failed  the only probe failing ttuStarFree relabelled ttuStarFreeX/...
+        ...::test_every_field_is_reported_and_has_a_rerunnable_probe[ttuStarFree]
+    S4c rc=1 1 failed  computedOnlyOperands row loses its reported_by
+        ...::test_every_field_is_reported_and_has_a_rerunnable_probe[computedOnlyOperands]
+
+**What is still NOT covered** (this is why the row closes without "the theorem applies"):
+the report covers the `W4Fragment` half of the premise only. `GraphAdmission` has no
+decider and no field classification. That is `TK104`, promoted to `NOW` at this close as
+the remaining owner of goal step 3.
 
 ## Progress, 2026-09-23d (appended; the body below is as-written)
 

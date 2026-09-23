@@ -155,6 +155,17 @@ implementation differential, and a refusal would abolish the category. The drive
 goal is met by REPORTING scope next to answering. Owner of the rest of the row: `DW-1`,
 map `docs/dw1-decidable-w4fragment-2026-09-23.md`.
 
+**2026-09-23e — the report reaches the PYTHON side, and `DW-1` is closed.**
+`zanzibar_utils_v1.py::w4_fragment_report` is the production twin of `w4FragmentB`. It is a
+pure per-field report over the raw `SchemaAST` and a store, and it changes no behaviour.
+Being a hand-written mirror, it is held to the decider field for field by
+`formal/conformance/test_conformance_fragment.py::test_production_report_equals_lean`, over
+every curated corpus plus the re-created scope-pin probes
+(`formal/conformance/w4_scope_probes.py::SCOPE_PROBES`). On a red, the PYTHON is what gets
+fixed. The two sides read different parsers (`encode.py` goes through the oracle's), so
+attribute a red to parser vs mirror first. `W4FRAGMENT_SCOPE` rows now name it in a
+`reported_by` column. Still unreported: the `GraphAdmission` half (`TK104`).
+
 
 All answer-comparing suites share ONE query grid
 (`formal/conformance/grid.py::grid`): targets are the stored-tuple cross product

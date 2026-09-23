@@ -11,9 +11,9 @@ labels: [formal]
 source: board
 source_hash: 04392ec66204
 created: 2026-08-16
-moved: 2026-09-23d
-updated: 2026-09-23d
-closed:
+moved: 2026-09-23e
+updated: 2026-09-23e
+closed: 2026-09-23e
 ---
 
 decidable `W4Fragment` for a driver-side pre-check. **Promoted SOMEDAY → LATER on
@@ -79,3 +79,11 @@ BUILDS: lake build rc 0, lake build zcli rc 0.
 RED: nothing.
 
 NEXT (step 3): the production Python w4_fragment_report(ast, tuples), a pure per-field report, plus its differential against zcli mode=fragment. Turn the scope-pin probe schemas into fixtures first. Trap: noUnionDirects walks exprDirects (union-only), NOT exprDirectsAll. Sabotage S2 shows that mistake reddens direct_arm_exclusion.
+
+### 2026-09-23e
+
+Steps 3+4 LANDED 2026-09-23e; row CLOSED. Map (now FROZEN): docs/dw1-decidable-w4fragment-2026-09-23.md, 2026-09-23e block.
+LANDED: zanzibar_utils_v1.py::w4_fragment_report (pure per-field report, no behaviour change, never raises); formal/conformance/w4_scope_probes.py::SCOPE_PROBES (the scope pin 2026-08-31 probe labels re-created as 18 re-runnable fixtures, hand-derived expectations, 2 hand errors corrected and dated); test_conformance_fragment.py (D) report == Lean per field + tainted over corpora + probes, (E) probes == hand derivation, (F) ADMITTED/RAISED still holds, plus a field-list/order pin to FullScope.lean; tests/test_w4_fragment_report.py (tuple carriers, bare spellings); W4FRAGMENT_SCOPE reported_by column + test_every_field_is_reported_and_has_a_rerunnable_probe.
+EVIDENCE: 19-mutation sweep with an M0 attribution control -- 17 red, M13 EQUIVALENT (untainted defs hold no booleans), M16 INERT until probe derived-operand-second was added (then red). Step-4 sabotages S4a/S4b/S4c all red.
+DECISION: no fourth classification value -- SILENT stays SILENT, because the report is opt-in and the write path is unchanged.
+NOT COVERED: the GraphAdmission half of the premise. TK104 promoted to NOW as the remaining owner of goal step 3.

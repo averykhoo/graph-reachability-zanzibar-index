@@ -306,7 +306,11 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   for scope rejections (object wildcards on derived relations, wildcard usersets over
   derived relations) and via `enable_boolean=False`; derived-dependency cycles raise
   `ValueError`. `SchemaInfo`; `validate_write_identifiers`; `.` is reserved in declared
-  relation names (leaf predicates are `<relation>.<index>`).
+  relation names (leaf predicates are `<relation>.<index>`). `w4_fragment_report` is the
+  opt-in, non-raising per-field report of whether a (schema, store) is inside `W4Fragment`,
+  the scope of the headline theorems. It is a mirror of the Lean decider and is
+  differential-pinned to it (`formal/conformance/test_conformance_fragment.py`), so fix the
+  Python, not Lean, on a red.
 - **`tests/oracle.py`** — independent reference oracle (pointwise, boolean-aware).
   **Independence contract:** it imports nothing from the backends and parses the DSL
   itself, so one parser bug can't corrupt both sides of the validation matrix.

@@ -27,15 +27,15 @@ number INTO it over restating it.
 
 | quantity | value |
 |---|---|
-| `formal/conformance/` collected | **680** |
-| `tests/` collected | **1279** |
-| whole-repo suite | **1959** |
-| differential conformance tests | **609** across **15** files |
-| gate-tooling conformance tests | **71** across **4** files |
+| `formal/conformance/` collected | **777** |
+| `tests/` collected | **1283** |
+| whole-repo suite | **2060** |
+| differential conformance tests | **696** across **15** files |
+| gate-tooling conformance tests | **81** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **656** |
 | audit identity pin (`audited_theorems.txt`) | **656** |
 | headline definition pin | **274** rows (**265** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **706** (**391** Python + **315** Lean) |
+| `CORRESPONDENCE.md` anchors | **709** (**394** Python + **315** Lean) |
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **36** = 27 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
@@ -61,18 +61,18 @@ Per conformance file:
 
 | file | tests | kind |
 |---|---|---|
+| `test_conformance_fragment.py` | 185 | differential |
 | `test_conformance_remove.py` | 135 | differential |
 | `test_conformance_spec.py` | 108 | differential |
-| `test_conformance_fragment.py` | 98 | differential |
 | `test_conformance_state.py` | 56 | differential |
 | `test_conformance_graph.py` | 51 | differential |
 | `test_sorry_scan.py` | 44 | tooling |
 | `test_conformance_generated.py` | 40 | differential |
 | `test_conformance_random.py` | 27 | differential |
 | `test_conformance_bulk_state.py` | 26 | differential |
+| `test_w4fragment_scope_pin.py` | 25 | tooling |
 | `test_conformance_remove_graph.py` | 23 | differential |
 | `test_conformance_nary_strata.py` | 20 | differential |
-| `test_w4fragment_scope_pin.py` | 15 | tooling |
 | `test_runner_retry.py` | 7 | tooling |
 | `test_conformance_enum.py` | 6 | differential |
 | `test_conformance_enum_state.py` | 6 | differential |

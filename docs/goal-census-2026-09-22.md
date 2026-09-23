@@ -3,6 +3,19 @@
 **ACTIVE-PLAN** (`docs/README.md` §3). Corrections append **dated at the top**. Freeze when a
 direction is chosen and its first item closes.
 
+## Correction, 2026-09-23e (appended; the body below is as-written)
+
+**Step 3's `W4Fragment` half is DONE. `DW-1` closed.** The premise half that scopes every
+headline theorem is now decided in Lean (`FragmentDecide.lean::w4FragmentB`, exact) and
+reported per field in production Python (`zanzibar_utils_v1.py::w4_fragment_report`). The
+two are pinned together by a differential (`test_conformance_fragment.py`). The scope pin
+names the report in a `reported_by` column. What remains of step 3 is the OTHER premise
+half: `GraphAdmission` has neither a decider nor a field classification. `TK104` owns it
+and is `NOW`. Its first action is sizing, not proof. The write path is still silent by
+design: the report is opt-in, and SILENT stays the honest classification
+([`docs/dw1-decidable-w4fragment-2026-09-23.md`](dw1-decidable-w4fragment-2026-09-23.md),
+2026-09-23e block).
+
 ## Correction, 2026-09-23c (appended; the body below is as-written)
 
 **Step 2 is COMPLETE. `P14` closed as absorbed, with nothing owed.** The `_d` reach-collapse
