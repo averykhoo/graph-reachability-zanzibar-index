@@ -267,12 +267,21 @@ HEADLINE = [
     # `final_applies` is the unsuffixed `graph_correct` at that store; it is the ONLY
     # declaration in the tree that distinguishes the real widening from a half-done
     # one that compiles, audits clean and regenerates both goldens (see its docstring
-    # for the observed sabotage output).  `outside_narrow_t2a` is the machine-checked
-    # counterexample keeping the T2a asymmetry declared rather than silent.
+    # for the observed sabotage output).
     "Zanzibar.W4WitnessDirect.admission",
     "Zanzibar.W4WitnessDirect.w4fragment",
     "Zanzibar.W4WitnessDirect.final_applies",
-    "Zanzibar.W4WitnessDirect.outside_narrow_t2a",
+    # `P5` (2026-09-23) -- T2a lost its `W4NarrowT2a` bundle, and with it the pinned
+    # counterexample `outside_narrow_t2a` (which could not survive the structure it
+    # refuted).  Its replacements, pinned so a restatement to `True` is visible: the
+    # SCOPE witnesses at the Direct-arm and corpus stores, and the CONTENT witness at
+    # D.3's store (`Exec.lean::P5Witness`), whose `prefix_facts` carries the decided
+    # facts the other conjuncts rest on (non-empty `neg` row, bare edge present only on
+    # the pre-flip write).
+    "Zanzibar.W4WitnessDirect.reached_inv_applies",
+    "Zanzibar.W4WitnessDirect.reached_inv_applies4",
+    "Zanzibar.P5Witness.prefix_facts",
+    "Zanzibar.P5Witness.leafRouted_inv_preflip_not",
     # 2026-09-06 -- the headline `backend_equivalence` (T3) INSTANTIATED for the first
     # time, once its never-used `hValid : AllValid T` hypothesis (over an `opaque`
     # predicate, undischargeable at any concrete store) was deleted.  Two forms: the

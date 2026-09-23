@@ -15,13 +15,11 @@ reader should know before trusting the word:
   (`can_view: [user] but not blocked`) — not narrower coverage, no theorem there at all.
   E-chain legs 5+6 (2026-08-05) closed that for T2b/T3/T6 and the Exec finals;
   `W4WitnessDirect.final_applies4` instantiates the headline `graph_correct_public` at exactly
-  that shape. ⚠ **T2a `graph_reached_inv` alone is still vacuous there**
-  (`outside_narrow_t2a`), and what is owed is PROOF work — `Inv.negEdgeFree` on the `_d`
-  fragment for the leaf-routed write leg, then `graph_reached_inv` without the
-  `W4NarrowT2a` bundle. (This line read "a design decision — not proof effort" until
-  2026-09-05, when leg 7's flip landed and retired that justification; the carry itself
-  did not move.) Read `FINAL_REVIEW.md` §3.0 / `ARCHITECTURE.md` §6.0 before quoting
-  anything graph-side.
+  that shape. T2a `graph_reached_inv`, which alone had stayed vacuous there (it took an
+  extra `W4NarrowT2a` bundle), caught up on 2026-09-23 (`P5`): the bundle is deleted and
+  `W4WitnessDirect.reached_inv_applies4` instantiates T2a at the same store — map in
+  `docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`. Read `FINAL_REVIEW.md` §3.0 /
+  `ARCHITECTURE.md` §6.0 before quoting anything graph-side.
 * **A genuine model-vs-Python infidelity was found in the audited chain AFTER this
   directory was first described as "complete"** (2026-07-20b: Lean's `affectedKeys`
   lacked Python's LeafFamily own-key branch, yielding a modeled *drained* state with
@@ -78,7 +76,7 @@ to be equivalent (machine-checked, axiom-audited; set engine at **full scope** �
 equality is literally unconditional, all three hypotheses of `setEngine_correct` are
 underscored and unused — graph index at the documented
 `GraphAdmission ∧ W4Fragment` scope, **which since 2026-08-05 covers `Direct`-arm
-derived stores for every graph theorem except T2a, `FINAL_REVIEW.md` §3.0**). The **Python
+derived stores for every graph theorem — T2a since 2026-09-23, `FINAL_REVIEW.md` §3.0**). The **Python
 implementations** are pinned to those models by the correspondence map, five-corner
 differential conformance (including the Lean operational graph model vs the real
 graph index), **state-level equality under seven documented projections**,

@@ -80,6 +80,10 @@ P4Bridge.bridge_holds_SwU
 P4Bridge.bridge_is_per_leaf_SwF
 P4Bridge.bridge_needs_the_leaf_name_Sw
 P4Bridge.bridge_needs_the_leaf_name_SwU
+P5Witness.admission
+P5Witness.leafRouted_inv_preflip_not
+P5Witness.prefix_facts
+P5Witness.w4fragment
 Schema.isStarTuplesetThrough
 T0aCounter.fuel_stable_step_false
 T0aCounter.not_storeDeclared
@@ -119,9 +123,10 @@ W4WitnessDirect.equivalence_applies
 W4WitnessDirect.final_applies
 W4WitnessDirect.final_applies4
 W4WitnessDirect.fragment
-W4WitnessDirect.outside_narrow_t2a
 W4WitnessDirect.outside_old_admission
 W4WitnessDirect.outside_old_admission4
+W4WitnessDirect.reached_inv_applies
+W4WitnessDirect.reached_inv_applies4
 W4WitnessDirect.toC_applies
 W4WitnessDirect.w3d2E_correct_applies
 W4WitnessDirect.w3d2E_correct_applies_nonfence
@@ -340,6 +345,7 @@ nreaches_of_semAux_rules
 nreaches_of_semAux_rulesBS
 nreaches_relation_rewrite
 nreaches_remove_terminal
+objNode_ne_derived_of_untainted
 objectName_mem_instances
 pathCount_addEdge
 pathCount_removeEdge
@@ -608,7 +614,6 @@ w3dJobCoverage_enumJob2_state
 w3d_leg_context
 w4Fragment_of_computedOnly
 w4Fragment_of_untainted
-w4NarrowT2a_of_untainted
 w4_within_scope
 wall_reach_isObjectWildcard
 wantEdge_reconcileKeyD_inert

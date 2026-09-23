@@ -56,23 +56,25 @@ VACUOUS on `can_view: [user] but not blocked`** — `W4WitnessDirect.final_appli
 instantiates the unsuffixed `graph_correct` at exactly that store, and
 `W4WitnessDirect.outside_old_admission` machine-checks the pre-leg-5 bundle could not be.
 `w4Fragment_of_computedOnly` proves the old six fields imply all ten, so nothing that held
-before stopped holding. **T2a did NOT widen**: `graph_reached_inv` gained a third bundle
-`W4NarrowT2a`, whose counterexample at the Direct-arm store is
-`W4WitnessDirect.outside_narrow_t2a`.
+before stopped holding. At leg 5 T2a did NOT widen: `graph_reached_inv` took a third
+bundle `W4NarrowT2a` (schema-wide `ComputedOnly` + narrow `StoreValidRules`), refuted at
+the Direct-arm store by `W4WitnessDirect.outside_narrow_t2a`.
 
-**★ 2026-09-05 — leg 7's flip LANDED, and T2a's JUSTIFICATION is retired while the CARRY
-is not.** The reason this file used to give for the T2a asymmetry was "probe D.3
-machine-checked `Inv.negEdgeFree` FALSE on the `_d` fragment — a P6 leaf-family modelling
-limit, not a Python bug". That reason is gone:
-`GraphIndex/Cascade.lean::GraphState.writeLoggedRules` now folds
-`rewriteClosureL S (rawWriteTuples S t)`, so the model routes a Direct-arm write onto the
-leaf family exactly as `zanzibar_utils_v1.py::RuleSet.apply` does, and extractor
-projection P6 is deleted. The write no longer lands on the bare public R-node — which is
-the mechanism D.3 measured. **`graph_reached_inv` nonetheless STILL takes `W4NarrowT2a`
-and `outside_narrow_t2a` STILL holds.** So the carry outlived its justification, and what
-is owed is now **PROOF WORK** — prove `Inv.negEdgeFree` on the `_d` fragment for the
-leaf-routed write leg, then restate `graph_reached_inv` without the bundle — **not a
-design decision**. The post-flip probe output is transcribed in `W4NarrowT2a`'s docstring.
+**★ `P5` (2026-09-23) — T2a WIDENED; `W4NarrowT2a` and `outside_narrow_t2a` are DELETED.**
+`graph_reached_inv` now takes exactly `GraphAdmission` + `W4Fragment`, the same two bundles
+as every other headline theorem, so the six headlines share one scope with no
+theorem-specific carry. History: probe D.3 (2026-07-28) machine-checked `Inv.negEdgeFree`
+FALSE on the `_d` fragment because a Direct-arm write landed on the public R-node carrying
+the `neg` row; leg 7's flip (2026-09-05) made
+`GraphIndex/Cascade.lean::GraphState.writeLoggedRules` route that write onto the leaf
+family exactly as `zanzibar_utils_v1.py::RuleSet.apply` does, which removed the mechanism;
+and `P5` did the owed proof work — the T2a chain in `CascadeStrataEdge.lean` now runs on
+the `_d` fragment end to end, every narrow lemma swapped for its existing `_d` twin.
+Witnesses: `W4WitnessDirect.reached_inv_applies` (scope — the theorem applies at the store
+the bundle was refuted at) and `Exec.lean::P5Witness` (content — at D.3's own store `Sw`,
+where the `neg` row is non-empty, the leaf-routed write satisfies `Inv` and the pre-flip
+bare write from the SAME state violates it). Map:
+`docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`.
 -/
 
 namespace Zanzibar
@@ -329,8 +331,9 @@ theorem GraphAdmission.noBridgedDerived {S : Schema} {T : Store} (hA : GraphAdmi
     **Leg-5 note (2026-08-05).** The single `computedOnly` field became the five
     derived-def clauses above. `w4Fragment_of_computedOnly` shows the old bundle is
     subsumed: on a `ComputedOnly` schema every one of the five is vacuous or
-    immediate, so nothing that held before stopped holding. What is NOT subsumed is
-    **T2a** — see `W4NarrowT2a`. -/
+    immediate, so nothing that held before stopped holding. Until `P5` (2026-09-23) T2a
+    alone was NOT subsumed and took an extra `W4NarrowT2a` bundle; since then every
+    headline theorem, T2a included, takes exactly this bundle + `GraphAdmission`. -/
 structure W4Fragment (S : Schema) (T : Store) : Prop where
   computedOrDirect : ∀ dt R e, S.lookup (dt, R) = some e →
     isDerived S (dt, R) = true → ComputedOrDirect e
@@ -351,184 +354,6 @@ structure W4Fragment (S : Schema) (T : Store) : Prop where
   bareStar : BareStarStore T
   ttuStarFree : TtuStarFree S T
   term : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R
-
-/-- **`W4NarrowT2a S T` — the extra carries T2a (`graph_reached_inv`) still needs,
-    and T2b no longer does.** The two clauses the E-chain widening could NOT move:
-    schema-wide `ComputedOnly` derived defs, and the narrow `StoreValidRules` store
-    admission.
-
-    **This is a DECLARED asymmetry, not an oversight.**
-
-    **HISTORY 2026-07-28 → 2026-09-05 — the ORIGINAL justification, now RETIRED (see ★
-    below); kept dated because it was load-bearing for five weeks and is quoted in three
-    other docs.** Leg-0 probe D.3 (2026-07-28)
-    machine-checked `Inv.negEdgeFree` FALSE on the `_d` fragment: under
-    `StoreValidRulesD` a Direct-arm write lands an edge at the very derived R-node
-    whose residue carries the `neg` row, and `Inv` forbids exactly that. It is a
-    **modelling limit of the P6 leaf-family collapse, not a Python bug** — verified on
-    the real backends, `RuleSet.apply` routes the write onto the leaf family, so the
-    edge lands on `#approver.0`/`#approver.2` and never on `#approver` where the `neg`
-    row lives; different nodes, I6 disjointness intact throughout (0 mismatches over
-    the grid and a 6-way order sweep).
-
-    So `graph_reached_inv` takes this bundle IN ADDITION to `GraphAdmission` +
-    `W4Fragment`, and `W4WitnessDirect.outside_narrow_t2a` machine-checks that the
-    canonical Direct-arm store does not satisfy it.
-
-    **DECIDED 2026-08-05 — option (c). ★ ITS WORK LANDED 2026-09-05, AND THIS STRUCTURE
-    DID NOT DISAPPEAR.** The options were: (a) restate at drained states only, (b) weaken
-    `negEdgeFree` to exempt the current un-cascaded write leg, or
-    (c) **model the leaf-family split and retire P6 — CHOSEN**, because (a) and (b) both
-    shrink the claim while (c) makes `negEdgeFree` TRUE here with nothing weakened.
-    ⚠ This paragraph used to end "**and this structure disappears** rather than being
-    carried", and to head itself "the work is DEFERRED". Both are now wrong in the same
-    direction: leg 7 ran, and the structure is still below. (c) removed the OBSTACLE to
-    proving `negEdgeFree` here; it did not remove the bundle. Removing the bundle is the
-    separate, still-owed proof step recorded in ★ below.
-
-    **⚠ Corrected 2026-08-08 — option (b) used to read "weaken
-    `negEdgeFree`/`uposEdgeFree`", and pairing the two clauses was WRONG.** Only
-    `negEdgeFree` is implicated. `uposEdgeFree` is **structurally immune on the `_d`
-    fragment**, independent of leaf routing, because two filters compose:
-    `StoreValidRulesD` (`ReconcileCorrect.lean`) requires `t.subject.predicate = BARE`
-    on any tuple written to a DERIVED key, while `uposCands`
-    (`CascadeStrataEnum.lean`) is filtered to `predicate ≠ BARE` — so `res.upos` only
-    ever holds USERSET subjects, and a raw derived write can never land an edge from
-    one. Measured 2026-08-08 by attack-first `#eval`: `uposTested = 0` in every
-    in-fragment scenario and `uposFree := true` throughout, while the same probe
-    reproduced D.3's `negFree := false` as its positive control. The mechanism was
-    confirmed by deliberately leaving the fragment — putting the userset restriction
-    on an untainted operand gives `uposTested = 1..2` with `uposFree := false` at a
-    store `StoreValidRulesD` rejects. **Consequence: leg 7's `Inv`-side obligation is
-    ONE clause, not two** — half what the scope doc's §1/§7 imply.
-    Why not (b), which is the tempting one: **nothing consumes `Inv`.** It is a hypothesis
-    in exactly four places (`State.lean::Inv.toStruct`, `::inv_putResidue`,
-    `Write.lean::inv_writeDirect`, `RulesWrite.lean::inv_writeRules`), all `Inv → Inv`
-    preservation steps, and `CascadeInv.lean::EdgeHygienic` is consumed as a hypothesis
-    nowhere. So weakening this clause could not turn any proof red — the gate would stay
-    green while the theorem said less, which is the failure mode house rule 7 exists for.
-    Scope + blast radius + ordering:
-    `formal/history/leaf-family-split-scope-2026-08-05.md`.
-
-    ---
-
-    **★ 2026-09-05 — THE FLIP LANDED; THE JUSTIFICATION ABOVE IS RETIRED AND THE CARRY IS
-    NOT. WHAT IS OWED IS PROOF WORK, NOT A DESIGN DECISION.**
-    `GraphIndex/Cascade.lean::GraphState.writeLoggedRules` (and its remove twin
-    `::GraphState.removeLoggedRules`) now fold `rewriteClosureL S (rawWriteTuples S t)` —
-    the leaf-routed closure of `GraphIndex/LeafRules.lean::rewriteClosureL` — so a
-    Direct-arm write lands on the LEAF family, exactly as `RuleSet.apply` does in Python,
-    and extractor projection P6 is deleted. The mechanism the D.3 paragraph above
-    describes ("a Direct-arm write lands an edge at the very derived R-node whose residue
-    carries the `neg` row") **no longer exists in this model**. Two consequences, and they
-    point opposite ways:
-    * the words "a modelling limit of the P6 leaf-family collapse" are RETIRED — do not
-      copy them forward, and do not read this bundle as justified by them;
-    * `graph_reached_inv` STILL takes this bundle, `W4WitnessDirect.outside_narrow_t2a`
-      STILL holds, and no `Inv` clause was re-proved by the flip. **T2a did not widen.**
-    So the two owed steps are now proof steps: (1) prove `Inv.negEdgeFree` on the `_d`
-    fragment for the leaf-routed write leg, (2) restate `graph_reached_inv` without
-    `W4NarrowT2a`. Nothing here is waiting on a decision.
-
-    **The post-flip re-run of D.3's probe, LITERAL OUTPUT (2026-09-05).** Command:
-    `lake env lean ../../.scratch/d3_negedgefree_postflip.lean`, exit code 0, against the
-    already-built oleans of the post-flip tree; no repo file modified. Transcribed here
-    because the probe file is in gitignored `.scratch/` and the 2026-08-08 original was
-    lost exactly that way. Schema is D.3's own `Leaf.lean::LeafWitness.Sw` (3 relations,
-    wildcard-carrying, two strata, three tuples, one object `doc:d1`).
-
-        ("DOMAIN SIZE (routing-independent key pairs)", 144)
-        ("PRED NAMES",
-          ["banned", "banned.0", "banned.1", "banned.2", "viewer", "viewer.0", "viewer.1",
-           "viewer.2", "approver", "approver.0", "approver.1", "approver.2"])
-        ("rawWriteRels S tW", ["approver.0"])
-        ("rawWriteTuples S tW",
-         [{ subject := { type := "user", name := "bob", predicate := "..." },
-            relation := "approver.0",
-            object := { type := "doc", name := "d1" } }])
-        ("rewriteClosureL S (rawWriteTuples S tW)",
-         [{ subject := { type := "user", name := "bob", predicate := "..." },
-            relation := "approver.0",
-            object := { type := "doc", name := "d1" } }])
-        ("SUBJECT EDGES (A: writeLoggedRules, pre-cascade)",
-         some [({ type := "user", name := "bob", pred := "...", variant := plain },
-                { type := "doc", name := "d1", pred := "approver.0", variant := plain }),
-               ({ type := "user", name := "*", pred := "...", variant := wAny },
-                { type := "doc", name := "d1", pred := "approver.1", variant := plain }),
-               ({ type := "user", name := "*", pred := "...", variant := wAny },
-                { type := "doc", name := "d1", pred := "viewer", variant := plain }),
-               ({ type := "user", name := "bob", pred := "...", variant := plain },
-                { type := "doc", name := "d1", pred := "approver.2", variant := plain }),
-               ({ type := "user", name := "bob", pred := "...", variant := plain },
-                { type := "doc", name := "d1", pred := "banned", variant := plain })])
-        ("SUBJECT RESIDUE ROWS (A)",
-         some [({ type := "doc", name := "d1", pred := "approver", variant := plain },
-                "approver",
-                { stars := [("user", "...")],
-                  neg := [{ type := "user", name := "bob", predicate := "..." },
-                          { type := "user", name := "bob", predicate := "..." }],
-                  upos := [] })])
-        ("A vs B: (rows identical?, A-only edges, B-only edges)",
-         some (true,
-          [({ type := "user", name := "bob", pred := "...", variant := plain },
-            { type := "doc", name := "d1", pred := "approver.0", variant := plain })],
-          [({ type := "user", name := "bob", pred := "...", variant := plain },
-            { type := "doc", name := "d1", pred := "approver", variant := plain })]))
-        ("DRAINED? (prefix, subject-A, cascaded-C)", some (true, false, true))
-        ("PROBE",
-         some ("(A subject-leafrouted, B bare-preflip, C drained, D bridge-sabotage)",
-          { edges := 5, rows := 1, negTested := 2, negFree := true,  uposTested := 0, uposFree := true },
-          { edges := 5, rows := 1, negTested := 2, negFree := false, uposTested := 0, uposFree := true },
-          { edges := 5, rows := 1, negTested := 4, negFree := true,  uposTested := 0, uposFree := true },
-          { edges := 6, rows := 1, negTested := 2, negFree := false, uposTested := 0, uposFree := true }))
-        ("PROBE, PREFIX ORDER SWAPPED (A, B, C, D)"
-          -- identical 4-tuple of ProbeResults to the line above)
-
-    (The node-record printouts above are verbatim except that
-    `variant := Zanzibar.Variant.plain` / `.wAny` are abbreviated to `plain` / `wAny` for
-    width; nothing else is elided.)
-
-    **What the run does and does not license, in the order that matters:**
-    * ⚠ **NOT A PROOF, AND NOT "CONFIRMED" — D.2's lesson restated.** The instrument
-      evaluates the fuel-capped executable probe `GraphIndex/State.lean::GraphState.reach`
-      (`= reachB σ.edges (σ.nodes.length + 1)`), NOT `NReaches`, which is what
-      `Inv.negEdgeFree` is actually stated over. This is a measurement.
-    * **The positive control REPRODUCED THE KILL in the same run.** Leg B drives the
-      pre-flip bare write (`writeLoggedOne` on pred `approver`) over the SAME drained
-      prefix state and gives `negFree := false` at `negTested := 2`, while leg A gives
-      `negFree := true` at the same `negTested := 2` — and `A vs B: rows identical? = true`,
-      so those are the SAME two (row, `neg` member) pairs, not two different tests. An
-      instrument whose positive control had gone green would have been worthless.
-    * **NON-VACUITY, i.e. the 2026-08-08 trap did NOT recur.** `rows := 1` on every leg,
-      and the row is keyed at the BARE `doc:d1#approver` node — the key whose falling out
-      of the domain produced the vacuous green last time. The key domain is
-      routing-independent BY CONSTRUCTION (scope doc §9.1): objects from the tuple corpus
-      × `predNames S` × `predNames S` = 1 × 12 × 12 = 144 pairs, never derived from
-      `σ.nodes`, so the leaf-routing flip cannot move a key out of it.
-    * **Second instrument control (D):** adding a hypothetical
-      `doc:d1#approver.0 → doc:d1#approver` bridge edge to the subject state turns it RED
-      (`edges := 6, negFree := false`). The probe is REACHABILITY-sensitive, not merely
-      key-equality-sensitive — it is not green just because the write's target node
-      differs from the residue key.
-    * ⚠ `negTested` COUNTS PAIRS WITH MULTIPLICITY and the model's `neg` list carries
-      duplicates (`neg := [bob, bob]`), so today's 2 / 2 / 4 is NOT comparable one-for-one
-      with the 2026-08-08 run's 1 / 1 / 3 (different driver path: this run drives the
-      prefix through `Exec.graphRunOps`, one real cascade leg per op). What IS comparable
-      is that A and B tested the same pairs and disagreed only in the verdict.
-    * ⚠ **The subject state is deliberately NOT drained** (`(prefix, A, C) = (true, false,
-      true)`). It is the intermediate post-write pre-cascade state, which is the point of a
-      write-leg probe, but it is therefore not a certified `ReachedBy` + `Drained` chain
-      state and no headline theorem is instantiated at it.
-    * `uposTested := 0` on every leg — a re-observation of the 2026-08-08 structural
-      immunity above, NOT new evidence. The run says nothing about the `upos` clause.
-    * **SCOPE:** ONE schema shape (`LeafWitness.Sw`), one object, two prefix orders, the
-      WRITE leg only. Nothing about `removeLoggedRules`, about `negStarCovered` /
-      `edgesClosed` / `acyclic` / `uposNegDisjoint`, about Python, or about any state
-      reachable by a longer op stream. -/
-structure W4NarrowT2a (S : Schema) (T : Store) : Prop where
-  computedOnly : ∀ dt R e, S.lookup (dt, R) = some e →
-    isDerived S (dt, R) = true → ComputedOnly e
-  storeValid : StoreValidRules S T
 
 /-! ## The bundles sit inside the spec's accepted scope -/
 
@@ -767,35 +592,24 @@ theorem no_ghost_grant {S : Schema} {T' : Store} {σ' : GraphState} (q : Query)
     it quantified over a junk-admitting closure); the honest restatement is over
     `ReachedBy`. It is `reachedByW3d2E_inv` with the bundles unpacked.
 
-    **⚠ Leg-5 (2026-08-05): T2a takes a THIRD bundle that T2b does not.** Before the
-    E-chain widening the hypothesis split was the same as `graph_correct`'s. It is not
-    any more: `W4NarrowT2a` re-imposes schema-wide `ComputedOnly` and the narrow
-    `StoreValidRules`, so **`graph_reached_inv` is still vacuous on Direct-arm derived
-    stores while `graph_correct` no longer is**
-    (`W4WitnessDirect.outside_narrow_t2a` machine-checks the store fails this bundle).
-    Making the asymmetry a visible extra argument, rather than leaving it buried in a
-    widened bundle, was the deliberate output of that leg.
-
-    **★ 2026-09-05 — what is owed here is PROOF WORK, and this docstring used to say the
-    opposite.** It read: *"That is not a proof gap that more effort would close — probe D.3
-    machine-checked `Inv.negEdgeFree` FALSE on the `_d` fragment; read `W4NarrowT2a`'s
-    docstring for … what design decision is owed."* Leg 7's flip has now LANDED
-    (`Cascade.lean::GraphState.writeLoggedRules` folds
-    `rewriteClosureL S (rawWriteTuples S t)`; extractor projection P6 deleted), so the
-    write no longer lands on the bare public R-node and D.3's mechanism is gone. **`hN` is
-    still taken and `outside_narrow_t2a` still holds**, so the asymmetry survives its own
-    justification. The two owed steps are proof steps: prove `Inv.negEdgeFree` on the `_d`
-    fragment for the leaf-routed write leg, then restate this theorem without `hN`. A
-    post-flip re-run of D.3's probe measures the subject leg `negFree := true` with its
-    pre-flip positive control still `false` in the same run over identical residue rows —
-    a MEASUREMENT over the fuel-capped `GraphState.reach`, not a proof of the
-    `NReaches`-stated clause. Literal output and every caveat: `W4NarrowT2a`'s docstring. -/
+    **★ `P5` (2026-09-23): T2a takes the SAME two bundles as `graph_correct`.** From leg 5
+    (2026-08-05) to `P5` it also took `hN : W4NarrowT2a S T` (schema-wide `ComputedOnly` +
+    narrow `StoreValidRules`), which made it VACUOUS on every Direct-arm derived store —
+    `can_view: [user] but not blocked` included — while `graph_correct` was not. Its
+    original justification (probe D.3: a Direct-arm write lands on the public R-node that
+    carries the `neg` row, so `negEdgeFree` is FALSE) was removed by leg 7's leaf-routing
+    flip on 2026-09-05; `P5` then re-ran the T2a chain on the `_d` fragment and deleted
+    the bundle. Non-vacuity: `W4WitnessDirect.reached_inv_applies` (the Direct-arm store)
+    and `Exec.lean::P5Witness.leafRouted_inv_preflip_not` (D.3's own store, where the
+    `neg` row is non-empty and the pre-flip write provably breaks `Inv`). -/
 theorem graph_reached_inv {S : Schema} {T : Store} {σ : GraphState}
-    (hA : GraphAdmission S T) (hF : W4Fragment S T) (hN : W4NarrowT2a S T)
+    (hA : GraphAdmission S T) (hF : W4Fragment S T)
     (h : ReachedBy σ S T) :
     Inv S σ :=
   reachedByW3d2E_inv h hA.wf hA.ttuDirect hA.nodup hA.ranked hA.matchDecl
-    hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hA.leafScope hA.computedRefsNotLeaf hA.noBridgedDerived hN.computedOnly hF.twoStrata hF.wsBare hN.storeValid hF.bareStar
+    hA.strat hA.ttuNotLeaf hA.directRestrNotLeaf hA.leafScope hA.computedRefsNotLeaf
+    hA.noBridgedDerived hF.computedOrDirect hF.directArmsBare hF.directArmsConcrete
+    hF.computedOnlyOperands hF.twoStrata hF.wsBare hA.storeValid hF.bareStar
     hF.ttuStarFree hF.term
 
 /-! ## The W2 subsumption — untainted schemas sit inside the full scope
@@ -844,8 +658,8 @@ theorem drained_of_untainted {S : Schema} (hUT : UntaintedSchema S)
     This is the machine-checked form of "nothing that held before stopped holding" —
     the leg widened the bundle rather than trading one scope for another. It is also
     what keeps `W4Witness`/`W4WitnessUnion` (both `ComputedOnly` schemas) inhabiting
-    the new bundle without re-deciding anything. **The T2a half is NOT subsumed**;
-    see `W4NarrowT2a`. -/
+    the new bundle without re-deciding anything. (Until `P5`, 2026-09-23, T2a alone also
+    took a `W4NarrowT2a` bundle this did not subsume; that bundle is deleted.) -/
 theorem w4Fragment_of_computedOnly {S : Schema} {T : Store}
     (hCO : ∀ dt R e, S.lookup (dt, R) = some e →
       isDerived S (dt, R) = true → ComputedOnly e)
@@ -884,20 +698,6 @@ theorem w4Fragment_of_untainted {S : Schema} {T : Store} (hUT : UntaintedSchema 
     (fun dt R _ _ hder => absurd hder (by simp [isDerived_untainted hUT]))
     hWS hBS hTS
     (fun dt R hder => absurd hder (by simp [isDerived_untainted hUT]))
-
-/-- On an untainted schema the T2a narrow bundle is free too: the `ComputedOnly`
-    carry is vacuous, and `StoreValidRulesD` collapses to `StoreValidRules` because
-    every stored tuple lands on an untainted key (the widened form's second disjunct
-    needs `isDerived = true`). So the leg-5 asymmetry costs untainted schemas
-    nothing — it is a purely derived-side carry. -/
-theorem w4NarrowT2a_of_untainted {S : Schema} {T : Store} (hUT : UntaintedSchema S)
-    (hSVD : StoreValidRulesD S T) : W4NarrowT2a S T where
-  computedOnly := fun dt R _ _ hder => absurd hder (by simp [isDerived_untainted hUT])
-  storeValid := by
-    intro t ht
-    rcases hSVD t ht with ⟨_, h⟩ | ⟨hder, _⟩
-    · exact h
-    · exact absurd hder (by simp [isDerived_untainted hUT])
 
 end Zanzibar
 
@@ -1636,15 +1436,12 @@ because the intermediate states are easy to confuse:
   THIS pair by `w3d2E_correct_applies`); leg 5 rebased `W4Fragment` and
   `GraphAdmission` themselves, so the `_d` chain no longer stands BESIDE the final
   theorems — it IS them.
-* **T2a is the exception and stays one.** `graph_reached_inv` carries a third
-  bundle `W4NarrowT2a`, and `outside_narrow_t2a` below machine-checks that `Td`
-  fails it. ★ 2026-09-05: this bullet used to add "Probe D.3 proved `Inv.negEdgeFree`
-  FALSE on the `_d` fragment; that is a P6 leaf-family MODELLING limit, not a Python
-  bug" — RETIRED. Leg 7's flip landed, `writeLoggedRules` folds
-  `rewriteClosureL S (rawWriteTuples S t)` and projection P6 is deleted, so the write
-  no longer lands on the bare public R-node. The bundle is still taken, so the
-  exception stands with PROOF WORK owed (`Inv.negEdgeFree` on the `_d` fragment for
-  the leaf-routed write leg) rather than a design decision — see `W4NarrowT2a`.
+* **T2a was the exception until `P5` (2026-09-23), and is not any more.** From leg 5 to
+  `P5` `graph_reached_inv` carried a third bundle `W4NarrowT2a`, and a theorem here
+  (`outside_narrow_t2a`) machine-checked that `Td` failed it. Leg 7's flip (2026-09-05)
+  removed the mechanism that made `Inv.negEdgeFree` false on the `_d` fragment; `P5`
+  re-ran the T2a chain on that fragment and deleted both. `reached_inv_applies` below is
+  the replacement: the T2a headline instantiated at this pair.
 
 The declarations below therefore come in two layers. The `_d`-chain layer inhabits
 the hypothesis bundle of the C-chain T2b `graph_correct_w3d2_d`
@@ -1652,7 +1449,7 @@ the hypothesis bundle of the C-chain T2b `graph_correct_w3d2_d`
 side, with `StoreValidRulesD` in place of `storeValid`), `fragment` (the `_d`
 fragment carries), `correct_applies`, `coverage_applies`, `toC_applies`,
 `w3d2E_correct_applies`. The leg-5 layer (`admission` / `w4fragment` /
-`final_applies` / `outside_narrow_t2a`) inhabits the HEADLINE bundles. Non-vacuity
+`final_applies` / `reached_inv_applies`) inhabits the HEADLINE bundles. Non-vacuity
 of the chain itself is operational: the Exec driver reaches drained states over
 exactly this schema (attack-run 2026-07-20e: the 4-tuple corpus store drains with
 `check = sem` on the full truth table). -/
@@ -2358,8 +2155,8 @@ theorem w4fragment : W4Fragment Sd Td where
     repo that distinguishes "T2b covers the canonical boolean shape" from "T2b is
     silent there".
 
-    ⚠ **T2a is a different story and stays one.** `graph_reached_inv` also takes
-    `W4NarrowT2a`, and `outside_narrow_t2a` below machine-checks that `Td` fails it. -/
+    T2a was a different story until `P5` (2026-09-23): it took an extra bundle `Td`
+    failed. It now takes these same two bundles — `reached_inv_applies` below. -/
 theorem final_applies {σ : GraphState} (q : Query)
     (h : ReachedBy σ Sd Td) (hq : Drained Sd σ)
     (hqs : q.subject.name = STAR → q.subject.predicate = BARE)
@@ -2386,26 +2183,21 @@ theorem equivalence_applies {σ : GraphState} (q : Query)
     SetEngineModel.check Sd Td q = GraphModel.checkPublic σ q :=
   backend_equivalence q admission w4fragment h hq hqs hqo
 
-/-- **The T2a asymmetry is machine-checked, not asserted.** `W4NarrowT2a` re-imposes the
-    narrow `StoreValidRules`, which `outside_old_admission` refutes at `Td` — so
-    `graph_reached_inv` remains VACUOUS on the Direct-arm store that `final_applies`
-    above brings into `graph_correct`'s scope.
+/-- **★ T2a (`graph_reached_inv`) APPLIES at the Direct-arm store (`P5`, 2026-09-23).**
+    Replaces `outside_narrow_t2a : ¬ W4NarrowT2a Sd Td`, which from leg 5 until `P5`
+    machine-checked the opposite: that T2a's extra bundle failed here, so T2a said
+    nothing about `can_view: [user] but not blocked` while `final_applies` above did.
+    Same two bundles as `final_applies`, and nothing else.
 
-    This is the arc's expected honest end state (`echain-widening-plan-2026-07-28.md`
-    §F: "T2b widened and T2a explicitly not"), and it is a **declared** carry with a
-    counterexample attached rather than a silent gap.
-
-    **★ 2026-09-05 — this refutation SURVIVED leg 7's flip, and that is the finding.**
-    The paragraph above used to end "what is owed before leg 7 is a design decision, not
-    proof effort". Leg 7 landed: `Cascade.lean::GraphState.writeLoggedRules` folds
-    `rewriteClosureL S (rawWriteTuples S t)` and extractor projection P6 is deleted. T2a
-    did NOT widen with it — `graph_reached_inv` still takes `W4NarrowT2a`, and this
-    theorem is unchanged because `W4NarrowT2a.storeValid` is still the narrow
-    `StoreValidRules` that `outside_old_admission` refutes at `Td`. So what is owed is now
-    PROOF WORK — prove `Inv.negEdgeFree` on the `_d` fragment for the leaf-routed write
-    leg, then restate `graph_reached_inv` without the bundle — not a design decision. -/
-theorem outside_narrow_t2a : ¬ W4NarrowT2a Sd Td :=
-  fun hN => outside_old_admission hN.storeValid
+    **What this witness does NOT show, measured:** `Inv.negEdgeFree` is exercised at no
+    state over `Sd`. `Sd` declares no wildcard shape, so every residue row has
+    `stars = []` and therefore `neg = []` — probe
+    `formal/probes/p5_negedgefree_sd_td_2026-09-23.lean` reads `negTested := 0` on every
+    leg at `Td4`, the pre-flip control included. This is the SCOPE witness (the theorem is
+    no longer vacuous on this store's hypotheses); the CONTENT witness, at D.3's own store
+    where the clause bites, is `Exec.lean::P5Witness.leafRouted_inv_preflip_not`. -/
+theorem reached_inv_applies {σ : GraphState} (h : ReachedBy σ Sd Td) : Inv Sd σ :=
+  graph_reached_inv admission w4fragment h
 
 /-! ### Leg 6 — the bundles at the REAL conformance store, not the minimal one
 
@@ -2521,8 +2313,8 @@ theorem w4fragment4 : W4Fragment Sd Td4 where
     `lean-graph != spec` disagreement there would now contradict a machine-checked
     theorem, which is the whole meaning of that classification.
 
-    Note what is still NOT covered, so the reclassification is not over-read:
-    `graph_reached_inv` (T2a) — `outside_narrow_t2a` — and the Lean REMOVE gate, whose
+    Note what is still NOT covered, so the reclassification is not over-read: the Lean
+    REMOVE gate, whose
     `removeGateB` decides plain `storeValidRulesB`; `direct_arm_exclusion` therefore
     stays in `test_conformance_remove_graph._REMOVE_EXCLUDED`, now for that reason
     alone rather than for the admission reason recorded there before leg 5. -/
@@ -2532,6 +2324,13 @@ theorem final_applies4 {σ : GraphState} (q : Query)
     (hqo : q.object.name ≠ STAR) :
     GraphModel.checkPublic σ q = sem Sd Td4 q :=
   graph_correct_public q admission4 w4fragment4 h hq hqs hqo
+
+/-- **T2a at the `direct_arm_exclusion` corpus store** (`P5`, 2026-09-23) — the leg-6
+    counterpart of `reached_inv_applies`, for the same reason `final_applies4` exists:
+    the bundles are store-indexed, so the corpus the conformance driver runs needs its
+    own instance. Same scope caveat: `neg = []` at every state over `Sd`. -/
+theorem reached_inv_applies4 {σ : GraphState} (h : ReachedBy σ Sd Td4) : Inv Sd σ :=
+  graph_reached_inv admission4 w4fragment4 h
 
 end W4WitnessDirect
 

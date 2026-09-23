@@ -1165,7 +1165,6 @@ namespace Zanzibar
 #print axioms drained_of_untainted
 #print axioms w4Fragment_of_computedOnly
 #print axioms w4Fragment_of_untainted
-#print axioms w4NarrowT2a_of_untainted
 #print axioms W4Witness.accepts
 #print axioms W4Witness.fragment
 #print axioms W4Witness.within_scope
@@ -1259,7 +1258,12 @@ namespace Zanzibar
 -- `reachedByW3d2E_edgeHygienic` lifts it to the `Inv` clauses' ¬NReaches form via
 -- the reach collapse, and **`reachedByW3d2E_inv`** is the full 8-clause `Inv` at
 -- every state. **`graph_reached_inv`** (FullScope.lean) is the final T2a restatement
--- over `ReachedBy` with the provenance-split bundles. Standard axioms only:
+-- over `ReachedBy` with the provenance-split bundles. ★ `P5` (2026-09-23): the whole
+-- chain runs on the Direct-arm `_d` fragment (write/remove legs via
+-- `writeLeg_derived_inedges_eq_d` / `removeLeg_derived_inedges_eq_d`, whose node-inequality
+-- premise is `objNode_ne_derived_of_untainted`), so `graph_reached_inv` takes only
+-- `GraphAdmission` + `W4Fragment`. Standard axioms only:
+#print axioms objNode_ne_derived_of_untainted
 #print axioms edgeHyg1_applyLoggedR
 #print axioms edgeHyg1_reconcileJobsLR
 #print axioms edgeHyg1_runCascade2
@@ -1748,20 +1752,14 @@ namespace Zanzibar
 -- .final_applies` instantiates the unsuffixed `graph_correct` at exactly that store.
 -- `w4Fragment_of_computedOnly` is the machine-checked "nothing that held before stopped
 -- holding" (the pre-leg-5 six fields imply all ten).
--- ⚠ T2a is NOT widened and now says so in its own type: `graph_reached_inv` gained a third
--- bundle `W4NarrowT2a` (schema-wide `ComputedOnly` + narrow `StoreValidRules`), and
--- `outside_narrow_t2a` machine-checks `Td` fails it. Probe D.3 (2026-07-28) proved
--- `Inv.negEdgeFree` FALSE on the `_d` fragment, which was read as a P6 leaf-family
--- MODELLING limit rather than a Python bug, with a design decision owed before leg 7.
--- ★ 2026-09-05 — THAT JUSTIFICATION IS RETIRED AND THE CARRY IS NOT. Leg 7's flip landed:
--- `Cascade.lean::GraphState.writeLoggedRules` folds `rewriteClosureL S (rawWriteTuples S t)`
--- and extractor projection P6 is deleted, so the write lands on the leaf family and never on
--- the bare public R-node — D.3's mechanism is gone. T2a still did NOT widen:
--- `graph_reached_inv` still takes `W4NarrowT2a` and `outside_narrow_t2a` (pinned below) still
--- holds. What is owed is now PROOF WORK — prove `Inv.negEdgeFree` on the `_d` fragment for
--- the leaf-routed write leg, then restate `graph_reached_inv` without the bundle — NOT a
--- design decision. Post-flip probe output, with its positive control and every caveat, is
--- transcribed in `W4NarrowT2a`'s docstring.
+-- T2a history: from leg 5 until `P5` (2026-09-23) `graph_reached_inv` took a third bundle
+-- `W4NarrowT2a` (schema-wide `ComputedOnly` + narrow `StoreValidRules`), and a pinned
+-- `outside_narrow_t2a` machine-checked that `Td` failed it. Probe D.3 (2026-07-28) had shown
+-- `Inv.negEdgeFree` FALSE on the `_d` fragment; leg 7's flip (2026-09-05) removed that
+-- mechanism; `P5` re-ran the T2a chain on the `_d` fragment and DELETED both declarations —
+-- the two audited names removed (`W4WitnessDirect.outside_narrow_t2a`, `w4NarrowT2a_of_untainted`)
+-- go because the structure they concluded about no longer exists; the replacement is
+-- `reached_inv_applies` below.
 -- ★ CONTROLLED (house rule 2; full observed output in `final_applies`'s docstring): the
 -- sabotage is the plausible HALF-DONE leg — widen `W4Fragment` but leave
 -- `GraphAdmission.storeValid` narrow and convert with
@@ -1773,7 +1771,22 @@ namespace Zanzibar
 #print axioms W4WitnessDirect.admission
 #print axioms W4WitnessDirect.w4fragment
 #print axioms W4WitnessDirect.final_applies
-#print axioms W4WitnessDirect.outside_narrow_t2a
+-- ★ `P5` (2026-09-23) — T2a's witnesses. SCOPE: `reached_inv_applies{,4}` instantiate
+-- `graph_reached_inv` at the Direct-arm store and the corpus store (where `neg = []` at
+-- every state, so `negEdgeFree` is not exercised). CONTENT: `P5Witness` (Exec.lean), at
+-- D.3's own store `LeafWitness.Sw` — from one drained prefix state, the leaf-routed write
+-- reaches a chain state satisfying `Inv` with `bob` in the `approver` row's `neg`, and the
+-- pre-flip bare write from the same state violates `Inv`. Controlled 2026-09-23 (literal
+-- output in `docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`): dropping the `user:*`
+-- grant, or claiming the routed write lands `bob → approver`, each reddens
+-- `P5Witness.prefix_facts`; weakening `Inv.negEdgeFree` itself dies upstream at
+-- `State.lean::inv_putResidue`, so it never reaches the witness. Standard axioms only:
+#print axioms W4WitnessDirect.reached_inv_applies
+#print axioms W4WitnessDirect.reached_inv_applies4
+#print axioms P5Witness.admission
+#print axioms P5Witness.w4fragment
+#print axioms P5Witness.prefix_facts
+#print axioms P5Witness.leafRouted_inv_preflip_not
 -- ★ 2026-09-06 — the headline `backend_equivalence` (T3) INSTANTIATED, for the first
 -- time. T3 used to carry `(hValid : AllValid T)` over an `opaque` `ValidIdent`, which no
 -- proof used and no concrete store could discharge, so every witness above stopped at T2b

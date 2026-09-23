@@ -30,6 +30,63 @@ from here.
 
 ---
 
+## 2026-09-23b — `P5` closed: T2a WIDENED, `W4NarrowT2a` deleted, and the row's own trap was a non-issue once measured
+
+rows: P5 (closed), P14 (comment, → `NOW`, brief).
+
+`task lint: clean (13 checks, 217 task file(s) parsed), 29 warning(s)`
+
+`read: board only`
+
+**User-assigned: "get that done" on `P5`.** `FullScope.lean::graph_reached_inv` (T2a) now takes
+exactly `GraphAdmission` + `W4Fragment` — the same two bundles as every other headline
+theorem — so it is no longer vacuous on `can_view: [user] but not blocked`. `W4NarrowT2a`,
+`w4NarrowT2a_of_untainted` and `W4WitnessDirect.outside_narrow_t2a` are deleted. Map, probe
+output and sabotage evidence:
+[`docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`](../../docs/p5-negedgefree-under-leaf-routing-2026-09-23.md)
+(FROZEN).
+
+**Step 0 answered the row's trap, and the answer was that there was nothing to reconcile.**
+The row said the "obstacle is gone" probe ran at `Sw` while the refutation sat at `Sd`/`Td`.
+Re-aimed at `Sd`/`Td4` (`formal/probes/p5_negedgefree_sd_td_2026-09-23.lean`), the instrument
+tests **zero** `neg` members on every leg — the pre-flip control included — because `Sd` has no
+wildcard shape. `outside_narrow_t2a` refuted the BUNDLE (its narrow `storeValid` field), never
+the invariant. The consequence that mattered: a positive witness at `Sd`/`Td` would pass under
+a sabotage of `negEdgeFree`, so the discriminating witness went to `Sw` instead.
+
+**The proof was plumbing.** Every consumer of the narrow pair in the T2a chain already had a
+`_d` twin except `CascadeStrataInv.lean::reconcileStarsKeyDR_row_edge_consistent`, which needed
+only the existing `reconcileStarsKeyDR_edge_char_d`. Widened in place (the chain's only
+consumer was `graph_reached_inv`). The P4-session estimate undercounted by five sites — all
+twinned, so the `M` sizing held.
+
+**Witnesses:** `W4WitnessDirect.reached_inv_applies{,4}` (scope; the docstring says `neg = []`
+there) and `GraphIndex/Exec.lean::P5Witness.leafRouted_inv_preflip_not` (content — from one
+drained prefix state at `Sw`, the leaf-routed write reaches a chain state satisfying `Inv`
+with `bob` in the `neg` row, and the pre-flip bare write provably violates `Inv`). M1/M2 redden
+`P5Witness.prefix_facts`; M3 (weaken `Inv.negEdgeFree`) dies upstream at
+`State.lean::inv_putResidue` and is recorded as an instrument limit, not evidence.
+
+**Pins moved deliberately:** `headline_statements.txt` (T2a loses `hN`; four witnesses added),
+`headline_definitions.txt`, `audited_theorems.txt` (two names removed — justified in
+`formal/history/PROOF_STATUS.md` 2026-09-23). Living formal docs swept by a delegated agent,
+diff reviewed first-hand.
+
+**`P14` is now `NOW` and may close without a proof:** the `_d` reach-collapse family it names
+(`reachedByW3d2_reach_collapse_root_d` and friends) already exists and T2a now rests on it.
+Its first action is to state what it still owes beyond those lemmas.
+
+**Gate note, first pass RED.** All four `tests` tiles failed, one `test_tasktool.py::test_sabotage_live_*`
+each, on lint check 12: this entry's banner line carried `U+21D2`/`U+00AC`, which `board` cannot
+fold, and the `task.py lint` receipt above had been taken BEFORE the banner was written. Fixed to
+ASCII, both lints re-run clean, and all ten phases re-run on the fixed tree. Rhythm step 0 means
+what it says: lint LAST, after the note. The second pass then went RED at `lean` (audit build:
+`Unknown constant w4NarrowT2a_of_untainted`) - that helper WAS audited, a case-sensitive grep had
+missed the lowercase `w4`, and a whole-package `lake build` does not build `Audit`. Removed, pin
+regenerated (two names removed, not one; every record corrected), full gate re-run a third time.
+
+---
+
 ## 2026-09-23 — `P4` executed: its premise is FALSE, six witness pins landed, and `P5`/`P14` never depended on it
 
 rows: P4 (comment, → `LATER`, re-scoped), P5 (dep removed, → `NOW`), P14 (dep removed).

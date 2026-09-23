@@ -414,12 +414,20 @@ other-key fixedness walk, and the write legs) is the next-session item. -/
     `neg`/`upos` member holds an edge into the key. Hypotheses are the
     `reconcileStarsKeyDR_edge_char` context plus the two candidate-discipline
     facts (`hnc` : residue candidates are audited; `hup` : upos candidates are
-    userset-shaped) and pre-pass source-bareness (`hsb`). -/
+    userset-shaped) and pre-pass source-bareness (`hsb`).
+
+    **Widened IN PLACE by `P5` (2026-09-23)**: the def at the key is `ComputedOrDirect` +
+    `DirectArmsBare` (it was `ComputedOnly`), because that is all the edge
+    characterisation it consumes needs (`reconcileStarsKeyDR_edge_char_d`). It was the
+    only `ComputedOnly` binder in the T2a chain with no widened twin; its sole consumer
+    is `CascadeStrataEdge.lean::edgeHyg1_applyLoggedR`, so no `_d` twin was minted (map:
+    `docs/p5-negedgefree-under-leaf-routing-2026-09-23.md` § 2). -/
 theorem reconcileStarsKeyDR_row_edge_consistent {S : Schema} {σ : GraphState}
     (T : Store) (dt on R : String) (e : Expr) (shapes : List Shape)
     (cands negCands uposCands : List SubjectRef)
     (hσS : σ.schema = S) (hRne : R ≠ BARE) (honStar : on ≠ STAR)
-    (hder : isDerived S (dt, R) = true) (hco : ComputedOnly e)
+    (hder : isDerived S (dt, R) = true)
+    (hcd : ComputedOrDirect e) (hba : DirectArmsBare e)
     (hrne : ∀ r' ∈ computedRefs e, r' ≠ R)
     (hcb : ∀ c ∈ cands, c.predicate = BARE)
     (hnc : ∀ c ∈ negCands, c ∈ cands)
@@ -456,16 +464,16 @@ theorem reconcileStarsKeyDR_row_edge_consistent {S : Schema} {σ : GraphState}
       cases hc : σ.checkFnR T n dt on R e with
       | false => rfl
       | true => rw [hc] at this; exact absurd this (by decide)
-    rcases (reconcileStarsKeyDR_edge_char T dt on R e shapes cands negCands
-        uposCands hσS hRne honStar hder hco hrne hcb hRns hcl n).mp hedge with
+    rcases (reconcileStarsKeyDR_edge_char_d T dt on R e shapes cands negCands
+        uposCands hσS hRne honStar hder hcd hba hrne hcb hRns hcl n).mp hedge with
       ⟨_, hg⟩ | ⟨hnotc, _⟩
     · rw [hguardF] at hg
       simp at hg
     · exact hnotc (hnc n hnmem)
   · intro n hn hedge
     obtain ⟨hnmem, _⟩ := List.mem_filter.mp hn
-    rcases (reconcileStarsKeyDR_edge_char T dt on R e shapes cands negCands
-        uposCands hσS hRne honStar hder hco hrne hcb hRns hcl n).mp hedge with
+    rcases (reconcileStarsKeyDR_edge_char_d T dt on R e shapes cands negCands
+        uposCands hσS hRne honStar hder hcd hba hrne hcb hRns hcl n).mp hedge with
       ⟨hc, _⟩ | ⟨_, hold⟩
     · exact hup n hnmem (hcb n hc)
     · have := hsb (subjNode n) hold

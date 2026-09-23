@@ -1,8 +1,8 @@
 ---
 id: P14
 title: leg 7 step 5, reach-collapse half ONLY -- classification half landed with P3 (2026-09-05b)
-brief: P3 closed 2026-09-05b: the absorbed classification half landed with it; only the reach-collapse half remains
-pri: LATER
+brief: NOW 2026-09-23b: _d reach-collapse lemmas already exist; first state what is still owed, else close as absorbed
+pri: NOW
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 5984b012cc7a
 created: 2026-08-20b
-moved: 2026-09-23
-updated: 2026-09-23
+moved: 2026-09-23b
+updated: 2026-09-23b
 closed:
 ---
 
@@ -45,3 +45,7 @@ Board cell appended 2026-09-05b: 'P3 closed 2026-09-05b -- the absorbed half lan
 ### 2026-09-23
 
 The dep on P4 is REMOVED this session, same measurement as P5s 2026-09-23 note: the leaf-probe <-> directLeaf bridge touches neither of the files this items reach-collapse half lives in (probeNonDerived and directLeaf occur ZERO times in CascadeStrataEdge.lean and CascadeStrataInv.lean). P4 -> P14 was a plan ordering from scope doc section 7 step 5, not a proof dependency. Still owed here, unchanged and still un-resized against the landed tree: re-partition DerNode/UntaintedShadow and re-prove the reach-collapse family. Note before sizing: much of the leaf-side classification already landed with the 2026-09-05 flip (CascadeStable.lean carries LeafNode, bare_is_leafPred and rewriteClosureL_extras_leafNode today), so the 2026-08-05 scope estimate is an upper bound, not a measurement. Map: docs/p4-leaf-probe-bridge-2026-09-23.md.
+
+### 2026-09-23b
+
+2026-09-23b (P5 closed): P5 is the other half of goal step 2 and landed WITHOUT needing this item, so this is now the only open formal-milestone row -- promoted to NOW. A sizing fact P5 produced, READ first-hand: the T2a chain now consumes CascadeStrataSettle.lean::reachedByW3d2_reach_collapse_root_d, ::reachedByW3d2_Rnode_source_bare_d, ::reachedByW3d2_bareNode_no_inedge_d and ::reachedByW3d2_Rnode_source_name_ne_star_d -- the reach-collapse family ALREADY exists on the Direct-arm (_d) fragment over the landed leaf-routed write leg, and graph_correct (via reachedByW3d2E_toC_d) and graph_reached_inv both rest on it today. So before re-proving anything, the first action here is to say WHAT the reach-collapse half still owes that those _d lemmas do not already give: re-read scope doc formal/history/leaf-family-split-scope-2026-08-05.md sec 5 + sec 7 step 5 against them, and if the answer is nothing, close this as absorbed (the way P3 absorbed the classification half) with the lemma list as evidence. Map of what P5 used: docs/p5-negedgefree-under-leaf-routing-2026-09-23.md sec 2.

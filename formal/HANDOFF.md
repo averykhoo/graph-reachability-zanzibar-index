@@ -27,8 +27,8 @@ the stratified-Datalog¬ perfect model `sem` — hence are equivalent — with t
 implementations pinned to the Lean models by the conformance harness. The honest claim
 never rounds up to "the code is formally verified" (plan §7).
 
-**The caveat every session used to carry is now HALF RETIRED — carry the correct half**
-(`FINAL_REVIEW.md` §3.0, `ARCHITECTURE.md` §6.0). It read: *the final graph theorems
+**The caveat every session used to carry is now RETIRED — for T2b on 2026-08-05, for T2a
+on 2026-09-23** (`FINAL_REVIEW.md` §3.0, `ARCHITECTURE.md` §6.0). It read: *the final graph theorems
 (`graph_correct`, `graph_reached_inv`, `Exec.graphRun_check_eq_sem`, and everything routed
 through them) are **VACUOUS — not merely narrow — on any store written through the
 `Direct` arm of a derived def**, i.e. on `can_view: [user] but not blocked`, the canonical
@@ -46,19 +46,19 @@ now the proof that the widening was contentful rather than a relabeling, and
 `w4Fragment_of_computedOnly` proves the pre-leg-5 six fields imply all ten — nothing that
 held before stopped holding.
 
-**⚠ T2a (`graph_reached_inv`) did NOT widen, and this is the half to keep carrying.** It
-now takes a third bundle `W4NarrowT2a` (schema-wide `ComputedOnly` + the narrow
-`StoreValidRules`), and `W4WitnessDirect.outside_narrow_t2a` machine-checks that the
-Direct-arm store fails it — so T2a **remains vacuous exactly where T2b no longer is.**
-Leg 7's flip (2026-09-05) retired this carry's justification — a P6 leaf-family modelling
-limit, evidenced by Leg-0 probe D.3's `Inv.negEdgeFree`-FALSE result — without retiring the
-carry: the model now routes a Direct-arm write onto the leaf family exactly as Python
-always did, so D.3's mechanism is gone, yet `graph_reached_inv` still takes `W4NarrowT2a`
-and `outside_narrow_t2a` still holds. Python was never implicated. What is owed is proof
-work, not a design decision: (1) prove `Inv.negEdgeFree` on the `_d` fragment for the
-leaf-routed write leg, (2) restate `graph_reached_inv` without the bundle. Post-flip probe
-output and every caveat on it: `FullScope.lean::W4NarrowT2a`'s docstring and
-`history/PROOF_STATUS.md` 2026-09-05b §9.5.
+**T2a (`graph_reached_inv`) caught up on 2026-09-23 — `P5`, DONE.** From leg 5 until then
+it took a third bundle `W4NarrowT2a` that the Direct-arm store provably failed, so T2a stayed
+vacuous exactly where T2b no longer was. That bundle, `outside_narrow_t2a` and
+`w4NarrowT2a_of_untainted` are deleted; `graph_reached_inv` now takes `GraphAdmission` ∧
+`W4Fragment` only, like every other headline theorem. Leg 7's flip (2026-09-05) had already
+removed probe D.3's mechanism; `P5` did the owed proof work, widening the T2a chain
+(`CascadeStrataEdge.lean`'s `edgeHyg1_*` → `reachedByW3d2E_inv`, and
+`CascadeStrataInv.lean::reconcileStarsKeyDR_row_edge_consistent`) in place to the `_d`
+fragment by swapping in the existing `_d` lemmas. Witnesses:
+`W4WitnessDirect.reached_inv_applies`/`reached_inv_applies4` (scope — `negEdgeFree` is not
+exercised at `Sd`) and `Exec.lean::P5Witness.leafRouted_inv_preflip_not` +
+`P5Witness.prefix_facts` (content, at D.3's own store `LeafWitness.Sw`). Map and record:
+[`docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`](../docs/p5-negedgefree-under-leaf-routing-2026-09-23.md). What comes next is ranked in the task tree, not here.
 
 **The design decision that was owed here was made 2026-08-05 — option (c), model the leaf
 family and retire P6 — and its work landed 2026-09-05.** The deliberation, the two rejected
@@ -462,8 +462,9 @@ one entry per held EDGE — the doubling). Post-fix `1…5` in 0.1 s, answers un
 `derived_arm_multiplicity.json` regenerated after a control run, `_MIN_LEDGER_STACKED`
 19 → 18, definition pin 250/250 after its control. `CORRESPONDENCE.md` §7.2 item 5c; item 6
 stays open, residual `+1` per reconcile. Record: `history/PROOF_STATUS.md` 2026-09-05b §10.
-Owed next: nothing on the flip itself. The T2a/`negEdgeFree` re-read is done and T2a did
-not widen — see the caveat at the top of this file and the scope carry below.
+Owed next: nothing on the flip itself. The T2a/`negEdgeFree` re-read is done; T2a did not
+widen with the flip, and caught up on 2026-09-23 (`P5`) — see the T2a note at the top of
+this file.
 
 **In flight — `ttuStarFree` (tree rows `P6`, `P7`).** Part (i) landed and is inert. ⚠ **NOT
 optional:** without the clause `graph_correct`/`backend_equivalence` are machine-checked FALSE
@@ -486,26 +487,11 @@ ten, and the one narrowing accepted on that ground (`P20`) is the exception. Clo
 seven is repo board row `DW-1`; making the classification measured rather than argued needs
 a fourth `zcli` mode, row `P21`.
 
-**The one live scope carry.** T2a (`graph_reached_inv`) did not widen with T2b: it takes the
-extra `W4NarrowT2a` bundle, and a Direct-arm store provably fails it, so T2a stays vacuous
-exactly where T2b (since 2026-08-05) no longer is. Leg 7's flip retired the justification,
-not the bundle; what is owed is proof work, not a design decision. Full statement, the two
-obligations and the post-flip probe: the T2a caveat at the top of this file.
-⚠ **2026-09-23 — three corrections to that caveat, all measured.** (i) Its `State.lean:706`
-cite for `Inv.negEdgeFree` is stale by 11 lines (`:717-730`, field at `:724-725`), as is the
-same cite in `W4NarrowT2a`'s docstring and on row `P5`; (ii) that docstring's "hypothesis in
-exactly four places" undercounts — ten `Inv`-preservation declarations exist today, four of
-them on the leaf/bridged write path and all gated on `ResidueEmpty`, so they say nothing
-about the hard `negEdgeFree` case; (iii) `graph_reached_inv` has **ZERO proof consumers**
-(whole-tree grep; every other hit is prose or an `Audit.lean` `#print axioms`), so
-**weakening it cannot go red** — a dual positive witness at `Sd`/`Td` is owed alongside any
-`hN` removal. The residual cost is now measured rather than estimated:
-`CascadeStrataInv.lean::reconcileStarsKeyDR_row_edge_consistent`'s `hco : ComputedOnly e`
-binder (exactly one call site) plus the three-lemma `edgeHyg1_*` re-point; no `_d` twin
-exists. ⚠ And `P5`'s FIRST action is a measurement, not the proof: the "obstacle is gone"
-probe runs at `LeafWitness.Sw` while `outside_narrow_t2a` refutes at `Sd`/`Td`, which has
-neither a union arm nor a wildcard — the two halves have never been measured at one store.
-**`P4` does NOT block this** (`deps` edge removed 2026-09-23): §8.1's bridge premise is
+**The T2a scope carry — CLOSED 2026-09-23 (`P5`)**; see the T2a note at the top of this
+file. The pre-work measurements that sat here (the Sd/Td probe, `graph_reached_inv`'s zero
+proof consumers ⇒ a positive witness owed with the restatement, the proof map) are recorded
+in `docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`.
+**`P4` did NOT block it** (`deps` edge removed 2026-09-23): §8.1's bridge premise is
 false — `checkFn` never reads a leaf node and `GraphAdmission.computedRefsNotLeaf` refuses
 the schemas that would make it — so 4b became a `CORRESPONDENCE.md` §7.3 item, landed as six
 `Exec.lean::P4Bridge` witness pins. Map: `docs/p4-leaf-probe-bridge-2026-09-23.md`.

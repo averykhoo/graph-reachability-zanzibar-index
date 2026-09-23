@@ -36,6 +36,9 @@ ambient:formal/lean/ZanzibarProofs/GraphIndex/LeafRules.lean	variable {S : Schem
 ambient:formal/lean/ZanzibarProofs/SetEngine/Correct.lean	open MemberSet SetEngineModel ; variable {s : SubjectRef}
 ambient:formal/lean/ZanzibarProofs/SetEngine/Eval.lean	open MemberSet
 ambient:formal/lean/ZanzibarProofs/SetEngine/MemberSet.lean	variable {Id : Type} [DecidableEq Id]
+def:LeafWitness.Sw	[def] def Sw : Schema := ⟨[(("doc", "banned"), .direct [("user", BARE, false)]), (("doc", "viewer"), .direct [("user", BARE, true)]), (("doc", "approver"), .excl (.union (.direct [("user", BARE, false)]) (.computed "viewer")) (.computed "banned"))], []⟩
+def:LeafWitness.tb	[def] def tb : Tuple := ⟨⟨"user", "bob", BARE⟩, "banned", ⟨"doc", "d1"⟩⟩
+def:LeafWitness.tw	[def] def tw : Tuple := ⟨⟨"user", "bob", BARE⟩, "approver", ⟨"doc", "d1"⟩⟩
 def:NotLeafName	[def] def NotLeafName (p : String) : Prop := p = BARE ∨ isLeafPred p = false
 def:Zanzibar.Acyclic	[def] def Acyclic (g : DirectGraph V) : Prop := ∀ v, pathCount g v v = 0
 def:Zanzibar.BARE	[def] def BARE : String := "..."
@@ -119,6 +122,12 @@ def:Zanzibar.NoTtuTarget	[def] def NoTtuTarget (S : Schema) (R : String) : Prop 
 def:Zanzibar.NodeKey	[structure] fields=(type name pred variant) structure NodeKey where type : String name : String pred : String variant : Variant deriving DecidableEq, Repr, Inhabited
 def:Zanzibar.NodupKeys	[def] def NodupKeys (S : Schema) : Prop := (S.defs.map (·.1)).Nodup
 def:Zanzibar.ObjectRef	[structure] fields=(type name) structure ObjectRef where type : String name : String deriving DecidableEq, Repr, Inhabited
+def:Zanzibar.P5Witness.bob	[def] def bob : SubjectRef := ⟨"user", "bob", BARE⟩
+def:Zanzibar.P5Witness.key	[def] def key : NodeKey := objNode ⟨"doc", "d1"⟩ "approver"
+def:Zanzibar.P5Witness.prefixOps	[def] def prefixOps : List GraphOp := [GraphOp.add LeafWitness.tb, GraphOp.add tStar]
+def:Zanzibar.P5Witness.prefixStore	[def] def prefixStore : Store := [tStar, LeafWitness.tb]
+def:Zanzibar.P5Witness.store	[def] def store : Store := LeafWitness.tw :: prefixStore
+def:Zanzibar.P5Witness.tStar	[def] def tStar : Tuple := ⟨⟨"user", STAR, BARE⟩, "viewer", ⟨"doc", "d1"⟩⟩
 def:Zanzibar.PLeaf	[inductive] fields=(storage closure userset) inductive PLeaf where | storage (rs : List Restriction) | closure (e : Expr) | userset (r : Restriction) deriving Repr, DecidableEq, Inhabited
 def:Zanzibar.Query	[structure] fields=(subject relation object) structure Query where subject : SubjectRef relation : String object : ObjectRef deriving DecidableEq, Repr, Inhabited
 def:Zanzibar.Quiescent	[def] def Quiescent (σ : GraphState) : Prop := ∀ d ∈ σ.outbox, d.id ≤ σ.watermark
@@ -175,7 +184,6 @@ def:Zanzibar.W3cJobValid	[def] def W3cJobValid (S : Schema) (j : W3cJob) : Prop 
 def:Zanzibar.W3dJobCoverage	[def] def W3dJobCoverage (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) : Prop := (∀ s : SubjectRef, (subjNode s, objNode ⟨j.dt, j.on⟩ j.R) ∈ σ.edges → s ∈ j.cands) ∧ (∀ s : SubjectRef, s.predicate = BARE → s.name ≠ STAR → sem S T ⟨s, j.R, ⟨j.dt, j.on⟩⟩ = true → ¬(s.shape ∈ declaredWildcardShapes S ∧ sem S T ⟨starSubj s.shape, j.R, ⟨j.dt, j.on⟩⟩ = true) → s ∈ j.cands) ∧ (∀ s : SubjectRef, s.name ≠ STAR → s.shape ∈ declaredWildcardShapes S → sem S T ⟨starSubj s.shape, j.R, ⟨j.dt, j.on⟩⟩ = true → sem S T ⟨s, j.R, ⟨j.dt, j.on⟩⟩ = false → s ∈ j.negCands) ∧ (∀ s : SubjectRef, s.predicate ≠ BARE → s.name ≠ STAR → sem S T ⟨s, j.R, ⟨j.dt, j.on⟩⟩ = true → s ∈ j.uposCands)
 def:Zanzibar.W3dJobOpsSettled	[def] def W3dJobOpsSettled (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) : Prop := ∀ r' ∈ computedRefs j.e, isDerived S (j.dt, r') = true → SettledKey S T σ j.dt j.on r' ∧ CompleteKey S T σ j.dt j.on r'
 def:Zanzibar.W4Fragment	[structure] fields=(computedOrDirect directArmsBare directArmsConcrete computedOnlyOperands noUnionDirects twoStrata wsBare bareStar ttuStarFree term) structure W4Fragment (S : Schema) (T : Store) : Prop where computedOrDirect : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOrDirect e directArmsBare : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → DirectArmsBare e directArmsConcrete : DirectArmsConcrete S computedOnlyOperands : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true → ∀ e', S.lookup (dt, r') = some e' → ComputedOnly e' noUnionDirects : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → exprDirects e = [] twoStrata : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true → ∀ e', S.lookup (dt, r') = some e' → ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = false wsBare : ∀ sh ∈ declaredWildcardShapes S, sh.2 = BARE bareStar : BareStarStore T ttuStarFree : TtuStarFree S T term : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R
-def:Zanzibar.W4NarrowT2a	[structure] fields=(computedOnly storeValid) structure W4NarrowT2a (S : Schema) (T : Store) : Prop where computedOnly : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e storeValid : StoreValidRules S T
 def:Zanzibar.W4Witness.Sx	[def] def Sx : Schema := ⟨[(("doc", "a"), .direct [("user", BARE, false)]), (("doc", "b"), .direct [("user", BARE, false)]), (("doc", "r"), .excl (.computed "a") (.computed "b"))], []⟩
 def:Zanzibar.W4Witness.Tx	[def] def Tx : Store := [⟨⟨"user", "alice", BARE⟩, "a", ⟨"doc", "1"⟩⟩]
 def:Zanzibar.W4WitnessDirect.Sd	[def] def Sd : Schema := ⟨[(("doc", "banned"), .direct [("user", BARE, false)]), (("doc", "approver"), .excl (.direct [("user", BARE, false)]) (.computed "banned"))], []⟩

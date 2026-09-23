@@ -3,6 +3,17 @@
 **ACTIVE-PLAN** (`docs/README.md` §3). Corrections append **dated at the top**. Freeze when a
 direction is chosen and its first item closes.
 
+## Correction, 2026-09-23b (appended; the body below is as-written)
+
+**Step 2's T2a half is LANDED — `P5` closed 2026-09-23b, and it needed neither `P4` nor
+`P14`.** `graph_reached_inv` now takes only `GraphAdmission` + `W4Fragment`; `W4NarrowT2a`
+is deleted, so the "one clean sentence" the body promises for step 2 is true of T2a today.
+The body's ordering *"P4 → P5 (+P14)"* was a plan order, not a proof dependency (measured
+2026-09-23: `P4` is now a Lean↔Python `CORRESPONDENCE.md` §7.3 item at `LATER`). What
+remains of step 2 is `P14`, and it may be absorbed rather than proved: the `_d`
+reach-collapse family it names already exists and T2a now rests on it (`P14`'s 2026-09-23b
+note). Map: [`docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`](p5-negedgefree-under-leaf-routing-2026-09-23.md).
+
 ## Correction, 2026-09-22d (appended; the body below is as-written)
 
 **`TK94`'s row in the table below overstates the hole in two ways, and executing the item

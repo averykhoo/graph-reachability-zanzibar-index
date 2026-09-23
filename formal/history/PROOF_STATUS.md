@@ -15,6 +15,39 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-23 (**`P5` — T2a WIDENED: `graph_reached_inv` now takes only `GraphAdmission` + `W4Fragment`; `W4NarrowT2a` and its pinned refutation `outside_narrow_t2a` are DELETED; no new mathematics was owed**)
+
+**Task (user-assigned, goal step 2):** board `P5`, *"`Inv.negEdgeFree` under leaf routing;
+retire the T2a caveat"*. Full map, probe output and sabotage evidence:
+[`docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`](../../docs/p5-negedgefree-under-leaf-routing-2026-09-23.md).
+
+* **Step 0, the row's trap, MEASURED.** Probe `formal/probes/p5_negedgefree_sd_td_2026-09-23.lean`
+  re-aimed D.3's instrument at `Sd`/`Td4`: `negTested := 0` on every leg, the pre-flip control
+  included — `Sd` has no wildcard shape, so `neg = []` at every state there.
+  `outside_narrow_t2a` refuted the BUNDLE (its narrow `storeValid`), never the invariant; the
+  clause only bites at `LeafWitness.Sw`, where the same run reproduced 2026-09-05 exactly.
+* **The proof.** The T2a chain (`CascadeStrataEdge.lean`, plus
+  `CascadeStrataInv.lean::reconcileStarsKeyDR_row_edge_consistent`) was widened IN PLACE to the
+  `_d` fragment. Every narrow consumer already had a `_d` twin; the only lemma without one
+  needed just `CascadeStrataResettle.lean::reconcileStarsKeyDR_edge_char_d`. The P4-session
+  estimate ("one binder + three re-points") undercounted by five sites, all with twins.
+* **TWO AUDITED NAMES REMOVED — justification (per `formal/regen_audit_pin.sh`).**
+  `W4WitnessDirect.outside_narrow_t2a : ¬ W4NarrowT2a Sd Td` is removed because the structure it
+  refuted no longer exists: `graph_reached_inv` does not take it, and keeping a bundle alive only
+  to pin its own refutation would have kept a retired carry legible as a live one. Audited
+  coverage did not shrink in substance — the claim it guarded ("T2a is vacuous at `Sd`/`Td`") is
+  now FALSE, and its replacements `W4WitnessDirect.reached_inv_applies{,4}` (scope) and
+  `P5Witness.leafRouted_inv_preflip_not` / `::prefix_facts` (content, at D.3's own store) are
+  audited and statement-pinned. The second removed name, `w4NarrowT2a_of_untainted` (the bundle is free on
+  untainted schemas), goes for the same reason: it concluded the deleted structure. (This entry
+  first said it "was never audited" - a case-sensitive grep missed the lowercase `w4`; the
+  gate's audit build caught it.)
+* **Sabotage:** M1 (drop the star) and M2 (claim the routed write lands the bare edge) each
+  redden `P5Witness.prefix_facts`; M3 (weaken `Inv.negEdgeFree`) dies upstream at
+  `State.lean::inv_putResidue` — instrument limit, recorded, not evidence.
+
+---
+
 ## Session 2026-09-06b (**`P17` and `TK55` CLOSED by user decision — the DEFAULT constructor `build_index(bulk=True)` is pinned by a 25-corpus state differential plus a written scope statement, not a Lean constructor; an EMPTY declared relation name was a real backend divergence and both parsers now refuse it; the red `P3` branch's evidence is extracted and the branch is KEPT; the trial window closed with NO cutover; two gate floors had leaked 6 tests of headroom**)
 
 **Task taken (user-assigned):** "look into these things, explain the context, recommend what

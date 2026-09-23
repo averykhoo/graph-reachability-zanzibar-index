@@ -32,10 +32,10 @@ number INTO it over restating it.
 | whole-repo suite | **1861** |
 | differential conformance tests | **511** across **14** files |
 | gate-tooling conformance tests | **71** across **4** files |
-| audited theorems (`#print axioms` in `Audit.lean`) | **623** |
-| audit identity pin (`audited_theorems.txt`) | **623** |
-| headline definition pin | **266** rows (**257** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **704** (**390** Python + **314** Lean) |
+| audited theorems (`#print axioms` in `Audit.lean`) | **628** |
+| audit identity pin (`audited_theorems.txt`) | **628** |
+| headline definition pin | **274** rows (**265** declarations + ambient) |
+| `CORRESPONDENCE.md` anchors | **703** (**390** Python + **313** Lean) |
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **36** = 27 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
@@ -124,11 +124,11 @@ Clause-by-clause, what is actually true today:
 | §7 clause | status |
 |---|---|
 | set-engine **algorithm** proven to compute `sem` | ✅ **Full scope, unconditional.** `setEngine_correct` (T1): for every schema, store and query, the Lean set-engine model's `check` equals `sem`. (Until 2026-09-06 the statement carried three unused binders — well-formed, stratifiable, "identifier-valid" — the last over an `opaque` predicate no store could be shown to satisfy; all three are gone, see `SEMANTICS.md` §2.1 history.) |
-| graph-index **algorithm** proven to compute `sem` | ⚠️ **At the documented fragment, not beyond (§3; and §3.0 for what that fragment stopped excluding on 2026-08-05, plus the one theorem it still excludes).** `graph_correct` (T2b): at every fully-drained state of the operational closure `ReachedBy` (logged rule-routed writes + the state-derived two-round cascade — the model of the synchronous v1 Python write path), graph `check` = `sem`, for stores/schemas satisfying `GraphAdmission` (the Python-admission mirror) **and** `W4Fragment` (honest carries: derived defs are boolean trees over computed refs AND `Direct` grant arms — whose restrictions must be bare and concrete and must not be union-reachable — with derived operands computed-only; ≤ 2 strata, bare declared wildcards, bare-star stores, star-free TTU tuplesets, derived terminality — **TEN** fields since E-chain leg 5 (2026-08-05) split `computedOnly` into five; `structure W4Fragment` in `FullScope.lean`; the derived-def ROOT operator has been UNRESTRICTED since 2026-07-17, when `rootB`/`RootBoolean` were deleted, and the chain has carried a scoped `remove` constructor since 2026-07-19f), for queries with concrete objects and bare star subjects. See §3 for the gap list and §3.0 for the Direct-arm history — including the fact that **T2a `graph_reached_inv` alone did NOT widen** and carries an extra `W4NarrowT2a` bundle. |
+| graph-index **algorithm** proven to compute `sem` | ⚠️ **At the documented fragment, not beyond (§3; and §3.0 for what that fragment stopped excluding on 2026-08-05, and for T2a on 2026-09-23).** `graph_correct` (T2b): at every fully-drained state of the operational closure `ReachedBy` (logged rule-routed writes + the state-derived two-round cascade — the model of the synchronous v1 Python write path), graph `check` = `sem`, for stores/schemas satisfying `GraphAdmission` (the Python-admission mirror) **and** `W4Fragment` (honest carries: derived defs are boolean trees over computed refs AND `Direct` grant arms — whose restrictions must be bare and concrete and must not be union-reachable — with derived operands computed-only; ≤ 2 strata, bare declared wildcards, bare-star stores, star-free TTU tuplesets, derived terminality — **TEN** fields since E-chain leg 5 (2026-08-05) split `computedOnly` into five; `structure W4Fragment` in `FullScope.lean`; the derived-def ROOT operator has been UNRESTRICTED since 2026-07-17, when `rootB`/`RootBoolean` were deleted, and the chain has carried a scoped `remove` constructor since 2026-07-19f), for queries with concrete objects and bare star subjects. See §3 for the gap list and §3.0 for the Direct-arm history — including the fact that **T2a `graph_reached_inv` widened only on 2026-09-23** (`P5`; until then it carried an extra `W4NarrowT2a` bundle, now deleted). |
 | hence equivalent | ✅ `backend_equivalence` (T3), by transitivity through `sem`, **exactly T2b's hypotheses and scope since 2026-09-06** (the extra undischargeable `hValid` is gone, and T3 is now instantiated at a concrete executed store: `W4WitnessDirect.equivalence_applies`, `Exec.lean::graphRunOps_directArm_backend_equivalence`); plus `exclusion_effective` / `no_ghost_grant` (T6a/T6b) — the security corollaries with real exclusion content. **All three are stated over the PUBLIC graph read `GraphModel.checkPublic` since 2026-08-28c** (the fenced entry modelling `WildcardIndex.check`; `graph_correct` itself remains the internal-layer statement over `GraphModel.check` = `_check_internal`, and is what `graph_correct_public` appeals to off the fence). |
 | machine-checked, axiom-audited | ✅ 0 sorries; the Audit module `#print axioms` every key theorem; `verify.sh` hard-fails on any axiom beyond `propext`, `Classical.choice`, `Quot.sound`. |
 | pinned by structural correspondence review | ✅ `CORRESPONDENCE.md` — the Lean-def ↔ Python-file:line map, with the known intentional divergences listed (scoped removes (validly-stored, drained-prior), fixed two rounds, fragment surplus). **"No leaf-family split" came OFF that list 2026-09-05** — leg 7's flip re-pointed both logged write legs at the leaf-routed closure, so the split is modeled and §7.4's entry reads RESOLVED. |
-| pinned by differential conformance | ✅ **check-verdict level, five corners** (`verify.sh` step 5; 310 differential-conformance tests of the 330 collected — see the per-file table above): Lean `sem` (zcli) × independent oracle × real `SetEngine` over the 25 spec-scope corpora + seeded randomized substores, **plus (Phase 6)** the Lean *operational graph model* (zcli mode `"graph"`, whose runtime output is covered by the theorem via `graphRun_reached` / `graphRun_check_eq_sem` — the driver is the chain's own constructors, by proof, not analogy) × the real Python `WildcardIndex`+`DeltaProcessor` × `sem`, over every `GRAPH_FRAGMENT` corpus (the count is `corpus.GRAPH_FRAGMENT` in the generated block above; this cell said "19" from its first writing until 2026-09-05, when it was re-checked against the live set, then 25), including two designed attack corpora (stale-edge cross-stratum re-settle; star churn over two strata). **Scope caveat on one of those corpora:** `direct_arm_exclusion` (added 2026-07-20e) is listed in `GRAPH_FRAGMENT` but is machine-checked to be OUTSIDE the final theorems' bundle (`FullScope.lean::outside_old_admission`) — its comparisons are a differential test between two implementations, NOT coverage by `graph_correct`. See §3.0. All answer suites share one query grid (`formal/conformance/grid.py`) that unions schema-DECLARED relations type-aware into the target set — so derived/boolean roots are queried on every corpus (previously targets came only from stored tuples and derived-only boolean roots went unqueried — the boolean-root conformance evidence was vacuous exactly there) — and emits concrete-named userset-shaped subjects over a bounded pool (inside the proved graph scope: `hqs` constrains only star-NAMED subjects). zcli's dispatch is itself conformance-tested (`test_cli_mode.py`; rc enumeration 0 answers-or-state / 1 usage-parse / 2 admission / 3 not-drained / 4 unknown mode / **5 `"ops"` supplied in spec mode**), so spec answers can never masquerade as graph answers and an op stream can never be silently ignored. **The remove gates:** `test_conformance_remove.py` (80 tests, the `conf-heavy` phase) pins BOTH Python backends' REMOVE paths at answer level — the real `SetEngine` and the real `WildcardIndex`+`DeltaProcessor` driven through seeded interleaved add/remove/re-add sequences over the spec-scope corpora × 5 seeds, equal to `sem` (zcli) × oracle on the FINAL store — plus Python-internal convergence pins: driven == fresh `rebuild()` / fresh add-only build over the grid AND at id-free state-fingerprint granularity (interner keys/refcounts, population masks, node_sets/member_of, flow edges; graph side: `snapshot_rows` + symbolic residues), and full-churn tests asserting complete state emptiness mid-cycle (graph: no `NodeV4`/`EdgeV4`/`ResidueV1` rows) with I12 non-mutation on a rejected repeat remove. Scope honesty: the graph-side **Python** remove path is pinned to oracle/`sem` transitively (via `graph == oracle` on the same corpora the set-engine leg pins `sem == oracle`); the graph-side **Lean** remove leg is CLOSED at the validly-stored + drained-prior scope (2026-07-19f, §4(d)) — `graph_correct` / `graph_reached_inv` / `Exec.graphRun_check_eq_sem` cover retraction of a tuple that is in the store (`t ∈ T`), from a drained prior state (`cascadeKeys = []`), whose PRE-remove store satisfies the W4 disciplines (`StoreValidRules` / `BareStarStore` / `TtuStarFree` / `htermT`, faithful to `TupleSource.remove`); and the Exec driver / zcli graph mode DRIVES removes end-to-end (2026-07-19, `5a35ec3`) — `graphRunOps` runs one runtime-gated `remove` chain leg (`removeGateB`, fail-closed) per op, zcli graph/graph-state modes take an optional `"ops"` add/remove stream (absent ⇒ the legacy add-only `graphRun`, byte-identical), and `test_conformance_remove_graph.py` differential-gates seeded streams against the real Python graph index and the oracle on the erased store. **"Driven end-to-end" carries one live exclusion:** `test_conformance_remove_graph.py::_REMOVE_EXCLUDED` is `frozenset({"direct_arm_exclusion"})`, because the chain's `remove` guard is stated over plain `StoreValidRules`, under which a Direct-arm-under-exclusion tuple is inadmissible, so `removeGateB` fail-closes on essentially every seeded stream over that corpus. Removes are therefore driven end-to-end over every in-fragment corpus EXCEPT that one (the newest). That gate compares at ANSWER level only; the Lean-vs-Python STATE comparisons for removes remain driven-vs-fresh-build Python-internal, never vs Lean. `test_conformance_generated.py` (40 tests) closes the disjoint-pools gap (§3 item 1, previously the #1 residual risk): a seeded deterministic re-implementation of the hypothesis `schema_asts` generator (NO hypothesis dependency — the formal/ convention; placed inside `formal/conformance/` so `verify.sh` gates it fail-closed) feeds GENERATED schemas + stores — shapes outside the curated corpora — asserting zcli `sem` == oracle == real `SetEngine` over the shared grid. Answer-level, spec-side only; the graph backend stays pinned by the curated corpora. The repository-wide validation matrix separately pins Python-graph × Python-set × oracle on every push. |
+| pinned by differential conformance | ✅ **check-verdict level, five corners** (`verify.sh` step 5; 310 differential-conformance tests of the 330 collected — see the per-file table above): Lean `sem` (zcli) × independent oracle × real `SetEngine` over the 25 spec-scope corpora + seeded randomized substores, **plus (Phase 6)** the Lean *operational graph model* (zcli mode `"graph"`, whose runtime output is covered by the theorem via `graphRun_reached` / `graphRun_check_eq_sem` — the driver is the chain's own constructors, by proof, not analogy) × the real Python `WildcardIndex`+`DeltaProcessor` × `sem`, over every `GRAPH_FRAGMENT` corpus (the count is `corpus.GRAPH_FRAGMENT` in the generated block above; this cell said "19" from its first writing until 2026-09-05, when it was re-checked against the live set, then 25), including two designed attack corpora (stale-edge cross-stratum re-settle; star churn over two strata). **Scope caveat on one of those corpora:** `direct_arm_exclusion` (added 2026-07-20e) was machine-checked to be OUTSIDE the final theorems' bundle until leg 5 (2026-08-05; `FullScope.lean::outside_old_admission`), and has been theorem-backed since leg 6 (`W4WitnessDirect.final_applies4`; T2a since 2026-09-23, `reached_inv_applies4`). See §3.0. All answer suites share one query grid (`formal/conformance/grid.py`) that unions schema-DECLARED relations type-aware into the target set — so derived/boolean roots are queried on every corpus (previously targets came only from stored tuples and derived-only boolean roots went unqueried — the boolean-root conformance evidence was vacuous exactly there) — and emits concrete-named userset-shaped subjects over a bounded pool (inside the proved graph scope: `hqs` constrains only star-NAMED subjects). zcli's dispatch is itself conformance-tested (`test_cli_mode.py`; rc enumeration 0 answers-or-state / 1 usage-parse / 2 admission / 3 not-drained / 4 unknown mode / **5 `"ops"` supplied in spec mode**), so spec answers can never masquerade as graph answers and an op stream can never be silently ignored. **The remove gates:** `test_conformance_remove.py` (80 tests, the `conf-heavy` phase) pins BOTH Python backends' REMOVE paths at answer level — the real `SetEngine` and the real `WildcardIndex`+`DeltaProcessor` driven through seeded interleaved add/remove/re-add sequences over the spec-scope corpora × 5 seeds, equal to `sem` (zcli) × oracle on the FINAL store — plus Python-internal convergence pins: driven == fresh `rebuild()` / fresh add-only build over the grid AND at id-free state-fingerprint granularity (interner keys/refcounts, population masks, node_sets/member_of, flow edges; graph side: `snapshot_rows` + symbolic residues), and full-churn tests asserting complete state emptiness mid-cycle (graph: no `NodeV4`/`EdgeV4`/`ResidueV1` rows) with I12 non-mutation on a rejected repeat remove. Scope honesty: the graph-side **Python** remove path is pinned to oracle/`sem` transitively (via `graph == oracle` on the same corpora the set-engine leg pins `sem == oracle`); the graph-side **Lean** remove leg is CLOSED at the validly-stored + drained-prior scope (2026-07-19f, §4(d)) — `graph_correct` / `graph_reached_inv` / `Exec.graphRun_check_eq_sem` cover retraction of a tuple that is in the store (`t ∈ T`), from a drained prior state (`cascadeKeys = []`), whose PRE-remove store satisfies the W4 disciplines (`StoreValidRules` / `BareStarStore` / `TtuStarFree` / `htermT`, faithful to `TupleSource.remove`); and the Exec driver / zcli graph mode DRIVES removes end-to-end (2026-07-19, `5a35ec3`) — `graphRunOps` runs one runtime-gated `remove` chain leg (`removeGateB`, fail-closed) per op, zcli graph/graph-state modes take an optional `"ops"` add/remove stream (absent ⇒ the legacy add-only `graphRun`, byte-identical), and `test_conformance_remove_graph.py` differential-gates seeded streams against the real Python graph index and the oracle on the erased store. **"Driven end-to-end" carries one live exclusion:** `test_conformance_remove_graph.py::_REMOVE_EXCLUDED` is `frozenset({"direct_arm_exclusion"})`, because the chain's `remove` guard is stated over plain `StoreValidRules`, under which a Direct-arm-under-exclusion tuple is inadmissible, so `removeGateB` fail-closes on essentially every seeded stream over that corpus. Removes are therefore driven end-to-end over every in-fragment corpus EXCEPT that one (the newest). That gate compares at ANSWER level only; the Lean-vs-Python STATE comparisons for removes remain driven-vs-fresh-build Python-internal, never vs Lean. `test_conformance_generated.py` (40 tests) closes the disjoint-pools gap (§3 item 1, previously the #1 residual risk): a seeded deterministic re-implementation of the hypothesis `schema_asts` generator (NO hypothesis dependency — the formal/ convention; placed inside `formal/conformance/` so `verify.sh` gates it fail-closed) feeds GENERATED schemas + stores — shapes outside the curated corpora — asserting zcli `sem` == oracle == real `SetEngine` over the shared grid. Answer-level, spec-side only; the graph backend stays pinned by the curated corpora. The repository-wide validation matrix separately pins Python-graph × Python-set × oracle on every push. |
 | … "including state-level equality" | ✅ **At a documented representation-neutral projection, per corpus.** `test_conformance_state.py` (**19** in-fragment corpora): the Lean operational graph model's FINAL MATERIALIZED STATE (zcli mode `"graph-state"` — the same `graphRun` fold, same admission/drain gates, emitting canonical edges + residues) equals the real Python graph index's final SQL state (`EdgeV4`/`ResidueV1` decoded through `NodeV4` to symbolic keys). Compared: the DIRECT edge set over `(type, name, predicate, wildcard)` node keys, and per derived key the full residue triple (`stars` shapes, `neg`/`upos` subject sets). **Five live edge projections since 2026-09-05** — this list ran P1–P6 until **P6 was RETIRED 2026-09-05**, and P7 (the `ResidueV1.version` drop, §3 item 4) is deliberately NOT renumbered — each documented and justified in `formal/conformance/extractor.py` (P1 closure rows are a function of the direct set; P2 wildcard bridges — inert, **re-verified 2026-07-26 over the widened 19-corpus set**: `bridged_in_shapes`/`bridged_out_shapes` compile EMPTY on all 19, the only non-empty pair in `SCHEMAS` being the excluded `object_wildcard` corpus, so P2 still never fires; P3 edge multiplicity — **NARROWED 2026-07-29**: compared EXACTLY on the untainted arm (153 of 171 compared edges, `nary_union`'s non-unit fan-in included), dropped only on the derived arm where Python's presence diff caps the count at 1 while the model compounds, and there golden-pinned per corpus by `test_conformance_state.py::test_derived_arm_multiplicity_ledger` — see `CORRESPONDENCE.md` §7.2; P4 all-empty residue rows the model stores and Python deletes; P5 node sets, GC'd vs never-GC'd — **no `NodeV4` row is compared at all**; ~~P6 leaf-family closure-leaf copies, whose evaluation OUTPUT — residues + derived edges — is compared exactly~~ — **P6 RETIRED 2026-09-05** by leg 7's flip: the Lean logged write path now folds the leaf-routed closure, so those rows are compared DIRECTLY rather than via their evaluation output. Measured 2026-09-05 over the 25 in-fragment corpora: 76 leaf-family rows moved from dropped to compared, `compared against Lean` 189 → **265**, and the `"P6"` ledger key is gone rather than pinned at 0). `test_conformance_enum_state.py` extends the state comparison to a deterministic stride-4 sample of the enumerated stores (257 of 1021). Attack-first: the state gate's first run FOUND P6 (state divergence under full check-parity); a deliberately corrupted extraction fails with the symmetric-difference message. |
 | … "exhaustive small-scope enumeration up to the documented bounds" | ✅ **At the documented (tiny) bounds.** `test_conformance_enum.py`: ALL stores of ≤ K tuples from the declared tuple space over a 2-names-per-type pool, for **six** representative fragment shapes at a per-shape K of 3 or 4 — boolean_exclusion (K=4, 163 stores), boolean_intersection (K=4, 163), two_stratum_cascade (K=3, 299), boolean_star_exclusion (K=4, 57), wildcard_group_member (K=3, 176), ttu (K=4, 163); **1021 stores total**, spec × oracle × set engine over the shared grid, per-shape tuple-space size / K / store count all ASSERTED so the bounds cannot silently drift. Zero disagreements. `test_conformance_enum_state.py` adds a state-level leg over a **stride-4 sample, 257 of the 1021** (sample size likewise asserted). Scope honesty: the graph backend is not part of the ANSWER enumeration (runtime; it stays pinned by the curated-corpora graph + state gates), and the bounds are deliberately tiny — this earns "exhaustive up to the documented bounds", nothing more. |
 | residual unverified surface | ✅ Acknowledged in full, and LARGER than §7's list — see §3. |
@@ -137,8 +137,8 @@ Clause-by-clause, what is actually true today:
 subtraction and THREE scope qualifiers:** the graph-side theorems hold at the
 `W4Fragment` scope (not everything Python admits) — which since 2026-08-05 DOES
 include stores written through the `Direct` arm of a derived def, the canonical
-Zanzibar boolean shape, **except for T2a `graph_reached_inv`, which alone is still
-VACUOUS there (§3.0, still the single most important caveat in this document)**;
+Zanzibar boolean shape (for T2a `graph_reached_inv` only since 2026-09-23, `P5`;
+§3.0);
 state-level equality holds under the six DOCUMENTED projections of
 `extractor.py` — P1–P5 and P7 since **P6 retired 2026-09-05**; a divergence inside a
 projected class is pinned elsewhere, not here, and nodes are not compared at all.
@@ -218,7 +218,7 @@ modeled in Lean). Read this as "none found on the last read", not as an invarian
 
 ## 3. Residual unverified surface (the full list)
 
-### 3.0 The Direct-arm vacuity - RETIRED for T2b (2026-08-05), STILL LIVE for T2a
+### 3.0 The Direct-arm vacuity - RETIRED for T2b (2026-08-05) and for T2a (2026-09-23)
 
 **Read this before quoting anything else in this document.** From the first version
 of this claim until 2026-08-05 this section said the headline graph theorems were
@@ -277,52 +277,38 @@ Two things keep this honest rather than a relabeling:
 * `w4Fragment_of_computedOnly` proves the pre-leg-5 six fields imply all ten, so
   nothing that held before stopped holding.
 
-#### The one thing that has NOT changed - T2a (`graph_reached_inv`)
+#### T2a (`graph_reached_inv`) - caught up 2026-09-23 (`P5`)
 
-`graph_reached_inv` now takes a **third** bundle, `W4NarrowT2a` (schema-wide
-`ComputedOnly` + the narrow `StoreValidRules`), and
-`W4WitnessDirect.outside_narrow_t2a` machine-checks that the Direct-arm store fails
-it. **T2a is still vacuous exactly where T2b no longer is.**
+From leg 5 until `P5`, `graph_reached_inv` took a **third** bundle, `W4NarrowT2a`
+(schema-wide `ComputedOnly` + the narrow `StoreValidRules`), which the Direct-arm store
+provably failed - so T2a stayed vacuous exactly where T2b no longer was. **That bundle
+and its refutation are deleted:** `graph_reached_inv` now takes
+`(hA : GraphAdmission S T) (hF : W4Fragment S T) (h : ReachedBy σ S T)`, the same two
+bundles as `graph_correct`.
 
-This is a declared carry with a counterexample attached. **Until 2026-09-05 it was also
-declared "not a proof gap that effort would close". That half is RETIRED: what is owed
-now is PROOF WORK, not a design decision.**
+The carry's justification - Leg-0 probe D.3 (2026-07-28): `Inv.negEdgeFree` FALSE on
+the `_d` fragment, a modelling limit of projection **P6**; **Python was never wrong**
+(`RuleSet.apply` routes the write onto the leaf family) - was removed by leg 7's
+leaf-routing flip on 2026-09-05 (`GraphIndex/Cascade.lean::GraphState.writeLoggedRules`
+folds `rewriteClosureL S (rawWriteTuples S t)`; P6 deleted from `extractor.py`). `P5`
+then did the owed proof work: the T2a chain in `GraphIndex/CascadeStrataEdge.lean`
+(`edgeHyg1_*`, `reachedByW3d2E_edgeHyg1`, `reachedByW3d2E_edgeHygienic`,
+`reachedByW3d2E_inv`) and `CascadeStrataInv.lean::reconcileStarsKeyDR_row_edge_consistent`
+were widened IN PLACE to the `_d` fragment, every narrow consumer already had a
+`_d` twin, and the one that did not needed only the existing `reconcileStarsKeyDR_edge_char_d` - no new mathematics.
 
-*The retired justification, kept dated because it was load-bearing for five weeks and
-is quoted in three other docs.* Leg-0 probe D.3 (2026-07-28) machine-checked
-`Inv.negEdgeFree` FALSE on the `_d` fragment: under `StoreValidRulesD` a Direct-arm
-write lands an edge at the very derived R-node whose residue carries the `neg` row,
-which `Inv` forbids. **Python was never wrong** - verified on the real backends:
-`RuleSet.apply` routes the write onto the leaf family, so the edge lands on
-`#approver.0`/`#approver.2` and never on `#approver` where the `neg` row lives;
-different nodes, I6 disjointness intact, 0 mismatches over the grid and a 6-way order
-sweep. That made it a modelling limit of projection **P6** (the leaf-family collapse),
-and the answer picked 2026-08-05 was option (c) - model the leaf-family split and
-retire P6.
+Witnesses, and what each one does and does not exercise:
 
-**★ 2026-09-05 - option (c) LANDED, and T2a did not move with it.**
-`formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean::GraphState.writeLoggedRules` now
-folds `rewriteClosureL S (rawWriteTuples S t)`, i.e. the Lean write path routes a
-Direct-arm write onto the leaf family exactly as `RuleSet.apply` does, and projection
-P6 is deleted from `formal/conformance/extractor.py`. So D.3's mechanism no longer
-exists in the model. But `graph_reached_inv` still takes `W4NarrowT2a`
-(`FullScope.lean`) and `W4WitnessDirect.outside_narrow_t2a` still holds - **the carry
-outlived its justification.** Two steps are owed, both of them proof:
+* **Scope** - `W4WitnessDirect.reached_inv_applies` / `reached_inv_applies4` instantiate
+  T2a at `Sd`/`Td` and at the corpus store `Sd`/`Td4`. At `Sd` the `neg` residue rows
+  are always empty, so `negEdgeFree` is NOT exercised there.
+* **Content** - `Exec.lean::P5Witness.leafRouted_inv_preflip_not` +
+  `P5Witness.prefix_facts`, at D.3's own store `LeafWitness.Sw`: from one drained prefix
+  state the leaf-routed write reaches a chain state satisfying `Inv` with `bob` in the
+  `approver` row's `neg`, and the pre-flip bare write from the same state provably
+  violates `Inv`. The 2026-09-05 probe below is the measurement that preceded it.
 
-1. prove `Inv.negEdgeFree` on the `_d` fragment for the leaf-routed write leg (it is
-   ONE clause, not two - see the 2026-08-08 measurement below);
-2. restate `graph_reached_inv` without `W4NarrowT2a`.
-
-Do not write "a modelling limit of P6" or "a design decision is owed" anywhere in this
-document again. ((a) "restate T2a at drained states only" and (b) "weaken
-`negEdgeFree` to exempt the un-cascaded write leg" remain the claim-shrinking
-alternatives that nobody chose. (b) used to name `uposEdgeFree` too; that pairing was
-refuted by measurement 2026-08-08 - `uposEdgeFree` is structurally immune on the
-`_d` fragment, so the Inv-side obligation is ONE clause. See
-`history/leaf-family-split-scope-2026-08-05.md` SS 9.2.)
-The plan (SS F) predicted this asymmetry as the arc's
-expected honest end state and called it the most valuable output rather than a
-failure.
+Map and record: `docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`.
 
 ##### The post-flip probe, literal output (2026-09-05)
 
@@ -407,7 +393,9 @@ What that does and does not license, in the order that matters:
 * ⚠ The subject state is deliberately NOT drained (`(prefix, A, C) = (true, false,
   true)`): it is the intermediate post-write pre-cascade state, so no headline theorem
   is instantiated at it.
-* `uposTested := 0` on every leg - a re-observation of the structural immunity above,
+* `uposTested := 0` on every leg - a re-observation of `uposEdgeFree`'s structural
+  immunity on the `_d` fragment (measured 2026-08-08,
+  `history/leaf-family-split-scope-2026-08-05.md` SS 9.2),
   not new evidence about the `upos` clause.
 * **Scope:** one schema shape, one object, two prefix orders, the WRITE leg only.
   Nothing about `removeLoggedRules`, the other `Inv` clauses, Python, or longer op
@@ -422,10 +410,9 @@ STORE-indexed, so the witness is taken at `Td4` - the corpus's own four tuples -
 at the one-tuple minimal store. A `lean-graph != spec` disagreement on that corpus
 would now contradict a machine-checked theorem.
 
-Two carve-outs survive and must not be over-read away:
+One carve-out survives and must not be over-read away (until 2026-09-23 there was a
+second, the T2a asymmetry, retired by `P5` above):
 
-* the **T2a** asymmetry above (that module compares `check` answers, which is T2b's
-  business, so the classification is unaffected - but `Inv` is not proved there);
 * the **Lean REMOVE gate**: `removeGateB` decides plain `storeValidRulesB`, so the
   corpus stays in `test_conformance_remove_graph._REMOVE_EXCLUDED` - now for that
   reason ALONE, no longer for the admission reason recorded there before leg 5.
@@ -493,9 +480,10 @@ Everything §7 lists, plus the fragment carries:
 3. **Fragment scope** (each a documented gap, none hidden — `history/ROADMAP.md`
    "W4 — honest gaps"): > 2 derived strata; non-`ComputedOnly` derived operand
    leaves — `Direct`/TTU arms under a boolean, i.e. `PDerivedTTU`/`PDerivedUserset`
-   plan leaves (**this is the §3.0 vacuity, not a coverage narrowing — the
-   `Direct`-arm half of it makes the final theorems say nothing at all about
-   `can_view: [user] but not blocked` stores**; the derived-def ROOT operator is
+   plan leaves (**the `Direct`-arm half of this WAS the §3.0 vacuity — the final
+   theorems said nothing at all about `can_view: [user] but not blocked` stores —
+   and is CLOSED: T2b/T3/T6 2026-08-05, T2a 2026-09-23; the TTU/userset half is
+   still a gap**; the derived-def ROOT operator is
    NO LONGER a gap — see the note);
    declared wildcard-userset restrictions (`[T#p:*]`-style) anywhere; stored
    object-wildcard (`w_all`) tuples; stored userset-star tuples; **removes**
@@ -718,7 +706,7 @@ spec-side, where the set engine is proved to compute `sem` at full scope (T1).
 **Every item still open in this section now has a board row** (added 2026-08-16, after an
 audit found this section ranking work [`HANDOFF.md`](../HANDOFF.md) did not list at all —
 the board's charter claims to rank *every* open item, so the omission made that charter
-false): (c)(i) → `P5`, on the leg-7 chain `P3`/`P4`/`P14`; (c)(ii) → `P15`, its
+false): (c)(i) → `P5` (DONE 2026-09-23), on the leg-7 chain `P3`/`P4`/`P14`; (c)(ii) → `P15`, its
 remove-guard half → `P9`; (d)'s suspected under-claim → `AW-1`; (e) → `P16`; (g) → `P19`;
 (h) → `P17`; (i) → `P18`; (j) → `SD-1`. The board's `pri` column is what *ranks* them; the
 descending value-per-effort argument below is the reasoning behind that ranking, and the
@@ -743,17 +731,11 @@ the way onto the FINAL unsuffixed theorems (`enumJob2D` swap, leg 2; the
 `StoreValidRulesD` and `W4Fragment.computedOnly` → the five derived-def clauses,
 leg 5**; the conformance reclassification, leg 6), so `graph_correct` and
 everything routed through it now cover `can_view: [user] but not blocked` and are
-no longer vacuous there (§3.0). **Two pieces of that gap survive and are the
-highest-value remaining items:** (i) **T2a alone did not widen** — `graph_reached_inv`
-carries an extra `W4NarrowT2a` bundle that the Direct-arm store provably fails
-(`outside_narrow_t2a`), and since **2026-09-05 what is owed is PROOF WORK, not a design
-decision**: leg 7's flip landed (`GraphState.writeLoggedRules` folds
-`rewriteClosureL S (rawWriteTuples S t)`; projection P6 deleted), so probe D.3's
-mechanism — and with it the "P6 leaf-family modelling limit" justification this item
-used to carry — is gone, while the bundle is still taken. The two steps are: prove
-`Inv.negEdgeFree` on the `_d` fragment for the leaf-routed write leg, then restate
-`graph_reached_inv` without `W4NarrowT2a` (§3.0 has the post-flip probe output and its
-caveats); (ii) the remaining leaf shapes —
+no longer vacuous there (§3.0). **Two pieces of that gap survived; (ii) is now the
+highest-value remaining item:** (i) **T2a** — **DONE 2026-09-23 (`P5`)**:
+`graph_reached_inv` no longer takes the extra `W4NarrowT2a` bundle (deleted); after leg
+7's flip removed probe D.3's mechanism, the T2a chain was widened in place to the `_d`
+fragment (§3.0; map in `docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`); (ii) the remaining leaf shapes —
 `PDerivedTTU`/`PDerivedUserset` (TTU/userset arms under a derived def, still
 `False` under `ComputedOrDirect`) and > 2 strata — plus the Lean REMOVE guard,
 which still decides plain `storeValidRulesB` and so keeps `direct_arm_exclusion`

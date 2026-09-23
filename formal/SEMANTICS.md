@@ -663,14 +663,15 @@ name, the code wins):
   restriction is likewise not a field — it was a property of the chain, and since
   2026-07-19f the chain carries a scoped `remove` constructor (see `h : ReachedBy` below,
   which states both facts correctly; only this field list had gone stale).
-  **Vacuity warning — HALF RETIRED 2026-08-05.** `computedOnly` (with the then-narrow
+  **Vacuity warning — RETIRED (T2b/T3/T6 2026-08-05, T2a 2026-09-23).** `computedOnly` (with the then-narrow
   `GraphAdmission.storeValid = StoreValidRules`) is what USED to make the final graph
   theorems VACUOUS on `Direct`-arm derived stores (`can_view: [user] but not blocked`).
   E-chain leg 5 widened both, so T2b/T3/T6 and the Exec finals now COVER that shape
-  (`W4WitnessDirect.final_applies`). ⚠ **T2a `graph_reached_inv` did not widen**: it takes
-  a third bundle `W4NarrowT2a` re-imposing schema-wide `ComputedOnly` + the narrow
-  `StoreValidRules`, and `W4WitnessDirect.outside_narrow_t2a` machine-checks that such a
-  store fails it. See `FINAL_REVIEW.md` §3.0.
+  (`W4WitnessDirect.final_applies`). T2a `graph_reached_inv` followed on 2026-09-23
+  (`P5`): until then it also took a third bundle `W4NarrowT2a` (schema-wide
+  `ComputedOnly` + the narrow `StoreValidRules`); that bundle is deleted and T2a now takes
+  these same two bundles (`W4WitnessDirect.reached_inv_applies`). See `FINAL_REVIEW.md` §3.0 and
+  `docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`.
 - `h : ReachedBy σ S T` (`FullScope.lean`; `ReachedBy := ReachedByW3d2E`) —
   `σ` is reached from empty by the OPERATIONAL chain: admitted logged
   rule-routed writes interleaved with state-derived two-round cascade legs —

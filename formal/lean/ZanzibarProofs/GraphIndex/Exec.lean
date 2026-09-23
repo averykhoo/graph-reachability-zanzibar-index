@@ -1217,7 +1217,214 @@ theorem swTw_admission : GraphAdmission LeafWitness.Sw [LeafWitness.tw] := by
     .excl (.union (.direct [("user", BARE, false)]) (.computed "viewer")) (.computed "banned"),
     [("user", BARE, false)], rfl, by decide, by decide, by decide⟩
 
-/-! ⚠ **`writeLeg_own_key_dirty_admitted_explicit`, `::_refuted_under_admission` and their
+/-! ## ★ `P5` — T2a's CONTENT witness, at D.3's own store (2026-09-23)
+
+`graph_reached_inv` lost its `W4NarrowT2a` bundle in `P5`. Its scope witness at the
+Direct-arm store (`FullScope.lean::W4WitnessDirect.reached_inv_applies`) cannot carry the
+evidence on its own: `Sd` declares no wildcard shape, so every residue row there has
+`neg = []` and `Inv.negEdgeFree` is never exercised (probe
+`formal/probes/p5_negedgefree_sd_td_2026-09-23.lean`, `negTested := 0` on every leg). And
+`graph_reached_inv` has no proof consumer, so nothing downstream would redden if it came to
+say less than it claims.
+
+This section is the witness where the clause BITES: `LeafWitness.Sw`
+(`approver := ([user] or viewer) but not banned`, `user:*` on `viewer`), with the prefix
+`bob banned`, `user:* viewer` driven to a drained state `σ0`. At `σ0` the `approver` row
+already records `bob` in `neg` (the star grants him, the ban revokes him). Then two writes of
+`bob approver` from the SAME `σ0`:
+
+* the model's own leaf-routed `writeLoggedRules` — a genuine chain state (the `write`
+  constructor, un-cascaded, i.e. mid-drain), where the theorem gives `Inv`, and `bob` is
+  still in the `neg` row, so `negEdgeFree` is a live constraint and it holds;
+* the pre-flip bare `writeLoggedOne`, the write D.3 killed — which lands `bob → approver`
+  directly and so provably VIOLATES `Inv`.
+
+So `Inv` separates the two writes exactly where they differ, and the theorem certifies the
+one the model makes. Weakening `Inv.negEdgeFree`, or reverting the write leg to a bare
+edge, each has to break a declaration below. The 2026-09-05 probe measured the same pair
+over the fuel-capped `GraphState.reach`; these are the `NReaches`-stated facts. -/
+
+namespace P5Witness
+
+/-- `user:*` on `viewer` at `doc:d1` — the load-bearing wildcard grant. -/
+def tStar : Tuple := ⟨⟨"user", STAR, BARE⟩, "viewer", ⟨"doc", "d1"⟩⟩
+
+/-- The drained prefix: `bob banned`, then `user:* viewer`. -/
+def prefixOps : List GraphOp := [GraphOp.add LeafWitness.tb, GraphOp.add tStar]
+
+/-- The prefix's accepted store (the driver conses, so it is reversed). -/
+def prefixStore : Store := [tStar, LeafWitness.tb]
+
+/-- The store after the probe write `bob approver`. -/
+def store : Store := LeafWitness.tw :: prefixStore
+
+/-- The public `approver` node at `doc:d1`, where the `neg` row lives. -/
+def key : NodeKey := objNode ⟨"doc", "d1"⟩ "approver"
+
+def bob : SubjectRef := ⟨"user", "bob", BARE⟩
+
+/-- `Sw`'s only derived key and its def. -/
+theorem derived_def {dt R : String} {e : Expr}
+    (hlk : LeafWitness.Sw.lookup (dt, R) = some e)
+    (hder : isDerived LeafWitness.Sw (dt, R) = true) :
+    (dt, R) = ("doc", "approver") ∧
+      e = .excl (.union (.direct [("user", BARE, false)]) (.computed "viewer"))
+            (.computed "banned") := by
+  have hmem := mem_defs_of_lookup hlk
+  simp only [LeafWitness.Sw, List.mem_cons, List.not_mem_nil, or_false,
+    Prod.mk.injEq] at hmem
+  rcases hmem with ⟨⟨rfl, rfl⟩, rfl⟩ | ⟨⟨rfl, rfl⟩, rfl⟩ | ⟨⟨rfl, rfl⟩, rfl⟩
+  · exact absurd hder (by decide)
+  · exact absurd hder (by decide)
+  · exact ⟨rfl, rfl⟩
+
+/-- `GraphAdmission` at the three-tuple store: `swTw_admission`'s discharge, with the two
+    prefix tuples taking the untainted (`Or.inl`) arm. -/
+theorem admission : GraphAdmission LeafWitness.Sw store := by
+  refine ⟨LeafWitness.wf, by unfold NodupKeys; decide, by unfold Stratifiable; decide,
+    by unfold TtuTuplesetsDirect; decide, by unfold RewriteMatchDeclared; decide,
+    ⟨fun _ => 0, by decide, fun _ => Nat.zero_le _⟩, by decide, by decide, ?_,
+    ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide), by decide, by decide,
+    by decide, by decide⟩
+  intro t ht
+  simp only [store, prefixStore, List.mem_cons, List.not_mem_nil, or_false] at ht
+  rcases ht with rfl | rfl | rfl
+  · exact Or.inr ⟨by decide, rfl,
+      .excl (.union (.direct [("user", BARE, false)]) (.computed "viewer")) (.computed "banned"),
+      [("user", BARE, false)], rfl, by decide, by decide, by decide⟩
+  · exact Or.inl ⟨by decide, .direct [("user", BARE, true)],
+      [("user", BARE, true)], rfl, by simp [exprDirects], by decide⟩
+  · exact Or.inl ⟨by decide, .direct [("user", BARE, false)],
+      [("user", BARE, false)], rfl, by simp [exprDirects], by decide⟩
+
+/-- `W4Fragment` at the same pair. The derived def's `Direct` arm sits under `excl`
+    (`noUnionDirects`), both computed operands are untainted (`computedOnlyOperands` /
+    `twoStrata` vacuous), and the one star subject is bare. -/
+theorem w4fragment : W4Fragment LeafWitness.Sw store where
+  computedOrDirect := by
+    intro dt R e hlk hder
+    obtain ⟨_, rfl⟩ := derived_def hlk hder
+    exact ⟨⟨trivial, trivial⟩, trivial⟩
+  directArmsBare := by
+    intro dt R e hlk hder
+    obtain ⟨_, rfl⟩ := derived_def hlk hder
+    refine ⟨⟨?_, trivial⟩, trivial⟩
+    intro r hr
+    simp only [List.mem_singleton] at hr
+    subst hr; rfl
+  directArmsConcrete := by
+    intro dt R e hlk hder
+    obtain ⟨_, rfl⟩ := derived_def hlk hder
+    decide
+  computedOnlyOperands := by
+    intro dt R e hlk hder r' hr' hder'
+    obtain ⟨⟨rfl, rfl⟩, rfl⟩ := derived_def hlk hder
+    simp only [computedRefs, List.nil_append, List.cons_append, List.mem_cons,
+      List.not_mem_nil, or_false] at hr'
+    rcases hr' with rfl | rfl <;> exact absurd hder' (by decide)
+  noUnionDirects := by
+    intro dt R e hlk hder
+    obtain ⟨_, rfl⟩ := derived_def hlk hder
+    rfl
+  twoStrata := by
+    intro dt R e hlk hder r' hr' hder'
+    obtain ⟨⟨rfl, rfl⟩, rfl⟩ := derived_def hlk hder
+    simp only [computedRefs, List.nil_append, List.cons_append, List.mem_cons,
+      List.not_mem_nil, or_false] at hr'
+    rcases hr' with rfl | rfl <;> exact absurd hder' (by decide)
+  wsBare := by decide
+  bareStar := by unfold BareStarStore; decide
+  ttuStarFree := by
+    intro t _ _ a ha tr _
+    rw [show schemaRewrites LeafWitness.Sw = [] from rfl] at ha
+    cases ha
+  term := by
+    intro dt R hder
+    have hkey : (dt, R) = ("doc", "approver") := by
+      unfold isDerived at hder
+      rw [show taintedKeys LeafWitness.Sw = [("doc", "approver")] from by decide] at hder
+      simpa using hder
+    rw [Prod.mk.injEq] at hkey
+    obtain ⟨rfl, rfl⟩ := hkey
+    refine ⟨?_, ?_⟩
+    · intro r hr tr _
+      rw [show schemaRewrites LeafWitness.Sw = [] from rfl] at hr
+      cases hr
+    · intro t ht
+      simp only [store, prefixStore, List.mem_cons, List.not_mem_nil, or_false] at ht
+      rcases ht with rfl | rfl | rfl <;> decide
+
+set_option maxHeartbeats 4000000 in
+/-- **The decided facts, all at ONE prefix state.** The driver accepts the prefix onto
+    `prefixStore`; the leaf-routed write of `bob approver` passes the chain's bridged
+    admission gate; after it, the `approver` row still records `bob` in `neg`; the
+    pre-flip bare write leaves the same row carrying `bob`; and the bare write lands the
+    edge `bob → approver`. -/
+theorem prefix_facts :
+    (graphRunOps LeafWitness.Sw prefixOps).map (fun p =>
+      (p.2,
+       foldAdmitsBridgedB p.1
+         (rewriteClosureL LeafWitness.Sw (rawWriteTuples LeafWitness.Sw LeafWitness.tw)),
+       ((p.1.writeLoggedRules LeafWitness.Sw LeafWitness.tw).residue key "approver").map
+         (fun r => r.neg.contains bob),
+       ((p.1.writeLoggedOne LeafWitness.tw).residue key "approver").map
+         (fun r => r.neg.contains bob),
+       (p.1.writeLoggedOne LeafWitness.tw).edges.contains (subjNode bob, key)))
+      = some (prefixStore, true, some true, some true, true) := by
+  decide
+
+/-- **★ `P5`'s content witness.** From one drained prefix state `σ0` of D.3's store:
+    the model's leaf-routed write reaches a chain state where `Inv` HOLDS (by
+    `graph_reached_inv`, no extra bundle) while the `approver` row's `neg` still holds
+    `bob` — so `negEdgeFree` is a live constraint there, not a vacuous one; and the
+    pre-flip bare write from the same `σ0` VIOLATES `Inv`, by `negEdgeFree` at exactly that
+    row and member. -/
+theorem leafRouted_inv_preflip_not :
+    ∃ σ0 : GraphState,
+      graphRunOps LeafWitness.Sw prefixOps = some (σ0, prefixStore)
+        ∧ ReachedBy (σ0.writeLoggedRules LeafWitness.Sw LeafWitness.tw) LeafWitness.Sw store
+        ∧ Inv LeafWitness.Sw (σ0.writeLoggedRules LeafWitness.Sw LeafWitness.tw)
+        ∧ (∃ res, (σ0.writeLoggedRules LeafWitness.Sw LeafWitness.tw).residue key "approver"
+              = some res ∧ bob ∈ res.neg)
+        ∧ ¬ Inv LeafWitness.Sw (σ0.writeLoggedOne LeafWitness.tw) := by
+  have hd := prefix_facts
+  cases hopt : graphRunOps LeafWitness.Sw prefixOps with
+  | none => rw [hopt] at hd; simp at hd
+  | some p =>
+    obtain ⟨σ0, T0⟩ := p
+    rw [hopt] at hd
+    simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq] at hd
+    obtain ⟨hT, hadm, hA, hB, hedge⟩ := hd
+    subst hT
+    have hadm' : FoldAdmitsBridged σ0
+        (rewriteClosureL LeafWitness.Sw (rawWriteTuples LeafWitness.Sw LeafWitness.tw)) :=
+      (foldAdmitsBridgedB_iff
+        (rewriteClosureL LeafWitness.Sw (rawWriteTuples LeafWitness.Sw LeafWitness.tw)) σ0).mp
+        hadm
+    have hprev : ReachedBy σ0 LeafWitness.Sw prefixStore := graphRunOps_reached hopt
+    have hreach : ReachedBy (σ0.writeLoggedRules LeafWitness.Sw LeafWitness.tw)
+        LeafWitness.Sw (LeafWitness.tw :: prefixStore) :=
+      @ReachedByW3d2E.write σ0 LeafWitness.Sw prefixStore LeafWitness.tw hadm' hprev
+    refine ⟨σ0, rfl, hreach, graph_reached_inv admission w4fragment hreach, ?_, ?_⟩
+    · cases hr : (σ0.writeLoggedRules LeafWitness.Sw LeafWitness.tw).residue key "approver"
+        with
+      | none => rw [hr] at hA; cases hA
+      | some res =>
+        rw [hr] at hA
+        simp only [Option.map_some, Option.some.injEq, List.contains_iff_mem] at hA
+        exact ⟨res, rfl, hA⟩
+    · intro hInv
+      cases hr : (σ0.writeLoggedOne LeafWitness.tw).residue key "approver" with
+      | none => rw [hr] at hB; cases hB
+      | some res =>
+        rw [hr] at hB
+        simp only [Option.map_some, Option.some.injEq, List.contains_iff_mem] at hB
+        rw [List.contains_iff_mem] at hedge
+        exact hInv.negEdgeFree key "approver" res hr bob hB (NReaches.edge hedge)
+
+end P5Witness
+
+/-! ⚠ **`writeLeg_own_key_dirty_admitted_explicit`,`::_refuted_under_admission` and their
 `#check` were DELETED by step (alpha).** They were the "repair (2)" trap: the witness was a
 reachable pre-state whose POST-write store `[LeafWitness.tw]` satisfied the WHOLE admission
 bundle (`swTw_admission`) and whose own key was still not dirtied, proving that assuming

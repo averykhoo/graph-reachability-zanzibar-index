@@ -61,7 +61,7 @@ end GraphModel
 
     **⚠ Corrected 2026-08-05 — this used to end "which do not occur on the fragment",
     and E-chain leg 5 made that FALSE.** It is still true on the `ComputedOnly` chains
-    (the `_e` family, `W4NarrowT2a`); it is false on the `_d`/E-chain fragment, where
+    (the `_e` family; until `P5` also T2a's `W4NarrowT2a` bundle); it is false on the `_d`/E-chain fragment, where
     `ComputedOrDirect` (`ReconcileCorrect.lean::ComputedOrDirect`) admits `.direct` and
     the store is genuinely read — see `CascadeStrataSettle.lean`'s
     `checkFnR_cons_irrel_cd`, which exists precisely because `checkFnR_store_irrel` is

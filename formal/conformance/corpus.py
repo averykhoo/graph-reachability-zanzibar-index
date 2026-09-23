@@ -421,14 +421,9 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
         # derived-def clauses). Both `outside_old_admission*` theorems are KEPT as the
         # proof that this was a widening and not a relabeling.
         #
-        # TWO carve-outs remain, and neither is a divergence:
-        #   * T2a `graph_reached_inv` takes a third bundle `W4NarrowT2a` that this store
-        #     provably fails (`outside_narrow_t2a`). Probe D.3 machine-checked
-        #     `Inv.negEdgeFree` FALSE on the `_d` fragment — a leaf-family MODELLING
-        #     limit (projection P6 retired 2026-09-05; the modelling-limit claim itself
-        #     is unchanged by the retirement); Python routes the write onto the leaf
-        #     family, so the edge and the `neg` row live on different nodes (0
-        #     mismatches on the real backends).
+        # ONE carve-out remains, and it is not a divergence (T2a's was retired by `P5`,
+        # 2026-09-23: `graph_reached_inv` no longer takes the `W4NarrowT2a` bundle this
+        # store failed, and `W4WitnessDirect.reached_inv_applies4` instantiates it here):
         #   * the REMOVE-stream Lean gate still excludes it (see
         #     test_conformance_remove_graph._REMOVE_EXCLUDED): `removeGateB` decides
         #     plain `storeValidRulesB`. That is now the SOLE reason for the exclusion —
