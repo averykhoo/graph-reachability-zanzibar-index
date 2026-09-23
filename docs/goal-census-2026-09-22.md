@@ -3,6 +3,15 @@
 **ACTIVE-PLAN** (`docs/README.md` §3). Corrections append **dated at the top**. Freeze when a
 direction is chosen and its first item closes.
 
+## Correction, 2026-09-23c (appended; the body below is as-written)
+
+**Step 2 is COMPLETE. `P14` closed as absorbed, with nothing owed.** The `_d` reach-collapse
+family was already proved over the leaf-routed chain, and a dependency-closure probe shows all
+eight headline theorems rest on it and on no narrower collapse lemma
+([`docs/p14-reach-collapse-absorbed-2026-09-23.md`](p14-reach-collapse-absorbed-2026-09-23.md)). Step 3 now has an owning row:
+`DW-1` (`NOW`, unsized). `TK103` (`LATER`) is a legibility item this closure surfaced:
+nothing states which audited Lean names the headlines actually rest on.
+
 ## Correction, 2026-09-23b (appended; the body below is as-written)
 
 **Step 2's T2a half is LANDED — `P5` closed 2026-09-23b, and it needed neither `P4` nor

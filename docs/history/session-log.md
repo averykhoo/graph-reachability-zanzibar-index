@@ -30,6 +30,43 @@ from here.
 
 ---
 
+## 2026-09-23c — `P14` closed as absorbed: headlines rest on the `_d` collapse family only; goal step 2 done
+
+rows: P14 (closed), TK103 (NEW, `LATER`), DW-1 (→ `NOW`, comment, brief).
+
+`task lint: clean (13 checks, 218 task file(s) parsed), 30 warning(s)`
+
+`read: board + note`
+
+**"Do the next task" → `P14`, the board's `NOW`.** Its 2026-09-23b note said to state what the
+reach-collapse half still owes beyond the existing `_d` lemmas, and to close it as absorbed if
+the answer was nothing. The answer is nothing. Map and literal probe output:
+[`docs/p14-reach-collapse-absorbed-2026-09-23.md`](../../docs/p14-reach-collapse-absorbed-2026-09-23.md) (FROZEN).
+
+* **Re-proof: already done.** `ReachedByW3d2.write` steps by `writeLoggedRules`, which has
+  been the leaf-routed `rewriteClosureL` fold since the 2026-09-05 flip.
+  `CascadeStrataSettle.lean::reachedByW3d2_reach_collapse_root_d` and its two premises are
+  proved over that chain. The re-proof happened in 4c-ii and was never recorded against this
+  row.
+* **Per-leaf-node collapse / re-pointing `graphRec`/`checkFn`: no reader.** `P4` showed the
+  tree took the refusal route. The Python `leaf_check` side is `P4`'s
+  `CORRESPONDENCE.md` §7.3 item.
+* **MEASURED, not argued:** `formal/probes/p14_collapse_closure_2026-09-23.lean` walks the
+  `getUsedConstantsAsSet` closure of the eight headline theorems. All eight rest on the
+  W3d2 `_d` collapse family plus the scope-free `reconcileJobsLR_reach_collapse`, and
+  every narrow, W3d and W3a collapse lemma is OUT. A positive control several hops deep
+  and a negative control (`P4Bridge.bridge_holds_Sw`) both behaved in the same run.
+
+**Goal step 2 is complete.** `DW-1` is promoted to `NOW` as the owner of step 3 ("surface the
+silent narrowing"). It is unsized, and its first action is sizing per SILENT field. `TK103`
+(new, `LATER`) turns the probe into the question the goal actually cares about: which audited
+names does NO headline rest on? `reachedByW3a_reach_collapse_root_d`, for example, has zero
+consumers outside `Audit.lean`.
+
+No Lean source, pin, golden or test changed. The probe lives outside the lake package.
+
+Still owed: nothing.
+
 ## 2026-09-23b — `P5` closed: T2a WIDENED, `W4NarrowT2a` deleted, and the row's own trap was a non-issue once measured
 
 rows: P5 (closed), P14 (comment, → `NOW`, brief).

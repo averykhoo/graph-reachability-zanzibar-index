@@ -15,6 +15,25 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-09-23c (**`P14` CLOSED AS ABSORBED — the reach-collapse half was re-proved during 4c-ii/the flip and never recorded; the headlines' dependency closure contains only the `_d` W3d2 collapse family, measured**)
+
+**Task:** board `P14` (leg 7 step 5, reach-collapse half). Map, literal output and controls:
+[`docs/p14-reach-collapse-absorbed-2026-09-23.md`](../../docs/p14-reach-collapse-absorbed-2026-09-23.md).
+
+* **Nothing owed.** The classification half landed with `P3`. The collapse family
+  (`CascadeStrataSettle.lean::reachedByW3d2_reach_collapse_root_d`,
+  `::reachedByW3d2_Rnode_source_bare_d`, `::reachedByW3d2_bareNode_no_inedge_d`) is proved over
+  `ReachedByW3d2`, whose write leg has been the leaf-routed fold since 2026-09-05. A
+  per-leaf-node collapse has no Lean reader under the refusal route (`P4`).
+* **Probe** `formal/probes/p14_collapse_closure_2026-09-23.lean` (rc=0): the transitive
+  used-constant closures of `graph_correct`, `graph_correct_public`, `graph_reached_inv`,
+  `backend_equivalence`, `no_ghost_grant`, `exclusion_effective`, `graphRunOps_check_eq_sem`
+  and `graphModeAnswers_eq_sem` contain the three `_d` lemmas and
+  `reconcileJobsLR_reach_collapse`. They contain none of the narrow W3d2, W3d or W3a
+  collapse lemmas, nor `reachedByRules_derived_no_inedge`. Controls: IN several hops
+  deep, and OUT for an unimported `by decide` witness.
+* No Lean source changed; no pin moved.
+
 ## Session 2026-09-23 (**`P5` — T2a WIDENED: `graph_reached_inv` now takes only `GraphAdmission` + `W4Fragment`; `W4NarrowT2a` and its pinned refutation `outside_narrow_t2a` are DELETED; no new mathematics was owed**)
 
 **Task (user-assigned, goal step 2):** board `P5`, *"`Inv.negEdgeFree` under leaf routing;

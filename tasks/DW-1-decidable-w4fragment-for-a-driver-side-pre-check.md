@@ -1,8 +1,8 @@
 ---
 id: DW-1
 title: decidable W4Fragment for a driver-side pre-check
-brief: SOMEDAY -> LATER 2026-08-31b on measured evidence: W4Fragment scope pin is LOUD 0 / MIXED 3 / SILENT 7
-pri: LATER
+brief: NOW 2026-09-23c: goal step 3 owner; size per SILENT field of W4FRAGMENT_SCOPE first
+pri: NOW
 size: ?
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 04392ec66204
 created: 2026-08-16
-moved: 2026-09-06b
-updated: 2026-09-06d
+moved: 2026-09-23c
+updated: 2026-09-23c
 closed:
 ---
 
@@ -50,3 +50,7 @@ Board cell rewritten 2026-08-31b (SOMEDAY -> LATER on the LOUD 0 / MIXED 3 / SIL
 ### 2026-09-06d
 
 The "do not lift ttuDirect in Lean" trap moved here from HANDOFF.md Standing traps at the 2026-09-06d cutover (see ## Traps). No change to the item itself.
+
+### 2026-09-23c
+
+Promoted LATER -> NOW 2026-09-23c: P14 closed as absorbed (docs/p14-reach-collapse-absorbed-2026-09-23.md), so goal step 2 is COMPLETE and this row is the most direct owner of goal step 3, "surface the silent narrowing -- the strongest version is a machine-checked coverage statement, not a doc" (docs/goal-census-2026-09-22.md, recommended moves). The census listed DW-1 among assurance-vs-product-risk rows; that was written before step 2 closed, and step 3 has no other owning row (grep of tasks/ for the silent-narrowing / scope-pin evidence finds DW-1, P21, P6, P4, TK101, TK103 only; P21 is the Lean-side differential channel, which this row may want but does not need first). UNSIZED: the first action is to size it against test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE (7 SILENT fields). For each field, say whether a decidable instance exists in Lean and whether the Python pre-check could be a mirror (P21 residual) or needs a real differential.

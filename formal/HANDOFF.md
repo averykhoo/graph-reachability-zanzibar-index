@@ -60,6 +60,12 @@ exercised at `Sd`) and `Exec.lean::P5Witness.leafRouted_inv_preflip_not` +
 `P5Witness.prefix_facts` (content, at D.3's own store `LeafWitness.Sw`). Map and record:
 [`docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`](../docs/p5-negedgefree-under-leaf-routing-2026-09-23.md). What comes next is ranked in the task tree, not here.
 
+**Leg 7 step 5 (`P14`) closed as absorbed 2026-09-23c — nothing was owed.** The reach-collapse
+family is proved over the leaf-routed chain (`CascadeStrataSettle.lean::reachedByW3d2_reach_collapse_root_d`),
+and a probe of the headline theorems' dependency closure shows they use only that `_d` family
+(plus the scope-free `reconcileJobsLR_reach_collapse`). No narrow, W3d or W3a collapse lemma is
+used. Record: [`docs/p14-reach-collapse-absorbed-2026-09-23.md`](../docs/p14-reach-collapse-absorbed-2026-09-23.md).
+
 **The design decision that was owed here was made 2026-08-05 — option (c), model the leaf
 family and retire P6 — and its work landed 2026-09-05.** The deliberation, the two rejected
 options ((a) restate at drained states only, (b) weaken `negEdgeFree`), the "nothing
