@@ -30,6 +30,60 @@ from here.
 
 ---
 
+## 2026-09-23d — `DW-1` sized and steps 1+2 landed: `W4Fragment` is DECIDED, and zcli reports it
+
+rows: DW-1 (comment, size `M`, brief), TK104 (NEW, `LATER`), P21 (comment).
+
+`task lint: clean (13 checks, 219 task file(s) parsed), 30 warning(s)`
+
+`read: board + note`
+
+**"Do the next task" → `DW-1`, the board's `NOW`** (goal step 3, "surface the silent
+narrowing"). Its first action was to size it per field. Two read-only agents did the census,
+and the session spot-checked their citations. The result: no field is MEDIUM or HARD, and
+four already had a decider. Map:
+[`docs/dw1-decidable-w4fragment-2026-09-23.md`](../dw1-decidable-w4fragment-2026-09-23.md)
+(ACTIVE-PLAN). Its Progress block carries every literal result.
+
+* **Step 1 — `GraphIndex/FragmentDecide.lean`:**
+  - `w4FragmentB` with `w4FragmentB_iff`, EXACT in both directions, and
+    `instance : Decidable (W4Fragment S T)`.
+  - The six lookup-quantified fields are decided over `taintedKeys S` with a `match` on
+    `S.lookup`. A `∀ p ∈ S.defs` form would have been strictly stronger under duplicate keys
+    and lost completeness.
+  - Pins: two positives and ten per-field controls. Each control pins its EXACT failure list.
+  - They were green on the first run, so a **14-mutation sweep** followed. M0 attributed
+    correctly. Every field mutation reddened its `_iff` and its own pin. The one proof-only
+    red (M13) is unobservable at any schema by construction.
+  - 28 audited names were added and none removed.
+* **Step 2 — `zcli mode="fragment"` + `test_conformance_fragment.py`:**
+  - The module pins (A) every `_THEOREM_BACKED` corpus inside the fragment, turning 24 prose
+    arguments into a machine check for the `W4Fragment` half.
+  - It pins (B) Lean's per-field verdict on all 36 curated corpora, against a table derived
+    independently by the Python mirror probe (`formal/probes/dw1_python_mirror_2026-09-23.py`).
+  - It pins (C) Lean `taintedKeys` == `compute_taint`, which nothing compared before.
+  - Four sabotages each reddened what they should.
+  - ⚠ **The first sabotage was an INSTRUMENT FAILURE.** The Lean-side mutation broke the
+    module's own pins, so `lake build zcli` failed and pytest certified the STALE binary with
+    `98 passed`. The harness was changed to abort on a build failure, and the mutations
+    moved to the unpinned `Cli.lean` seam.
+* **Decisions** (recorded on `DW-1`, per "Who decides"):
+  - `mode="graph"` does NOT refuse out-of-fragment input. That would abolish
+    `_DIFFERENTIAL_ONLY`, so zcli REPORTS scope instead. `CORRESPONDENCE.md`'s completion
+    criterion carries the dated revision.
+  - `admissionB` never existed. `GraphAdmission` has no decider (`RewriteRanked` is an
+    existential), and that is filed as `TK104`.
+* **Settled:** `ttu_fromchain`, `ttu_fromchain_group` and `self_flag` are IN `W4Fragment`.
+  `corpus.py` prose had them out or open, and it now carries dated notes. None was moved into
+  `GRAPH_FRAGMENT`, because the `GraphAdmission` half is unargued.
+
+Next: step 3, the production Python `w4_fragment_report` plus its differential against
+`mode="fragment"`. The Python side is still SILENT to an operator until that lands.
+
+Still owed: nothing.
+
+---
+
 ## 2026-09-23c — `P14` closed as absorbed: headlines rest on the `_d` collapse family only; goal step 2 done
 
 rows: P14 (closed), TK103 (NEW, `LATER`), DW-1 (→ `NOW`, comment, brief).

@@ -137,6 +137,25 @@ criterion:** an `admissionB`-style boolean form for `W4Fragment` plus its soundn
 equivalence lemma, wired as a zcli `mode=graph` pre-check that REFUSES an out-of-fragment
 schema instead of answering.
 
+**2026-09-23d — the decider EXISTS, and the completion criterion above is revised in one
+place.** `GraphIndex/FragmentDecide.lean::w4FragmentB` decides `W4Fragment` EXACTLY
+(`w4FragmentB_iff`, both directions), and the `Decidable` instance follows from it. Its
+evidence is two positives, ten per-field controls, and a 14-mutation sweep recorded in the
+module. `zcli mode="fragment"` (`Cli.lean::fragmentJson`) reports the verdict per field,
+together with Lean's `taintedKeys`. `formal/conformance/test_conformance_fragment.py` holds
+every `_THEOREM_BACKED` corpus inside the fragment, pins the verdict on all curated corpora
+against an independent Python derivation, and pins `isDerived ≡ compute_taint`.
+
+(i) There was never an `admissionB`. `GraphAdmission` has no decider, and `W4Fragment`'s
+completeness did not need one.
+
+(ii) **`mode="graph"` does NOT refuse an out-of-fragment input — decision, not omission.**
+`formal/conformance/test_conformance_graph.py::_DIFFERENTIAL_ONLY` exists to run exactly such corpora as an
+implementation differential, and a refusal would abolish the category. The driver-honesty
+goal is met by REPORTING scope next to answering. Owner of the rest of the row: `DW-1`,
+map `docs/dw1-decidable-w4fragment-2026-09-23.md`.
+
+
 All answer-comparing suites share ONE query grid
 (`formal/conformance/grid.py::grid`): targets are the stored-tuple cross product
 PLUS every schema-DECLARED `(type, relation)` paired type-aware with that type's

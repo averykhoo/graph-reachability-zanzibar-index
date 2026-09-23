@@ -9,6 +9,7 @@ import ZanzibarProofs.Spec.Counterexample
 import ZanzibarProofs.GraphIndex.Leaf
 import ZanzibarProofs.GraphIndex.LeafRules
 import ZanzibarProofs.GraphIndex.TtuStarWide
+import ZanzibarProofs.GraphIndex.FragmentDecide
 import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.BareStarCorrect
@@ -2175,5 +2176,48 @@ namespace Zanzibar
 #print axioms P4Bridge.bridge_needs_the_leaf_name_Sw
 #print axioms P4Bridge.bridge_needs_the_leaf_name_SwU
 #print axioms P4Bridge.bridge_is_per_leaf_SwF
+
+-- ★ `DW-1` (2026-09-23d) — `W4Fragment` IS DECIDABLE (`GraphIndex/FragmentDecide.lean`).
+-- `w4FragmentB_iff` is EXACT in both directions: soundness ("accepted ⇒ the headline
+-- theorems' `W4Fragment` premise holds") and completeness ("no in-scope input is refused").
+-- The six lookup-quantified fields are decided over `taintedKeys S` with a `match` on
+-- `S.lookup`, so no `NodupKeys` premise is needed (a `∀ p ∈ S.defs` form would be strictly
+-- stronger under duplicate keys and would have lost completeness). `GraphAdmission` is NOT
+-- decided — `RewriteRanked` is an existential over rank functions; out of `DW-1`'s scope.
+-- ★ NON-VACUITY: two positives (`W4Witness.Sx`/`Tx`, D.3's `LeafWitness.Sw`) and ten per-field
+-- controls, each pinning the EXACT failure list, so a decider stuck at either Bool, or one that
+-- confuses two fields, fails. ⚠ SABOTAGE: a 14-mutation sweep of the module, recorded in its
+-- own docstring; M0 (flip one pin's claim) reddened exactly that pin, every field mutation
+-- reddened its `_iff` AND its own pin, and the one proof-only red (M13, `lookupAll`'s `none`
+-- branch) is unobservable at any schema by construction.
+-- Standard axioms only:
+#print axioms computedOrDirectB_iff
+#print axioms directArmsBareB_iff
+#print axioms computedOnlyB_iff
+#print axioms lookupAll_iff
+#print axioms derivedDefsAll_iff
+#print axioms fragComputedOrDirectB_iff
+#print axioms fragDirectArmsBareB_iff
+#print axioms fragDirectArmsConcreteB_iff
+#print axioms fragComputedOnlyOperandsB_iff
+#print axioms fragNoUnionDirectsB_iff
+#print axioms fragTwoStrataB_iff
+#print axioms fragWsBareB_iff
+#print axioms w4FragmentB_iff
+#print axioms w4FragmentFailures_nil_iff
+#print axioms FragmentDecideWitness.accepts_Sx
+#print axioms FragmentDecideWitness.accepts_Sw
+#print axioms FragmentDecideWitness.fragment_Sx_by_decide
+#print axioms FragmentDecideWitness.refutes_computedOrDirect
+#print axioms FragmentDecideWitness.refutes_directArmsBare
+#print axioms FragmentDecideWitness.refutes_directArmsConcrete
+#print axioms FragmentDecideWitness.refutes_computedOnlyOperands
+#print axioms FragmentDecideWitness.refutes_noUnionDirects
+#print axioms FragmentDecideWitness.refutes_twoStrata
+#print axioms FragmentDecideWitness.refutes_wsBare
+#print axioms FragmentDecideWitness.refutes_bareStar
+#print axioms FragmentDecideWitness.refutes_ttuStarFree
+#print axioms FragmentDecideWitness.refutes_term
+#print axioms FragmentDecideWitness.outside_S6_by_decide
 
 end Zanzibar

@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: ea8db643136e
 created: 2026-08-31b
-moved: 2026-09-06b
-updated: 2026-09-06b
+moved: 2026-09-23d
+updated: 2026-09-23d
 closed:
 ---
 
@@ -57,3 +57,7 @@ rather than a measured one. Doing this well probably means a generic
 source: hand -> board by HAND EDIT 2026-09-06b, the route docs/tasktool-spec.md sec 3.1 prescribes for a wrong source value ('a hand edit plus a Log entry saying so'). Reason: this task was filed by hand AND given a board row in the same session under the dual-update contract, so sync reconciles it against the board (it reported BODY drift '(never reconciled)') while ack REFUSED it as hand-sourced (rc 2, task.py::op_ack:3175) -- a permanent red with no verb to clear it (trial friction A7 item 1). The tool's own remedy (delete the file, new --id --source board) would delete a committed task file, which sec 4 forbids, and would reset created. Body left as-is: it already matches the board cell.
 
 First reconciliation against the board row filed 2026-08-31b: cell and task body agree (fourth zcli mode so a fragment predicate is differentially checked, not mirrored; Cli.lean:14 three modes, rc 4 otherwise).
+
+### 2026-09-23d
+
+Half-absorbed by DW-1 (2026-09-23d). A fourth zcli mode now EXISTS: mode=fragment (Cli.lean::fragmentJson, runner.run_fragment). It decides W4Fragment per field, and the differential pattern is proved out in formal/conformance/test_conformance_fragment.py. What remains for this row is NoLeafSubjects: add a key to fragmentJson (the Decidable instance exists, LeafRules.lean) and turn test_leaf_namespace_correspondence.py mirror into a differential against it. Likely S now, not M. The exit-code set gained no new code; fragment mode reuses rc 5 for an ops stream.

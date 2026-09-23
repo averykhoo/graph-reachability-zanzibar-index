@@ -492,6 +492,7 @@ difference" without re-establishing it for that field** — it currently holds f
 ten, and the one narrowing accepted on that ground (`P20`) is the exception. Closing the
 seven is repo board row `DW-1`; making the classification measured rather than argued needs
 a fourth `zcli` mode, row `P21`.
+**2026-09-23d:** `W4Fragment` is now DECIDED (`GraphIndex/FragmentDecide.lean::w4FragmentB_iff`, exact in both directions), and `zcli mode="fragment"` reports the verdict per field. `test_conformance_fragment.py` machine-checks the `W4Fragment` half of every `_THEOREM_BACKED` corpus, which was prose before. The Python side is still SILENT: the production mirror plus its differential is `DW-1` step 3 (`docs/dw1-decidable-w4fragment-2026-09-23.md`).
 
 **The T2a scope carry — CLOSED 2026-09-23 (`P5`)**; see the T2a note at the top of this
 file. The pre-work measurements that sat here (the Sd/Td probe, `graph_reached_inv`'s zero

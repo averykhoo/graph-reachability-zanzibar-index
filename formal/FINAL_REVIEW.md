@@ -27,15 +27,15 @@ number INTO it over restating it.
 
 | quantity | value |
 |---|---|
-| `formal/conformance/` collected | **582** |
+| `formal/conformance/` collected | **680** |
 | `tests/` collected | **1279** |
-| whole-repo suite | **1861** |
-| differential conformance tests | **511** across **14** files |
+| whole-repo suite | **1959** |
+| differential conformance tests | **609** across **15** files |
 | gate-tooling conformance tests | **71** across **4** files |
-| audited theorems (`#print axioms` in `Audit.lean`) | **628** |
-| audit identity pin (`audited_theorems.txt`) | **628** |
+| audited theorems (`#print axioms` in `Audit.lean`) | **656** |
+| audit identity pin (`audited_theorems.txt`) | **656** |
 | headline definition pin | **274** rows (**265** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **703** (**390** Python + **313** Lean) |
+| `CORRESPONDENCE.md` anchors | **706** (**391** Python + **315** Lean) |
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **36** = 27 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
@@ -63,6 +63,7 @@ Per conformance file:
 |---|---|---|
 | `test_conformance_remove.py` | 135 | differential |
 | `test_conformance_spec.py` | 108 | differential |
+| `test_conformance_fragment.py` | 98 | differential |
 | `test_conformance_state.py` | 56 | differential |
 | `test_conformance_graph.py` | 51 | differential |
 | `test_sorry_scan.py` | 44 | tooling |

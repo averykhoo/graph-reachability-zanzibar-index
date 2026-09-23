@@ -1,9 +1,9 @@
 ---
 id: DW-1
 title: decidable W4Fragment for a driver-side pre-check
-brief: NOW 2026-09-23c: goal step 3 owner; size per SILENT field of W4FRAGMENT_SCOPE first
+brief: steps 1+2 LANDED 2026-09-23d (Lean decider + zcli mode=fragment); next: Python report + differential
 pri: NOW
-size: ?
+size: M
 deps: []
 related: []
 parent:
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 04392ec66204
 created: 2026-08-16
-moved: 2026-09-23c
-updated: 2026-09-23c
+moved: 2026-09-23d
+updated: 2026-09-23d
 closed:
 ---
 
@@ -54,3 +54,28 @@ The "do not lift ttuDirect in Lean" trap moved here from HANDOFF.md Standing tra
 ### 2026-09-23c
 
 Promoted LATER -> NOW 2026-09-23c: P14 closed as absorbed (docs/p14-reach-collapse-absorbed-2026-09-23.md), so goal step 2 is COMPLETE and this row is the most direct owner of goal step 3, "surface the silent narrowing -- the strongest version is a machine-checked coverage statement, not a doc" (docs/goal-census-2026-09-22.md, recommended moves). The census listed DW-1 among assurance-vs-product-risk rows; that was written before step 2 closed, and step 3 has no other owning row (grep of tasks/ for the silent-narrowing / scope-pin evidence finds DW-1, P21, P6, P4, TK101, TK103 only; P21 is the Lean-side differential channel, which this row may want but does not need first). UNSIZED: the first action is to size it against test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE (7 SILENT fields). For each field, say whether a decidable instance exists in Lean and whether the Python pre-check could be a mirror (P21 residual) or needs a real differential.
+
+### 2026-09-23d
+
+SIZED and steps 1+2 LANDED (2026-09-23d). Map: docs/dw1-decidable-w4fragment-2026-09-23.md (ACTIVE-PLAN; read its Progress block first).
+
+Sizing, measured by two read-only agents and spot-checked first-hand:
+- 4 fields already had a decider: wsBare, bareStar, ttuStarFree, term.
+- 6 fields were CHEAP, none MEDIUM or HARD.
+
+DECISIONS (the session's, per CLAUDE.md "Who decides"):
+(1) Quantify the six lookup fields over taintedKeys S and match S.lookup, not over S.defs. The defs form is strictly stronger under duplicate keys (WF has no nodup clause), so it would lose completeness.
+(2) GraphAdmission is out of this row: RewriteRanked is an existential. Filed as TK104.
+(3) zcli mode=graph does NOT refuse out-of-fragment input. That would abolish _DIFFERENTIAL_ONLY. It REPORTS instead, via the new mode=fragment. This revises the CORRESPONDENCE.md completion criterion; see the dated note there.
+
+LANDED:
+- GraphIndex/FragmentDecide.lean: w4FragmentB, w4FragmentB_iff (exact, both directions), the Decidable instance, per-field report, 2 positive pins, 10 per-field controls.
+- A 14-mutation sweep of that module, recorded in its docstring.
+- Cli.lean mode=fragment and runner.run_fragment.
+- formal/conformance/test_conformance_fragment.py: (A) theorem-backed corpora inside, (B) the per-field verdict on 36 corpora vs an independent Python derivation, (C) taintedKeys == compute_taint. 4 sabotages recorded in the plan doc.
+- The three GRAPH_FRAGMENT prose disagreements are settled: all IN for the W4Fragment half.
+
+BUILDS: lake build rc 0, lake build zcli rc 0.
+RED: nothing.
+
+NEXT (step 3): the production Python w4_fragment_report(ast, tuples), a pure per-field report, plus its differential against zcli mode=fragment. Turn the scope-pin probe schemas into fixtures first. Trap: noUnionDirects walks exprDirects (union-only), NOT exprDirectsAll. Sabotage S2 shows that mistake reddens direct_arm_exclusion.

@@ -949,6 +949,15 @@ MULTI_STRATUM_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # `test_conformance_nary_strata.py`, because the graph index ADMITS both shapes
 # and answers them correctly; that leg makes no Lean claim whatsoever, which is
 # exactly why it is allowed where `GRAPH_FRAGMENT` is not.
+#
+# ⚠ 2026-09-23d (`DW-1`): the claim above is now MACHINE-CHECKED per entry, and it is
+# WRONG for two of them. Lean's decider (`FragmentDecide.lean::w4FragmentB`, via
+# `zcli mode="fragment"`) puts `ttu_fromchain` and `ttu_fromchain_group` INSIDE
+# `W4Fragment`: their TTU sits in an UNTAINTED def, and `computedOrDirect` constrains
+# derived defs only. The verdict for every entry here is pinned by
+# `test_conformance_fragment.py::test_lean_verdict_matches_the_independent_mirror`.
+# That settles the `W4Fragment` half only. Moving them into GRAPH_FRAGMENT still needs the
+# `GraphAdmission` half argued, and nobody has done that.
 # ---------------------------------------------------------------------------
 
 TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
@@ -1211,6 +1220,13 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # work it stays spec-side-only, which is the conservative direction. Only
 # test_conformance_spec's full-scope comparisons consume these (T1 places no fragment
 # restriction on the set engine).
+#
+# ⚠ 2026-09-23d (`DW-1`): the OPEN question above is ANSWERED for the `W4Fragment` half.
+# Lean's decider (`FragmentDecide.lean::w4FragmentB`, via `zcli mode="fragment"`) puts
+# `self_flag` INSIDE on all ten fields, and
+# `test_conformance_fragment.py::test_lean_verdict_matches_the_independent_mirror` pins
+# that verdict. The `GraphAdmission` half is still unargued, so it stays out of
+# GRAPH_FRAGMENT until someone argues it.
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------

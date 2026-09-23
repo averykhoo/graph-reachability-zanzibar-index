@@ -30,6 +30,7 @@ _ZCLI_TIMEOUT_S = 120
 # their return shapes differ.
 _SPEC_CACHE: dict[str, list[bool]] = {}
 _STATE_CACHE: dict[str, dict] = {}
+_FRAGMENT_CACHE: dict[str, dict] = {}
 
 # Windows PROCESS-INITIALIZATION failures that the OS raises BEFORE zcli's own code
 # runs — spawning the ~120 MB static binary in rapid succession under memory/desktop-
@@ -206,3 +207,41 @@ def run_state(request_json: str) -> dict:
     discard_request(req_path)
     _STATE_CACHE[request_json] = state
     return state
+
+
+#: The exact key set `zcli mode="fragment"` emits (`Cli.lean::fragmentJson`).
+FRAGMENT_KEYS = frozenset({"inFragment", "fields", "failures", "tainted"})
+
+
+def run_fragment(request_json: str) -> dict:
+    """Feed a `mode="fragment"` request to `zcli` and parse the `W4Fragment`
+    report `{"inFragment", "fields", "failures", "tainted"}` it prints
+    (`Cli.lean::fragmentJson`, `DW-1`). The verdict is Lean's
+    `FragmentDecide.lean::w4FragmentB`, proved EXACT by `w4FragmentB_iff`.
+
+    The key set is asserted EXACTLY, and `inFragment` is cross-checked against
+    `failures` here, so a zcli that dropped a field or emitted an inconsistent
+    report fails at the seam rather than in some caller's comparison.
+    """
+    cached = _FRAGMENT_CACHE.get(request_json)
+    if cached is not None:
+        return cached
+    proc, req_path = invoke_zcli(request_json, "fragment")
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"zcli fragment failed (rc={proc.returncode}): "
+            f"{proc.stderr.strip()} (request kept at {req_path})")
+    rep = json.loads(proc.stdout.strip())
+    if not isinstance(rep, dict) or set(rep) != FRAGMENT_KEYS:
+        raise AssertionError(
+            f"fragment output shape unexpected: keys="
+            f"{sorted(rep) if isinstance(rep, dict) else type(rep)} "
+            f"(request kept at {req_path})")
+    failing = [k for k, v in rep["fields"].items() if not v]
+    if sorted(rep["failures"]) != sorted(failing) or rep["inFragment"] != (not failing):
+        raise AssertionError(
+            f"fragment report is internally inconsistent: {rep!r} "
+            f"(request kept at {req_path})")
+    discard_request(req_path)
+    _FRAGMENT_CACHE[request_json] = rep
+    return rep

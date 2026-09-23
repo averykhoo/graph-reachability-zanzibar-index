@@ -1,5 +1,6 @@
 import ZanzibarProofs.Spec.Semantics
 import ZanzibarProofs.GraphIndex.Exec
+import ZanzibarProofs.GraphIndex.FragmentDecide
 import Lean.Data.Json
 
 /-!
@@ -76,14 +77,26 @@ Modes (Phase 6 — graph-state conformance):
       by `writeDirect` (hence in `σ.nodes`/the store) — and from edge endpoints
       (in `σ.nodes` by `edgesClosed`).
 
+* `"fragment"` (`DW-1`, 2026-09-23d) — decide `W4Fragment S T` at the static
+  `"tuples"` store and emit `{"inFragment", "fields", "failures", "tainted"}`
+  (`fragmentJson`): the per-field verdict of `GraphIndex/FragmentDecide.lean::
+  w4FragmentFieldsB`, which `w4FragmentB_iff` proves EXACT in both directions,
+  and the Lean `taintedKeys`. Queries are ignored; an `"ops"` stream is rc 5.
+  It decides the `W4Fragment` half of the headline premise only —
+  `GraphAdmission` has no decider. `"graph"` deliberately does NOT refuse an
+  out-of-fragment input: `formal/conformance/test_conformance_graph.py::
+  _DIFFERENTIAL_ONLY` exists to run exactly such corpora as an implementation
+  differential, so the honest move is to REPORT the scope, not to delete the
+  category (`docs/dw1-decidable-w4fragment-2026-09-23.md`).
+
 An unrecognized mode — a `"mode"` value that is present but not a string, or a
-string other than `"spec"`/`"graph"`/`"graph-state"` — is rejected with rc 4
+string other than `"spec"`/`"graph"`/`"graph-state"`/`"fragment"` — is rejected with rc 4
 (stderr message). A mislabeled mode must never silently fall through to spec
 answers, or the graph-vs-spec conformance pin would void.
 
 Exit codes: 0 = answers/state printed · 1 = usage / JSON parse / decode error ·
 2 = a graph op failed its gate (write admission / remove guard) · 3 = graph state
-not drained · 4 = unrecognized mode · 5 = `"ops"` in spec mode (unsupported).
+not drained · 4 = unrecognized mode · 5 = `"ops"` in spec mode or fragment mode (unsupported).
 
 Output: a JSON array of booleans, one per query (spec/graph modes), or the
 canonical state object (graph-state mode). Usage: `zcli <request.json>`.
@@ -299,6 +312,24 @@ def stateJson (S : Schema) (σ : GraphState) (T : Store) : Json :=
     ("edgeCounts", edgeCountsJson σ),
     ("residues", canonJsonArr (stateResidues S σ T))]
 
+/-! ## Fragment report (mode `"fragment"`) — `DW-1` -/
+
+/-- The `W4Fragment` verdict at the request's schema and static store, per field
+    (`GraphIndex/FragmentDecide.lean::w4FragmentFieldsB`, decided EXACTLY:
+    `w4FragmentB_iff`), plus the failing field names and `taintedKeys S` — the Lean
+    `isDerived` set, emitted so the Python side can pin its own taint computation
+    against it. `"inFragment"` is `w4FragmentB S T`. `GraphAdmission` is NOT decided
+    here (its `RewriteRanked` field is an existential over rank functions), so
+    `"inFragment": true` means the `W4Fragment` half of the headline premise holds,
+    never that a headline theorem applies outright. -/
+def fragmentJson (S : Schema) (T : Store) : Json :=
+  Json.mkObj [
+    ("inFragment", Json.bool (w4FragmentB S T)),
+    ("fields", Json.mkObj ((w4FragmentFieldsB S T).map (fun p => (p.1, Json.bool p.2)))),
+    ("failures", Json.arr ((w4FragmentFailures S T).map Json.str).toArray),
+    ("tainted", Json.arr ((taintedKeys S).map
+      (fun k => Json.arr #[Json.str k.1, Json.str k.2])).toArray)]
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | [path] =>
@@ -373,6 +404,19 @@ def main (args : List String) : IO UInt32 := do
                 IO.eprintln "graph-state mode: final state not drained \
                   (outside the proved read scope)"
                 pure 3
+        | .ok "fragment" =>
+          -- `DW-1`: report the decided `W4Fragment` verdict at the static store;
+          -- queries are ignored. An `"ops"` stream is refused (rc 5): the store
+          -- fields are about ONE store, and which store an op stream means is a
+          -- choice this mode does not make silently.
+          match decodeOps j with
+          | .ok (some _) =>
+            IO.eprintln "fragment mode does not support an \"ops\" stream \
+              (it decides W4Fragment at the static \"tuples\" store)"
+            pure 5
+          | _ => do
+            IO.println (fragmentJson S T).compress
+            pure 0
         | .ok "spec" =>
           -- Spec mode evaluates `sem` over the static store; an `"ops"` stream
           -- (removes especially) has no spec-level meaning and MUST be rejected
@@ -385,7 +429,7 @@ def main (args : List String) : IO UInt32 := do
           | _ => printAnswers (qs.map (fun q => sem S T q))
         | .ok other =>
           IO.eprintln s!"unknown mode: {other} \
-            (expected \"spec\", \"graph\", or \"graph-state\")"
+            (expected \"spec\", \"graph\", \"graph-state\", or \"fragment\")"
           pure 4
   | _ => IO.eprintln "usage: zcli <request.json>"; pure 1
 

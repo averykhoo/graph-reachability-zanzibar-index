@@ -81,6 +81,10 @@ import ZanzibarProofs.GraphIndex.Exec
 -- ttuStarFree lift, part (iv) groundwork: the WIDENED predicate + its decision procedure
 import ZanzibarProofs.GraphIndex.TtuStarWide
 
+-- DW-1 (2026-09-23d): `W4Fragment` is decidable -- `w4FragmentB` + its exact `_iff`, the per-field
+-- report a driver-side pre-check needs, and the discriminating pins.
+import ZanzibarProofs.GraphIndex.FragmentDecide
+
 -- Leg 7 4c-ii adjudication battery (2026-08-20): the (★)/(★′) probe pins + controls.
 -- Additive and zero-cone; expected to be absorbed or deleted by the 4c-ii commit.
 import ZanzibarProofs.GraphIndex.Scratch4cii

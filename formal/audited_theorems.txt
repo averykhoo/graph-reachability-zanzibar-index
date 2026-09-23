@@ -14,6 +14,20 @@
 #
 #     bash formal/regen_audit_pin.sh
 #
+FragmentDecideWitness.accepts_Sw
+FragmentDecideWitness.accepts_Sx
+FragmentDecideWitness.fragment_Sx_by_decide
+FragmentDecideWitness.outside_S6_by_decide
+FragmentDecideWitness.refutes_bareStar
+FragmentDecideWitness.refutes_computedOnlyOperands
+FragmentDecideWitness.refutes_computedOrDirect
+FragmentDecideWitness.refutes_directArmsBare
+FragmentDecideWitness.refutes_directArmsConcrete
+FragmentDecideWitness.refutes_noUnionDirects
+FragmentDecideWitness.refutes_term
+FragmentDecideWitness.refutes_ttuStarFree
+FragmentDecideWitness.refutes_twoStrata
+FragmentDecideWitness.refutes_wsBare
 GraphAdmission.noBridgedDerived
 GraphModel.check_derived_ResidueEmpty
 GraphModel.check_derived_uposOnly
@@ -200,6 +214,8 @@ closure_tupleset_is_seed
 completeKey_cascade_untargeted
 completeKey_jobsLR_untargeted
 completeKey_writeLeg
+computedOnlyB_iff
+computedOrDirectB_iff
 computedRefs_ne_self
 coveredFn_bare_shadow
 coveredFn_bare_w3c
@@ -208,6 +224,8 @@ coveredFn_declared_d
 coveredFn_declared_shadow
 coveredFn_declared_w3c
 declaredWildcardShapes
+derivedDefsAll_iff
+directArmsBareB_iff
 directLeaf_elim_bs
 directLeaf_elim_us
 directLeaf_grant_usStar
@@ -244,6 +262,13 @@ foldAdmitsB_iff
 foldAdmits_of_acyclic
 foldl_writeDirectRaw_eq
 foldl_writeDirect_edge_complete
+fragComputedOnlyOperandsB_iff
+fragComputedOrDirectB_iff
+fragDirectArmsBareB_iff
+fragDirectArmsConcreteB_iff
+fragNoUnionDirectsB_iff
+fragTwoStrataB_iff
+fragWsBareB_iff
 grantReach_of_trail
 graphModeAnswers_eq_sem
 graphRec_base_eq
@@ -309,6 +334,7 @@ leafPred_ne_relName
 leafPublic_leafPred
 leafRewrites
 leafRewrites_eq_nil
+lookupAll_iff
 lookup_of_mem
 mem_affectedKeys
 mem_enumJob2D_cands
@@ -612,6 +638,8 @@ w3dJobCoverage_enumJob2D
 w3dJobCoverage_enumJob2D_state
 w3dJobCoverage_enumJob2_state
 w3d_leg_context
+w4FragmentB_iff
+w4FragmentFailures_nil_iff
 w4Fragment_of_computedOnly
 w4Fragment_of_untainted
 w4_within_scope
