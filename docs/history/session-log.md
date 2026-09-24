@@ -30,6 +30,60 @@ from here.
 
 ---
 
+## 2026-09-24 — `TK104` sized: `GraphAdmission` is LOUD 10 / MIXED 2 / SILENT 2, pinned and probe-tied
+
+rows: TK104 (comment, brief, touch; stays `NOW`).
+
+`task lint: clean (13 checks, 219 task file(s) parsed), 30 warning(s)`
+
+`read: board only`
+
+**"Do the next task" → `TK104`, the board's `NOW`.** Its first action was sizing, and sizing
+is what landed. The row stays open. Map (ACTIVE-PLAN):
+[`docs/tk104-graphadmission-scope-2026-09-24.md`](../tk104-graphadmission-scope-2026-09-24.md).
+
+* **The claim checked:** `FullScope.lean::GraphAdmission`'s docstring says Python
+  "guarantee[s]" every field, and the `DW-1` plan repeated it (UNVERIFIED). Every field was
+  probed, one violating input each, against the real `parse_openfga_schema`,
+  `ConnectedStore.add_tuple` and `SetEngine.add_tuple`.
+* **Result: LOUD 10, MIXED 2, SILENT 2.**
+  - MIXED `ttuDirect` and `storeValid` are SHADOWED. Their silent halves also fail
+    `W4Fragment.computedOrDirect` / `directArmsBare`, which the Lean-pinned report flags, so
+    the joint premise never silently covers them.
+  - SILENT `matchDecl` = dangling references (`define viewer: [user] or editor`, no
+    `editor`, compiles).
+  - SILENT `ranked` = untainted computed cycles (`a: [user] or b`, `b: [user] or a`). TTU
+    recursion is NOT excluded.
+  - These two are the whole unreported surface of the headline premise. 0 of 36 curated
+    corpora hit either.
+* **Landed:** `formal/conformance/test_graphadmission_scope_pin.py` (66 tests) plus
+  `graphadmission_scope_probes.py`. It is the `W4FRAGMENT_SCOPE` design with the same
+  parser, and it adds a MECHANICAL tie between classification and evidence: a LOUD row's
+  probes must RAISE and a SILENT row's must be ADMITTED, a MIXED `shadowed_by` is checked
+  through `w4_fragment_report`, and a REASONED mirror sweeps the `_THEOREM_BACKED` corpora.
+* **Sweep:** M0 control plus 12 mutations, 10 RED.
+  - M5 (`SetEngine._validate` skipped) was INERT, and M5b (`RuleSet.apply` alone) was INERT
+    too. M5c (both) went RED: store admission is two gates in series.
+  - That also showed the `storeValid` row citing the gate that never fires first. It now
+    cites `RuleSet.apply`.
+  - (The row's Log says "11 mutations + an M0 control"; the literal table in the doc § 4 is
+    authoritative: M0–M10 plus M5b/M5c.)
+* **Docs fixed in place:** the `GraphAdmission` docstring (dated ⚠ corrections on its first
+  sentence and on `matchDecl` / `ranked`), `formal/ARCHITECTURE.md` ("imposes nothing Python
+  does not already impose" was false), and the `formal/FINAL_REVIEW.md` scope cell.
+* **Floors:** `MIN_CONF_ALL` 582 → 843 and `MIN_CONF_REST` 447 → 708.
+  - **195 of the 261 were an unratcheted leak left by `DW-1`**: live 777 on clean `b08a262`.
+  - Instrument check: at 844, `conf-tile:1/5` refuses with rc=1.
+* **Decision (the session's, recorded on the row):** build the Lean decider, because only a
+  Lean-pinned report can surface the two SILENT fields honestly. `RewriteRanked` is the one
+  real proof, and doc § 3 carries the completeness sketch. Refusing dangling references in
+  Python was NOT taken: it is a product change made to fit a proof, so it would be an
+  `ASK-*` question.
+
+Still owed: nothing.
+
+---
+
 ## 2026-09-23e — `DW-1` CLOSED: Python reports `W4Fragment` per field, differential-pinned to Lean's decider
 
 rows: DW-1 (closed), TK104 (→ `NOW`, brief, comment).

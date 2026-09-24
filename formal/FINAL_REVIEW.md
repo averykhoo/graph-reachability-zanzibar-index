@@ -27,10 +27,10 @@ number INTO it over restating it.
 
 | quantity | value |
 |---|---|
-| `formal/conformance/` collected | **777** |
+| `formal/conformance/` collected | **843** |
 | `tests/` collected | **1283** |
-| whole-repo suite | **2060** |
-| differential conformance tests | **696** across **15** files |
+| whole-repo suite | **2126** |
+| differential conformance tests | **762** across **16** files |
 | gate-tooling conformance tests | **81** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **656** |
 | audit identity pin (`audited_theorems.txt`) | **656** |
@@ -39,7 +39,7 @@ number INTO it over restating it.
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **36** = 27 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=582 (=135+447), `MIN_TESTS_ALL`=1279, `EXPECTED_MIN_AUDITS`=460 |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=843 (=135+708), `MIN_TESTS_ALL`=1279, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
 Driven fresh over all **25** `GRAPH_FRAGMENT` corpora through the real graph
@@ -64,6 +64,7 @@ Per conformance file:
 | `test_conformance_fragment.py` | 185 | differential |
 | `test_conformance_remove.py` | 135 | differential |
 | `test_conformance_spec.py` | 108 | differential |
+| `test_graphadmission_scope_pin.py` | 66 | differential |
 | `test_conformance_state.py` | 56 | differential |
 | `test_conformance_graph.py` | 51 | differential |
 | `test_sorry_scan.py` | 44 | tooling |
@@ -125,7 +126,7 @@ Clause-by-clause, what is actually true today:
 | §7 clause | status |
 |---|---|
 | set-engine **algorithm** proven to compute `sem` | ✅ **Full scope, unconditional.** `setEngine_correct` (T1): for every schema, store and query, the Lean set-engine model's `check` equals `sem`. (Until 2026-09-06 the statement carried three unused binders — well-formed, stratifiable, "identifier-valid" — the last over an `opaque` predicate no store could be shown to satisfy; all three are gone, see `SEMANTICS.md` §2.1 history.) |
-| graph-index **algorithm** proven to compute `sem` | ⚠️ **At the documented fragment, not beyond (§3; and §3.0 for what that fragment stopped excluding on 2026-08-05, and for T2a on 2026-09-23).** `graph_correct` (T2b): at every fully-drained state of the operational closure `ReachedBy` (logged rule-routed writes + the state-derived two-round cascade — the model of the synchronous v1 Python write path), graph `check` = `sem`, for stores/schemas satisfying `GraphAdmission` (the Python-admission mirror) **and** `W4Fragment` (honest carries: derived defs are boolean trees over computed refs AND `Direct` grant arms — whose restrictions must be bare and concrete and must not be union-reachable — with derived operands computed-only; ≤ 2 strata, bare declared wildcards, bare-star stores, star-free TTU tuplesets, derived terminality — **TEN** fields since E-chain leg 5 (2026-08-05) split `computedOnly` into five; `structure W4Fragment` in `FullScope.lean`; the derived-def ROOT operator has been UNRESTRICTED since 2026-07-17, when `rootB`/`RootBoolean` were deleted, and the chain has carried a scoped `remove` constructor since 2026-07-19f), for queries with concrete objects and bare star subjects. See §3 for the gap list and §3.0 for the Direct-arm history — including the fact that **T2a `graph_reached_inv` widened only on 2026-09-23** (`P5`; until then it carried an extra `W4NarrowT2a` bundle, now deleted). |
+| graph-index **algorithm** proven to compute `sem` | ⚠️ **At the documented fragment, not beyond (§3; and §3.0 for what that fragment stopped excluding on 2026-08-05, and for T2a on 2026-09-23).** `graph_correct` (T2b): at every fully-drained state of the operational closure `ReachedBy` (logged rule-routed writes + the state-derived two-round cascade — the model of the synchronous v1 Python write path), graph `check` = `sem`, for stores/schemas satisfying `GraphAdmission` (the Python-admission mirror, bar two SILENT fields -- dangling references and untainted computed cycles, `conformance/test_graphadmission_scope_pin.py`, 2026-09-24) **and** `W4Fragment` (honest carries: derived defs are boolean trees over computed refs AND `Direct` grant arms — whose restrictions must be bare and concrete and must not be union-reachable — with derived operands computed-only; ≤ 2 strata, bare declared wildcards, bare-star stores, star-free TTU tuplesets, derived terminality — **TEN** fields since E-chain leg 5 (2026-08-05) split `computedOnly` into five; `structure W4Fragment` in `FullScope.lean`; the derived-def ROOT operator has been UNRESTRICTED since 2026-07-17, when `rootB`/`RootBoolean` were deleted, and the chain has carried a scoped `remove` constructor since 2026-07-19f), for queries with concrete objects and bare star subjects. See §3 for the gap list and §3.0 for the Direct-arm history — including the fact that **T2a `graph_reached_inv` widened only on 2026-09-23** (`P5`; until then it carried an extra `W4NarrowT2a` bundle, now deleted). |
 | hence equivalent | ✅ `backend_equivalence` (T3), by transitivity through `sem`, **exactly T2b's hypotheses and scope since 2026-09-06** (the extra undischargeable `hValid` is gone, and T3 is now instantiated at a concrete executed store: `W4WitnessDirect.equivalence_applies`, `Exec.lean::graphRunOps_directArm_backend_equivalence`); plus `exclusion_effective` / `no_ghost_grant` (T6a/T6b) — the security corollaries with real exclusion content. **All three are stated over the PUBLIC graph read `GraphModel.checkPublic` since 2026-08-28c** (the fenced entry modelling `WildcardIndex.check`; `graph_correct` itself remains the internal-layer statement over `GraphModel.check` = `_check_internal`, and is what `graph_correct_public` appeals to off the fence). |
 | machine-checked, axiom-audited | ✅ 0 sorries; the Audit module `#print axioms` every key theorem; `verify.sh` hard-fails on any axiom beyond `propext`, `Classical.choice`, `Quot.sound`. |
 | pinned by structural correspondence review | ✅ `CORRESPONDENCE.md` — the Lean-def ↔ Python-file:line map, with the known intentional divergences listed (scoped removes (validly-stored, drained-prior), fixed two rounds, fragment surplus). **"No leaf-family split" came OFF that list 2026-09-05** — leg 7's flip re-pointed both logged write legs at the leaf-routed closure, so the split is modeled and §7.4's entry reads RESOLVED. |

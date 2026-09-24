@@ -184,8 +184,14 @@ restriction comes from (`FullScope.lean`):
   write admission already guarantee for every accepted schema/store. Fields (each
   docstring cites the enforcing Python mechanism): `wf`, `nodup`, `strat`, `ttuDirect`
   (untainted TTU tuplesets direct-only), `matchDecl`, `ranked`, `objWild` (object-wildcard
-  shapes never on derived relations), `storeValid`. This bundle imposes **nothing Python
-  does not already impose**.
+  shapes never on derived relations), `storeValid`, and six name-shape/scope fields added
+  since (`usWild`, `ttuNotLeaf`, `directRestrNotLeaf`, `computedRefsNotLeaf`,
+  `noLeafSubjects`, `keysNonempty`). **Not quite a mirror, measured 2026-09-24 (`TK104`)**:
+  of the 14 fields, 10 are LOUD (Python refuses every probed violation), 2 are MIXED
+  (`ttuDirect`, `storeValid`; their silent halves also fail a `W4Fragment` field), and
+  2 are SILENT: `matchDecl` (Python admits a dangling reference) and `ranked` (Python
+  admits an untainted computed cycle). The classification and its probes are
+  `conformance/test_graphadmission_scope_pin.py`.
 - **`W4Fragment S T`** — the **honest carries**: scope restrictions the current proof
   needs that Python admission does **not** imply. `structure W4Fragment`
   (`FullScope.lean`) has exactly **TEN** fields since E-chain leg 5 (2026-08-05) split

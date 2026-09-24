@@ -104,6 +104,13 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
     Lean mirror of "this schema compiled and these writes were admitted". Fields
     cite the enforcing mechanism:
 
+    ⚠ **2026-09-24 (`TK104`): that first sentence is NOT true of every field.** Probed
+    per field against the real Python: LOUD 10, MIXED 2 (`ttuDirect`, `storeValid`, whose
+    silent halves also fail a `W4Fragment` field), SILENT 2 (`matchDecl`, `ranked`).
+    The classification, its probes and its sabotage are
+    `formal/conformance/test_graphadmission_scope_pin.py`; read that before quoting
+    this bundle as "what Python guarantees".
+
     * `wf` — `"."` reserved in declared relation names (`parse_schema_ast`;
       `Core/Schema.lean` `relNameOK`).
     * `nodup` — the AST is dict-keyed: one def per `(type, relation)`.
@@ -120,9 +127,15 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
       `wsBare` and `directArmsConcrete` state theirs.
     * `matchDecl` — compiled `Rule`s route onto declared, untainted families
       (leaf routing splits derived storage onto leaf predicates; `RewriteFilter`
-      targets are declared relations).
+      targets are declared relations). ⚠ **SILENT (2026-09-24, `TK104`)**: Python
+      never checks that a referenced relation is DECLARED, so a dangling computed ref
+      or TTU tupleset (`define viewer: [user] or editor`, no `editor`) compiles and
+      is outside this field.
     * `ranked` — the untainted rewrite graph is acyclic/ranked (the compiler's
-      rank assignment; `RulesSaturate.lean`).
+      rank assignment; `RulesSaturate.lean`). ⚠ **SILENT (2026-09-24, `TK104`)**:
+      there is no such compiler step. Python admits an untainted computed cycle
+      (`a: [user] or b`, `b: [user] or a`) on purpose (`Spec/Stratify.lean`'s header:
+      "untainted relations may be positively recursive"), and it is outside this field.
     * `objWild` — object-wildcard shapes never target a derived relation
       (`zanzibar_utils_v1.py::_reject_object_wildcard_scope`, first loop).
     * `usWild` — **the SUBJECT-wildcard twin of `objWild`, added 2026-09-13e (`TK68`).**

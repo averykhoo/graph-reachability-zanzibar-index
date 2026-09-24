@@ -422,7 +422,14 @@ GATE_LOCK_HELD=1
 #   collection floor -- observed literally:
 #     FAIL: formal/conformance/ collects only 582 test(s); the gate floor is 583.
 #   and rc=1. Restored to 582, which then passes.
-MIN_CONF_ALL=582
+# Re-measured 2026-09-24 with `pytest formal/conformance/ -q --collect-only`: 843.
+#   DRIFT REPAIR + GROWTH, the same leak as 2026-09-22 found the same way: the live
+#   count on a clean checkout of b08a262 was 777 against this floor of 582, i.e. 195
+#   conformance tests (DW-1's test_conformance_fragment.py and the widened
+#   test_w4fragment_scope_pin.py) could have been DELETED with the gate green. +66
+#   are TK104's formal/conformance/test_graphadmission_scope_pin.py (777 + 66 = 843).
+#   Instrument check: see docs/tk104-graphadmission-scope-2026-09-24.md sec 4.
+MIN_CONF_ALL=843
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -624,8 +631,11 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 # other 26 accumulated unratcheted. REST measured the same way with
 # `--ignore=formal/conformance/test_conformance_remove.py` -> `447 tests collected`,
 # and 135 + 447 == 582 == MIN_CONF_ALL, which the identity check below re-asserts.
+# 2026-09-24 (TK104): HEAVY re-measured at 135 (unchanged); REST measured with the same
+#   --ignore construction -> `708 tests collected`, and 135 + 708 == 843 == MIN_CONF_ALL.
+#   All +261 are REST (DW-1's +195 unratcheted, TK104's +66).
 MIN_CONF_HEAVY=135
-MIN_CONF_REST=447
+MIN_CONF_REST=708
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in
