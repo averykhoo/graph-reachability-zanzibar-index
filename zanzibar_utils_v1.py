@@ -2392,9 +2392,10 @@ def unparse_schema_ast(ast: SchemaAST) -> str:
 # for field with Lean's `zcli mode="fragment"`. If that differential goes red, fix THIS
 # function to agree with Lean. Do not edit the decider to agree with Python.
 #
-# Scope of the report: the `W4Fragment` half ONLY. `GraphAdmission` has no decider
-# (`RulesSaturate.lean::RewriteRanked` is an existential; task row TK104), so
-# `in_fragment=True` means "inside W4Fragment", not "the theorem applies".
+# Scope of the report: the `W4Fragment` half ONLY, so `in_fragment=True` means "inside
+# W4Fragment", not "the theorem applies". The `GraphAdmission` half is decided in Lean
+# since TK104 (`AdmissionDecide.lean::graphAdmissionB`); its two fields that Python
+# neither refuses nor shadows are reported by `graph_admission_report` below.
 
 #: The ten `W4Fragment` fields, in declaration order (`FullScope.lean::W4Fragment`).
 W4_FRAGMENT_FIELDS: tuple[str, ...] = (
@@ -2547,3 +2548,108 @@ def w4_fragment_report(schema: 'SchemaAST | str', tuples=()) -> W4FragmentReport
                  and all(sp not in derived_names for sp, *_rest in tuples)),
     }
     return W4FragmentReport(tuple((f, fields[f]) for f in W4_FRAGMENT_FIELDS), tainted)
+
+
+
+# ---------------------------------------------------------------------------
+# GraphAdmission report (TK104) -- the two premise fields NOTHING ELSE surfaces
+# ---------------------------------------------------------------------------
+#
+# `GraphAdmission` is the other half of the headline premise. The TK104 sizing
+# (`formal/conformance/test_graphadmission_scope_pin.py::GRAPHADMISSION_SCOPE`) found ten of
+# its fourteen fields LOUD (the compiler or the write path refuses a violating input) and
+# two MIXED, whose silent halves always also fail a `W4Fragment` field that
+# `w4_fragment_report` names. The remaining two are SILENT: Python accepts a violating
+# schema and answers queries on it, and before this report no operator could find out.
+#
+# * `matchDecl` -- no untainted rewrite rule matches an undeclared or derived relation, i.e.
+#   no DANGLING reference (`define viewer: [user] or editor` with no `editor`).
+# * `ranked` -- the untainted rewrite graph is acyclic, i.e. no untainted computed CYCLE
+#   (`a: [user] or b` with `b: [user] or a`). TTU recursion through a direct-only tupleset
+#   (nested folders) emits no cycle and is fine.
+#
+# Both schemas are valid Zanzibar and both backends answer them; they are outside the
+# proved scope, not wrong. So this is a REPORT, like `w4_fragment_report`: pure, opt-in,
+# never raises, and nothing calls it on a write path.
+#
+# The Lean decider is `AdmissionDecide.lean::graphAdmissionB` (proved exact by
+# `graphAdmissionB_iff`). This function mirrors only its two SILENT fields, and
+# `formal/conformance/test_conformance_fragment.py` (section J) compares it with
+# `zcli mode="fragment"` on every curated corpus and every parseable sizing probe. If
+# that differential goes red, fix THIS function.
+
+#: The `GraphAdmission` fields this report covers, in declaration order. The other twelve
+#: are refused by Python or shadowed by `W4Fragment` (see the section comment).
+GRAPH_ADMISSION_REPORTED_FIELDS: tuple[str, ...] = ('matchDecl', 'ranked')
+
+
+@dataclass(frozen=True)
+class GraphAdmissionReport:
+    """Per-field verdict on the two SILENT `GraphAdmission` fields, ordered as
+    `GRAPH_ADMISSION_REPORTED_FIELDS`."""
+    fields: tuple[tuple[str, bool], ...]
+
+    @property
+    def failures(self) -> tuple[str, ...]:
+        """The reported fields that do NOT hold, in declaration order."""
+        return tuple(name for name, ok in self.fields if not ok)
+
+    @property
+    def silent_fields_hold(self) -> bool:
+        """True iff both SILENT fields hold. This alone is NOT "GraphAdmission holds": the
+        other twelve fields are established by Python's refusals, not by this report."""
+        return not self.failures
+
+
+def _ga_rule_arms(e: Expr):
+    # RulesWrite.lean::exprArms -- the match relation of each Computed / TTU arm, walking
+    # into unions only (boolean nodes emit no rewrite rule).
+    if isinstance(e, Computed):
+        yield e.relation
+    elif isinstance(e, TTU):
+        yield e.tupleset_rel
+    elif isinstance(e, Union):
+        for c in e.children:
+            yield from _ga_rule_arms(c)
+
+
+def graph_admission_report(schema: 'SchemaAST | str') -> GraphAdmissionReport:
+    """Report whether ``schema`` satisfies the two SILENT `GraphAdmission` fields.
+
+    ``schema`` is a raw `SchemaAST` or DSL text. Both fields are schema-only. Pure, and it
+    never raises on an out-of-scope input. See the section comment above for what the
+    result does and does not mean."""
+    ast = parse_schema_ast(schema) if isinstance(schema, str) else schema
+    tainted = compute_taint(ast)
+    # RulesWrite.lean::schemaRewrites -- the rules of the UNTAINTED definitions only, as
+    # (match key, out key) on the definition's own object type.
+    rules = [((ot, m), (ot, rel)) for (ot, rel), e in ast.items() if (ot, rel) not in tainted
+             for m in _ga_rule_arms(e)]
+    match_decl = all(mk in ast and mk not in tainted for mk, _ok in rules)
+    # RulesSaturate.lean::RewriteRanked. Its rank bound (<= the key count) is implied by
+    # acyclicity: the keys of a walk after its first are distinct out keys, and out keys are
+    # declared, so a walk is never longer than the key count.
+    succ: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    for mk, ok in rules:
+        succ.setdefault(mk, set()).add(ok)
+    done: set[tuple[str, str]] = set()
+    ranked = True
+    for root in list(succ):
+        if root in done or not ranked:
+            continue
+        on_path = {root}
+        stack = [(root, iter(succ.get(root, ())))]
+        while stack and ranked:
+            node, it = stack[-1]
+            nxt = next(it, None)
+            if nxt is None:
+                stack.pop()
+                on_path.discard(node)
+                done.add(node)
+            elif nxt in on_path:
+                ranked = False
+            elif nxt not in done:
+                on_path.add(nxt)
+                stack.append((nxt, iter(succ.get(nxt, ()))))
+    fields = {'matchDecl': match_decl, 'ranked': ranked}
+    return GraphAdmissionReport(tuple((f, fields[f]) for f in GRAPH_ADMISSION_REPORTED_FIELDS))

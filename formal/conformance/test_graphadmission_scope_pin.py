@@ -177,6 +177,7 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
         ),
         "classification": "SILENT",
         "evidence": "zanzibar_utils_v1.py::_validate_ast_references",
+        "reported_by": "zanzibar_utils_v1.py::graph_admission_report",
         "note": (
             "Referenced names are checked for the '.' lock only, never for declared-ness, "
             "so `define viewer: [user] or editor` with no `editor` compiles. The derived "
@@ -192,6 +193,7 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
         ),
         "classification": "SILENT",
         "evidence": "formal/lean/ZanzibarProofs/Spec/Stratify.lean",
+        "reported_by": "zanzibar_utils_v1.py::graph_admission_report",
         "note": (
             "Python admits positively recursive untainted relations on purpose ('the "
             "closure handles them', that file's header), and nothing in "
@@ -365,7 +367,7 @@ def test_graphadmission_field_count_is_the_pinned_constant():
 @pytest.mark.parametrize("field", sorted(GRAPHADMISSION_SCOPE))
 def test_every_scope_row_is_well_formed(field):
     row = GRAPHADMISSION_SCOPE[field]
-    keys = {"demands", "classification", "evidence", "note", "shadowed_by"}
+    keys = {"demands", "classification", "evidence", "note", "shadowed_by", "reported_by"}
     assert set(row) <= keys, f"{field}: unexpected key(s) {sorted(set(row) - keys)}"
     assert len(row.get("demands", "").strip()) >= 30, f"{field}: `demands` is not a sentence"
     cls = row.get("classification", "")
@@ -382,6 +384,20 @@ def test_every_scope_row_is_well_formed(field):
             f"joint premise, or that it does not -- in which case it is a headline gap.")
     else:
         assert "shadowed_by" not in row, f"{field}: only a MIXED row carries `shadowed_by`"
+    if cls == "SILENT":
+        # TK104 (2026-09-25): a SILENT row is the unreported premise surface, so it must
+        # name the production report that now surfaces it, and that report must emit it.
+        # Its verdict is pinned to Lean in test_conformance_fragment.py section (J).
+        import zanzibar_utils_v1
+        path, _, symbol = row.get("reported_by", "").partition("::")
+        assert path == "zanzibar_utils_v1.py" and callable(
+            getattr(zanzibar_utils_v1, symbol, None)), (
+            f"{field} is SILENT but `reported_by` {row.get('reported_by')!r} does not "
+            f"resolve to a callable in zanzibar_utils_v1.py")
+        assert field in zanzibar_utils_v1.GRAPH_ADMISSION_REPORTED_FIELDS, (
+            f"{field}: the report named by reported_by does not emit this field")
+    else:
+        assert "reported_by" not in row, f"{field}: only a SILENT row carries `reported_by`"
 
 
 def test_the_classification_ratio_is_the_finding():
@@ -472,7 +488,10 @@ def test_every_mixed_row_has_a_shadowed_probe():
 
 
 # --------------------------------------------------------------------------- #
-# The REASONED mirror of the two SILENT fields, and the corpus sweep it enables
+# The report of the two SILENT fields, and the corpus sweep it enables. Since 2026-09-25
+# `silent_admission_failures` delegates to `zanzibar_utils_v1.py::graph_admission_report`,
+# whose verdict test_conformance_fragment.py (J) pins to Lean; until then it was a
+# REASONED hand mirror and the known answers below were its only control.
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("label", sorted(
     lb for lb in SCHEMA_PROBES if _field_of(lb) in ("matchDecl", "ranked")))
@@ -486,7 +505,8 @@ def test_silent_field_mirror_known_answers(label):
 def test_theorem_backed_corpora_pass_the_silent_fields():
     """No `_THEOREM_BACKED` corpus has a dangling reference or an untainted computed cycle.
     These are the two premise fields that nothing else checks; the prose argument in
-    `corpus.py` covers them only by assertion. REASONED mirror, not a decider."""
+    `corpus.py` covers them only by assertion. The production report, Lean-pinned by
+    test_conformance_fragment.py (J); (A') there checks the whole premise by Lean."""
     from formal.conformance.test_conformance_fragment import ALL_CORPORA
     from formal.conformance.test_conformance_graph import _THEOREM_BACKED
     backed = {k: v for k, v in ALL_CORPORA.items()

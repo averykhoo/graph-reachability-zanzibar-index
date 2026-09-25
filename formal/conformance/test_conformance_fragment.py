@@ -12,9 +12,9 @@ both directions by `w4FragmentB_iff`, is reached through `zcli mode="fragment"`
 What this module pins:
 
 (A) **Every `_THEOREM_BACKED` corpus is inside `W4Fragment`**, by Lean's decider at the
-    corpus's own schema and store. Half of the prose argument becomes a machine check. The
-    other half, `GraphAdmission`, has no decider (`RewriteRanked` is an existential over rank
-    functions) and stays prose.
+    corpus's own schema and store. Half of the prose argument becomes a machine check.
+    Since `TK104` (2026-09-25) the other half is checked too: (A') in the `GraphAdmission`
+    section at the end of this module asserts the WHOLE premise.
 (B) **The Lean verdict, field by field, on every curated corpus** equals
     `_EXPECTED_FAILURES`. That table was derived INDEPENDENTLY, by the straw-man Python mirror
     `formal/probes/dw1_python_mirror_2026-09-23.py` run over the production AST
@@ -44,6 +44,11 @@ Three corpora are IN `W4Fragment` by Lean's verdict although `corpus.py` prose p
 outside or left them open: `TTU_USERSET:ttu_fromchain`, `TTU_USERSET:ttu_fromchain_group`
 and `SELF_REF:self_flag`. That is the `W4Fragment` half only. None of them is moved into
 `GRAPH_FRAGMENT` here, because that also needs the `GraphAdmission` half argued.
+
+Since `TK104` (2026-09-25), `zcli` also decides `GraphAdmission`
+(`AdmissionDecide.lean::graphAdmissionB`, EXACT by `graphAdmissionB_iff`), and sections
+(G)-(J) at the end of this module hold the corpora, the sizing probes and the REASONED
+silent-field mirror to it. Their record is `docs/tk104-graphadmission-scope-2026-09-24.md`.
 
 SABOTAGE (2026-09-23d for (A)-(C), 2026-09-23e for (D)-(F), `docs/sabotage-procedure.md`):
 recorded in `docs/dw1-decidable-w4fragment-2026-09-23.md`, literal output quoted there. The
@@ -277,3 +282,215 @@ def test_scope_probe_python_outcome_still_holds(label):
     assert got == PYTHON_OUTCOME[label], (
         f"[{label}] the production compile now {got}; the scope pin recorded "
         f"{PYTHON_OUTCOME[label]}. Re-adjudicate test_w4fragment_scope_pin.py's row.")
+
+
+# --------------------------------------------------------------------------- #
+# (G)-(J): the `GraphAdmission` half, `TK104` (2026-09-25)
+# --------------------------------------------------------------------------- #
+# `AdmissionDecide.lean::graphAdmissionFieldsB`, EXACT by `graphAdmissionB_iff`, reaches
+# Python as the `"admission"` key of the same zcli report. These tests hold the curated
+# corpora, the `TK104` sizing probes and the REASONED silent-field mirror to it.
+
+from formal.conformance.graphadmission_scope_probes import (  # noqa: E402
+    SCHEMA_PROBES as GA_SCHEMA_PROBES,
+    SHADOWED as GA_SHADOWED,
+    STORE_PROBES as GA_STORE_PROBES,
+    silent_admission_failures,
+)
+
+#: The fourteen `GraphAdmission` field names, in declaration order
+#: (`FullScope.lean::GraphAdmission`).
+GA_FIELDS = (
+    "wf", "nodup", "strat", "ttuDirect", "matchDecl", "ranked", "objWild", "usWild",
+    "storeValid", "ttuNotLeaf", "directRestrNotLeaf", "computedRefsNotLeaf",
+    "noLeafSubjects", "keysNonempty",
+)
+
+#: The `GraphAdmission` fields each curated corpus fails. Every corpus not listed is
+#: expected to be ADMITTED. PREDICTED 2026-09-25 from the `TK104` sizing
+#: (`docs/tk104-graphadmission-scope-2026-09-24.md` sec 0) BEFORE zcli could be asked:
+#: the LOUD fields cannot fail on a corpus Python compiles and writes, the silent fields
+#: were swept by the mirror at 0, so only MIXED silent halves can appear, and only these
+#: three corpora carry one. `derived_tupleset_ttu`'s `inherited` reads a derived
+#: tupleset (the `ttuDirect` silent half). The two `derived_userset` corpora write a
+#: userset subject onto a derived `Direct` arm (the `storeValid` silent half).
+_EXPECTED_ADMISSION_FAILURES: dict[str, tuple[str, ...]] = {
+    "SCHEMAS:derived_userset_subject": ("storeValid",),
+    "TTU_USERSET:derived_userset": ("storeValid",),
+    "TTU_USERSET:derived_tupleset_ttu": ("ttuDirect",),
+}
+
+#: The `W4Fragment` field that also takes a MIXED field's silent half out of the premise
+#: (`graphadmission_scope_probes.py::SHADOWED`, per field rather than per probe).
+_SHADOW_FIELD = {"ttuDirect": "computedOrDirect", "storeValid": "directArmsBare"}
+
+
+def _field_of(label: str) -> str:
+    """`<field>/<case>` or `<field>.<half>/<case>` -> `<field>`."""
+    return label.split("/", 1)[0].split(".", 1)[0]
+
+
+def test_admission_expectation_table_is_well_formed():
+    stale = sorted(set(_EXPECTED_ADMISSION_FAILURES) - set(ALL_CORPORA))
+    assert not stale, f"_EXPECTED_ADMISSION_FAILURES names corpora that do not exist: {stale}"
+    bad = sorted({f for fs in _EXPECTED_ADMISSION_FAILURES.values() for f in fs}
+                 - set(GA_FIELDS))
+    assert not bad, f"_EXPECTED_ADMISSION_FAILURES names non-fields: {bad}"
+
+
+def test_admission_field_list_is_the_lean_structure():
+    """`GA_FIELDS` is the field list parsed from `FullScope.lean`, in order."""
+    from formal.conformance.test_graphadmission_scope_pin import _live_fields
+
+    live = tuple(_live_fields())
+    assert live == GA_FIELDS, f"GraphAdmission fields: Lean source {live}, this module {GA_FIELDS}"
+
+
+@pytest.mark.parametrize("key", sorted(ALL_CORPORA))
+def test_lean_admission_verdict_matches_the_prediction(key):
+    """(G) Lean's per-field `GraphAdmission` verdict on every curated corpus equals the
+    prediction made from the sizing, field for field."""
+    rep = _fragment_report(key)
+    adm = rep["admission"]
+    # a set, not a list: Lean's `Json.mkObj` sorts keys, so JSON cannot carry the order.
+    # The order is `graphAdmissionFieldsB`'s, and `failures` below is compared as a list.
+    assert set(adm["fields"]) == set(GA_FIELDS), (
+        f"[{key}] zcli reported admission fields {sorted(adm['fields'])}, not the "
+        f"fourteen GraphAdmission fields")
+    expected = list(_EXPECTED_ADMISSION_FAILURES.get(key, ()))
+    assert adm["failures"] == expected, (
+        f"[{key}] Lean's GraphAdmission verdict fails {adm['failures']}, the sizing "
+        f"predicted {expected}. If a LOUD field fails, a corpus Python accepts is "
+        f"outside a field the sizing classified as a Python refusal: re-adjudicate "
+        f"test_graphadmission_scope_pin.py before touching this table.")
+
+
+@pytest.mark.parametrize("key", sorted(ALL_CORPORA))
+def test_no_corpus_is_in_w4fragment_but_outside_admission(key):
+    """(H) The shadowing claim, machine-checked on the corpora: a corpus that fails a
+    `GraphAdmission` field also fails that field's `W4Fragment` shadow, so the joint
+    premise never covers it silently through the other bundle."""
+    rep = _fragment_report(key)
+    for f in rep["admission"]["failures"]:
+        assert f in _SHADOW_FIELD, (
+            f"[{key}] fails GraphAdmission.{f}, which has no W4Fragment shadow")
+        assert not rep["fields"][_SHADOW_FIELD[f]], (
+            f"[{key}] fails GraphAdmission.{f} but passes W4Fragment."
+            f"{_SHADOW_FIELD[f]}, its claimed shadow")
+
+
+def test_theorem_backed_corpora_meet_the_whole_premise():
+    """(A') Every `_THEOREM_BACKED` corpus meets BOTH bundles by Lean's deciders, so the
+    classification no longer rests on prose for either half."""
+    outside = {}
+    for name in sorted(GRAPH_FRAGMENT):
+        if name in _DIFFERENTIAL_ONLY:
+            continue
+        rep = _fragment_report(f"SCHEMAS:{name}")
+        if not rep["inPremise"]:
+            outside[name] = (rep["failures"], rep["admission"]["failures"])
+    assert not outside, (
+        f"`_THEOREM_BACKED` corpora outside the headline premise by Lean's deciders "
+        f"(W4Fragment failures, GraphAdmission failures): {outside}. Move them to "
+        f"`_DIFFERENTIAL_ONLY` with this output as the citation. Do NOT edit a decider.")
+
+
+def _ga_probe_request(label: str) -> str:
+    if label in GA_SCHEMA_PROBES:
+        schema_text, obj_wild, _ = GA_SCHEMA_PROBES[label]
+        return build_request(schema_text, [], [], obj_wild, mode="fragment")
+    schema_text, tup, _ = GA_STORE_PROBES[label]
+    return build_request(schema_text, [tup], [], (), mode="fragment")
+
+
+#: Probes the ORACLE-side parser (`tests/oracle.py`, which `encode.py` reads) refuses, so
+#: no request can be built and zcli is never asked. Pinned as a set so a parser change
+#: surfaces here rather than as a silently shrunk sweep. MEASURED 2026-09-25: the first
+#: raises `malformed userset restriction 'group#member.0'` (`tests/oracle.py::
+#: _parse_restrictions`), the second the oracle's own empty-name lock (`TK55`). Both
+#: fields keep a Lean control in `AdmissionDecide.lean` (`refutes_directRestrNotLeaf`,
+#: `refutes_keysNonempty`).
+_ORACLE_REFUSES: frozenset[str] = frozenset({
+    "directRestrNotLeaf/dotted-restriction-predicate",
+    "keysNonempty/empty-relation-name",
+})
+
+#: Probes the oracle-side parser ACCEPTS but cannot represent, so the request zcli gets is
+#: not the probe. MEASURED 2026-09-25: `tests/oracle.py::parse_schema_ast` keeps the LAST
+#: of two `define viewer` lines without complaint, where the production parser raises
+#: `duplicate relation definition`. The encoded schema therefore has one key and Lean
+#: rightly admits it. Pinned so that fixing the oracle (task row `TK105`) flips this loudly.
+#: The Lean side of `nodup` is `AdmissionDecide.lean::refutes_nodup`.
+_ORACLE_COLLAPSES: frozenset[str] = frozenset({"nodup/duplicate-define"})
+
+
+@pytest.mark.parametrize("label", sorted({**GA_SCHEMA_PROBES, **GA_STORE_PROBES}))
+def test_lean_admission_fails_each_probes_named_field(label):
+    """(I) The sizing's REASONED claim that each probe VIOLATES the field its label names
+    is now checked by Lean: a non-control probe fails its field, and a control does not.
+    This is independent of what Python did with the probe, which the scope pin checks."""
+    try:
+        req = _ga_probe_request(label)
+    except Exception as exc:  # noqa: BLE001 -- the refusal set is pinned, not tolerated
+        assert label in _ORACLE_REFUSES, (
+            f"[{label}] the oracle-side parser refuses this probe ({exc!r}); add it to "
+            f"_ORACLE_REFUSES only after confirming the refusal is the parser's own")
+        return
+    assert label not in _ORACLE_REFUSES, f"[{label}] is in _ORACLE_REFUSES but now encodes"
+    try:
+        runner.zcli_path()
+    except runner.ZcliUnavailable:
+        pytest.skip("zcli not built (run `lake build zcli` in formal/lean)")
+    rep = runner.run_fragment(req)
+    field = _field_of(label)
+    assert field in GA_FIELDS, f"[{label}] names no GraphAdmission field"
+    failing = rep["admission"]["failures"]
+    if label in _ORACLE_COLLAPSES:
+        assert field not in failing, (
+            f"[{label}] the oracle parser no longer collapses this probe (Lean now fails "
+            f"{field}). Move it out of _ORACLE_COLLAPSES and close TK105's finding.")
+        return
+    if "control" in label:
+        assert field not in failing, f"[{label}] is an in-scope control but Lean fails {failing}"
+    else:
+        assert field in failing, (
+            f"[{label}] was built to violate GraphAdmission.{field}, but Lean's decider "
+            f"says it holds (failures {failing}). The probe does not test its row.")
+    if label in GA_SHADOWED:
+        assert GA_SHADOWED[label] in rep["failures"], (
+            f"[{label}] is SHADOWED by W4Fragment.{GA_SHADOWED[label]}, but Lean says that "
+            f"field holds (W4Fragment failures {rep['failures']})")
+
+
+def _mirror_inputs() -> dict[str, tuple]:
+    """Every curated corpus plus every schema probe the production parser accepts."""
+    from zanzibar_utils_v1 import parse_schema_ast
+
+    out = {k: (s, t, ow) for k, (s, t, ow) in ALL_CORPORA.items()}
+    for label, (s, ow, _) in GA_SCHEMA_PROBES.items():
+        try:
+            parse_schema_ast(s)
+        except ValueError:
+            continue
+        out[f"GA_PROBE:{label}"] = (s, [], ow)
+    return out
+
+
+#: Floor on `_mirror_inputs()`: 36 corpora + 11 parseable schema probes, 2026-09-25.
+MIN_MIRROR_INPUTS = 47
+
+
+def test_mirror_sweep_is_not_vacuous():
+    assert len(_mirror_inputs()) >= MIN_MIRROR_INPUTS
+
+
+@pytest.mark.parametrize("key", sorted(_mirror_inputs()))
+def test_silent_field_mirror_equals_lean(key):
+    """(J) `graphadmission_scope_probes.py::silent_admission_failures`, the REASONED hand
+    mirror of `matchDecl` and `ranked`, equals Lean's verdict on those two fields. Until
+    this test it was pinned only by known answers. On a red, fix the mirror."""
+    schema_text, tuples, obj_wild = _mirror_inputs()[key]
+    rep = _lean_report(schema_text, tuples, obj_wild)
+    lean = tuple(f for f in ("matchDecl", "ranked") if not rep["admission"]["fields"][f])
+    assert silent_admission_failures(schema_text) == lean, (
+        f"[{key}] mirror says {silent_admission_failures(schema_text)}, Lean says {lean}")

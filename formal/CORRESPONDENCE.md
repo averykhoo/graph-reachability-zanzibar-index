@@ -166,6 +166,20 @@ fixed. The two sides read different parsers (`encode.py` goes through the oracle
 attribute a red to parser vs mirror first. `W4FRAGMENT_SCOPE` rows now name it in a
 `reported_by` column. Still unreported: the `GraphAdmission` half (`TK104`).
 
+**2026-09-25 — `GraphAdmission` is decided too (`TK104`), so (i) above is superseded.**
+`GraphIndex/AdmissionDecide.lean::graphAdmissionB` decides `GraphAdmission` EXACTLY
+(`graphAdmissionB_iff`), and `headlinePremiseB_iff` decides the whole headline premise
+`GraphAdmission S T ∧ W4Fragment S T`. The one non-bounded field, `RewriteRanked` (an
+existential over rank functions), is decided by a canonical longest-walk candidate
+(`rkF`, tabulated as `rkL`) and `rankCheck_rkF_iff`. `zcli mode="fragment"` now also emits
+`"admission"` (per field) and `"inPremise"`. The Python twin is
+`zanzibar_utils_v1.py::graph_admission_report`, and it covers only the two fields the
+sizing found SILENT (`matchDecl`, `ranked`). The other twelve are refused by Python or
+shadowed by a `W4Fragment` field (`formal/conformance/test_graphadmission_scope_pin.py::GRAPHADMISSION_SCOPE`).
+It is held to the decider by
+`formal/conformance/test_conformance_fragment.py::test_silent_field_mirror_equals_lean`.
+Map: `docs/tk104-graphadmission-scope-2026-09-24.md`.
+
 
 All answer-comparing suites share ONE query grid
 (`formal/conformance/grid.py::grid`): targets are the stored-tuple cross product

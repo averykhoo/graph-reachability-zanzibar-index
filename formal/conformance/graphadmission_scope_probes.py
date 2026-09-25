@@ -9,8 +9,10 @@ per sub-case), each paired with what the real Python surface did with it on 2026
 `test_graphadmission_scope_pin.py` re-runs every one of them.
 
 Provenance, per entry:
-  * that the input VIOLATES the field named by its label is REASONED from the Lean
-    definition (there is no `GraphAdmission` decider; building one is what `TK104` owns);
+  * that the input VIOLATES the field named by its label was REASONED from the Lean
+    definition on 2026-09-24. Since 2026-09-25 it is CHECKED by Lean's decider
+    (`AdmissionDecide.lean::graphAdmissionB`) in
+    `test_conformance_fragment.py::test_lean_admission_fails_each_probes_named_field`;
   * the outcome (`ADMITTED` / the raised class) is MEASURED, and re-measured by the pin.
 
 A label is `<field>/<case>` or `<field>.<half>/<case>`. A label containing `control` is an
@@ -232,57 +234,19 @@ SHADOWED: dict[str, str] = {
 
 
 # --------------------------------------------------------------------------- #
-# A REASONED mirror of the two SILENT fields. NOT a decider: nothing pins it to Lean.
+# The two SILENT fields. Since TK104's decider landed (2026-09-25) this delegates to the
+# PRODUCTION report, which `test_conformance_fragment.py` section (J) differential-pins
+# to Lean's `AdmissionDecide.lean::graphAdmissionB`. It was a REASONED hand mirror with
+# known-answer controls only, from the 2026-09-24 sizing until then.
 # --------------------------------------------------------------------------- #
-def _untainted_rules(ast, tainted):
-    """Mirror of `RulesWrite.lean::schemaRewrites`: the `exprArms` of every UNTAINTED def,
-    walking into unions only. Yields `(object_type, match_rel, out_rel)`."""
-    from zanzibar_utils_v1 import TTU, Computed, Union
-
-    def arms(e):
-        if isinstance(e, Computed):
-            yield e.relation
-        elif isinstance(e, TTU):
-            yield e.tupleset_rel
-        elif isinstance(e, Union):
-            for c in e.children:
-                yield from arms(c)
-
-    for (ot, rel), e in ast.items():
-        if (ot, rel) not in tainted:
-            for m in arms(e):
-                yield ot, m, rel
-
-
 def silent_admission_failures(schema_text: str) -> tuple[str, ...]:
-    """Which of `matchDecl` / `ranked` a schema fails, by a hand mirror of the Lean.
+    """Which of `matchDecl` / `ranked` a schema fails (`zanzibar_utils_v1.py::
+    graph_admission_report`).
 
     `matchDecl` -- every untainted rule's match key is declared and untainted
                   (`RestrictBase.lean::RewriteMatchDeclared`).
-    `ranked`    -- the untainted rule graph, match -> out, is acyclic. `RewriteRanked`
-                  also bounds the rank by `S.keys.length`; under `matchDecl` every rule
-                  endpoint is a declared key, so an acyclic graph always fits (REASONED).
+    `ranked`    -- the untainted rule graph, match -> out, is acyclic
+                  (`RulesSaturate.lean::RewriteRanked`).
     """
-    from zanzibar_utils_v1 import compute_taint, parse_schema_ast
-    ast = parse_schema_ast(schema_text)
-    tainted = compute_taint(ast)
-    rules = list(_untainted_rules(ast, tainted))
-    fails = []
-    if any((ot, m) not in ast or (ot, m) in tainted for ot, m, _ in rules):
-        fails.append("matchDecl")
-    succ: dict = {}
-    for ot, m, out in rules:
-        succ.setdefault((ot, m), set()).add((ot, out))
-    state: dict = {}
-
-    def on_cycle(n) -> bool:
-        state[n] = 1
-        for nx in succ.get(n, ()):
-            if state.get(nx) == 1 or (nx not in state and on_cycle(nx)):
-                return True
-        state[n] = 2
-        return False
-
-    if any(n not in state and on_cycle(n) for n in list(succ)):
-        fails.append("ranked")
-    return tuple(fails)
+    from zanzibar_utils_v1 import graph_admission_report
+    return graph_admission_report(schema_text).failures

@@ -30,6 +30,65 @@ from here.
 
 ---
 
+## 2026-09-25 — `TK104` CLOSED: `GraphAdmission` decided in Lean, the whole premise too, SILENT fields reported
+
+rows: TK104 (comment ×2, closed), TK71 (NEXT → NOW), TK105 NEW (LATER), ASK-1 NEW (LATER).
+
+`task lint: clean (13 checks, 221 task file(s) parsed), 30 warning(s)`
+
+`read: board only`
+
+**"Do the next task" → `TK104`, the board's `NOW`.** The session carried out all three steps
+of the sizing doc's § 3 plan, and the row closed. Map, now FROZEN:
+[`docs/tk104-graphadmission-scope-2026-09-24.md`](../tk104-graphadmission-scope-2026-09-24.md),
+block "Progress, 2026-09-25".
+
+* **Lean.** `formal/lean/ZanzibarProofs/GraphIndex/AdmissionDecide.lean` adds three results:
+  - `graphAdmissionB_iff`, exact in both directions;
+  - the `Decidable (GraphAdmission S T)` instance;
+  - `headlinePremiseB_iff`, which decides `GraphAdmission ∧ W4Fragment`, the premise of every
+    headline theorem.
+
+  `RewriteRanked` is an existential over rank functions. It is decided by a canonical
+  candidate: the longest rule-walk ending at a key (`rkF`, tabulated as `rkL`), with
+  `rankCheck_rkF_iff`. No proof sketch step failed. 48 audited names.
+* **Found by the pins:** `chainS` is the tree's FIRST admitted witness with a non-zero rank.
+  All six earlier hand proofs used `⟨fun _ => 0, …⟩`.
+* **zcli and the conformance harness.**
+  - `mode="fragment"` emits `"admission"` and `"inPremise"`.
+  - `test_conformance_fragment.py` (A') holds every `_THEOREM_BACKED` corpus inside the WHOLE
+    premise, by Lean.
+  - (G): Lean's verdict on all 36 corpora equals a table predicted from the sizing before zcli
+    could be asked. It matched on the first comparable run.
+  - (H): the SHADOWED claim, machine-checked.
+  - (I): each sizing probe fails its named field by Lean, which was REASONED before.
+  - (J): the report differential.
+* **Operator report.** `zanzibar_utils_v1.py::graph_admission_report` covers `matchDecl` and
+  `ranked`, the whole gap the sizing found. It is differential-pinned to Lean over 47 inputs.
+  The sizing mirror now delegates to it.
+* **Sabotage.**
+  - **Lean:** 21 mutations with an M0 control, all red. 5 reds are proof-only, each
+    equivalent by construction and argued in the doc. Three pins were added for predicted
+    INERT rows before the sweep, and each took its mutation.
+  - **Python:** 10 mutations with a P0 control. P7 was INERT because it weakened a check of a
+    TRUE claim; the subject sabotage P7b was red.
+  - ⚠ **Instrument failure.** An outer `timeout` killed the Python runner after it wrote a
+    mutation and before `finally` restored it. The rerun's red BASELINE caught it. The
+    mutated line was found by diff and restored, and that rerun is VOID. Rule: no outer
+    `timeout` around a mutation runner.
+* **Findings filed.**
+  - `TK105`: `tests/oracle.py::parse_schema_ast` keeps the last duplicate `define` silently,
+    while production refuses it. Pinned as `_ORACLE_COLLAPSES`.
+  - `ASK-1` (LATER): should the product refuse dangling references? That would make
+    `matchDecl` LOUD.
+* **Floors.** `MIN_CONF_ALL` 843 → 990, `MIN_CONF_REST` 708 → 855, `MIN_TESTS_ALL` 1279 → 1288
+  (+4 of it drift).
+* **Re-rank.** Goal step 3 (`docs/goal-census-2026-09-22.md`) is complete, so all three
+  steps of the 2026-09-22 goal are done. `TK71` was promoted to `NOW` as the first `NEXT`.
+  Whether the goal has a next phase is the user's call.
+
+Still owed: nothing.
+
 ## 2026-09-24 — `TK104` sized: `GraphAdmission` is LOUD 10 / MIXED 2 / SILENT 2, pinned and probe-tied
 
 rows: TK104 (comment, brief, touch; stays `NOW`).

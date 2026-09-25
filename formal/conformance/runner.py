@@ -210,18 +210,28 @@ def run_state(request_json: str) -> dict:
 
 
 #: The exact key set `zcli mode="fragment"` emits (`Cli.lean::fragmentJson`).
-FRAGMENT_KEYS = frozenset({"inFragment", "fields", "failures", "tainted"})
+#: `"inPremise"` and `"admission"` were added by `TK104` (2026-09-25).
+FRAGMENT_KEYS = frozenset({"inPremise", "admission", "inFragment", "fields", "failures",
+                           "tainted"})
+
+#: The exact key set of the nested `"admission"` report.
+ADMISSION_KEYS = frozenset({"admitted", "fields", "failures"})
 
 
 def run_fragment(request_json: str) -> dict:
-    """Feed a `mode="fragment"` request to `zcli` and parse the `W4Fragment`
-    report `{"inFragment", "fields", "failures", "tainted"}` it prints
-    (`Cli.lean::fragmentJson`, `DW-1`). The verdict is Lean's
-    `FragmentDecide.lean::w4FragmentB`, proved EXACT by `w4FragmentB_iff`.
+    """Feed a `mode="fragment"` request to `zcli` and parse the premise report
+    it prints (`Cli.lean::fragmentJson`). `{"inFragment", "fields", "failures",
+    "tainted"}` is the `W4Fragment` half (`DW-1`; Lean's
+    `FragmentDecide.lean::w4FragmentB`, EXACT by `w4FragmentB_iff`).
+    `"admission"` is `{"admitted", "fields", "failures"}`, the `GraphAdmission`
+    half (`TK104`; `AdmissionDecide.lean::graphAdmissionFieldsB`, EXACT by
+    `graphAdmissionB_iff`), and `"inPremise"` is both at once
+    (`headlinePremiseB_iff`).
 
-    The key set is asserted EXACTLY, and `inFragment` is cross-checked against
-    `failures` here, so a zcli that dropped a field or emitted an inconsistent
-    report fails at the seam rather than in some caller's comparison.
+    Both key sets are asserted EXACTLY, and each verdict is cross-checked against
+    its `failures` here, as is `inPremise` against the two verdicts. So a zcli
+    that dropped a field or emitted an inconsistent report fails at the seam
+    rather than in some caller's comparison.
     """
     cached = _FRAGMENT_CACHE.get(request_json)
     if cached is not None:
@@ -237,8 +247,17 @@ def run_fragment(request_json: str) -> dict:
             f"fragment output shape unexpected: keys="
             f"{sorted(rep) if isinstance(rep, dict) else type(rep)} "
             f"(request kept at {req_path})")
+    adm = rep["admission"]
+    if not isinstance(adm, dict) or set(adm) != ADMISSION_KEYS:
+        raise AssertionError(
+            f"fragment output's admission shape unexpected: {adm!r} "
+            f"(request kept at {req_path})")
     failing = [k for k, v in rep["fields"].items() if not v]
-    if sorted(rep["failures"]) != sorted(failing) or rep["inFragment"] != (not failing):
+    adm_failing = [k for k, v in adm["fields"].items() if not v]
+    if (sorted(rep["failures"]) != sorted(failing) or rep["inFragment"] != (not failing)
+            or sorted(adm["failures"]) != sorted(adm_failing)
+            or adm["admitted"] != (not adm_failing)
+            or rep["inPremise"] != (rep["inFragment"] and adm["admitted"])):
         raise AssertionError(
             f"fragment report is internally inconsistent: {rep!r} "
             f"(request kept at {req_path})")

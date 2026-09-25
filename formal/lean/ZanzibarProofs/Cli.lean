@@ -1,6 +1,7 @@
 import ZanzibarProofs.Spec.Semantics
 import ZanzibarProofs.GraphIndex.Exec
 import ZanzibarProofs.GraphIndex.FragmentDecide
+import ZanzibarProofs.GraphIndex.AdmissionDecide
 import Lean.Data.Json
 
 /-!
@@ -82,8 +83,11 @@ Modes (Phase 6 — graph-state conformance):
   (`fragmentJson`): the per-field verdict of `GraphIndex/FragmentDecide.lean::
   w4FragmentFieldsB`, which `w4FragmentB_iff` proves EXACT in both directions,
   and the Lean `taintedKeys`. Queries are ignored; an `"ops"` stream is rc 5.
-  It decides the `W4Fragment` half of the headline premise only —
-  `GraphAdmission` has no decider. `"graph"` deliberately does NOT refuse an
+  Since `TK104` (2026-09-25) it also decides the OTHER half of the headline
+  premise: `"admission"` is `{"admitted", "fields", "failures"}` from
+  `GraphIndex/AdmissionDecide.lean::graphAdmissionFieldsB` (EXACT by
+  `graphAdmissionB_iff`), and `"inPremise"` is `headlinePremiseB`, i.e.
+  `GraphAdmission S T ∧ W4Fragment S T` (`headlinePremiseB_iff`). `"graph"` deliberately does NOT refuse an
   out-of-fragment input: `formal/conformance/test_conformance_graph.py::
   _DIFFERENTIAL_ONLY` exists to run exactly such corpora as an implementation
   differential, so the honest move is to REPORT the scope, not to delete the
@@ -318,12 +322,18 @@ def stateJson (S : Schema) (σ : GraphState) (T : Store) : Json :=
     (`GraphIndex/FragmentDecide.lean::w4FragmentFieldsB`, decided EXACTLY:
     `w4FragmentB_iff`), plus the failing field names and `taintedKeys S` — the Lean
     `isDerived` set, emitted so the Python side can pin its own taint computation
-    against it. `"inFragment"` is `w4FragmentB S T`. `GraphAdmission` is NOT decided
-    here (its `RewriteRanked` field is an existential over rank functions), so
-    `"inFragment": true` means the `W4Fragment` half of the headline premise holds,
-    never that a headline theorem applies outright. -/
+    against it. `"inFragment"` is `w4FragmentB S T`, the `W4Fragment` half only.
+    `"admission"` is the `GraphAdmission` half, per field (`TK104`,
+    `AdmissionDecide.lean::graphAdmissionFieldsB`), and `"inPremise"` is
+    `headlinePremiseB S T`: `true` exactly when BOTH bundles hold, i.e. when every
+    headline theorem's premise is met at this `(S, T)`. -/
 def fragmentJson (S : Schema) (T : Store) : Json :=
   Json.mkObj [
+    ("inPremise", Json.bool (headlinePremiseB S T)),
+    ("admission", Json.mkObj [
+      ("admitted", Json.bool (graphAdmissionB S T)),
+      ("fields", Json.mkObj ((graphAdmissionFieldsB S T).map (fun p => (p.1, Json.bool p.2)))),
+      ("failures", Json.arr ((graphAdmissionFailures S T).map Json.str).toArray)]),
     ("inFragment", Json.bool (w4FragmentB S T)),
     ("fields", Json.mkObj ((w4FragmentFieldsB S T).map (fun p => (p.1, Json.bool p.2)))),
     ("failures", Json.arr ((w4FragmentFailures S T).map Json.str).toArray),

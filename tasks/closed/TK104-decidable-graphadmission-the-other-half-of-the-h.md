@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-23d
-moved: 2026-09-24
-updated: 2026-09-24
-closed:
+moved: 2026-09-25
+updated: 2026-09-25
+closed: 2026-09-25
 ---
 
 `GraphAdmission` has no decider, so a `W4Fragment` verdict (`DW-1`, landed 2026-09-23d) only
@@ -46,10 +46,14 @@ widened to the full premise. It is assurance, ranked against product risk under 
 - The sizing is DONE (2026-09-24): do not re-probe. The classification is pinned by
   `formal/conformance/test_graphadmission_scope_pin.py::GRAPHADMISSION_SCOPE`, and its
   probes re-run on every gate.
-- `graphadmission_scope_probes.py::silent_admission_failures` is a REASONED hand mirror.
-  It is NOT a decider, and nothing pins it to Lean. Do not cite it as one, and do not
-  promote it into production as an operator report. `DW-1`'s hand derivation was wrong
-  twice before a differential caught it.
+- (Superseded 2026-09-25.) `graphadmission_scope_probes.py::silent_admission_failures`
+  WAS a REASONED hand mirror, and this trap forbade promoting it. It now DELEGATES to
+  `zanzibar_utils_v1.py::graph_admission_report`, which is differential-pinned to Lean by
+  `formal/conformance/test_conformance_fragment.py::test_silent_field_mirror_equals_lean`.
+  The report covers `matchDecl` and `ranked` ONLY. Its `silent_fields_hold` is not
+  "GraphAdmission holds"; only zcli's `"admission"` / `"inPremise"` say that.
+- `String.contains` does not reduce under `decide`. A Bool that uses it makes every
+  `decide` pin stick (`admWfB` hit this). Use `toList.contains`, as `Leaf.lean::isLeafPred` does.
 - Store admission has TWO gates in series (`zanzibar_utils_v1.py::RuleSet.apply`, then
   `setengine/engine.py::SetEngine._validate`). A mutation to one gate alone is INERT by
   design. Sweep M5 / M5b / M5c.
@@ -76,3 +80,16 @@ Sweep: 11 mutations + an M0 control. M5 was INERT because two admission gates ru
 Also: the FullScope.lean GraphAdmission docstring, formal/ARCHITECTURE.md and formal/FINAL_REVIEW.md claimed full Python enforcement; they are corrected in place and dated. MIN_CONF_ALL 582 -> 843 and MIN_CONF_REST 447 -> 708: 195 of the 261 were DW-1's unratcheted leak.
 DECISION (the session's call per CLAUDE.md Who decides; reasoning in doc sec 3): build the decider, because only a Lean-pinned report can surface matchDecl/ranked to an operator honestly. NOT taken: refusing dangling refs in Python. That is a product change made to fit a proof, and if wanted it is an ASK-* question.
 NEXT ACTION: Lean graphAdmissionB + exact _iff in FragmentDecide.lean style. 13 fields are cheap (doc sec 3 lists which already have instances). RewriteRanked is the one real proof: an iterated longest-path candidate rank, soundness trivial, and the completeness sketch is in doc sec 3. Then zcli fragment gains an admission key, (A) widens, then the Python report for the two SILENT fields, differential-pinned.
+
+### 2026-09-25
+
+CLOSED 2026-09-25: steps 1-3 of the plan doc sec 3 all LANDED. Map (now FROZEN): docs/tk104-graphadmission-scope-2026-09-24.md, Progress 2026-09-25 block.
+LANDED (1): formal/lean/ZanzibarProofs/GraphIndex/AdmissionDecide.lean. graphAdmissionB_iff is exact; headlinePremiseB_iff decides GraphAdmission AND W4Fragment. RewriteRanked is decided by a canonical longest-walk rank (rkF, tabulated as rkL): rankCheck_rkF_iff, via rkF_le_rank / rkF_mono / rkF_jump. Pins: 7 positives (chainS is the first admitted witness with a non-zero rank), 14 field controls with exact failure lists, rank_tight, premise_reads_both_halves. 64 audited names.
+LANDED (2): zcli mode=fragment emits admission + inPremise. test_conformance_fragment.py (A) plus (G)-(J): corpora vs a table predicted from the sizing, the shadow claim, each probe failing its named field by Lean, and the report differential.
+LANDED (3): zanzibar_utils_v1.py::graph_admission_report (matchDecl + ranked only, differential-pinned). The two SILENT rows of GRAPHADMISSION_SCOPE carry reported_by.
+SABOTAGE: Lean 21 mutations with an M0 control, all red; 5 proof-only reds, each equivalent by construction. Python 10 mutations with a P0 control. P7 was INERT, and its subject sabotage P7b is red. One instrument failure: a timeout left a mutation on disk, a red baseline caught it, recorded.
+FILED: TK105 (the oracle keeps the last duplicate define), ASK-1 (refuse dangling refs?). Gate: all ten phases, see the commit.
+
+GraphAdmission decided exactly in Lean (AdmissionDecide.lean::graphAdmissionB_iff), the whole premise too (headlinePremiseB_iff), reported by zcli, and its two SILENT fields reported by zanzibar_utils_v1.py::graph_admission_report, differential-pinned. Goal step 3 complete.
+
+CORRECTION to the entry above: 48 audited names were added (grep -c of the new #print axioms lines in Audit.lean), not 64.

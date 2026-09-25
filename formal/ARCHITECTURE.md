@@ -191,7 +191,10 @@ restriction comes from (`FullScope.lean`):
   (`ttuDirect`, `storeValid`; their silent halves also fail a `W4Fragment` field), and
   2 are SILENT: `matchDecl` (Python admits a dangling reference) and `ranked` (Python
   admits an untainted computed cycle). The classification and its probes are
-  `conformance/test_graphadmission_scope_pin.py`.
+  `conformance/test_graphadmission_scope_pin.py`. **Decided since 2026-09-25**
+  (`GraphIndex/AdmissionDecide.lean::graphAdmissionB_iff`, exact), and the two SILENT
+  fields are reported to an operator by `zanzibar_utils_v1.py::graph_admission_report`,
+  differential-pinned to the decider.
 - **`W4Fragment S T`** — the **honest carries**: scope restrictions the current proof
   needs that Python admission does **not** imply. `structure W4Fragment`
   (`FullScope.lean`) has exactly **TEN** fields since E-chain leg 5 (2026-08-05) split

@@ -493,6 +493,7 @@ ten, and the one narrowing accepted on that ground (`P20`) is the exception. Clo
 seven is repo board row `DW-1`; making the classification measured rather than argued needs
 a fourth `zcli` mode, row `P21`.
 **2026-09-23d:** `W4Fragment` is now DECIDED (`GraphIndex/FragmentDecide.lean::w4FragmentB_iff`, exact in both directions), and `zcli mode="fragment"` reports the verdict per field. `test_conformance_fragment.py` machine-checks the `W4Fragment` half of every `_THEOREM_BACKED` corpus, which was prose before. The Python side is still SILENT: the production mirror plus its differential is `DW-1` step 3 (`docs/dw1-decidable-w4fragment-2026-09-23.md`).
+**2026-09-25 (`TK104`):** `GraphAdmission` is DECIDED too (`GraphIndex/AdmissionDecide.lean::graphAdmissionB_iff`), and so is the whole headline premise (`headlinePremiseB_iff`). `RewriteRanked`, the one existential field, is decided by a canonical longest-walk rank (`rankCheck_rkF_iff`). `zcli mode="fragment"` emits `"admission"` and `"inPremise"`; the Python report of the two SILENT fields is `zanzibar_utils_v1.py::graph_admission_report`. Map: `docs/tk104-graphadmission-scope-2026-09-24.md`.
 
 **The T2a scope carry — CLOSED 2026-09-23 (`P5`)**; see the T2a note at the top of this
 file. The pre-work measurements that sat here (the Sd/Td probe, `graph_reached_inv`'s zero

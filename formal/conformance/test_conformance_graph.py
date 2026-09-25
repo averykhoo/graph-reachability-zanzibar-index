@@ -280,8 +280,9 @@ def test_graph_fragment_scope_classified():
         f"FullScope.lean and recorded the argument in corpus.py; otherwise put it "
         f"in `_DIFFERENTIAL_ONLY` with the machine-checked citation for why it is "
         f"outside. `zcli mode=\"fragment\"` now DECIDES the W4Fragment half "
-        f"(test_conformance_fragment.py pins every theorem-backed corpus inside it); "
-        f"the GraphAdmission half has no decider and is still your argument.")
+        f"and, since TK104, the GraphAdmission half too: "
+        f"test_conformance_fragment.py::test_theorem_backed_corpora_meet_the_whole_premise "
+        f"holds every theorem-backed corpus inside BOTH bundles.")
 
     stale = (_THEOREM_BACKED | _DIFFERENTIAL_ONLY) - fragment
     assert not stale, (

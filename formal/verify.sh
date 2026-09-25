@@ -429,7 +429,11 @@ GATE_LOCK_HELD=1
 #   test_w4fragment_scope_pin.py) could have been DELETED with the gate green. +66
 #   are TK104's formal/conformance/test_graphadmission_scope_pin.py (777 + 66 = 843).
 #   Instrument check: see docs/tk104-graphadmission-scope-2026-09-24.md sec 4.
-MIN_CONF_ALL=843
+# Re-measured 2026-09-25 (TK104 decider) with the same command: 990. All +147 are
+#   formal/conformance/test_conformance_fragment.py's new GraphAdmission sections
+#   (A')/(G)-(J): that module collects 332, up from 185. No drift this time. The floor
+#   mechanism is unchanged, so the 2026-09-24 instrument check stands.
+MIN_CONF_ALL=990
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -564,7 +568,11 @@ MIN_CONF_ALL=843
 #   observed literally:
 #     FAIL: tests/ collects only 1279 test(s); the gate floor is 1280.
 #   and rc=1. Restored to 1279, which then passes.
-MIN_TESTS_ALL=1279
+# Re-measured 2026-09-25 with `pytest tests/ -q --collect-only`: 1288. +5 are TK104's
+#   tests/test_graph_admission_report.py. The other +4 are DRIFT: with that file
+#   --ignore'd the count is 1283, so four tests had accumulated unratcheted before this
+#   session. Mechanism unchanged; the instrument check above stands.
+MIN_TESTS_ALL=1288
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -634,8 +642,10 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 # 2026-09-24 (TK104): HEAVY re-measured at 135 (unchanged); REST measured with the same
 #   --ignore construction -> `708 tests collected`, and 135 + 708 == 843 == MIN_CONF_ALL.
 #   All +261 are REST (DW-1's +195 unratcheted, TK104's +66).
+# 2026-09-25 (TK104 decider): HEAVY re-measured at 135 (unchanged), REST at 855 by the
+#   same --ignore construction; 135 + 855 == 990 == MIN_CONF_ALL.
 MIN_CONF_HEAVY=135
-MIN_CONF_REST=708
+MIN_CONF_REST=855
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

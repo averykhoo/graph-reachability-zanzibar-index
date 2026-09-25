@@ -85,6 +85,10 @@ import ZanzibarProofs.GraphIndex.TtuStarWide
 -- report a driver-side pre-check needs, and the discriminating pins.
 import ZanzibarProofs.GraphIndex.FragmentDecide
 
+-- TK104 (2026-09-25): `GraphAdmission` is decidable -- `graphAdmissionB` + its exact `_iff`
+-- (`RewriteRanked` by a canonical longest-walk rank), the whole-premise Bool, and the pins.
+import ZanzibarProofs.GraphIndex.AdmissionDecide
+
 -- Leg 7 4c-ii adjudication battery (2026-08-20): the (★)/(★′) probe pins + controls.
 -- Additive and zero-cone; expected to be absorbed or deleted by the 4c-ii commit.
 import ZanzibarProofs.GraphIndex.Scratch4cii

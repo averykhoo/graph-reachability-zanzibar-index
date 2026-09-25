@@ -26,7 +26,8 @@ precedent for the shape.
 
 `GraphAdmission` — the OTHER half of the headline premise — is NOT decided here: its
 `RewriteRanked` field is an existential over rank functions. Out of `DW-1`'s scope, by
-decision recorded on the row.
+decision recorded on the row. It is decided since 2026-09-25 (`TK104`) in
+`AdmissionDecide.lean::graphAdmissionB_iff`, which also decides the whole premise.
 -/
 
 namespace Zanzibar

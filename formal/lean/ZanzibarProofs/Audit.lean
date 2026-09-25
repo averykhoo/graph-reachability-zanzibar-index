@@ -10,6 +10,7 @@ import ZanzibarProofs.GraphIndex.Leaf
 import ZanzibarProofs.GraphIndex.LeafRules
 import ZanzibarProofs.GraphIndex.TtuStarWide
 import ZanzibarProofs.GraphIndex.FragmentDecide
+import ZanzibarProofs.GraphIndex.AdmissionDecide
 import ZanzibarProofs.GraphIndex.Write
 import ZanzibarProofs.GraphIndex.DirectCorrect
 import ZanzibarProofs.GraphIndex.BareStarCorrect
@@ -2219,5 +2220,67 @@ namespace Zanzibar
 #print axioms FragmentDecideWitness.refutes_ttuStarFree
 #print axioms FragmentDecideWitness.refutes_term
 #print axioms FragmentDecideWitness.outside_S6_by_decide
+
+-- ★ `TK104` (2026-09-25) — `GraphAdmission` IS DECIDABLE (`GraphIndex/AdmissionDecide.lean`),
+-- so the WHOLE headline premise is: `headlinePremiseB_iff` decides `GraphAdmission ∧
+-- W4Fragment`. `graphAdmissionB_iff` is EXACT in both directions. The one non-bounded field,
+-- `RewriteRanked` (∃ a rank function), is decided by a canonical candidate: `rkF` (the longest
+-- rule-walk ending at a key, iterated `|keys| + 1` times) is checked by `rankCheck`, and
+-- `rankCheck_rkF_iff` is the existential's exact decision. Completeness rests on
+-- `rkF_le_rank` / `rkF_mono` / `rkF_jump`. `lookD_rkL` ties the executable table to `rkF`.
+-- ★ NON-VACUITY: seven positives (the six hand-proved admission witnesses plus `chainS`, the
+-- tree's first admitted witness with a non-zero rank), fourteen per-field controls pinning
+-- EXACT failure lists, `rank_tight` (a walk as long as the bound), and
+-- `premise_reads_both_halves`. ⚠ SABOTAGE: a mutation sweep with an M0 control, recorded in
+-- `docs/tk104-graphadmission-scope-2026-09-24.md`.
+-- Standard axioms only:
+#print axioms le_maxOf
+#print axioms maxOf_le
+#print axioms maxOf_cases
+#print axioms rkF_le_rank
+#print axioms rkF_mono
+#print axioms rkF_jump
+#print axioms rkF_eq_zero_or_outKey
+#print axioms rankCheck_rkF_iff
+#print axioms lookD_rkL
+#print axioms rankedB_iff
+#print axioms admWfB_iff
+#print axioms admTtuNotLeafB_iff
+#print axioms storeTupleOkB_iff
+#print axioms admStoreValidB_iff
+#print axioms graphAdmissionB_iff
+#print axioms graphAdmissionFailures_nil_iff
+#print axioms headlinePremiseB_iff
+#print axioms AdmissionDecideWitness.accepts_Sx
+#print axioms AdmissionDecideWitness.accepts_Sy
+#print axioms AdmissionDecideWitness.accepts_Sd
+#print axioms AdmissionDecideWitness.accepts_Sd4
+#print axioms AdmissionDecideWitness.accepts_SlV
+#print axioms AdmissionDecideWitness.accepts_Sw
+#print axioms AdmissionDecideWitness.accepts_chainS
+#print axioms AdmissionDecideWitness.premise_chainS
+#print axioms AdmissionDecideWitness.rank_viewer_chainS
+#print axioms AdmissionDecideWitness.rank_needs_iteration
+#print axioms AdmissionDecideWitness.rank_tight
+#print axioms AdmissionDecideWitness.admission_Sx_by_decide
+#print axioms AdmissionDecideWitness.refutes_wf
+#print axioms AdmissionDecideWitness.refutes_nodup
+#print axioms AdmissionDecideWitness.refutes_strat
+#print axioms AdmissionDecideWitness.refutes_ttuDirect
+#print axioms AdmissionDecideWitness.refutes_matchDecl
+#print axioms AdmissionDecideWitness.refutes_matchDecl_ttu
+#print axioms AdmissionDecideWitness.refutes_ranked
+#print axioms AdmissionDecideWitness.refutes_ranked_self
+#print axioms AdmissionDecideWitness.refutes_objWild
+#print axioms AdmissionDecideWitness.refutes_usWild
+#print axioms AdmissionDecideWitness.refutes_storeValid
+#print axioms AdmissionDecideWitness.refutes_storeValid_derived
+#print axioms AdmissionDecideWitness.refutes_ttuNotLeaf
+#print axioms AdmissionDecideWitness.refutes_directRestrNotLeaf
+#print axioms AdmissionDecideWitness.refutes_computedRefsNotLeaf
+#print axioms AdmissionDecideWitness.refutes_noLeafSubjects
+#print axioms AdmissionDecideWitness.refutes_keysNonempty
+#print axioms AdmissionDecideWitness.premise_reads_both_halves
+#print axioms AdmissionDecideWitness.outside_S3_by_decide
 
 end Zanzibar
