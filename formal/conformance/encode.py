@@ -23,7 +23,7 @@ from tests.oracle import (
     OIntersection,
     OExclusion,
     OracleTuple,
-    parse_schema_ast,
+    parse_schema_ast_unchecked,
     norm_pred,
 )
 
@@ -58,8 +58,11 @@ def _fold_binary(tag: str, children: tuple) -> dict:
 
 def schema_to_json(schema_text: str,
                    object_wildcards: Iterable[tuple[str, str]] = ()) -> dict:
-    """Parse the DSL (via the oracle's parser) and emit the Lean CLI schema JSON."""
-    ast = parse_schema_ast(schema_text)  # {(type, relation): OExpr}
+    """Parse the DSL (via the oracle's parser) and emit the Lean CLI schema JSON.
+
+    UNCHECKED parse: a dangling or cyclic schema (ASK-1) is translated, not refused, so
+    Lean's own admission decider sees it and the probes can pin Lean's verdict on it."""
+    ast = parse_schema_ast_unchecked(schema_text)  # {(type, relation): OExpr}
     defs = [[[t, r], _expr_to_json(e)] for (t, r), e in ast.items()]
     ow = [[t, r] for (t, r) in object_wildcards]
     return {"defs": defs, "objectWildcards": ow}

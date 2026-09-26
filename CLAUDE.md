@@ -379,6 +379,17 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   (`MAX_TESTS_XFAILED`) instead of tolerating them silently.
 
 ## Gotchas / invariants
+- **Schemas must be self-consistent (user decision 2026-09-26, `ASK-1`).** Both parsers
+  refuse a dangling relation reference (computed ref, TTU tupleset, TTU target,
+  `[T#P]`) and any cycle of computed / TTU-tupleset references
+  (`zanzibar_utils_v1.py::_validate_ast_consistency`, oracle twin
+  `tests/oracle.py::_validate_consistency`). Recursion through stored tuples (nested
+  groups, `x from parent`) stays legal; bare restriction types are not checked. A test
+  that needs "graph refuses, set engine accepts" uses a derived cycle through a TTU
+  TARGET, the only form left for `_stratify`. The non-raising reports, the conformance
+  encoder and grammar tests read `_parse_schema_ast_unchecked` /
+  `oracle.parse_schema_ast_unchecked`, not the checked parse. Map:
+  `docs/ask1-schema-self-consistency-2026-09-26.md`.
 - **Identifiers** are validated on writes to `[A-Za-z0-9_./@+=-]` (1–256 chars). Reserved:
   a name may be `*` (wildcard sentinel), a subject predicate may be `...` (bare). Reads are
   lenient (an out-of-charset name just never matches).

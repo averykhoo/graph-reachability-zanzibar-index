@@ -30,6 +30,59 @@ from here.
 
 ---
 
+## 2026-09-26 — `ASK-1` ANSWERED and IMPLEMENTED: schemas must be self-consistent; no SILENT GraphAdmission field
+
+rows: ASK-1 (comment ×2, closed).
+
+`task lint: clean (13 checks, 221 task file(s) parsed), 30 warning(s)`
+
+`read: board + note`
+
+**The user asked what `ASK-1` was about, then decided it.** Their words: *"I think we can
+strictly expect schemas to be self consistent"*. Asked whether reference cycles
+(`ranked`) should go too, they said *"refuse both"*. Map (ACTIVE-PLAN, frozen with this
+close): [`docs/ask1-schema-self-consistency-2026-09-26.md`](../ask1-schema-self-consistency-2026-09-26.md).
+
+* **What landed.** Both parsers now refuse, at parse time:
+  - dangling relation references: computed ref, TTU tupleset, TTU target, `[T#P]`;
+  - any cycle of computed / TTU-tupleset references.
+
+  The production check is `zanzibar_utils_v1.py::_validate_ast_consistency`, on both the
+  DSL and JSON front ends. The oracle has an independent twin,
+  `tests/oracle.py::_validate_consistency`. `GraphAdmission.matchDecl` and `.ranked` are
+  LOUD, so the scope pin now reads LOUD 12 / MIXED 2 / SILENT 0.
+  `test_conformance_fragment.py` (K) proves that every input the Lean-pinned report says
+  fails either field is refused by both parsers.
+* **A prior REASONED claim was wrong.** `docs/tk104-graphadmission-scope-2026-09-24.md` §3
+  said `ranked` "cannot be made LOUD without refusing legitimate recursive schemas".
+  - READ first-hand in OpenFGA's `pkg/typesystem/typesystem.go::hasCycle`: OpenFGA refuses
+    every computed cycle (`ErrCycle`).
+  - Legitimate recursion (nested groups, folder hierarchies, OpenFGA's self-referential
+    boolean flag) goes through stored tuples and makes no reference edge.
+* **The unchecked parse is deliberate.** `_parse_schema_ast_unchecked` and
+  `oracle.parse_schema_ast_unchecked` exist for three readers:
+  - the non-raising reports, which promise never to raise;
+  - the conformance encoder, since Lean decides admission itself;
+  - grammar tests.
+
+  Without it, the (J) Lean differential would have lost every failing input and silently
+  compared `()` with `()`.
+* **Census and resolution.** The first run gave `57 failed, 1 error`; every one was
+  resolved, and no curated corpus was refused. The findings:
+  - The set engine refuses a group-membership DATA cycle whenever the graph can compile
+    the schema.
+  - `CyclicDerivedDependency` is now reachable only through a TTU TARGET. Every "graph
+    refuses, set engine accepts" test moved onto that shape.
+  - The oracle memo-poisoning repro was rebuilt as a data cycle and sabotaged.
+  - `MIN_COOCCURRING_PAIRS` went 839 -> 813; all 26 lost pairs contain the now-unreachable
+    `ttu.ts:undeclared`, measured.
+  - The `tupleset_shapes` golden was regenerated; the diff is one deleted rule.
+* **Mutation sweep:** 16 of 16 caught, with an M0 control attributed correctly.
+* **Floors:** `MIN_TESTS_ALL` 1288 -> 1328 and `MIN_CONF_ALL` 990 -> 1038 (REST 855 -> 903).
+  The growth is fully attributed in `verify.sh`; there was no drift.
+
+Still owed: nothing.
+
 ## 2026-09-25 — `TK104` CLOSED: `GraphAdmission` decided in Lean, the whole premise too, SILENT fields reported
 
 rows: TK104 (comment ×2, closed), TK71 (NEXT → NOW), TK105 NEW (LATER), ASK-1 NEW (LATER).

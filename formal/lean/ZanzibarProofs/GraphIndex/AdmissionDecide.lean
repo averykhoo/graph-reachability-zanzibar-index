@@ -16,7 +16,9 @@ the WHOLE premise can be asked of a concrete `(S, T)`:
 The field-by-field sizing that preceded this module
 (`docs/tk104-graphadmission-scope-2026-09-24.md` §0) found ten fields LOUD in Python, two
 MIXED but shadowed by `W4Fragment`, and two SILENT (`matchDecl`, `ranked`). This decider is
-what a Python report of the two SILENT fields gets differential-pinned to.
+what a Python report of the two SILENT fields gets differential-pinned to. Since `ASK-1`
+(2026-09-26) Python REFUSES both at parse time, so no field is SILENT; the report stays, and
+`formal/conformance/test_conformance_fragment.py` (K) ties the refusal to this decider.
 
 ## The one real proof: `RewriteRanked`
 
@@ -552,7 +554,8 @@ theorem refutes_ttuDirect :
     graphAdmissionFailures (ext [(("doc", "p"), .computed "a"), (("doc", "v"), .ttu "a" "p")]) Tx
       = ["ttuDirect"] := by decide
 
-/-- `matchDecl` (SILENT in Python): a computed reference to an undeclared relation. -/
+/-- `matchDecl` (Python refuses it since `ASK-1`, 2026-09-26): a computed reference to an
+    undeclared relation. -/
 theorem refutes_matchDecl :
     graphAdmissionFailures
       (ext [(("doc", "c"), .union (.direct [("user", BARE, false)]) (.computed "zz"))]) Tx
@@ -562,7 +565,7 @@ theorem refutes_matchDecl :
 theorem refutes_matchDecl_ttu :
     graphAdmissionFailures (ext [(("doc", "v"), .ttu "a" "zz")]) Tx = ["matchDecl"] := by decide
 
-/-- `ranked` (SILENT in Python): an untainted computed two-cycle `c ↔ d`. -/
+/-- `ranked` (Python refuses it since `ASK-1`, 2026-09-26): an untainted computed two-cycle `c ↔ d`. -/
 theorem refutes_ranked :
     graphAdmissionFailures
       (ext [(("doc", "c"), .union (.direct [("user", BARE, false)]) (.computed "d")),

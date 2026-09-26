@@ -9,7 +9,9 @@ import ZanzibarProofs.Core.Schema
 A relation is **derived (tainted)** iff it transitively reaches an
 `Intersection`/`Exclusion`. Stratification is Kahn topological layering over the
 dependency edges *among tainted relations only* (untainted relations may be
-positively recursive; the closure handles them). `stratify S = none` iff a
+positively recursive; the closure handles them -- in the MODEL: since `ASK-1`,
+2026-09-26, the Python parsers refuse any cycle of schema references, untainted or not).
+`stratify S = none` iff a
 derived-dependency cycle exists.
 
 **Fidelity note (PROOF_STATUS variations):** the static reference/taint extraction

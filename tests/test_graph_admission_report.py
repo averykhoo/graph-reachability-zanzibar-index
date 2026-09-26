@@ -1,7 +1,9 @@
 """`zanzibar_utils_v1.py::graph_admission_report` -- the operator surface of `TK104`.
 
-The report covers the two `GraphAdmission` fields that Python neither refuses nor shadows
-(`matchDecl`, `ranked`). Its per-field verdict is differential-pinned to Lean's decider
+The report covers the two `GraphAdmission` fields that Python neither refused nor shadowed
+until ASK-1 (`matchDecl`, `ranked`). Since 2026-09-26 both parsers REFUSE every violation of
+them (`tests/test_schema_self_consistency.py`), and the report reads the UNCHECKED parse
+(`_parse_schema_ast_unchecked`) so it can still describe one. Its per-field verdict is differential-pinned to Lean's decider
 `AdmissionDecide.lean::graphAdmissionB` in
 `formal/conformance/test_conformance_fragment.py` section (J). That differential runs only
 on schemas both parsers accept and only where `zcli` is built, so this module pins the
@@ -13,8 +15,8 @@ from __future__ import annotations
 
 from zanzibar_utils_v1 import (
     GRAPH_ADMISSION_REPORTED_FIELDS,
+    _parse_schema_ast_unchecked,
     graph_admission_report,
-    parse_schema_ast,
 )
 
 DANGLING = """
@@ -52,7 +54,8 @@ def test_known_answers():
 
 def test_accepts_the_ast_as_well_as_text():
     for text in (DANGLING, CYCLE, NESTED_FOLDERS):
-        assert graph_admission_report(parse_schema_ast(text)) == graph_admission_report(text)
+        assert (graph_admission_report(_parse_schema_ast_unchecked(text))
+                == graph_admission_report(text))
 
 
 def test_a_derived_def_contributes_no_rule():

@@ -17,5 +17,3 @@ type doc
 
     define mixed_parent: [folder] but not [doc]
     define via_negonly: viewer from mixed_parent
-
-    define via_undeclared: viewer from ghost_parent

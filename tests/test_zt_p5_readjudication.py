@@ -957,39 +957,43 @@ _UNDEFINED_REFERENCE_SCHEMAS = {
 }
 
 
-@pytest.mark.parametrize('name', sorted(_UNDEFINED_REFERENCE_SCHEMAS))
-def test_zt_p5_undefined_references_compile_silently_and_read_empty(name):
-    """Phase-ledger row 0.5 ("verify compiler undefined-reference behavior (A3)",
-    still `todo` since Phase 0). Current Python-side truth, established here:
+@pytest.mark.parametrize('name', sorted(set(_UNDEFINED_REFERENCE_SCHEMAS) - {'direct_type'}))
+def test_zt_p5_undefined_references_are_refused(name):
+    """Phase-ledger row 0.5 ("verify compiler undefined-reference behavior (A3)").
 
-      * `compile_ruleset` performs NO undefined-reference validation at all --
-        every form below compiles SILENTLY (undefined computed target, undefined
-        TTU target, undefined tupleset relation, undefined restriction type,
-        undefined userset relation, undefined boolean arm, self-referential
-        computed);
-      * all three backends (graph, both SetOps, oracle) then build, and every
-        such reference reads as the EMPTY relation -- fail-CLOSED, and unanimous.
-
-    That is the safe direction, so this is a WF/diagnostics gap, not a soundness
-    one; pinning it means a future "reject undefined references" change is a
-    deliberate, visible decision rather than a silent behaviour flip.
+    REVERSED 2026-09-26 by ASK-1 (user decision: schemas must be self-consistent). Until
+    then this was `test_zt_p5_undefined_references_compile_silently_and_read_empty`, and
+    its docstring said: "pinning it means a future 'reject undefined references' change
+    is a deliberate, visible decision rather than a silent behaviour flip". This is that
+    change. Every form below except `direct_type` is now refused at PARSE time by the
+    production parser AND the oracle's (`zanzibar_utils_v1.py::_validate_ast_consistency`,
+    `tests/oracle.py::_validate_consistency`). Before, all of them compiled, and every
+    backend read the reference as EMPTY, unanimously and fail-closed.
     """
-    from tests.test_matrix import GraphBackend, SetBackend
+    from tests import oracle
     schema = _UNDEFINED_REFERENCE_SCHEMAS[name]
-    rs = parse_openfga_schema(schema)          # must NOT raise (documents today)
-    assert rs is not None
+    with pytest.raises(ValueError, match='undeclared relation|depend on themselves'):
+        parse_openfga_schema(schema)
+    with pytest.raises(ValueError):
+        oracle.parse_schema_ast(schema)
 
+
+def test_zt_p5_undefined_restriction_type_still_compiles_and_reads_empty():
+    """The one form ASK-1 does NOT refuse: a bare restriction type that is never declared
+    (`[nosuchtype]`). A relation-less `type` line leaves no trace in a `SchemaAST`, so
+    declared-ness of a bare subject type is not checkable there, and it is not a dangling
+    RELATION (`docs/ask1-schema-self-consistency-2026-09-26.md` sec 2). It still reads
+    EMPTY on every backend, as it did before."""
+    schema = _UNDEFINED_REFERENCE_SCHEMAS['direct_type']
+    assert parse_openfga_schema(schema) is not None
     backends = _backends(schema)
     try:
-        # anything writable stays writable, and nothing an undefined reference
-        # gates ever becomes true
         orc = Oracle(schema, [])
         for q in (('...', 'user', 'u1', 'viewer', 'doc', 'd1'),
                   ('m', 'group', 'g1', 'viewer', 'doc', 'd1')):
-            want = orc.check(*q)
-            assert want is False, (name, q, want)
+            assert orc.check(*q) is False, q
             for b in backends:
-                assert b.check(q) is False, (name, q, b.name)
+                assert b.check(q) is False, (q, b.name)
     finally:
         for b in backends:
             b.close()

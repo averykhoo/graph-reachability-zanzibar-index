@@ -6,6 +6,13 @@ ledger. Corrections are appended dated at the top, never edited into the body. (
 ACTIVE-PLAN from 2026-09-24, `docs/README.md` §3.) Live state is `python scripts/task.py show TK104`, never this file. Every figure below
 was measured on `2026-09-24` against HEAD `b08a262` plus this session's diff.
 
+**Correction, 2026-09-26 (`ASK-1`).** § 3 says "`ranked` cannot be made LOUD without
+refusing legitimate recursive schemas". That REASONED claim was wrong. OpenFGA refuses every
+computed cycle (`ErrCycle`, READ in `pkg/typesystem/typesystem.go::hasCycle`), and
+legitimate recursion goes through stored tuples, which make no reference edge. By user
+decision, both `matchDecl` and `ranked` are now parse refusals, so the classification is
+LOUD 12 / MIXED 2 / SILENT 0. See `docs/ask1-schema-self-consistency-2026-09-26.md`.
+
 Provenance labels: **READ** (verified first-hand, `file::symbol`), **REASONED**, **PROBED**
 (a script was run, literal output quoted), **UNVERIFIED**. No subagent was used. Every READ
 below was read by the session.

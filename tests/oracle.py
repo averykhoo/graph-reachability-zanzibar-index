@@ -251,7 +251,18 @@ class _Parser:
 
 
 def parse_schema_ast(text: str) -> dict[tuple[str, str], object]:
-    """Parse the DSL into ``{(type, relation): OExpr}`` (boolean-aware; drives evaluation)."""
+    """Parse the DSL into ``{(type, relation): OExpr}`` (boolean-aware; drives evaluation),
+    refusing a schema that is not self-consistent (``_validate_consistency``)."""
+    ast = parse_schema_ast_unchecked(text)
+    _validate_consistency(ast)
+    return ast
+
+
+def parse_schema_ast_unchecked(text: str) -> dict[tuple[str, str], object]:
+    """``parse_schema_ast`` without the self-consistency refusal. The conformance encoder
+    (``formal/conformance/encode.py::schema_to_json``) uses it: it is a translator, and
+    Lean decides admission for itself, so it must be able to send Lean a schema this
+    parser would refuse."""
     ast: dict[tuple[str, str], object] = {}
     current_type: str | None = None
     for raw in text.strip().splitlines():
@@ -275,6 +286,60 @@ def parse_schema_ast(text: str) -> dict[tuple[str, str], object]:
                     f"({line!r})")
             ast[(current_type, name)] = _Parser(_tokenize(body.strip()), name).parse()
     return ast
+
+
+def _oracle_nodes(expr):
+    """Every node of ``expr``, through every operator."""
+    yield expr
+    if isinstance(expr, (OUnion, OIntersection)):
+        for c in expr.children:
+            yield from _oracle_nodes(c)
+    elif isinstance(expr, OExclusion):
+        yield from _oracle_nodes(expr.base)
+        yield from _oracle_nodes(expr.subtract)
+
+
+def _validate_consistency(ast) -> None:
+    """Independent twin of the production self-consistency refusal (ASK-1, 2026-09-26).
+    NOT shared with ``zanzibar_utils_v1.py::_validate_ast_consistency`` (independence
+    contract above). Refused: a computed ref or TTU tupleset naming an undeclared relation
+    on its own type; a TTU target declared on none of the tupleset's restriction types (on
+    no type at all, when it has none); a ``[T#P]`` restriction with no ``T#P``; and any
+    relation that reaches itself through computed / TTU-tupleset references."""
+    edges = {}
+    for (typ, rel), expr in ast.items():
+        edges[(typ, rel)] = []
+        for node in _oracle_nodes(expr):
+            if isinstance(node, ODirect):
+                for (rtype, rpred, _wild) in node.restrictions:
+                    if rpred != '...' and (rtype, rpred) not in ast:
+                        raise ValueError(f'{typ}#{rel}: undeclared restriction {rtype}#{rpred}')
+            elif isinstance(node, OComputed):
+                if (typ, node.relation) not in ast:
+                    raise ValueError(f'{typ}#{rel}: undeclared relation {typ}#{node.relation}')
+                edges[(typ, rel)].append((typ, node.relation))
+            elif isinstance(node, OTTU):
+                if (typ, node.tupleset_rel) not in ast:
+                    raise ValueError(f'{typ}#{rel}: undeclared tupleset {typ}#{node.tupleset_rel}')
+                edges[(typ, rel)].append((typ, node.tupleset_rel))
+                types = {r[0] for n in _oracle_nodes(ast[(typ, node.tupleset_rel)])
+                         if isinstance(n, ODirect) for r in n.restrictions}
+                types = types or {t for t, _r in ast}   # no restriction: any declared type
+                if all((t, node.target_rel) not in ast for t in types):
+                    raise ValueError(f'{typ}#{rel}: {node.target_rel!r} is declared on no '
+                                     f'type of tupleset {typ}#{node.tupleset_rel}')
+    # A key is on a cycle iff it can reach itself; the schemas here are tiny, so a plain
+    # reachability walk per key is the clearest form.
+    for start in edges:
+        seen, todo = set(), list(edges[start])
+        while todo:
+            k = todo.pop()
+            if k == start:
+                raise ValueError(f'{start[0]}#{start[1]} depends on itself through schema '
+                                 f'references')
+            if k not in seen:
+                seen.add(k)
+                todo.extend(edges[k])
 
 
 # ---------------------------------------------------------------------------

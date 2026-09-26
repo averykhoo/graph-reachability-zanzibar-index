@@ -19,6 +19,7 @@ from zanzibar_utils_v1 import (
     compile_ruleset,
     parse_openfga_schema,
     UnsupportedByGraphIndex,
+    _parse_schema_ast_unchecked,
 )
 
 
@@ -27,7 +28,10 @@ from zanzibar_utils_v1 import (
 # ---------------------------------------------------------------------------
 
 def _rel(schema, obj_type, relation):
-    return parse_schema_ast(schema)[(obj_type, relation)]
+    # GRAMMAR tests: their one-line fragments reference relations they never declare
+    # (`define x: a and b`). Since ASK-1 (2026-09-26) the checked parse refuses that, so
+    # these read the unchecked one; the refusal is pinned in test_schema_self_consistency.
+    return _parse_schema_ast_unchecked(schema)[(obj_type, relation)]
 
 
 def test_direct_leaf_restriction_list():

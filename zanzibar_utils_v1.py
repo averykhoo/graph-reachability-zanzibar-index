@@ -855,9 +855,19 @@ class _RelationParser:
 def parse_schema_ast(schema: str) -> SchemaAST:
     """Parse an OpenFGA DSL string into ``{(object_type, relation): Expr}`` (spec §2.2).
 
-    Always succeeds for well-formed syntax, including boolean (``and`` / ``but not``)
-    definitions -- refusing booleans is compilation's job, not parsing's.
+    Succeeds for well-formed, SELF-CONSISTENT syntax (`_validate_ast_consistency`),
+    including boolean (``and`` / ``but not``) definitions -- refusing booleans is
+    compilation's job, not parsing's.
     """
+    ast = _parse_schema_ast_unchecked(schema)
+    _validate_ast_consistency(ast)
+    return ast
+
+
+def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
+    """`parse_schema_ast` WITHOUT the self-consistency refusal (every other refusal
+    stays). Only for the non-raising scope reports, which must describe a dangling or
+    cyclic schema rather than raise on it (`w4_fragment_report`, `graph_admission_report`)."""
     ast: SchemaAST = {}
     current_type: str | None = None
     seen_types: set[str] = set()
@@ -952,6 +962,104 @@ def _validate_ast_references(ast: SchemaAST) -> None:
                 walk(e.subtract)
 
         walk(expr)
+
+
+def _iter_refs(expr: Expr):
+    """Every Computed / TTU node anywhere in ``expr``, through every operator."""
+    if isinstance(expr, (Computed, TTU)):
+        yield expr
+    elif isinstance(expr, (Union, Intersection)):
+        for c in expr.children:
+            yield from _iter_refs(c)
+    elif isinstance(expr, Exclusion):
+        yield from _iter_refs(expr.base)
+        yield from _iter_refs(expr.subtract)
+
+
+def _validate_ast_consistency(ast: SchemaAST) -> None:
+    """A schema must be SELF-CONSISTENT: every referenced relation is declared, and no
+    relation depends on itself through schema references (ASK-1, user decision
+    2026-09-26). OpenFGA refuses both (`pkg/typesystem/typesystem.go::
+    isUsersetRewriteValid`, `::validateTypeRestrictions`, `::hasCycle`).
+
+    Before this, a dangling reference silently meant "empty" and a computed cycle was
+    answered by a fixpoint. Both backends and the oracle agreed on those answers, but no
+    headline theorem covers them: they are exactly the `GraphAdmission` fields `matchDecl`
+    and `ranked`, which were the premise's only SILENT fields (TK104). This refusal makes
+    both LOUD. `graph_admission_report` still reports them: it reads a hand-built
+    `SchemaAST` or `_parse_schema_ast_unchecked`, never this refusal.
+
+    * A computed ref ``editor`` and a TTU tupleset ``parent`` must be declared on the
+      defining type.
+    * A TTU target must be declared on at least one type the tupleset admits, or on any
+      type when the tupleset admits none.
+    * A userset restriction ``[group#member]`` must name a declared relation. Bare subject
+      types (``[user]``) are NOT checked, because a relation-less ``type`` line leaves no
+      trace in a `SchemaAST`.
+    * No cycle of computed / TTU-tupleset references, through any operator. Recursion
+      through stored tuples (nested groups ``[group#member]``, folders ``x from parent``,
+      OpenFGA's self-referential boolean flag) makes no such edge and stays legal. A
+      DERIVED cycle through a TTU target is not caught here; `_stratify` refuses it
+      (`CyclicDerivedDependency`).
+
+    Every dangling-reference message contains ``undeclared relation`` and every cycle
+    message ``depend on themselves``; `tests/genswarm.py::REJECTION_WITNESSES` matches on
+    them.
+
+    The oracle carries an independent twin (`tests/oracle.py::_validate_consistency`)."""
+    deps: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    for (object_type, relation), expr in ast.items():
+        where = f'{object_type}#{relation}'
+        for d in _iter_directs(expr):
+            for r in d.restrictions:
+                if r.predicate != '...' and (r.type, r.predicate) not in ast:
+                    raise ValueError(
+                        f'{where}: restriction [{r.type}#{r.predicate}] names an undeclared '
+                        f'relation {r.type}#{r.predicate}')
+        out = deps.setdefault((object_type, relation), set())
+        for ref in _iter_refs(expr):
+            if isinstance(ref, Computed):
+                if (object_type, ref.relation) not in ast:
+                    raise ValueError(
+                        f'{where}: references undeclared relation {object_type}#{ref.relation}')
+                out.add((object_type, ref.relation))
+                continue
+            if (object_type, ref.tupleset_rel) not in ast:
+                raise ValueError(
+                    f'{where}: tupleset of {ref.target_rel!r} from {ref.tupleset_rel!r} is '
+                    f'undeclared relation {object_type}#{ref.tupleset_rel}')
+            out.add((object_type, ref.tupleset_rel))
+            parent_types = {r.type for d in _iter_directs(ast[(object_type, ref.tupleset_rel)])
+                            for r in d.restrictions}
+            # A tupleset that admits no type is constantly empty; its target must still be
+            # declared SOMEWHERE (OpenFGA's schema-1.0 rule), or the name dangles.
+            candidates = parent_types or {t for t, _r in ast}
+            if not any((t, ref.target_rel) in ast for t in candidates):
+                raise ValueError(
+                    f'{where}: {ref.target_rel!r} from {ref.tupleset_rel!r} is an undeclared '
+                    f'relation on every tupleset type {sorted(candidates)}')
+    # Depth-first cycle search over "depends on" edges, reporting the first cycle found.
+    state: dict[tuple[str, str], int] = {}          # 1 = on the current path, 2 = done
+    for root in deps:
+        if root in state:
+            continue
+        path = [root]
+        state[root] = 1
+        stack = [iter(sorted(deps[root]))]
+        while stack:
+            nxt = next(stack[-1], None)
+            if nxt is None:
+                stack.pop()
+                state[path.pop()] = 2
+            elif state.get(nxt) == 1:
+                cycle = path[path.index(nxt):] + [nxt]
+                raise ValueError(
+                    'reference cycle: relations depend on themselves through schema '
+                    'references: ' + ' -> '.join(f'{t}#{r}' for t, r in cycle))
+            elif nxt not in state:
+                state[nxt] = 1
+                path.append(nxt)
+                stack.append(iter(sorted(deps[nxt])))
 
 
 def _iter_directs(expr: Expr):
@@ -2248,6 +2356,7 @@ def parse_openfga_json(model) -> SchemaAST:
     # this in parse_schema_ast; skipping it here left a foreign write handle into
     # compiled leaf families open through JSON metadata.
     _validate_ast_references(ast)
+    _validate_ast_consistency(ast)
     return ast
 
 
@@ -2504,7 +2613,7 @@ def w4_fragment_report(schema: 'SchemaAST | str', tuples=()) -> W4FragmentReport
 
     Pure, and it never raises on an out-of-scope input. See the section comment above for
     what the result does and does not mean, and for the Lean differential that pins it."""
-    ast = parse_schema_ast(schema) if isinstance(schema, str) else schema
+    ast = _parse_schema_ast_unchecked(schema) if isinstance(schema, str) else schema
     tuples = [_w4_tuple_fields(t) for t in tuples]
     tainted = compute_taint(ast)
     derived = [(key, expr) for key, expr in ast.items() if key in tainted]
@@ -2619,7 +2728,7 @@ def graph_admission_report(schema: 'SchemaAST | str') -> GraphAdmissionReport:
     ``schema`` is a raw `SchemaAST` or DSL text. Both fields are schema-only. Pure, and it
     never raises on an out-of-scope input. See the section comment above for what the
     result does and does not mean."""
-    ast = parse_schema_ast(schema) if isinstance(schema, str) else schema
+    ast = _parse_schema_ast_unchecked(schema) if isinstance(schema, str) else schema
     tainted = compute_taint(ast)
     # RulesWrite.lean::schemaRewrites -- the rules of the UNTAINTED definitions only, as
     # (match key, out key) on the definition's own object type.

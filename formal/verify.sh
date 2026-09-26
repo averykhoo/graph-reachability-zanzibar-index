@@ -433,7 +433,10 @@ GATE_LOCK_HELD=1
 #   formal/conformance/test_conformance_fragment.py's new GraphAdmission sections
 #   (A')/(G)-(J): that module collects 332, up from 185. No drift this time. The floor
 #   mechanism is unchanged, so the 2026-09-24 instrument check stands.
-MIN_CONF_ALL=990
+# Re-measured 2026-09-26 (ASK-1) with the same command: 1038. All +48 are
+#   formal/conformance/test_conformance_fragment.py section (K), measured with
+#   -k 'reported_failures_are_refused_by_both_parsers or refusal_sweep': 48. No drift.
+MIN_CONF_ALL=1038
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -572,7 +575,12 @@ MIN_CONF_ALL=990
 #   tests/test_graph_admission_report.py. The other +4 are DRIFT: with that file
 #   --ignore'd the count is 1283, so four tests had accumulated unratcheted before this
 #   session. Mechanism unchanged; the instrument check above stands.
-MIN_TESTS_ALL=1288
+# Re-measured 2026-09-26 (ASK-1) with the same command: 1328. +41 are the new
+#   tests/test_schema_self_consistency.py (collect-only: 41), +1 is
+#   test_generator_coverage.py's guard becoming a two-case parametrize, and -2 are
+#   test_schema_shapes.py's two `via_undeclared` queries, removed with the fixture arm
+#   ASK-1 made unparseable (41 + 1 - 2 = 40). No drift.
+MIN_TESTS_ALL=1328
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -644,8 +652,10 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 #   All +261 are REST (DW-1's +195 unratcheted, TK104's +66).
 # 2026-09-25 (TK104 decider): HEAVY re-measured at 135 (unchanged), REST at 855 by the
 #   same --ignore construction; 135 + 855 == 990 == MIN_CONF_ALL.
+# 2026-09-26 (ASK-1): HEAVY re-measured at 135 (unchanged), REST at 903 by the same
+#   --ignore construction; 135 + 903 == 1038 == MIN_CONF_ALL. All +48 are REST.
 MIN_CONF_HEAVY=135
-MIN_CONF_REST=855
+MIN_CONF_REST=903
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

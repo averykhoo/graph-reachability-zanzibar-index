@@ -315,8 +315,21 @@ def test_rejection_witness_is_still_refused(w):
     assert G.ast_features(w.schema, w.owc), f'{w.name} carries no features'
 
 
-def test_undeclared_tupleset_with_untainted_target_still_compiles():
-    """Property guarded: the 2026-08-11 scope refusal keys on the TAINT OF THE TARGET,
+@pytest.mark.parametrize('target', ['r0', 'r1'])
+def test_undeclared_tupleset_is_refused_whatever_its_target(target):
+    """Property guarded: an undeclared tupleset is refused at PARSE time, whether its
+    target is untainted (`r0`) or derived (`r1`).
+
+    ⚠ REVERSED 2026-09-26 by ASK-1 (user decision: schemas must be self-consistent). This
+    test used to be `test_undeclared_tupleset_with_untainted_target_still_compiles`, the
+    negative control that stopped the 2026-08-11 refusal from widening to every undeclared
+    tupleset. That widening is now the product rule, made in `_validate_ast_consistency`
+    rather than `_validate_ttu_tuplesets`. The old docstring is kept below as history: its
+    sabotage output is the PRE-ASK-1 observation.
+
+    Old docstring, as-written:
+
+    Property guarded: the 2026-08-11 scope refusal keys on the TAINT OF THE TARGET,
     not on the tupleset merely being undeclared.
 
     This is the negative control for `undeclared-tupleset-with-derived-target`. That
@@ -349,8 +362,9 @@ def test_undeclared_tupleset_with_untainted_target_still_compiles():
                             '    define blk: [user]\n'
                             '    define r0: [user]\n'
                             '    define r1: [user] but not blk\n'
-                            '    define r7: [user] or r0 from nodecl\n')
-    G.features(schema, frozenset())      # must not raise
+                            f'    define r7: [user] or {target} from nodecl\n')
+    with pytest.raises(ValueError, match='undeclared relation doc#nodecl'):
+        G.features(schema, frozenset())
 
 
 def test_every_rejection_witness_family_is_actually_exercised_by_the_enumerator():
@@ -424,7 +438,10 @@ def test_no_enumerated_config_is_silently_dropped():
     flipped to match, and `test_undeclared_tupleset_with_untainted_target_still_compiles`
     guards against the refusal being widened to every undeclared tupleset. The sabotage
     output quoted below is therefore the PRE-FIX observation — kept because it is the
-    evidence that this test can see an unrecorded refusal at all.
+    evidence that this test can see an unrecorded refusal at all. (Superseded 2026-09-26
+    by ASK-1: every undeclared tupleset is now refused at parse; the witness is
+    `dangling-reference`, and the guard became
+    `test_undeclared_tupleset_is_refused_whatever_its_target`.)
 
     SABOTAGE (literal output). Narrowest plausible weakening: delete the single
     `undeclared-tupleset-with-derived-target` entry from `REJECTION_WITNESSES` — the

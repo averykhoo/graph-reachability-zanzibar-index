@@ -190,7 +190,10 @@ restriction comes from (`FullScope.lean`):
   of the 14 fields, 10 are LOUD (Python refuses every probed violation), 2 are MIXED
   (`ttuDirect`, `storeValid`; their silent halves also fail a `W4Fragment` field), and
   2 are SILENT: `matchDecl` (Python admits a dangling reference) and `ranked` (Python
-  admits an untainted computed cycle). The classification and its probes are
+  admits an untainted computed cycle). **Since 2026-09-26 (`ASK-1`, user decision) both
+  are LOUD too**: the parsers refuse dangling references and reference cycles
+  (`zanzibar_utils_v1.py::_validate_ast_consistency`), so it is LOUD 12 / MIXED 2 /
+  SILENT 0. The classification and its probes are
   `conformance/test_graphadmission_scope_pin.py`. **Decided since 2026-09-25**
   (`GraphIndex/AdmissionDecide.lean::graphAdmissionB_iff`, exact), and the two SILENT
   fields are reported to an operator by `zanzibar_utils_v1.py::graph_admission_report`,

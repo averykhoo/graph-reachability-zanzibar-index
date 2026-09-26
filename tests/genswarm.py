@@ -255,7 +255,10 @@ def ast_features(schema_text: str, owc=frozenset()) -> set[str]:
     rather than re-derived, because a second taint implementation in the test tree would
     be an instrument that can disagree with its subject."""
     f: set[str] = set()
-    ast = parse_schema_ast(schema_text)
+    # UNCHECKED parse (ASK-1): a witness may be refused at PARSE time for a dangling
+    # reference; its features still have to be describable. `features` below uses the
+    # checked parse, so a refusal still surfaces there.
+    ast = Z._parse_schema_ast_unchecked(schema_text)
     owc = frozenset(owc)
     if owc:
         f.add('schema:owc')
@@ -585,11 +588,10 @@ def witness(sw) -> tuple[dict, frozenset]:
         ast[('doc', 'r6')] = Union((Direct((Restriction('user', '...', False),)),
                                     Direct((Restriction('doc', 'r1', True),))))
     if 'ts_undeclared' in sw:
-        # A TTU whose tupleset relation is NOT declared on the object type. It compiles
-        # (it is not a parse error) and evaluates constantly empty -- so it is a real
-        # grammar point that no existing generator can express, and it is deliberately
-        # UNIONED with a live arm rather than standing alone, so the relation it sits on
-        # is still driven non-vacuously.
+        # A TTU whose tupleset relation is NOT declared on the object type. Since ASK-1
+        # (2026-09-26) the parser REFUSES it (the `dangling-reference` witness); until
+        # then it compiled and evaluated constantly empty. Kept as a switch so the
+        # enumerator keeps proving that refusal is live.
         ast[('doc', 'r7')] = Union((Direct((Restriction('user', '...', False),)),
                                     TTU('r1', 'nodecl')))
     if 'self_ttu' in sw:
@@ -733,35 +735,30 @@ REJECTION_WITNESSES: tuple[Rejection, ...] = (
         UnsupportedByGraphIndex,
         'wildcard userset restriction'),
     Rejection(
-        # FOUND 2026-08-10, FIXED 2026-08-11. A TTU whose tupleset relation is
-        # UNDECLARED and whose target relation is DERIVED used to escape the decision-15
-        # scope checks and die inside `compile_boolean_schema` on an internal invariant,
-        # as a bare `ValueError` -- a class `tests/parity.py` says out loud "must
-        # surface", so `ParityEngine` was UNCONSTRUCTIBLE on it (a hard crash) rather
-        # than degrading to 3-way. `_validate_ttu_tuplesets` now refuses the shape up
-        # front as a scoped `UnsupportedByGraphIndex`, and the `ValueError` at the
-        # `compile_boolean_schema` site is back to being an unreachable backstop.
-        #
-        # Compare `... define r7: [user] or r0 from nodecl` (UNTAINTED target), which
-        # compiles cleanly -- so it is the taint of the TARGET, not the undeclared
-        # tupleset, that trips it. That control is asserted by
-        # `test_undeclared_tupleset_with_untainted_target_still_compiles`, because a
-        # refusal widened to every undeclared tupleset would satisfy this witness while
-        # silently rejecting a schema that works.
-        'undeclared-tupleset-with-derived-target',
+        # ASK-1 (2026-09-26, user decision): schemas must be self-consistent, so the
+        # parser refuses any dangling reference (`_validate_ast_consistency`). This
+        # REPLACED the 2026-08-11 witness 'undeclared-tupleset-with-derived-target'
+        # (`UnsupportedByGraphIndex`, "targets the derived relation"): the parse now
+        # refuses an undeclared tupleset before `_validate_ttu_tuplesets` sees it,
+        # whatever the target's taint, so that family is unreachable from the DSL and
+        # `test_every_rejection_witness_family_is_actually_exercised_by_the_enumerator`
+        # would call it stale. Its history is in that test module's docstrings.
+        'dangling-reference',
         _REJ_HEAD + ('type doc\n  relations\n'
-                     '    define blk: [user]\n'
-                     '    define r1: [user] but not blk\n'
-                     '    define r7: [user] or r1 from nodecl\n'),
+                     '    define r7: [user] or r0 from nodecl\n'),
         frozenset(),
-        UnsupportedByGraphIndex,
-        'targets the derived relation'),
+        ValueError,
+        'undeclared relation'),
     Rejection(
+        # A derived cycle through a TTU TARGET. Until ASK-1 (2026-09-26) this witness was
+        # the same-type computed cycle `a: (...) or b`, `b: [user] and a`; the parser now
+        # refuses that one first ('depend on themselves'), so `_stratify` is reached only
+        # through a TTU target.
         'cyclic-derived-dependency',
         _REJ_HEAD + ('type doc\n  relations\n'
                      '    define blk: [user]\n'
-                     '    define a: ([user] but not blk) or b\n'
-                     '    define b: [user] and a\n'),
+                     '    define parent: [doc]\n'
+                     '    define a: ([user] but not blk) or a from parent\n'),
         frozenset(),
         CyclicDerivedDependency,
         'dependency cycle'),

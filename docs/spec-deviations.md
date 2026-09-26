@@ -29,6 +29,28 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-09-26 — `ASK-1`: schemas must be self-consistent; dangling references and reference cycles are refused
+
+**User adjudication, not a spec divergence found by a session.** The user decided: *"I
+think we can strictly expect schemas to be self consistent"*, then *"refuse both"*.
+Until now both parsers ACCEPTED two kinds of schema, and both backends and the oracle
+answered them the same way:
+
+- a dangling reference was treated as constantly empty;
+- a cycle of computed references was answered by a fixpoint.
+
+Neither kind was inside any headline theorem's premise (`GraphAdmission.matchDecl`,
+`GraphAdmission.ranked`). Both are now refused at parse time
+(`zanzibar_utils_v1.py::_validate_ast_consistency`, oracle twin
+`tests/oracle.py::_validate_consistency`), as OpenFGA refuses them (`ErrRelationUndefined`,
+`ErrCycle`).
+
+Golden change, deliberate: `tests/fga_schemas/tupleset_shapes.fga` lost its
+`via_undeclared: viewer from ghost_parent` arm, and its compiled-RuleSet snapshot was
+regenerated with `ZANZIBAR_UPDATE_SNAPSHOTS=1`. The diff is exactly one deleted line, the
+`relation='ghost_parent'` rewrite rule. Rules, what is deliberately not refused, and the
+pins: [`ask1-schema-self-consistency-2026-09-26.md`](ask1-schema-self-consistency-2026-09-26.md).
+
 ## 2026-09-17 — `TK70`: the ZT-P5 star self-edge rule held only at LENGTH 1, and the graph detonated on the next innocent write
 
 The 2026-07-26 ZT-P5 entry below states the rule this one completes, and states it
@@ -3411,6 +3433,11 @@ is asserted, so it cannot drift silently).
   well-formedness/diagnostics gap, not a soundness one. Pinned (7 parametrised
   cases) so a future "reject undefined references" change is a deliberate, visible
   decision rather than a silent behaviour flip.
+
+  > **2026-09-26 (`ASK-1`): that change was made, by user decision.** Six of the seven
+  > forms are now refused at parse time; the undefined bare restriction TYPE is still
+  > accepted and reads empty. See `## 2026-09-26` at the top of this file and
+  > `tests/test_zt_p5_readjudication.py::test_zt_p5_undefined_references_are_refused`.
 
 ### Also re-derived while working (not separately filed)
 

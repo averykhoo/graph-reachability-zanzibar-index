@@ -183,8 +183,8 @@ def test_lean_taint_equals_python_compute_taint(key):
 # `zanzibar_utils_v1.py::w4_fragment_report` is the operator-facing twin of the Lean
 # decider. It is a hand-written mirror, so it is held to Lean field for field. On a red,
 # fix the PYTHON. The two sides read different parsers (`encode.py` uses the oracle's;
-# the report uses the production `parse_schema_ast`), so attribute a red to parser vs
-# mirror first.
+# the report uses the production `_parse_schema_ast_unchecked`), so attribute a red to
+# parser vs mirror first.
 
 from formal.conformance.w4_scope_probes import PYTHON_OUTCOME, SCOPE_PROBES  # noqa: E402
 
@@ -278,6 +278,12 @@ def test_scope_probe_python_outcome_still_holds(label):
         parse_openfga_schema(schema_text, object_wildcard_shapes=frozenset(obj_wild))
         got = "ADMITTED"
     except UnsupportedByGraphIndex:
+        got = "RAISED"
+    except ValueError as e:
+        # ASK-1 (2026-09-26): the parse-time self-consistency refusal is a refusal too.
+        # Matched by its fixed message fragments, so any other ValueError still errors.
+        if "undeclared relation" not in str(e) and "depend on themselves" not in str(e):
+            raise
         got = "RAISED"
     assert got == PYTHON_OUTCOME[label], (
         f"[{label}] the production compile now {got}; the scope pin recorded "
@@ -463,8 +469,11 @@ def test_lean_admission_fails_each_probes_named_field(label):
 
 
 def _mirror_inputs() -> dict[str, tuple]:
-    """Every curated corpus plus every schema probe the production parser accepts."""
-    from zanzibar_utils_v1 import parse_schema_ast
+    """Every curated corpus plus every schema probe the production parser accepts, before
+    the self-consistency refusal. Since ASK-1 (2026-09-26) that refusal rejects every
+    `matchDecl` / `ranked` probe; filtering on the checked parser would drop exactly the
+    failing inputs and leave this differential comparing `()` with `()`."""
+    from zanzibar_utils_v1 import _parse_schema_ast_unchecked as parse_schema_ast
 
     out = {k: (s, t, ow) for k, (s, t, ow) in ALL_CORPORA.items()}
     for label, (s, ow, _) in GA_SCHEMA_PROBES.items():
@@ -494,3 +503,49 @@ def test_silent_field_mirror_equals_lean(key):
     lean = tuple(f for f in ("matchDecl", "ranked") if not rep["admission"]["fields"][f])
     assert silent_admission_failures(schema_text) == lean, (
         f"[{key}] mirror says {silent_admission_failures(schema_text)}, Lean says {lean}")
+
+
+
+# --------------------------------------------------------------------------- #
+# (K) ASK-1 (2026-09-26): `matchDecl` and `ranked` are REFUSED, not just reported
+# --------------------------------------------------------------------------- #
+# The user decided schemas must be self-consistent, so both parsers now refuse a dangling
+# reference or a reference cycle (`zanzibar_utils_v1.py::_validate_ast_consistency`,
+# `tests/oracle.py::_validate_consistency`). (J) makes the report equal Lean, so (K) makes
+# the refusal answer to Lean: an input that fails either field is refused by BOTH parsers.
+# The refusal is deliberately WIDER than the two fields (a dangling `[group#member]`, a
+# dangling ref inside a tainted def), so the converse is not claimed; the curated corpora
+# are the "must still be accepted" side.
+
+def _refused_by(parse, text: str) -> bool:
+    try:
+        parse(text)
+    except ValueError:
+        return True
+    return False
+
+
+@pytest.mark.parametrize("key", sorted(_mirror_inputs()))
+def test_reported_failures_are_refused_by_both_parsers(key):
+    """(K) If the report (== Lean, by (J)) says this input fails `matchDecl` or `ranked`,
+    the production parser AND the oracle's refuse it. A curated corpus is accepted by both."""
+    from tests.oracle import parse_schema_ast as oracle_parse
+    from zanzibar_utils_v1 import parse_schema_ast as prod_parse
+
+    schema_text = _mirror_inputs()[key][0]
+    fails = silent_admission_failures(schema_text)
+    for name, parse in (("production", prod_parse), ("oracle", oracle_parse)):
+        refused = _refused_by(parse, schema_text)
+        if key in ALL_CORPORA:
+            assert not fails and not refused, (
+                f"[{key}] a curated corpus fails {fails} / the {name} parser refuses it")
+        elif fails:
+            assert refused, f"[{key}] fails {fails}, but the {name} parser accepts it"
+
+
+def test_refusal_sweep_sees_both_fields_fail():
+    """Anti-vacuity for (K): the sweep holds inputs failing EACH field, so the refusal half
+    is exercised for both, not only the all-pass corpora."""
+    seen = {f for k in _mirror_inputs()
+            for f in silent_admission_failures(_mirror_inputs()[k][0])}
+    assert seen == {"matchDecl", "ranked"}, seen

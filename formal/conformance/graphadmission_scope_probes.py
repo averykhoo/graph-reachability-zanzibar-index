@@ -37,12 +37,15 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
           define viewer: [user]
           define viewer: [user]
         """, (), "ValueError"),
+    # A derived cycle through a TTU TARGET. Until ASK-1 (2026-09-26) this was the
+    # same-type `a: b but not x`, `b: a but not x`; the parser now refuses that as a
+    # reference cycle before `_stratify` runs, so only a TTU target still reaches it.
     "strat/derived-cycle": ("""
         type user
         type doc
           define x: [user]
-          define a: b but not x
-          define b: a but not x
+          define parent: [doc]
+          define a: ([user] but not x) or a from parent
         """, (), "CyclicDerivedDependency"),
     # The LOUD half: an UNTAINTED tupleset with a computed arm.
     "ttuDirect.untainted/tupleset-with-computed-arm": ("""
@@ -66,36 +69,38 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
           define parent: [folder] but not blockedp
           define view: viewer from parent
         """, (), "ADMITTED"),
-    # A computed reference to an undeclared relation. Nothing in Python checks that a
-    # referenced relation is DECLARED (`_validate_ast_references` checks the '.' lock only).
+    # A computed reference to an undeclared relation. ADMITTED until ASK-1 (2026-09-26),
+    # when the user decided schemas must be self-consistent; now
+    # `zanzibar_utils_v1.py::_validate_ast_consistency` refuses it at parse time.
     "matchDecl/undeclared-computed-ref": ("""
         type user
         type doc
           define viewer: [user] or editor
-        """, (), "ADMITTED"),
+        """, (), "ValueError"),
     # An undeclared tupleset whose TARGET is untainted. (With a derived target the same
-    # shape RAISES -- `w4_scope_probes.py`'s `term.NoTtuTarget/undeclared-tupleset`.)
+    # shape raised even before ASK-1 -- `w4_scope_probes.py`'s
+    # `term.NoTtuTarget/undeclared-tupleset`.)
     "matchDecl/undeclared-tupleset-untainted-target": ("""
         type user
         type folder
           define viewer: [user]
         type doc
           define view: viewer from parent
-        """, (), "ADMITTED"),
-    # An untainted computed cycle. `Spec/Stratify.lean`'s header says it outright:
-    # "untainted relations may be positively recursive; the closure handles them".
-    # `RewriteRanked` needs a strictly increasing rank along every untainted rule.
+        """, (), "ValueError"),
+    # An untainted computed cycle. `RewriteRanked` needs a strictly increasing rank along
+    # every untainted rule. ADMITTED until ASK-1 (2026-09-26); OpenFGA refuses it too
+    # (`ErrCycle`), and now so does `_validate_ast_consistency`.
     "ranked/computed-two-cycle": ("""
         type user
         type doc
           define a: [user] or b
           define b: [user] or a
-        """, (), "ADMITTED"),
+        """, (), "ValueError"),
     "ranked/computed-self-loop": ("""
         type user
         type doc
           define viewer: [user] or viewer
-        """, (), "ADMITTED"),
+        """, (), "ValueError"),
     # IN scope: TTU recursion (nested folders) puts the edge (folder,parent) -> (folder,
     # viewer), which is not a cycle. The shape a reader most fears is NOT excluded.
     "ranked/in-scope-control(ttu-recursion)": ("""
@@ -234,7 +239,9 @@ SHADOWED: dict[str, str] = {
 
 
 # --------------------------------------------------------------------------- #
-# The two SILENT fields. Since TK104's decider landed (2026-09-25) this delegates to the
+# The two formerly SILENT fields, LOUD since ASK-1 (2026-09-26): the parsers refuse every
+# violation, and this report still describes one on the unchecked parse. Since TK104's
+# decider landed (2026-09-25) this delegates to the
 # PRODUCTION report, which `test_conformance_fragment.py` section (J) differential-pins
 # to Lean's `AdmissionDecide.lean::graphAdmissionB`. It was a REASONED hand mirror with
 # known-answer controls only, from the 2026-09-24 sizing until then.

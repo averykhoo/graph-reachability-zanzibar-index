@@ -30,9 +30,10 @@ uniqueness is the wrong bar:
     so ``parent_types`` was never exercised with breadth > 1 -- and ``parent_types``
     breadth is exactly what RC1 got wrong. A single-type corpus cannot distinguish
     "computes the set correctly" from "returns the only candidate".
-  * ``tupleset_shapes``        -- three tupleset-axis features at once: a tupleset defined
-    by an Intersection, an UNDECLARED tupleset, and a type reaching the tupleset ONLY
-    through an Exclusion's negative arm.
+  * ``tupleset_shapes``        -- tupleset-axis features at once: a tupleset defined by an
+    Intersection, and a type reaching the tupleset ONLY through an Exclusion's negative
+    arm. (Its third, an UNDECLARED tupleset, was removed 2026-09-26: ASK-1 made that a
+    parse refusal.)
   * ``wildcard_userset_cross``  -- contributes no NEW feature; its value is entirely
     CO-OCCURRENCE, and that is the point. ``restr:wildcard-userset`` (``group:*#member``)
     lived only in ``wildcards.fga``, a schema with no boolean operator anywhere, so the
@@ -111,7 +112,7 @@ guard here was broken and watched go red before it was believed:
   * *the bar itself* -- the two corpus floors (`test_corpus_pair_coverage_does_not_regress`
     and `test_fga_corpus_feature_coverage_does_not_regress`) are what actually protect
     coverage, and both were sabotaged by deleting a fixture: the feature floor named the
-    exact three lost features, and the pair floor drops below 839.
+    exact three lost features, and the pair floor drops below 839 (its value then).
 
     ⚠ **An earlier version of this file asserted per-fixture UNIQUENESS instead, and it
     was wrong twice over.** It reddened when ``wildcard_userset_cross`` legitimately
@@ -210,8 +211,9 @@ REQUIRED = {
     'userset_over_derived': {'family:userset-storage', 'leaf:derived-userset',
                              'plan:PDerivedUserset', 'via:userset'},
     'heterogeneous_tupleset': {'ttu.ts:multitype'},
-    'tupleset_shapes': {'ttu.ts:Intersection', 'ttu.ts:neg-only-type',
-                        'ttu.ts:undeclared'},
+    # `ttu.ts:undeclared` left this set on 2026-09-26: ASK-1 made an undeclared tupleset
+    # a parse refusal, so no fixture can carry it (see EXPECTED_UNREACHED).
+    'tupleset_shapes': {'ttu.ts:Intersection', 'ttu.ts:neg-only-type'},
     # Contributes no NEW feature -- its value is co-occurrence. `restr:wildcard-userset`
     # lived only in the non-boolean wildcards.fga and had never met a boolean operator;
     # 21 of its 35 unpaired combinations close here.
@@ -468,8 +470,13 @@ def test_masked_groups_cite_a_live_guard():
 #: Co-occurring feature pairs across the corpus, measured 2026-08-11. This is the
 #: INTERACTION bar: pairs that appear together in at least one fixture. Raising it is
 #: free; a drop means a fixture was removed or narrowed.
-#: History: 778 before wildcard_userset_cross.fga, 839 after.
-MIN_COOCCURRING_PAIRS = 839
+#: History: 778 before wildcard_userset_cross.fga, 839 after. LOWERED to 813 on
+#: 2026-09-26, deliberately: ASK-1 made an undeclared tupleset a parse refusal, so
+#: `tupleset_shapes.fga` lost `via_undeclared`. MEASURED that day: the old fixture (fed
+#: to `genswarm.features` with the refusal switched off) gives 839 and the new one 813;
+#: all 26 lost pairs contain `ttu.ts:undeclared`, which is now unreachable by design
+#: (EXPECTED_UNREACHED), and no other pair moved.
+MIN_COOCCURRING_PAIRS = 813
 
 
 def test_corpus_pair_coverage_does_not_regress():
@@ -573,9 +580,8 @@ def test_heterogeneous_tupleset_answers(driven, query, expected):
     # positive-arm control: alice arrives via folder:f1, the POSITIVE arm. If this were
     # the only probe, RC1 would be invisible -- it is what makes carol attributable.
     (('...', 'user', 'alice', 'via_negonly', 'doc', 'd1'), True),
-    # an UNDECLARED tupleset can hold no tuples, so the TTU is constantly empty
-    (('...', 'user', 'alice', 'via_undeclared', 'doc', 'd1'), False),
-    (('...', 'user', 'carol', 'via_undeclared', 'doc', 'd1'), False),
+    # (`via_undeclared`, an UNDECLARED tupleset answering constantly empty, was dropped
+    # 2026-09-26: ASK-1 made the whole schema a parse refusal.)
 ])
 def test_tupleset_shapes_answers(driven, query, expected):
     assert driven['tupleset_shapes'].check(*query) is expected
@@ -608,6 +614,10 @@ EXPECTED_UNREACHED = {
     # Reachable in some configurations but refused in the common ones; witnesses:
     # owc-on-a-ttu-tupleset, owc-on-derived-relation. Same parameter caveat as above.
     'ttu.ts:owc',
+    # Refused at PARSE time since ASK-1 (2026-09-26, user decision: schemas must be
+    # self-consistent); witness: dangling-reference. `tupleset_shapes.fga` carried it
+    # until then as `via_undeclared`.
+    'ttu.ts:undeclared',
 }
 
 

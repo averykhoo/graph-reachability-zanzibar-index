@@ -107,6 +107,9 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
     ⚠ **2026-09-24 (`TK104`): that first sentence is NOT true of every field.** Probed
     per field against the real Python: LOUD 10, MIXED 2 (`ttuDirect`, `storeValid`, whose
     silent halves also fail a `W4Fragment` field), SILENT 2 (`matchDecl`, `ranked`).
+    **2026-09-26 (`ASK-1`, user decision): SILENT is now 0.** Both Python parsers refuse a
+    dangling reference and a reference cycle (`zanzibar_utils_v1.py::_validate_ast_consistency`),
+    so `matchDecl` and `ranked` are LOUD: LOUD 12, MIXED 2.
     The classification, its probes and its sabotage are
     `formal/conformance/test_graphadmission_scope_pin.py`; read that before quoting
     this bundle as "what Python guarantees".

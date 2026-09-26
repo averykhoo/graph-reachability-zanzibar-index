@@ -120,12 +120,18 @@ from setengine import ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from tests.test_matrix import GraphBackend, SetBackend
 
+#: `admin` and `editor` were UNDECLARED (a dangling TTU target and a dangling computed
+#: ref, both read as empty) until ASK-1 (2026-09-26) made that a parse refusal. They are
+#: now declared direct relations that no witness write touches, so they are still empty;
+#: they go LAST so every relation the witness drives keeps its compile position.
 SCHEMA = ('type user\n'
           'type folder\n'
           '  relations\n'
           '    define parent: [folder, folder:*]\n'
           '    define viewer: [user] or admin from parent\n'
-          '    define owner: viewer but not editor\n')
+          '    define owner: viewer but not editor\n'
+          '    define admin: [user]\n'
+          '    define editor: [user]\n')
 
 W1 = ('...', 'folder', '*', 'parent', 'folder', 'x')    # STAR parent -- required
 W2 = ('...', 'folder', 'x', 'parent', 'folder', 'y')

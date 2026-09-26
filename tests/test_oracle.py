@@ -189,9 +189,15 @@ def test_all_folders_grant_ghost_folder_probe3():
 # ---------------------------------------------------------------------------
 
 def test_parse_schema_classification():
+    # `group#member` and `parent` are declared since ASK-1 (2026-09-26): the parser
+    # refuses a dangling reference.
     rels = parse_schema('''
+    type group
+      relations
+        define member: [user]
     type document
       relations
+        define parent: [document]
         define owner: [user]
         define viewer: [user, group#member] or owner or viewer from parent
     ''')

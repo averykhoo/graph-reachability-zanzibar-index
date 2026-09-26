@@ -220,12 +220,16 @@ def test_parity_grid_has_no_leaf_targets_when_leaf_families_is_empty(load_fga_sc
     finally:
         pe.close()
 
+    # A derived cycle through a TTU target. Until ASK-1 (2026-09-26) this was the
+    # same-type `a: [user] but not b`, `b: [user] but not a`, now a PARSE refusal on
+    # every backend; only the graph's stratifier refuses this one.
     cyclic = '''
         type user
         type doc
           relations
-            define a: [user] but not b
-            define b: [user] but not a
+            define blk: [user]
+            define parent: [doc]
+            define a: ([user] but not blk) or a from parent
     '''
     pe3 = ParityEngine(cyclic, grid_cap=20)              # graph degrades to 3-way
     try:

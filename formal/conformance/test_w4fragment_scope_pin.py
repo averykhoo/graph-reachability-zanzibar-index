@@ -400,7 +400,9 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "`term.NoTtuTarget/untainted-ttu-onto-derived`: ADMITTED, 2 strata); what "
             "removes it from the fragment is then `computedOrDirect`, not `term`, and not a "
             "raise. The `NoStoreSubjectR` half is fully SILENT: a stored subject whose "
-            "predicate is a derived relation was ADMITTED (added=True)."
+            "predicate is a derived relation was ADMITTED (added=True). Since ASK-1 "
+            "(2026-09-26) the undeclared-tupleset corner is refused EARLIER, at parse, "
+            "by `_validate_ast_consistency` (a dangling reference); it is still RAISED."
         ),
     },
 }

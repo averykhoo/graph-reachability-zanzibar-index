@@ -1,5 +1,13 @@
 """**The `GraphAdmission` SCOPE pin -- the other half of the headline premise, classified.**
 
+**UPDATE 2026-09-26 (ASK-1): SILENT is now 0. LOUD 12, MIXED 2.** The user decided schemas
+must be self-consistent, so both parsers refuse a dangling reference and a reference cycle
+(`zanzibar_utils_v1.py::_validate_ast_consistency`, oracle twin
+`tests/oracle.py::_validate_consistency`). That made `matchDecl` and `ranked` LOUD, and the
+finding below is as-written on 2026-09-24. `test_conformance_fragment.py` (K) checks that
+every input the Lean-pinned report says fails either field is refused by both parsers. The
+report itself (`graph_admission_report`) stays, reading the unchecked parse.
+
 Every headline theorem takes `(hA : GraphAdmission S T) (hF : W4Fragment S T)`.
 `test_w4fragment_scope_pin.py` classifies the `W4Fragment` half. This module does the same
 for `structure GraphAdmission` (`formal/lean/ZanzibarProofs/FullScope.lean::GraphAdmission`),
@@ -175,14 +183,15 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
             "(object type, relation): no computed reference or TTU tupleset names an "
             "undeclared relation."
         ),
-        "classification": "SILENT",
-        "evidence": "zanzibar_utils_v1.py::_validate_ast_references",
-        "reported_by": "zanzibar_utils_v1.py::graph_admission_report",
+        "classification": "LOUD",
+        "evidence": "zanzibar_utils_v1.py::_validate_ast_consistency",
         "note": (
-            "Referenced names are checked for the '.' lock only, never for declared-ness, "
-            "so `define viewer: [user] or editor` with no `editor` compiles. The derived "
-            "half is vacuous: referencing a derived relation taints the referrer, and "
-            "`schemaRewrites` skips tainted defs (REASONED)."
+            "SILENT until ASK-1 (2026-09-26): only the '.' lock was checked, so "
+            "`define viewer: [user] or editor` with no `editor` compiled. The user decided "
+            "schemas must be self-consistent, and both parsers now refuse every dangling "
+            "reference -- a strict superset of this field (test_conformance_fragment.py "
+            "(K)). The derived half is vacuous: referencing a derived relation taints the "
+            "referrer, and `schemaRewrites` skips tainted defs (REASONED)."
         ),
     },
     "ranked": {
@@ -191,14 +200,14 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
             "strictly increasing rank bounded by the key count, i.e. it is acyclic: no "
             "untainted computed cycle such as `a: [user] or b`, `b: [user] or a`."
         ),
-        "classification": "SILENT",
-        "evidence": "formal/lean/ZanzibarProofs/Spec/Stratify.lean",
-        "reported_by": "zanzibar_utils_v1.py::graph_admission_report",
+        "classification": "LOUD",
+        "evidence": "zanzibar_utils_v1.py::_validate_ast_consistency",
         "note": (
-            "Python admits positively recursive untainted relations on purpose ('the "
-            "closure handles them', that file's header), and nothing in "
-            "`zanzibar_utils_v1.py::compile_ruleset` refuses them. TTU recursion is NOT "
-            "excluded: a tupleset def emits no rule, so a TTU edge closes no cycle."
+            "SILENT until ASK-1 (2026-09-26): Python admitted positively recursive "
+            "untainted relations on purpose. OpenFGA refuses them (`ErrCycle`), and both "
+            "parsers now refuse any cycle of computed / TTU-tupleset references, a strict "
+            "superset of this field (test_conformance_fragment.py (K)). TTU recursion is "
+            "NOT excluded: a tupleset def emits no rule, so a TTU edge closes no cycle."
         ),
     },
     "objWild": {
@@ -401,12 +410,13 @@ def test_every_scope_row_is_well_formed(field):
 
 
 def test_the_classification_ratio_is_the_finding():
-    """LOUD 10 / MIXED 2 / SILENT 2 (2026-09-24). A row that changes class has to come
-    here and say so; see the module docstring for what each number means."""
+    """LOUD 10 / MIXED 2 / SILENT 2 (2026-09-24), then LOUD 12 / MIXED 2 / SILENT 0 when
+    ASK-1 (2026-09-26) made `matchDecl` and `ranked` refusals. A row that changes class
+    has to come here and say so; see the module docstring for what each number means."""
     counts = {c: 0 for c in _VALID_CLASSIFICATIONS}
     for row in GRAPHADMISSION_SCOPE.values():
         counts[row["classification"]] += 1
-    assert counts == {"LOUD": 10, "MIXED": 2, "SILENT": 2}, (
+    assert counts == {"LOUD": 12, "MIXED": 2, "SILENT": 0}, (
         f"GraphAdmission classification moved: {counts}. The SILENT rows are the unreported "
         f"part of every headline theorem's premise; a change here changes that sentence.")
 
@@ -496,8 +506,9 @@ def test_every_mixed_row_has_a_shadowed_probe():
 @pytest.mark.parametrize("label", sorted(
     lb for lb in SCHEMA_PROBES if _field_of(lb) in ("matchDecl", "ranked")))
 def test_silent_field_mirror_known_answers(label):
-    """KNOWN-ANSWER control for the mirror: each SILENT-field probe fails exactly its own
-    field, and the in-scope control fails nothing."""
+    """KNOWN-ANSWER control for the report: each `matchDecl` / `ranked` probe fails exactly
+    its own field, and the in-scope control fails nothing. The probes are refused by the
+    parsers since ASK-1; the report reads the unchecked parse, so it still sees them."""
     want = () if _is_control(label) else (_field_of(label),)
     assert silent_admission_failures(SCHEMA_PROBES[label][0]) == want
 

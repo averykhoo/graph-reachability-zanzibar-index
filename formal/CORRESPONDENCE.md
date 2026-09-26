@@ -174,7 +174,10 @@ existential over rank functions), is decided by a canonical longest-walk candida
 (`rkF`, tabulated as `rkL`) and `rankCheck_rkF_iff`. `zcli mode="fragment"` now also emits
 `"admission"` (per field) and `"inPremise"`. The Python twin is
 `zanzibar_utils_v1.py::graph_admission_report`, and it covers only the two fields the
-sizing found SILENT (`matchDecl`, `ranked`). The other twelve are refused by Python or
+sizing found SILENT (`matchDecl`, `ranked`). Since `ASK-1` (2026-09-26) both parsers
+REFUSE every violation of those two (`zanzibar_utils_v1.py::_validate_ast_consistency`), and
+`formal/conformance/test_conformance_fragment.py::test_reported_failures_are_refused_by_both_parsers`
+ties the refusal to the decider; the report reads the unchecked parse. The other twelve are refused by Python or
 shadowed by a `W4Fragment` field (`formal/conformance/test_graphadmission_scope_pin.py::GRAPHADMISSION_SCOPE`).
 It is held to the decider by
 `formal/conformance/test_conformance_fragment.py::test_silent_field_mirror_equals_lean`.

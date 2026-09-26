@@ -41,30 +41,54 @@ def _fresh_session() -> Session:
 # Memo poisoning under the recursion guard (oracle + set engine)
 # --------------------------------------------------------------------------- #
 
+#: The recursion is in the DATA (d1 and d2 are each other's parent). The auditor's
+#: original repro was a SCHEMA cycle (`a: x or [user]`, `x: a`), which ASK-1
+#: (2026-09-26) made a parse refusal; the guard is still live for data cycles.
 _CYCLIC_ORACLE_SCHEMA = '''
 type user
 type doc
   relations
-    define a: x or [user]
-    define x: a
-    define r: a and x
-    define r2: a but not x
+    define parent: [doc]
+    define a: a from parent or [user]
+    define up: a from parent
+    define r: a and up
+    define r2: a but not up
 '''
+
+_CYCLIC_ORACLE_TUPLES = [
+    OracleTuple('...', 'doc', 'd2', 'parent', 'doc', 'd1'),
+    OracleTuple('...', 'doc', 'd1', 'parent', 'doc', 'd2'),
+    OracleTuple('...', 'user', 'alice', 'a', 'doc', 'd1'),
+]
 
 
 def test_oracle_memo_not_poisoned_by_revisit_guard():
-    """Auditor repro: `x` consults in-stack `a` (guard -> provisional False); the
-    old code memoized that provisional result, so `r = a and x` answered False
-    while `a` and `x` each answered True -- internally inconsistent."""
-    o = Oracle(_CYCLIC_ORACLE_SCHEMA,
-               [OracleTuple('...', 'user', 'alice', 'a', 'doc', 'd1')])
+    """Auditor repro, as a data cycle: evaluating `a@d1` visits `a@d2`, whose only parent
+    is the in-stack `d1` (guard -> provisional False). `a@d1` then succeeds on its direct
+    arm. Memoizing `a@d2`'s provisional False made `up@d1` (= `a@d2`) read False inside the
+    same query, so `r = a and up` answered False while `a` and `up` each answered True.
+
+    SABOTAGE 2026-09-26 (`tests/oracle.py::Oracle.check`, the memo branch
+    `if my_low >= depth:` replaced by `if True:`, i.e. memoize every frame). Observed::
+
+        baseline   {'a': True, 'up': True, 'r': True,  'r2': False}
+        sabotaged  {'a': True, 'up': True, 'r': False, 'r2': True}
+    """
+    o = Oracle(_CYCLIC_ORACLE_SCHEMA, _CYCLIC_ORACLE_TUPLES)
     q = lambda rel: o.check('...', 'user', 'alice', rel, 'doc', 'd1')
     assert q('a') is True
-    assert q('x') is True
-    assert q('r') is True            # a and x: both True above
-    assert q('r2') is False          # a but not x
+    assert q('up') is True
+    assert q('r') is True            # a and up: both True above
+    assert q('r2') is False          # a but not up
 
 
+#: `x2` is the graph-refused part: a derived cycle through a TTU target, which only the
+#: graph's stratifier refuses (`CyclicDerivedDependency`). Until ASK-1 (2026-09-26) it
+#: was a same-type `and` cycle (`x2: [user] and y2`, `y2: [user] and x2`), now a PARSE
+#: refusal on every backend. It is NOT incidental to the set-engine test below: while the
+#: graph can compile the schema, the set engine refuses the group-membership cycle the
+#: memo repro needs (MEASURED 2026-09-26: `AdmissionRejected ... would create a cycle in
+#: the userset membership topology` with `x2` removed).
 _CYCLIC_SET_SCHEMA = '''
 type user
 type group
@@ -75,8 +99,9 @@ type doc
     define reader: [group#member]
     define editor: [group#member]
     define can_view: reader and editor
-    define x2: [user] and y2
-    define y2: [user] and x2
+    define blk: [user]
+    define parent: [doc]
+    define x2: ([user] but not blk) or x2 from parent
 '''
 
 _CYCLIC_SET_TUPLES = [
