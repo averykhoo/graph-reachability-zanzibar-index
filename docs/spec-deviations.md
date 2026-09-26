@@ -29,6 +29,48 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-09-27 — `TK108`: a `from`-tupleset may not restrict to a userset
+
+**User adjudication, not a spec divergence found by a session.** Asked whether the graph
+index could handle `parent: [folder#member]` as a tupleset, the user decided: *"Okay then
+let's refuse the shape. Just to be sure, try the other shape to accomplish the same thing
+and then document it somewhere."* OpenFGA refuses it too (tupleset relations must be
+directly assignable types).
+
+**Why.** `from` takes a stored parent's type and name and never reads its predicate
+(`tests/oracle.py::Oracle.check`'s `ttu_leaf`; `setengine/engine.py::SetEngine.check`'s
+`ttu_leaf` discards it as `_pp`). So a stored `folder:f1#member` meant just `folder:f1`,
+and the `#member` was silently dropped. The graph refused the schema at compile time
+(`zanzibar_utils_v1.py::_validate_ttu_tuplesets`, `UnsupportedByGraphIndex`) while the set
+engine degraded past the refusal and answered: the backends disagreed about whether the
+schema existed. The graph could have been taught the same drop-the-predicate reading, but
+that reading is exactly `[folder]`, so it would have added no expressible schema.
+
+**Now it is a parse-time rule of the whole system**
+(`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+`tests/oracle.py::_validate_tuplesets_direct`), wildcard usersets `[folder:*#member]`
+included. Bare wildcards `[folder:*]` stay legal (`ASK-2`).
+
+**The rewrite**, probed to give every refused schema's old answers (0 of 135 differ, with a
+control that does differ) and pinned 4-way in
+`tests/test_tk108_userset_tupleset_rewrite.py`:
+
+```
+define parent: [folder#member]            ->  define parent: [folder]
+define viewer: viewer from parent              define parent_member: member from parent
+                                               define viewer: viewer from parent
+```
+
+Store the link bare (`doc:d1#parent@folder:f1`). `parent_member` is what a check on the old
+`parent` meant (members of the parent's `member`); `viewer from parent` is unchanged.
+`[folder:*#member]` becomes `[folder:*]` the same way. A tupleset mixing both,
+`[folder, folder#member]`, splits into `parent: [folder]` and
+`parent_via_member: [folder]`, with `parent_member: member from parent_via_member` and each
+`x from parent` extended by `or x from parent_via_member`.
+
+Detail and measurements:
+[`tk108-userset-tuplesets-2026-09-27.md`](tk108-userset-tuplesets-2026-09-27.md).
+
 ## 2026-09-26b — `TK106`: a `from`-tupleset must be direct-only; boolean and computed tuplesets are refused
 
 **User adjudication, not a spec divergence found by a session.** The user decided: *"Okay

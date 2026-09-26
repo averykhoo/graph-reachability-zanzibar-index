@@ -30,6 +30,56 @@ from here.
 
 ---
 
+## 2026-09-27 — `TK108` CLOSED: a tupleset may not restrict to a userset; every refusal says WHY and INSTEAD
+
+rows: TK108 (LATER -> NOW, comment, closed), TK71 (NOW -> NEXT -> NOW: bumped for the user's task, restored on close), TK109 NEW (LATER)
+
+`task lint: clean (13 checks, 226 task file(s) parsed), 33 warning(s)`
+
+`read: board only`
+
+The user asked what `TK108` was, whether the graph index could handle the shape instead
+(answer: mechanically yes, but the only type-consistent meaning is "ignore the predicate",
+which is exactly `[folder]`, so it buys nothing), then decided: *"let's refuse the shape.
+Just to be sure, try the other shape to accomplish the same thing and then document it
+somewhere."* In the same message: *"whenever we refuse a shape can there be a comment in
+the parser that explains why and the alternative"*.
+
+* **`TK108` DONE.** Both parsers refuse `parent: [folder#member]` (and `[folder:*#member]`,
+  and a mix with `[folder]`) as a `from`-tupleset, at parse time, in the `TK106` functions
+  (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+  `tests/oracle.py::_validate_tuplesets_direct`). `TK106`'s check runs first, so no existing
+  pin moved. Before, the graph refused at compile time and the set engine degraded past it
+  and answered with the predicate silently dropped.
+* **The rewrite is exact, proven before the refusal landed:** `parent: [folder]` plus
+  `parent_member: member from parent`. Probe over ParityEngine: 0 of 135 answers differ
+  (refused shape 3-way, rewrite 4-way), and a naive-rewrite control differs on 4. Pinned by
+  `tests/test_tk108_userset_tupleset_rewrite.py` (7 tests; the expectation is DERIVED from the
+  oracle over the unchecked parse of the refused schema; built-in control; sabotage S1/S2 red,
+  and the first S1 attempt's anchor matched 0 times, which is now asserted).
+* **Documented** in `docs/spec-deviations.md` `## 2026-09-27`, `CLAUDE.md` § Gotchas, and the
+  parser comment. Map: [`docs/tk108-userset-tuplesets-2026-09-27.md`](../tk108-userset-tuplesets-2026-09-27.md).
+* **Breakage census, both suites: zero real.** `1 failed, 1411 passed` and `1 failed, 1080
+  passed`; both failures were source-introspection anti-vacuity checks tripped by the comment
+  sweep editing `zanzibar_utils_v1.py` mid-run, green alone. The graph already refused this
+  shape, so only the two genswarm witnesses and one blind-audit test named the old exception.
+* **The user's standing rule, applied to every existing refusal.** A read-only census agent
+  found 43 schema-shape refusals; only `TK106`'s stated both why and alternative. A
+  comments-only agent added `# REFUSED SHAPE / WHY / INSTEAD` blocks at the other 40
+  (30 product, 9 oracle, 1 set engine); verified first-hand: `ast.dump` identical, every added
+  line a comment, and every DSL `INSTEAD` parses in both parsers (the agent's log is
+  transcribed in the map doc § 4). Two stale suggestions inside error MESSAGES are flagged in
+  their comments. Enforced by `tests/test_refused_shape_comments.py` (9 tests: in-scope raises
+  need a header, every block needs WHY and INSTEAD, per-file floors 32/11/1 at zero headroom);
+  three sabotages each went red on the rule meant to catch them.
+* **`TK109` filed, PROBED first-hand:** the oracle parser silently accepts seven schema shapes
+  the product parser refuses.
+* **Floors:** `MIN_TESTS_ALL` 1405 -> 1421 (+7, +9, the two new modules; no drift).
+* **Lesson:** do not edit a module under a running census that introspects its source; it
+  produced two convincing false reds.
+
+Still owed: nothing.
+
 ## 2026-09-26b — `TK106` CLOSED: a `from`-tupleset must be direct-only; `ASK-2`: keep wildcard extensions, warn
 
 rows: ASK-2 NEW (LATER, comment, brief), TK106 (comment ×2, size M -> L, closed), TK107 NEW (LATER), TK108 NEW (LATER), TK71 (NEXT -> NOW: back where it was before the TK106 demotion).

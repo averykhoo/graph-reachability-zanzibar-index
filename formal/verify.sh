@@ -598,7 +598,12 @@ MIN_CONF_ALL=1081
 #   (test_ttu_tupleset_parent_types 8), refused-shape tests converted (test_pure_union_ttu
 #   4, test_processor 2), test_boolean_compile 1, test_hypothesis 1, the retired
 #   `owc-on-derived-relation` witness 1. 1328 + 101 - 24 = 1405. No drift.
-MIN_TESTS_ALL=1405
+# Re-measured 2026-09-27 (TK108) with the same command: 1421. +7 are the new
+#   tests/test_tk108_userset_tupleset_rewrite.py and +9 the new
+#   tests/test_refused_shape_comments.py (collect-only: 7 and 9). The two moved genswarm
+#   witnesses and the blind-audit test changed expectation, not count. 1405 + 16 = 1421.
+#   No drift.
+MIN_TESTS_ALL=1421
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

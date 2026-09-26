@@ -807,6 +807,12 @@ class _RelationParser:
                 if op is None:
                     op = text
                 elif op != text:
+                    # REFUSED SHAPE: ``or`` and ``and`` mixed in one chain without
+                    # parentheses (``a or b and c``). WHY: the grammar gives them no
+                    # relative precedence, so either reading would be a guess -- and the two
+                    # readings grant different subjects.
+                    # INSTEAD: parenthesise the intended reading: ``(a or b) and c`` or
+                    # ``a or (b and c)``.
                     raise ValueError(
                         f"relation {self.relation!r}: mixing 'or' and 'and' without "
                         f"parentheses is ambiguous")
@@ -888,6 +894,9 @@ def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
             current_type = words[1]
             # duplicate type blocks silently merged before -- a pasted schema with a
             # duplicate silently rewrote relations (blind-audit S-6)
+            # REFUSED SHAPE (blind-audit S-6): a second ``type X`` block. WHY: the comment
+            # above.
+            # INSTEAD: put every relation of the type under ONE ``type doc`` block.
             if current_type in seen_types:
                 raise ValueError(f'duplicate type declaration: {current_type!r}')
             seen_types.add(current_type)
@@ -908,6 +917,8 @@ def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
             # is what makes `FullScope.lean::GraphAdmission.keysNonempty` a Python
             # scope claim rather than an assumption. Kept to EMPTY only -- the full
             # identifier charset is deliberately NOT imposed on declared names here.
+            # REFUSED SHAPE (TK55): an empty declared relation name, ``define : [user]``.
+            # WHY: the comment above. INSTEAD: name it -- ``define viewer: [user]``.
             if not relation_name:
                 raise ValueError(
                     f"type {current_type!r}: a declared relation name may not be empty "
@@ -915,10 +926,19 @@ def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
             # Lexical collision lock (boolean spec §3.2): '.' is reserved for synthetic
             # leaf predicates ('<relation>.<index>'), so a *declared* relation name may
             # never contain it. Tuple-side entity names remain unrestricted.
+            # REFUSED SHAPE (boolean spec §3.2): ``.`` in a declared relation name. WHY: the
+            # comment above.
+            # INSTEAD: use ``_`` -- ``define can_view: [user]`` rather than ``can.view``.
             if '.' in relation_name:
                 raise ValueError(
                     f"relation {relation_name!r}: '.' is reserved for compiled leaf "
                     f"predicates and cannot appear in a declared relation name")
+            # REFUSED SHAPE: a second ``define viewer`` in the same type.
+            # WHY: the assignment below would silently replace the first definition, so the
+            # store would run a schema other than the one written.
+            # INSTEAD: ONE ``define`` joining the arms --
+            # ``define viewer: [user] or editor`` (``and`` / ``but not`` if that is the
+            # intended combination).
             if (current_type, relation_name) in ast:
                 raise ValueError(
                     f'duplicate relation definition: {current_type}#{relation_name}')
@@ -939,6 +959,10 @@ def _validate_ast_references(ast: SchemaAST) -> None:
     refs -- blind-audit S-5: a `[doc#viewer.0]` restriction was a foreign write
     handle into a compiled leaf family)."""
     def check_name(name: str, where: str) -> None:
+        # REFUSED SHAPE (blind-audit S-5): ``.`` in a REFERENCED name -- ``[doc#viewer.0]``,
+        # ``viewer.0``, ``viewer.0 from parent``. WHY: the docstring above: ``.``-names are
+        # the compiler's leaf predicates, so a reference reads or writes compiled state.
+        # INSTEAD: reference the public relation -- ``[doc#viewer]``, ``viewer``.
         if '.' in name and name != '...':
             raise ValueError(
                 f"{where}: {name!r} is inside the reserved leaf namespace "
@@ -1014,6 +1038,13 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
         where = f'{object_type}#{relation}'
         for d in _iter_directs(expr):
             for r in d.restrictions:
+                # REFUSED SHAPE (ASK-1): ``[group#member]`` where ``group#member`` is
+                # undeclared.
+                # WHY (all five refusals in this function): the docstring -- a dangling
+                # reference silently meant "empty" and a computed cycle was answered by a
+                # fixpoint; no headline theorem covers either, and OpenFGA refuses both.
+                # INSTEAD: declare it (``type group`` / ``define member: [user]``), or write
+                # ``[group]`` if a group object itself was meant.
                 if r.predicate != '...' and (r.type, r.predicate) not in ast:
                     raise ValueError(
                         f'{where}: restriction [{r.type}#{r.predicate}] names an undeclared '
@@ -1021,11 +1052,18 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
         out = deps.setdefault((object_type, relation), set())
         for ref in _iter_refs(expr):
             if isinstance(ref, Computed):
+                # REFUSED SHAPE (ASK-1): a computed ref to an undeclared relation
+                # (``define viewer: [user] or editor``, no ``editor``). WHY: see above.
+                # INSTEAD: declare it on the SAME type (``define editor: [user]``), or fix
+                # the spelling.
                 if (object_type, ref.relation) not in ast:
                     raise ValueError(
                         f'{where}: references undeclared relation {object_type}#{ref.relation}')
                 out.add((object_type, ref.relation))
                 continue
+            # REFUSED SHAPE (ASK-1): an undeclared tupleset (``viewer from parent``, no
+            # ``parent``). WHY: see above. INSTEAD: declare the link on the same type,
+            # ``define parent: [folder]``.
             if (object_type, ref.tupleset_rel) not in ast:
                 raise ValueError(
                     f'{where}: tupleset of {ref.target_rel!r} from {ref.tupleset_rel!r} is '
@@ -1036,6 +1074,10 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
             # A tupleset that admits no type is constantly empty; its target must still be
             # declared SOMEWHERE (OpenFGA's schema-1.0 rule), or the name dangles.
             candidates = parent_types or {t for t, _r in ast}
+            # REFUSED SHAPE (ASK-1): a TTU target declared on none of the tupleset's types
+            # (``viewer from parent``, ``parent: [folder]``, no ``folder#viewer``). WHY: see
+            # above. INSTEAD: declare it on the parent type (``type folder`` /
+            # ``define viewer: [user]``), or let the tupleset admit a type that has it.
             if not any((t, ref.target_rel) in ast for t in candidates):
                 raise ValueError(
                     f'{where}: {ref.target_rel!r} from {ref.tupleset_rel!r} is an undeclared '
@@ -1054,6 +1096,12 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
                 stack.pop()
                 state[path.pop()] = 2
             elif state.get(nxt) == 1:
+                # REFUSED SHAPE (ASK-1): a cycle of computed / TTU-tupleset references
+                # (``define a: [user] or b`` + ``define b: a``). WHY: see above (OpenFGA
+                # ``hasCycle``). INSTEAD: none for a pure alias loop -- delete one
+                # direction. Intended recursion goes through STORED tuples, which stays
+                # legal: ``define member: [user, group#member]`` or
+                # ``define viewer: [user] or viewer from parent``.
                 cycle = path[path.index(nxt):] + [nxt]
                 raise ValueError(
                     'reference cycle: relations depend on themselves through schema '
@@ -1079,16 +1127,21 @@ def _validate_tuplesets_direct(ast: SchemaAST) -> None:
     set engine degraded past it, and nothing refused the tainted form. The behaviour-
     preserving rewrite is ``parent_link: [<every type parent names>]``, used by the ``from``.
 
-    Wildcard restrictions (``[folder:*]``, star tuplesets, ASK-2) stay legal here. Userset
-    restrictions (``[folder#member]``) are refused by the graph compiler
-    (`_validate_ttu_tuplesets`), not by this parse-time check.
+    Wildcard restrictions (``[folder:*]``, star tuplesets, ASK-2) stay legal here.
 
-    Every message contains ``tupleset must be direct``; `tests/genswarm.py::
-    REJECTION_WITNESSES` matches on it. The oracle carries an independent twin
-    (`tests/oracle.py::_validate_tuplesets_direct`)."""
+    A USERSET restriction on a tupleset (``parent: [folder#member]`` or
+    ``[folder:*#member]``) is refused too (TK108, user decision 2026-09-27); see the second
+    refusal below for why and for the rewrite.
+
+    Every message of the first refusal contains ``tupleset must be direct``, and every
+    message of the second contains ``tupleset may not restrict to a userset``;
+    `tests/genswarm.py::REJECTION_WITNESSES` matches on both. The oracle carries an
+    independent twin (`tests/oracle.py::_validate_tuplesets_direct`)."""
     for (object_type, relation), expr in ast.items():
         for ttu in _iter_ttus(expr):
             ts_key = (object_type, ttu.tupleset_rel)
+            # REFUSED SHAPE (TK106): a tupleset with computed, ``from``, ``and`` or
+            # ``but not`` arms. WHY and INSTEAD: the docstring above.
             if ts_key in ast and not _directs_only(ast[ts_key]):
                 raise ValueError(
                     f'{object_type}#{relation}: {ttu.target_rel!r} from '
@@ -1098,6 +1151,36 @@ def _validate_tuplesets_direct(ast: SchemaAST) -> None:
                     f'"but not" arms that "from" would silently ignore, because it '
                     f'walks stored tuples only. Store the links on a direct relation '
                     f'(parent_link: [...]) and use that in the "from" (OpenFGA rule)')
+            if ts_key in ast:
+                # REFUSED SHAPE (TK108): a userset restriction on a tupleset,
+                # ``parent: [folder#member]`` with ``viewer from parent``.
+                # WHY: ``from`` takes the stored subject's OBJECT as the parent and
+                # never looks at its predicate, so a stored ``folder:f#member`` meant
+                # just ``folder:f`` -- the ``#member`` was silently dropped. The set
+                # engine and the oracle answered that way while the graph refused the
+                # schema at compile time (`_validate_ttu_tuplesets`), so the backends
+                # disagreed on whether the schema existed at all. OpenFGA refuses it:
+                # tupleset relations must be directly assignable types.
+                # INSTEAD: store the bare link, and spell the userset reading as its
+                # own TTU. Both answer exactly what the refused shape answered
+                # (probed on every backend, `docs/tk108-userset-tuplesets-2026-09-27.md`
+                # sec 2; pinned by `tests/test_tk108_userset_tupleset_rewrite.py`):
+                #     define parent: [folder]                # was [folder#member]
+                #     define parent_member: member from parent   # what `parent` meant
+                #     define viewer: viewer from parent      # unchanged
+                # ``[folder:*#member]`` becomes ``[folder:*]`` the same way.
+                for d in _iter_directs(ast[ts_key]):
+                    for r in d.restrictions:
+                        if r.predicate != '...':
+                            star = ':*' if r.wildcard else ''
+                            raise ValueError(
+                                f'{object_type}#{relation}: {ttu.target_rel!r} from '
+                                f'{ttu.tupleset_rel!r}: a tupleset may not restrict to a '
+                                f'userset, but {object_type}#{ttu.tupleset_rel} allows '
+                                f'[{r.type}{star}#{r.predicate}]; "from" would ignore '
+                                f'the #{r.predicate}. Use [{r.type}{star}] for the link '
+                                f'and "{r.predicate} from {ttu.tupleset_rel}" where the '
+                                f'userset itself is meant (OpenFGA rule)')
 
 
 def _iter_directs(expr: Expr):
@@ -1274,6 +1357,13 @@ def _emit_expr(expr: Expr, object_type: str, relation_name: str,
             _emit_expr(c, object_type, relation_name, out)
     elif isinstance(expr, (Intersection, Exclusion)):
         op = 'and' if isinstance(expr, Intersection) else 'but not'
+        # REFUSED SHAPE (opt-in, pre-P7): ``and`` / ``but not`` under
+        # ``compile_ruleset(..., enable_boolean=False)``. WHY: that flag restores the
+        # historical refusal (`compile_ruleset` docstring): this emitter builds plain
+        # Filters/Rules only, and booleans need the derived-predicate compiler.
+        # INSTEAD: compile with the default ``enable_boolean=True`` (boolean spec §3).
+        # NOTE: the message's own suggestion is stale ("use the set engine": since P7 the
+        # graph index compiles booleans itself; only this opt-in mode refuses them).
         raise UnsupportedByGraphIndex(
             f"relation {object_type}#{relation_name} uses boolean operator {op!r}; "
             f"the graph index materialises closures and cannot ingest boolean relations "
@@ -1327,6 +1417,16 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
         if (object_type, relation) in tainted:
             continue                      # boolean path: no rewrite Rule is emitted
         for e in _iter_ttus(expr):
+            # REFUSED SHAPE (decision-15 family): a TTU in an untainted relation whose
+            # target NAME is a derived relation on some type. WHY: the comment above.
+            # INSTEAD: the undeclared-tupleset cause is refused at parse since ASK-1, so
+            # from a checked parse what remains is a NAME collision (e.g. boolean
+            # ``folder#viewer``, plain ``team#viewer``, ``parent: [team]``): rename the
+            # boolean relation and the references that mean it
+            # (``define can_view: [user] but not blocked``). The check compares NAMES on
+            # every type, and a relation reading a boolean one is tainted too, so EVERY
+            # tainted relation sharing the name needs a new name (probed 2026-09-27). Same
+            # answers under the new names.
             if e.target_rel in derived_predicate_names:
                 raise UnsupportedByGraphIndex(
                     f"relation {object_type}#{relation}: TTU "
@@ -1340,6 +1440,13 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
     for (object_type, relation), expr in ast.items():
         for e in _iter_ttus(expr):
             ts_key = (object_type, e.tupleset_rel)
+            # REFUSED SHAPE: an untainted tupleset with computed / TTU arms. WHY: the
+            # docstring above. Since TK106 every non-direct tupleset is refused at parse
+            # time (`_validate_tuplesets_direct`), so only a hand-built AST reaches this.
+            # INSTEAD: store the links on a direct relation,
+            # ``define parent_link: [folder]``, and use ``viewer from parent_link``.
+            # NOTE: the message's own suggestion is stale ("make the whole chain boolean":
+            # since TK106 a tainted non-direct tupleset is refused at parse as well).
             if ts_key in ast and ts_key not in tainted and not _directs_only(ast[ts_key]):
                 raise UnsupportedByGraphIndex(
                     f"relation {object_type}#{relation}: tupleset "
@@ -1353,7 +1460,11 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
                 # rule): they bypassed taint analysis entirely (a relation
                 # reading derived state compiled as pure union with no
                 # invalidation wiring) and had drop-the-predicate parent
-                # semantics no spec defines (blind-audit D3). Wildcard
+                # semantics no spec defines (blind-audit D3). Since TK108
+                # (2026-09-27) both parsers refuse this at PARSE time
+                # (`_validate_tuplesets_direct`, which carries the why and the
+                # rewrite), so a checked parse never reaches here: this is the
+                # last line of defence for a hand-built AST. Wildcard
                 # restrictions stay ALLOWED -- star tuplesets are this repo's
                 # deliberate object-wildcard extension (w_all machinery);
                 # derive_schema_info derives their through-shapes.
@@ -1605,6 +1716,14 @@ def _reject_doubly_bridged_shapes(ast: SchemaAST, schema_info: SchemaInfo) -> No
               & frozenset(schema_info.bridged_out_shapes))
     if doubly:
         offending = ', '.join(f'({t}, {p})' for (t, p) in sorted(doubly))
+        # REFUSED SHAPE (decision-15 family, F1/F2): a shape that is both a ``T:*#p``
+        # wildcard-userset shape and an object-wildcard shape. WHY: the docstring above (a
+        # latent w_any -> w_all cycle, then innocent concrete writes are locked out); the
+        # set engine re-raises it (`SetEngine.__init__`), so neither backend runs it.
+        # INSTEAD: drop one factor. Either ``[group#member]`` for ``[group:*#member]``
+        # (closest legal form: covers only the groups written, not every group), or remove
+        # the shape from ``object_wildcard_shapes`` -- it may arrive by propagation through
+        # a TTU head, so the declared shape to drop can be upstream. Neither is in OpenFGA.
         raise DoublyBridgedShapeError(
             f"shape(s) {offending} are BOTH a wildcard-userset shape (a T:*#p "
             f"restriction) and an object-wildcard shape; a wildcard write on such a "
@@ -1639,14 +1758,32 @@ def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,
     declared form)."""
     for (t, r) in sorted(shapes):
         if (t, r) in tainted:
+            # REFUSED SHAPE (decision-15 family): an object-wildcard shape on a derived
+            # (boolean-tainted) relation. WHY: symbolic every-object (w_all) state on a
+            # derived relation needs a subject-keyed residue the v1 processor lacks. Every
+            # refusal in this function is GRAPH-only: the set engine still runs the schema,
+            # with no graph partner to cross-check it.
+            # INSTEAD: none in the graph index -- drop ``(T, r)`` from
+            # ``object_wildcard_shapes`` and write concrete objects (covers only the objects
+            # written, not every object).
             raise UnsupportedByGraphIndex(
                 f"object-wildcard shape ({t}, {r}) targets a derived (boolean-tainted) "
                 f"relation; symbolic object state on derived relations needs a "
                 f"subject-keyed residue (v1 scope hook)")
         if '.' in r:
             if (t, r) in declared:
+                # REFUSED SHAPE: a declared object-wildcard shape naming a compiled leaf
+                # predicate (``(doc, viewer.0)``). WHY: ``.``-names are compiler-internal
+                # (boolean spec §3.2) and never a user's to declare. INSTEAD: declare the
+                # public relation (``(doc, viewer)``), subject to the refusal above.
                 raise UnsupportedByGraphIndex(
                     f"object-wildcard shape ({t}, {r}) names a compiled leaf predicate")
+            # REFUSED SHAPE (decision-15 family): an object-wildcard shape that the rewrite
+            # rules carry onto a leaf of a derived relation. WHY: the docstring -- the delta
+            # processor cannot map w_all deltas onto derived keys. INSTEAD: none -- no
+            # object wildcard may flow into a boolean relation; drop the shape, or drop the
+            # arm of the boolean relation that reads the wildcarded relation (that changes
+            # its answers).
             raise UnsupportedByGraphIndex(
                 f"object-wildcard shape ({t}, {r.rsplit('.', 1)[0]}) expands onto the "
                 f"compiled leaf predicate ({t}, {r}) through the rewrite rules; "
@@ -1657,6 +1794,12 @@ def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,
         for ttu in _iter_ttus(ast[key]):
             ts_key = (key[0], ttu.tupleset_rel)
             if ts_key in shapes:
+                # REFUSED SHAPE (decision-15 family): an object-wildcard shape on the
+                # tupleset of a TTU inside a derived relation. WHY: derived parent
+                # enumeration reads stored tupleset tuples directly, so a ``doc:*`` parent
+                # tuple would be invisible -- wrong denials with no invariant tripping.
+                # INSTEAD: drop the shape and write one concrete parent tuple per object
+                # (``doc:d parent folder:f``), covering only those written.
                 raise UnsupportedByGraphIndex(
                     f"object-wildcard shape {ts_key} is the tupleset of TTU "
                     f"'{ttu.target_rel} from {ttu.tupleset_rel}' in derived relation "
@@ -1669,6 +1812,11 @@ def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,
             for direct in _iter_directs(ts_expr):
                 for restr in direct.restrictions:
                     if (restr.type, ttu.target_rel) in shapes:
+                        # REFUSED SHAPE (blind-audit D4): an object-wildcard shape on the
+                        # TTU TARGET of a derived relation. WHY: derived evaluation probes
+                        # the closure directly and never consults w_all state. INSTEAD: drop
+                        # the shape and write concrete target tuples
+                        # (``folder:f viewer user:u``), covering only the objects written.
                         raise UnsupportedByGraphIndex(
                             f"object-wildcard shape ({restr.type}, {ttu.target_rel}) "
                             f"is the TTU target of derived relation {key[0]}#{key[1]}; "
@@ -1677,6 +1825,13 @@ def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,
                             f"family, blind-audit D4)")
                     if (restr.wildcard and restr.predicate == '...'
                             and (restr.type, ttu.target_rel) in tainted):
+                        # REFUSED SHAPE: a star tupleset ``[folder:*]`` whose TTU target is
+                        # derived. WHY: it derives a wildcard userset over a derived
+                        # relation, which needs symbolic composition through residues that
+                        # the v1 processor lacks (the same scope hook as
+                        # `_build_plan_tree`). INSTEAD: ``define parent: [folder]`` and one
+                        # parent tuple per folder (closest legal form: covers only the
+                        # folders written).
                         raise UnsupportedByGraphIndex(
                             f"relation {key[0]}#{key[1]}: star tupleset "
                             f"[{restr.type}:*] on {ttu.tupleset_rel!r} derives the "
@@ -2073,6 +2228,13 @@ def _build_plan_tree(key: tuple[str, str], expr: Expr, tainted: frozenset,
             for r in e.restrictions:
                 if r.predicate != '...' and (r.type, r.predicate) in tainted:
                     if r.wildcard:
+                        # REFUSED SHAPE (decision-15 family): a wildcard userset
+                        # ``[group:*#member]`` over a derived (boolean) ``group#member``.
+                        # WHY: "members of every group" over a boolean relation needs
+                        # symbolic composition through residues, which the v1 processor
+                        # lacks. INSTEAD: ``[group#member]`` with one tuple per group
+                        # (closest legal form: covers only the groups written), or make
+                        # ``group#member`` plain.
                         raise UnsupportedByGraphIndex(
                             f"relation {object_type}#{relation}: wildcard userset "
                             f"restriction [{r.type}:*#{r.predicate}] over the derived "
@@ -2287,6 +2449,17 @@ def _stratify(plans: dict) -> list[list[tuple[str, str]]]:
 
     if placed != len(plans):
         cyclic = sorted(k for k, d in indeg.items() if d > 0)
+        # REFUSED SHAPE (boolean spec §1.9): derived relations in a dependency cycle, e.g.
+        # ``define member: [user, group#member] but not banned``. The ASK-1 cycle check
+        # misses it: a userset restriction or TTU target makes no reference edge.
+        # WHY: a derived relation that depends on itself gets no stratum, so the per-stratum
+        # cascade cannot order it; through ``but not`` it is also recursion through
+        # negation, which has no single stratified meaning. GRAPH-only: the set engine
+        # degrades past it. INSTEAD: recurse on a plain relation, apply the boolean on top:
+        #     define member_base: [user, group#member_base]
+        #     define member: member_base but not banned
+        # NOT equivalent: ``banned`` is subtracted once, at the queried group, not at every
+        # nesting level. Per-level exclusion has no legal form.
         raise CyclicDerivedDependency(
             f"derived relations form a dependency cycle (boolean spec §1.9 forbids "
             f"recursion through boolean relations): {cyclic}")
@@ -2410,8 +2583,18 @@ def parse_openfga_json(model) -> SchemaAST:
     if isinstance(model, str):
         model = _json.loads(model)
     version = model.get('schema_version')
+    # REFUSED SHAPE (connected-store spec §5-S5): a schema_version other than 1.1.
+    # WHY: only the 1.1 format is implemented -- its ``directly_related_user_types``
+    # metadata is where ``this`` gets its type restrictions (`_json_rewrite`); per the
+    # front-end's header comment, unsupported features are rejected, never skipped.
+    # INSTEAD: supply the model as schema 1.1, or pass its DSL to `parse_schema_ast`.
     if version != '1.1':
         raise ValueError(f"unsupported OpenFGA schema_version {version!r} (need '1.1')")
+    # REFUSED SHAPE (connected-store spec §5-S5): model-level ``conditions`` (ABAC).
+    # WHY: neither backend evaluates a condition, and skipping one would let its tuples
+    # grant unconditionally -- wider access than the model says.
+    # INSTEAD: none -- conditions are unsupported. Where the condition is a stored fact,
+    # model it as a relation: ``define viewer: [user] but not suspended``.
     if model.get('conditions'):
         raise ValueError('OpenFGA conditions are not supported')
 
@@ -2422,12 +2605,18 @@ def parse_openfga_json(model) -> SchemaAST:
         # Same S-6 rule as the DSL front-end: a duplicate type_definitions entry
         # silently replaced the earlier one's relations -- the store then ran a
         # different schema than the operator wrote, with no error anywhere.
+        # REFUSED SHAPE (blind-audit S-6): a duplicate ``type_definitions`` entry. WHY: the
+        # comment above. INSTEAD: merge both entries' ``relations`` and ``metadata`` into
+        # ONE type definition.
         if object_type in seen_types:
             raise ValueError(f'duplicate type declaration: {object_type!r}')
         seen_types.add(object_type)
         relations = type_def.get('relations', {})
         metadata = (type_def.get('metadata') or {}).get('relations', {})
         for relation_name, rewrite in relations.items():
+            # REFUSED SHAPE (boolean spec §3.2): ``.`` in a declared relation name, as in
+            # the DSL front-end. WHY: ``.`` names the compiler's leaf predicates
+            # (``<relation>.<index>``). INSTEAD: use ``_`` (``can_view``, not ``can.view``).
             if '.' in relation_name:
                 raise ValueError(
                     f"relation {relation_name!r}: '.' is reserved for compiled leaf "
@@ -2451,6 +2640,12 @@ def _json_restrictions(object_type: str, relation_name: str,
                        entries: list) -> tuple[Restriction, ...]:
     out = []
     for e in entries:
+        # REFUSED SHAPE: a conditional type restriction,
+        # ``{"type": "user", "condition": ...}``. WHY: conditions are unsupported
+        # (`parse_openfga_json`); dropping one would make the restriction unconditional --
+        # wider access than the model says.
+        # INSTEAD: none -- remove ``condition`` only if the unconditional grant is what is
+        # meant, or model the condition as a relation (``[user] but not suspended``).
         if e.get('condition'):
             raise ValueError(
                 f'relation {object_type}#{relation_name}: conditional type '
@@ -2472,6 +2667,11 @@ def _json_rewrite(node: dict, object_type: str, relation_name: str,
     kind, body = next(iter(node.items()))
 
     if kind == 'this':
+        # REFUSED SHAPE: ``this`` with no ``directly_related_user_types`` metadata.
+        # WHY: with no type restrictions ``this`` admits no subject type, so the arm could
+        # never hold a tuple. INSTEAD: add the metadata on the type definition, e.g.
+        # ``"metadata": {"relations": {"viewer": {"directly_related_user_types": [{"type":
+        # "user"}]}}}``.
         if not restrictions:
             raise ValueError(
                 f'relation {object_type}#{relation_name}: `this` requires '
@@ -2497,6 +2697,12 @@ def _json_rewrite(node: dict, object_type: str, relation_name: str,
         return Exclusion(
             _json_rewrite(body['base'], object_type, relation_name, restrictions),
             _json_rewrite(body['subtract'], object_type, relation_name, restrictions))
+    # REFUSED SHAPE (connected-store spec §5-S5): an unknown rewrite operator.
+    # WHY: only the six operators above are implemented, and skipping an unknown node would
+    # silently drop an arm (the front-end's header comment: rejected, never skipped).
+    # INSTEAD: none -- use ``this``, ``computedUserset``, ``tupleToUserset``, ``union``,
+    # ``intersection`` or ``difference`` (a misspelt key such as ``computedUserSet`` lands
+    # here too).
     raise ValueError(
         f'relation {object_type}#{relation_name}: unsupported rewrite operator {kind!r}')
 

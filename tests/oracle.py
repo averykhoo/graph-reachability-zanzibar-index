@@ -161,6 +161,9 @@ def _parse_restrictions(bracket: str) -> tuple[tuple[str, str, bool], ...]:
             pred = pred.strip()
             # mirrors the production parser (blind-audit O4): a second '#' or an
             # empty predicate silently misparsed before
+            # REFUSED SHAPE (blind-audit S-5), the `.` case only (the rest is syntax): a `.`
+            # in a userset predicate, `[doc#viewer.0]`. WHY: `.`-names are the compiler's
+            # leaf predicates, a write handle into compiled state. INSTEAD: `[doc#viewer]`.
             if not pred or '#' in pred or '.' in pred:
                 raise ValueError(f'malformed userset restriction {part!r}')
         else:
@@ -210,6 +213,10 @@ class _Parser:
                 if op is None:
                     op = text
                 elif op != text:
+                    # REFUSED SHAPE: `or` and `and` mixed without parentheses. WHY: the
+                    # grammar gives them no relative precedence, so any reading would be a
+                    # guess.
+                    # INSTEAD: `(a or b) and c` or `a or (b and c)`.
                     raise ValueError(f'relation {self.relation!r}: mixed or/and without parens')
                 self.pos += 1
                 children.append(self._unit())
@@ -281,6 +288,9 @@ def parse_schema_ast_unchecked(text: str) -> dict[tuple[str, str], object]:
             # has the same check; this one is NOT shared with it (independence
             # contract above), so a regression in either parser is caught alone by
             # tests/test_reg_empty_relation_name.py.
+            # REFUSED SHAPE (TK55): an empty relation name, `define : [user]`. WHY: no write
+            # can land on '', yet a computed ref to it was reachable, and there the backends
+            # answered differently. INSTEAD: name it, `define viewer: [user]`.
             if not name:
                 raise ValueError(
                     f"type {current_type!r}: a declared relation name may not be empty "
@@ -313,19 +323,33 @@ def _validate_consistency(ast) -> None:
         for node in _oracle_nodes(expr):
             if isinstance(node, ODirect):
                 for (rtype, rpred, _wild) in node.restrictions:
+                    # REFUSED SHAPE (ASK-1): an undeclared `[T#P]`. WHY (all five refusals
+                    # here): a dangling reference silently meant "empty" and a reference
+                    # cycle was answered by a fixpoint; no headline theorem covers either,
+                    # and OpenFGA refuses both.
+                    # INSTEAD: declare `T#P`, or write `[T]` if the object itself was meant.
                     if rpred != '...' and (rtype, rpred) not in ast:
                         raise ValueError(f'{typ}#{rel}: undeclared restriction {rtype}#{rpred}')
             elif isinstance(node, OComputed):
+                # REFUSED SHAPE (ASK-1): an undeclared computed ref. WHY: see above.
+                # INSTEAD: declare it on the same type (`define editor: [user]`), or fix the
+                # spelling.
                 if (typ, node.relation) not in ast:
                     raise ValueError(f'{typ}#{rel}: undeclared relation {typ}#{node.relation}')
                 edges[(typ, rel)].append((typ, node.relation))
             elif isinstance(node, OTTU):
+                # REFUSED SHAPE (ASK-1): an undeclared tupleset. WHY: see above.
+                # INSTEAD: declare the link on the same type, `define parent: [folder]`.
                 if (typ, node.tupleset_rel) not in ast:
                     raise ValueError(f'{typ}#{rel}: undeclared tupleset {typ}#{node.tupleset_rel}')
                 edges[(typ, rel)].append((typ, node.tupleset_rel))
                 types = {r[0] for n in _oracle_nodes(ast[(typ, node.tupleset_rel)])
                          if isinstance(n, ODirect) for r in n.restrictions}
                 types = types or {t for t, _r in ast}   # no restriction: any declared type
+                # REFUSED SHAPE (ASK-1): a TTU target declared on no tupleset type. WHY: see
+                # above.
+                # INSTEAD: declare it on the parent type (`type folder` /
+                # `define viewer: [user]`), or let the tupleset admit a type that has it.
                 if all((t, node.target_rel) not in ast for t in types):
                     raise ValueError(f'{typ}#{rel}: {node.target_rel!r} is declared on no '
                                      f'type of tupleset {typ}#{node.tupleset_rel}')
@@ -335,6 +359,11 @@ def _validate_consistency(ast) -> None:
         seen, todo = set(), list(edges[start])
         while todo:
             k = todo.pop()
+            # REFUSED SHAPE (ASK-1): a cycle of computed / TTU-tupleset references. WHY: see
+            # above. INSTEAD: none for a pure alias loop (delete one direction); intended
+            # recursion goes through STORED tuples, which stays legal:
+            # `define member: [user, group#member]`,
+            # `define viewer: [user] or viewer from parent`.
             if k == start:
                 raise ValueError(f'{start[0]}#{start[1]} depends on itself through schema '
                                  f'references')
@@ -347,7 +376,10 @@ def _validate_tuplesets_direct(ast) -> None:
     """Independent twin of ``zanzibar_utils_v1.py::_validate_tuplesets_direct`` (TK106,
     2026-09-26), NOT shared with it (independence contract above). A relation named as a
     TTU tupleset must be only type restrictions, alone or joined by ``or``: ``from`` walks
-    stored tuples, so any other arm would be silently ignored. OpenFGA refuses it too."""
+    stored tuples, so any other arm would be silently ignored. OpenFGA refuses it too.
+
+    Its restrictions must also be bare or wildcard types, never a userset (TK108,
+    2026-09-27): see the comment at the second refusal."""
     def direct_only(expr) -> bool:
         if isinstance(expr, ODirect):
             return True
@@ -357,10 +389,27 @@ def _validate_tuplesets_direct(ast) -> None:
 
     for (typ, rel), expr in ast.items():
         for node in _oracle_nodes(expr):
-            if isinstance(node, OTTU) and (typ, node.tupleset_rel) in ast \
-                    and not direct_only(ast[(typ, node.tupleset_rel)]):
+            if not (isinstance(node, OTTU) and (typ, node.tupleset_rel) in ast):
+                continue
+            ts = ast[(typ, node.tupleset_rel)]
+            # REFUSED SHAPE (TK106). WHY: `ttu_leaf` below reads stored tuples only, so a
+            # computed / boolean / `from` arm of the tupleset never contributes a parent.
+            # INSTEAD: `parent_link: [<the types>]`, and `x from parent_link`.
+            if not direct_only(ts):
                 raise ValueError(f'{typ}#{rel}: tupleset must be direct, but '
                                  f'{typ}#{node.tupleset_rel} is not')
+            # REFUSED SHAPE (TK108). WHY: `ttu_leaf` below takes a stored parent's type and
+            # name and ignores its predicate, so `[folder#member]` silently meant
+            # `[folder]`. INSTEAD: `parent: [folder]` for the link, plus
+            # `parent_member: member from parent` where the userset itself is meant
+            # (`[folder:*#member]` -> `[folder:*]` likewise).
+            for sub in _oracle_nodes(ts):
+                if isinstance(sub, ODirect):
+                    for (r_type, r_pred, _wild) in sub.restrictions:
+                        if r_pred != '...':
+                            raise ValueError(
+                                f'{typ}#{rel}: tupleset may not restrict to a userset, '
+                                f'but {typ}#{node.tupleset_rel} allows {r_type}#{r_pred}')
 
 
 # ---------------------------------------------------------------------------
@@ -399,6 +448,9 @@ def parse_schema(text: str) -> dict[tuple[str, str], RelationDef]:
             elif isinstance(child, OTTU):
                 rd.ttu.append((child.target_rel, child.tupleset_rel))
             else:
+                # REFUSED SHAPE (test-only view): a boolean operator. WHY: `RelationDef`
+                # classifies pure-union children only. INSTEAD: `parse_schema_ast`, which
+                # parses the full boolean grammar.
                 raise ValueError(f'{typ}#{rel}: boolean operators not supported by parse_schema')
         out[(typ, rel)] = rd
     return out

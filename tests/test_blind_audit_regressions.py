@@ -327,7 +327,11 @@ def test_oracle_restrictions_reject_double_hash():
 def test_userset_restriction_in_tupleset_rejected():
     """D3: a userset restriction on a tupleset relation bypassed taint analysis
     (drop-the-predicate parent semantics no spec defines). OpenFGA model rule:
-    tupleset relations must be directly assignable."""
+    tupleset relations must be directly assignable.
+
+    Since TK108 (2026-09-27) it is a PARSE refusal in both parsers (`ValueError`), no
+    longer a graph-only `UnsupportedByGraphIndex` the set engine degraded past; the
+    oracle's twin is asserted below so neither side can drift back to accepting it."""
     schema = '''
 type user
 type group
@@ -341,8 +345,10 @@ type doc
     define parent: [folder, group#member]
     define viewer: [user] or viewer from parent
 '''
-    with pytest.raises(UnsupportedByGraphIndex, match='userset'):
+    with pytest.raises(ValueError, match='tupleset may not restrict to a userset'):
         parse_openfga_schema(schema)
+    with pytest.raises(ValueError, match='tupleset may not restrict to a userset'):
+        Oracle(schema, [])
 
 
 def test_wildcard_tupleset_still_supported_with_derived_shape():

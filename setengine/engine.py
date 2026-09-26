@@ -364,6 +364,9 @@ class SetEngine:
                 # compiler runs _expand_object_wildcard_shapes before it fires, so
                 # this also catches the PROPAGATION-derived intersection (P3) that
                 # this engine's own unexpanded schema_info would miss.
+                # REFUSED SHAPE (decision-15 family, F1/F2): a doubly-bridged shape. WHY:
+                # above.
+                # INSTEAD: see `zanzibar_utils_v1.py::_reject_doubly_bridged_shapes`.
                 raise
             except (UnsupportedByGraphIndex, CyclicDerivedDependency):
                 # Only the graph's documented refusals leave us ruleset-less; any

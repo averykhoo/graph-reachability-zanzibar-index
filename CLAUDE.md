@@ -399,6 +399,20 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   the `from`. Consequence: a tupleset is never tainted, so `PDerivedTuplesetTTU` /
   `derived-tupleset-ttu` and the processor's `derived_stored_*` helpers are unreachable from
   a checked parse. Map: `docs/tk106-boolean-tuplesets-2026-09-26.md`.
+- **A tupleset may not restrict to a userset (user decision 2026-09-27, `TK108`).**
+  `parent: [folder#member]` / `[folder:*#member]` under `x from parent` is a parse refusal in
+  both parsers (same functions as `TK106`): `from` ignores a stored parent's predicate, so
+  the `#member` was silently dropped. Rewrite: `parent: [folder]` plus
+  `parent_member: member from parent`, pinned exact in
+  `tests/test_tk108_userset_tupleset_rewrite.py`.
+- **Every refused schema shape says WHY and what to write INSTEAD, at the refusal (user
+  instruction 2026-09-27).** A `# REFUSED SHAPE (<id>): <what>.` / `# WHY: ...` /
+  `# INSTEAD: <DSL that parses in both parsers>` (or `none -- <reason>`) block sits directly
+  above the `raise`, in EVERY parser that refuses it (product and oracle twin). Adding a
+  refusal without one is red: `tests/test_refused_shape_comments.py` (in-scope raises,
+  WHY+INSTEAD per block, zero-headroom per-file floors `MIN_HEADERS`). Its limit is in its
+  docstring: a plain `ValueError` outside a `_validate_*` / `_reject_*` function is only
+  caught by review, so put a new refusal in such a function.
 - **Identifiers** are validated on writes to `[A-Za-z0-9_./@+=-]` (1–256 chars). Reserved:
   a name may be `*` (wildcard sentinel), a subject predicate may be `...` (bare). Reads are
   lenient (an out-of-charset name just never matches).

@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-16b
-moved: 2026-09-26b
-updated: 2026-09-26b
+moved: 2026-09-27
+updated: 2026-09-27
 closed:
 ---
 

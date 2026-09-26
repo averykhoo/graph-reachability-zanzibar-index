@@ -681,17 +681,24 @@ _REJ_HEAD = 'type user\ntype folder\n  relations\n    define r0: [user]\n'
 #: (`zanzibar_utils_v1.py::_validate_tuplesets_direct`).
 TUPLESET_MUST_BE_DIRECT = 'tupleset must be direct'
 
+#: The TK108 parse refusal's stable message substring (same function): a tupleset may
+#: not restrict to a userset (`[folder#member]`, `[folder:*#member]`).
+TUPLESET_NO_USERSET = 'tupleset may not restrict to a userset'
+
 
 REJECTION_WITNESSES: tuple[Rejection, ...] = (
     Rejection(
+        # Refused at PARSE time since TK108 (2026-09-27) by both parsers. Until then the
+        # graph refused it at compile time ('tupleset relations must be directly
+        # assignable types', UnsupportedByGraphIndex) and the set engine degraded past it.
         'tupleset-userset-restriction',
         _REJ_HEAD + ('type doc\n  relations\n'
                      '    define r0: [user]\n'
                      '    define parent: [doc, doc#r0]\n'
                      '    define r2: r0 from parent\n'),
         frozenset(),
-        UnsupportedByGraphIndex,
-        'tupleset relations must be directly assignable types'),
+        ValueError,
+        TUPLESET_NO_USERSET),
     Rejection(
         # carries `ttu.ts.restr:wildcard-userset`, which nothing else can reach
         'tupleset-wildcard-userset-restriction',
@@ -700,8 +707,8 @@ REJECTION_WITNESSES: tuple[Rejection, ...] = (
                      '    define parent: [doc, doc:*#r0]\n'
                      '    define r2: r0 from parent\n'),
         frozenset(),
-        UnsupportedByGraphIndex,
-        'tupleset relations must be directly assignable types'),
+        ValueError,
+        TUPLESET_NO_USERSET),
     Rejection(
         # Refused at PARSE time since TK106 (2026-09-26): a tupleset must be direct. Until
         # then the graph refused it at compile time ('Zanzibar tupleset semantics read
