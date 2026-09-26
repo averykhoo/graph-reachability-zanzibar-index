@@ -436,7 +436,13 @@ GATE_LOCK_HELD=1
 # Re-measured 2026-09-26 (ASK-1) with the same command: 1038. All +48 are
 #   formal/conformance/test_conformance_fragment.py section (K), measured with
 #   -k 'reported_failures_are_refused_by_both_parsers or refusal_sweep': 48. No drift.
-MIN_CONF_ALL=1038
+# Re-measured 2026-09-26 (TK106) with the same command: 1081 (first-hand). The +43
+#   is attributed by the conformance subagent (docs/tk106-agent-reports-2026-09-26.md
+#   § B): test_conformance_fragment.py section (L) +47 parametrized and +1 anti-vacuity,
+#   (H) -1, test_conformance_spec.py -3 (the refused `derived_tupleset_ttu` corpus left
+#   the spec registries), test_conformance_nary_strata.py net 0. Heavy (remove) unchanged
+#   at 135, so REST moves 903 -> 946 by the same +43.
+MIN_CONF_ALL=1081
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -580,7 +586,19 @@ MIN_CONF_ALL=1038
 #   test_generator_coverage.py's guard becoming a two-case parametrize, and -2 are
 #   test_schema_shapes.py's two `via_undeclared` queries, removed with the fixture arm
 #   ASK-1 made unparseable (41 + 1 - 2 = 40). No drift.
-MIN_TESTS_ALL=1328
+# Re-measured 2026-09-26 (ASK-2) with the same command: 1336. +8 are the new
+#   tests/test_unproven_extension_warning.py (collect-only: 8). No drift.
+# Re-measured 2026-09-26 (TK106) with the same command: 1405. MEASURED as a test-id diff
+#   against HEAD 9d1bedf (collect-only in a throwaway worktree: 1328): 101 new, 24 gone.
+#   New: test_tupleset_must_be_direct.py +75, test_unproven_extension_warning.py +8
+#   (ASK-2, above), test_ttu_tupleset_parent_types.py +9, test_pure_union_ttu.py +4,
+#   test_processor.py +2, test_generator_coverage.py +2 (two new rejection witnesses),
+#   test_schema_ast.py +1. Gone: tupleset_shapes.fga's retirement (test_schema_shapes 5,
+#   test_compile_snapshot 1, test_zanzibar_utils 1), RC1/RC2 pins rewritten or refused
+#   (test_ttu_tupleset_parent_types 8), refused-shape tests converted (test_pure_union_ttu
+#   4, test_processor 2), test_boolean_compile 1, test_hypothesis 1, the retired
+#   `owc-on-derived-relation` witness 1. 1328 + 101 - 24 = 1405. No drift.
+MIN_TESTS_ALL=1405
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -654,8 +672,10 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 #   same --ignore construction; 135 + 855 == 990 == MIN_CONF_ALL.
 # 2026-09-26 (ASK-1): HEAVY re-measured at 135 (unchanged), REST at 903 by the same
 #   --ignore construction; 135 + 903 == 1038 == MIN_CONF_ALL. All +48 are REST.
+# 2026-09-26 (TK106): HEAVY re-measured at 135 (unchanged), REST at 946 by the same
+#   --ignore construction; 135 + 946 == 1081 == MIN_CONF_ALL. All +43 are REST.
 MIN_CONF_HEAVY=135
-MIN_CONF_REST=903
+MIN_CONF_REST=946
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

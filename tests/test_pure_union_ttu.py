@@ -25,12 +25,20 @@ The set engine and oracle (both stored-only) accept the schema and agree it does
 grant ``can_read`` through the rule-routed path. Latent gap closed as benign — the guard
 prevents the over-granting shape from ever materializing on the graph. See
 docs/spec-deviations.md 2026-07-07 P5 #3 (resolution appended 2026-07-13).
+
+★ SUPERSEDED 2026-09-26 by TK106 (user decision, as OpenFGA does): a tupleset must be
+DIRECT-ONLY, and the schema above is now refused at PARSE time by every backend -- graph,
+set engine and oracle alike. The 2026-07-13 finding above is kept as history. Its
+"benign" verdict rested on the set engine and oracle ACCEPTING the schema and silently
+ignoring the `or backlink` arm, which is exactly the silent-ignore TK106 closes. Sections
+1 and 2 below are now refusal pins; section 3 (the directs-only sibling, three backends
+agreeing) is unchanged and is also the behaviour-preserving rewrite of section 1's schema.
 """
 
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar_utils_v1 import parse_openfga_schema, UnsupportedByGraphIndex
+from zanzibar_utils_v1 import parse_openfga_schema
 from setengine import SetEngine, ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from tests.test_matrix import GraphBackend
@@ -83,49 +91,33 @@ def _fresh_session() -> Session:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize('enable_boolean', [True, False])
-def test_graph_rejects_rule_routed_untainted_tupleset(enable_boolean):
-    with pytest.raises(UnsupportedByGraphIndex) as exc:
+def test_graph_refuses_rule_routed_untainted_tupleset(enable_boolean):
+    """Refused at PARSE since TK106 (2026-09-26), before the graph compiler's own
+    `UnsupportedByGraphIndex` (`_validate_ttu_tuplesets`) is reached, so both
+    `enable_boolean` settings take the same path."""
+    with pytest.raises(ValueError, match='tupleset must be direct') as exc:
         parse_openfga_schema(RULE_ROUTED_SCHEMA, enable_boolean=enable_boolean)
-    msg = str(exc.value)
-    assert 'tupleset' in msg and 'linked' in msg
+    assert 'linked' in str(exc.value)
 
 
 # ---------------------------------------------------------------------------
-# 2. Stored-only TTU semantics: the set engine ACCEPTS the same schema (it reads
-#    raw tuples) and, together with the oracle, refuses to grant through the
-#    rule-routed path — no over-grant. A genuinely stored `linked` tuple DOES grant.
+# 2. The set engine and the oracle REFUSE the same schema (TK106, 2026-09-26).
+#    Until then they accepted it and answered stored-only: `u` via the rule-routed
+#    `backlink` was NOT granted, silently ignoring the `or backlink` arm the schema
+#    declares. That silent ignore is what the refusal closes; a schema whose author
+#    meant `backlink` to count now fails loudly instead.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize('ops', ALL_SETOPS, ids=lambda o: o.name)
-def test_stored_only_ttu_no_overgrant(ops):
-    # f1 is a member of `linked` on d1 ONLY via the rule-routed `backlink` arm;
-    # f2 is a member of `linked` on d1 via a genuinely STORED `linked` tuple.
-    tuples = [
-        ('...', 'user', 'u', 'viewer', 'folder', 'f1'),
-        ('...', 'folder', 'f1', 'backlink', 'doc', 'd1'),   # rule-routed into `linked`
-        ('...', 'user', 'u2', 'viewer', 'folder', 'f2'),
-        ('...', 'folder', 'f2', 'linked', 'doc', 'd1'),     # stored `linked` parent
-    ]
-
-    oracle = Oracle(RULE_ROUTED_SCHEMA, [OracleTuple(*t) for t in tuples])
-
+def test_set_engine_and_oracle_refuse_rule_routed_tupleset(ops):
     session = _fresh_session()
-    se = SetEngine(session, 'se', RULE_ROUTED_SCHEMA, ops=ops)
-    for t in tuples:
-        se.add_tuple(*t)
-    session.commit()
-
-    # rule-routed parent (f1 via backlink) must NOT grant can_read — stored-only.
-    q_routed = ('...', 'user', 'u', 'can_read', 'doc', 'd1')
-    assert oracle.check(*q_routed) is False
-    assert se.check(*q_routed) is False
-
-    # genuinely stored `linked` parent (f2) DOES grant — the TTU itself works.
-    q_stored = ('...', 'user', 'u2', 'can_read', 'doc', 'd1')
-    assert oracle.check(*q_stored) is True
-    assert se.check(*q_stored) is True
-
-    session.close()
+    try:
+        with pytest.raises(ValueError, match='tupleset must be direct'):
+            SetEngine(session, 'se', RULE_ROUTED_SCHEMA, ops=ops)
+    finally:
+        session.close()
+    with pytest.raises(ValueError, match='tupleset must be direct'):
+        Oracle(RULE_ROUTED_SCHEMA, [])
 
 
 # ---------------------------------------------------------------------------

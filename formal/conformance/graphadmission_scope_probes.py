@@ -47,7 +47,13 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
           define parent: [doc]
           define a: ([user] but not x) or a from parent
         """, (), "CyclicDerivedDependency"),
-    # The LOUD half: an UNTAINTED tupleset with a computed arm.
+    # Both `ttuDirect` probes are refused at PARSE time since TK106 (2026-09-26, user
+    # decision: refuse boolean tuplesets, as OpenFGA does) by
+    # `zanzibar_utils_v1.py::_validate_tuplesets_direct`, message "tupleset must be direct".
+    #
+    # Was the LOUD half: an UNTAINTED tupleset with a computed arm. It raised
+    # `UnsupportedByGraphIndex` from the graph compiler (`_validate_ttu_tuplesets`) until
+    # TK106; the parse-time check now fires first, so it raises `ValueError`.
     "ttuDirect.untainted/tupleset-with-computed-arm": ("""
         type user
         type folder
@@ -56,10 +62,11 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
           define owner: [folder]
           define parent: owner
           define view: viewer from parent
-        """, (), "UnsupportedByGraphIndex"),
-    # The SILENT half: `_validate_ttu_tuplesets` exempts DERIVED tuplesets by design, and
-    # `TtuTuplesetsDirect` has no such guard. The container doc#view is tainted through
-    # its tupleset reference, so it is a derived def with a `.ttu` leaf: see SHADOWED.
+        """, (), "ValueError"),
+    # Was the SILENT half, ADMITTED until TK106: `_validate_ttu_tuplesets` exempts DERIVED
+    # tuplesets by design, and `TtuTuplesetsDirect` has no such guard. The container
+    # doc#view is tainted through its tupleset reference, so it is a derived def with a
+    # `.ttu` leaf, and it was listed in SHADOWED (by `computedOrDirect`) until TK106.
     "ttuDirect.derived/derived-tupleset": ("""
         type user
         type folder
@@ -68,7 +75,7 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
           define blockedp: [folder]
           define parent: [folder] but not blockedp
           define view: viewer from parent
-        """, (), "ADMITTED"),
+        """, (), "ValueError"),
     # A computed reference to an undeclared relation. ADMITTED until ASK-1 (2026-09-26),
     # when the user decided schemas must be self-consistent; now
     # `zanzibar_utils_v1.py::_validate_ast_consistency` refuses it at parse time.
@@ -225,14 +232,14 @@ STORE_PROBES: dict[str, tuple[str, object, str]] = {
 #: these inputs, because the other bundle fails too, and `zanzibar_utils_v1.py::
 #: w4_fragment_report` (differential-pinned to Lean's decider) reports that field.
 #: REASONED as a general statement:
-#:   ttuDirect.derived  -- a derived tupleset taints its container (`exprRefs`'s `.ttu`
-#:                         case lists `(t, ts)`), so the container is a derived def with a
-#:                         `.ttu` leaf, and `computedOrDirect` bans those.
 #:   storeValid.derived -- a tuple matching a NON-bare restriction on a derived Direct arm
 #:                         means that arm is not bare, and `directArmsBare` fails.
 #: MEASURED on the probes by the pin.
+#: `ttuDirect.derived/derived-tupleset -> computedOrDirect` was REMOVED on 2026-09-26
+#: (TK106): `ttuDirect` is LOUD now, the probe is refused at parse time, so there is no
+#: SILENT half left to shadow. (The reasoning still holds of the unchecked schema: a
+#: derived tupleset taints its container, whose `.ttu` leaf `computedOrDirect` bans.)
 SHADOWED: dict[str, str] = {
-    "ttuDirect.derived/derived-tupleset": "computedOrDirect",
     "storeValid.derived/userset-subject-on-derived-direct-arm": "directArmsBare",
     "storeValid.derived/bare-subject-beside-a-userset-restriction": "directArmsBare",
 }

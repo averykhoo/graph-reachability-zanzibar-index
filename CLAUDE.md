@@ -390,11 +390,25 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   encoder and grammar tests read `_parse_schema_ast_unchecked` /
   `oracle.parse_schema_ast_unchecked`, not the checked parse. Map:
   `docs/ask1-schema-self-consistency-2026-09-26.md`.
+- **A `from`-tupleset must be DIRECT-ONLY (user decision 2026-09-26, `TK106`), as in
+  OpenFGA.** The relation after `from` may only be Directs or a union of Directs (wildcards
+  allowed); both parsers refuse the rest at parse time, tainted or not
+  (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+  `tests/oracle.py::_validate_tuplesets_direct`). `from` walks STORED tuples, so a boolean or
+  computed arm there was silently ignored. The rewrite is `parent_link: [<types>]`, used by
+  the `from`. Consequence: a tupleset is never tainted, so `PDerivedTuplesetTTU` /
+  `derived-tupleset-ttu` and the processor's `derived_stored_*` helpers are unreachable from
+  a checked parse. Map: `docs/tk106-boolean-tuplesets-2026-09-26.md`.
 - **Identifiers** are validated on writes to `[A-Za-z0-9_./@+=-]` (1–256 chars). Reserved:
   a name may be `*` (wildcard sentinel), a subject predicate may be `...` (bare). Reads are
   lenient (an out-of-charset name just never matches).
 - **Object wildcards** (`folder:*`) have no DSL syntax — pass `object_wildcard_shapes` to
   `parse_openfga_schema` / `SetEngine`.
+- **Wildcard extensions beyond OpenFGA warn** (`ASK-2`, user decision 2026-09-26: kept, but
+  unproven). Wildcard usersets `[T:*#p]`, star tuplesets and object wildcards are outside
+  `W4Fragment`, so `zanzibar_utils_v1.py::derive_schema_info` emits
+  `UnprovenExtensionWarning` on every construction path; a bare `[T:*]` stays silent.
+  `pytest.ini` ignores it suite-wide; `tests/test_unproven_extension_warning.py` pins it.
 - **Set-engine ids** are recycled int32 (roaring is uint32); the `(type, name, predicate)`
   key is the stable surrogate. State is in-memory — `rebuild()` replays from `TupleV1`.
 - **Operational knobs added 2026-07-27** (all default to today's behaviour):
@@ -435,8 +449,11 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   boolean schema must run `DeltaProcessor.run_cascade(watermark)` in the same
   transaction (synchronous v1) — see `GraphBackend.apply` in `tests/test_matrix.py`.
 - **TTU parents are STORED tupleset tuples**, never computed membership (oracle-pinned
-  Zanzibar semantics): a TTU over a derived relation with no direct restrictions is
-  constantly empty. Storage leaves are split from rule-routed leaves for exactly this.
+  Zanzibar semantics). That is why a tupleset must be direct-only since `TK106`
+  (2026-09-26, the bullet above): a TTU over a derived tupleset used to be silently empty
+  or silently ignore its boolean arm, and is now a parse refusal. Storage leaves are still
+  split from rule-routed leaves on DERIVED relations, where a Direct arm's stored tuples
+  must not mix with computed state.
 - **Never edit a golden/oracle result to make a refactor pass** — and the compiled-
   RuleSet snapshots (`tests/snapshots/`) are the byte-identity gate for untainted
   compilation.

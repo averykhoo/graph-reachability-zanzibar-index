@@ -110,6 +110,10 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
     **2026-09-26 (`ASK-1`, user decision): SILENT is now 0.** Both Python parsers refuse a
     dangling reference and a reference cycle (`zanzibar_utils_v1.py::_validate_ast_consistency`),
     so `matchDecl` and `ranked` are LOUD: LOUD 12, MIXED 2.
+    **2026-09-26 (`TK106`, user decision): `ttuDirect` is LOUD too.** Both parsers refuse
+    every non-direct tupleset (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle
+    twin `tests/oracle.py::_validate_tuplesets_direct`): LOUD 13, MIXED 1 (`storeValid`),
+    SILENT 0.
     The classification, its probes and its sabotage are
     `formal/conformance/test_graphadmission_scope_pin.py`; read that before quoting
     this bundle as "what Python guarantees".
@@ -128,6 +132,12 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
       has no such guard, so it additionally excludes derived tuplesets — a shape Python
       ACCEPTS and compiles. Proof scope, not a mirrored refusal; stated the way
       `wsBare` and `directArmsConcrete` state theirs.
+      **SUPERSEDED 2026-09-26 (`TK106`):** the predicate and the Python now coincide. A
+      tupleset must be direct-only, tainted or not, and both parsers refuse the rest at
+      PARSE time (`zanzibar_utils_v1.py::_validate_tuplesets_direct`), as OpenFGA does.
+      `from` walks stored tuples, so a derived tupleset's boolean arm was silently ignored;
+      the tainted exemption above is gone, and `_validate_ttu_tuplesets`' own directs-only
+      branch is unreachable from a checked parse.
     * `matchDecl` — compiled `Rule`s route onto declared, untainted families
       (leaf routing splits derived storage onto leaf predicates; `RewriteFilter`
       targets are declared relations). ⚠ **SILENT (2026-09-24, `TK104`)**: Python

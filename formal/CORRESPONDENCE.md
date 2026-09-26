@@ -1220,7 +1220,10 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   concrete witness is defeq-blind to a mutation preserving the witness's value (`TK68`).
   The other four plan-leaf kinds (`PDerivedComputed`, `PDerivedUserset`, `PDerivedTTU`,
   `PDerivedTuplesetTTU`) are untouched by this and remain netted only. `task.py show P4`
-  carries the shape and the residual cost.
+  carries the shape and the residual cost. (Since `TK106`, 2026-09-26,
+  `PDerivedTuplesetTTU` is UNREACHABLE from any checked parse: a tupleset must be
+  direct-only, so it is never tainted. It is netted by the refusal and the conformance
+  leaf-kind exclusion, not by a differential; removing it is a dead-code follow-up.)
 
 * **★ The DERIVED TTU THROUGH-SHAPE — Python bridges it from the CASCADE, and no Lean
   fragment reaches it (added 2026-09-13, `P6` step 0).** A schema can declare a

@@ -227,42 +227,41 @@ def _derived_member_grid() -> list[tuple]:
                        else [f'd{i}' for i in range(1, 4)])]
 
 
-#  (c) DERIVED-TUPLESET-TTU (derived tupleset) + (d) >= 3 BOOLEAN STRATA + X4b/from-chain:
-#      demorgans_law_1 chains three ``derived-tupleset-ttu`` leaves (each TTU's tupleset is
-#      itself derived) across five strata; its from-chain nodes are recorded edge-free
-#      (no bridged shape) -> the rc=0 explicit-node case (e).
+#  (e) the rc=0 explicit-node case, on demorgans_law_1's star-minus-concrete `non_labels`.
+#      Until 2026-09-26 this corpus also carried (c) DERIVED-TUPLESET-TTU and (d) >= 3
+#      BOOLEAN STRATA: the fixture chained three `from`s whose tuplesets were themselves
+#      derived, across five strata. TK106 (user decision) made a non-direct tupleset a
+#      parse refusal; the fixture was trimmed to its legal core and (c)/(d) left with it
+#      (the `derived-tupleset-ttu` leaf is unreachable from a checked parse).
 _DEMORGAN1 = _load_fga('demorgans_law_1.fga')
 
 
-def _demorgan1_tuples(nusers=3, nroles=2, nconds=2, nattrs=3, ndocs=2) -> list[tuple]:
-    users = [f'u{i}' for i in range(1, nusers + 1)]
-    roles = [f'r{i}' for i in range(1, nroles + 1)]
-    conds = [f'c{i}' for i in range(1, nconds + 1)]
+def _demorgan1_tuples(nattrs=3, ndocs=2) -> list[tuple]:
     attrs = [f'a{i}' for i in range(1, nattrs + 1)]
     docs = [f'd{i}' for i in range(1, ndocs + 1)]
     out: list[tuple] = []
-    for u in users:
-        for r in roles:
-            out.append(('...', 'user', u, 'granted', 'role', r))
-    for r in roles:
-        for c in conds:
-            out.append(('...', 'role', r, 'assigned', 'cond', c))
-    for c in conds:
-        for a in attrs:
-            out.append(('...', 'cond', c, 'required_by', 'attr', a))
     for j, d in enumerate(docs):
         out.append(('...', 'attr', '*', '_all_attrs', 'doc', d))   # attr:* subject wildcard
-        out.append(('...', 'cond', '*', '_all_conds', 'doc', d))   # cond:* subject wildcard
         for i, a in enumerate(attrs):
             if (i + j) % 2 == 0:                                    # label a varying subset
                 out.append(('...', 'attr', a, 'labels', 'doc', d))
     return list(dict.fromkeys(out))
 
 
-#  (f) STAR TUPLESET PARENT ON A DERIVED TUPLESET RELATION -- the RC2 corpus, added
-#      2026-08-11 with the fix. `parent` is DERIVED (`and gate`) and carries a stored
-#      `doc:*` subject, so the TTUs over it must walk a STAR parent: the shape
-#      (doc, viewer) unconditionally, plus the ∃-expansion over instances of `doc`.
+#  (f) STAR TUPLESET PARENT UNDER A DERIVED TTU -- the RC2 corpus, added 2026-08-11 with
+#      the fix. `parent` carries a stored `doc:*` subject, so the TTUs over it must walk a
+#      STAR parent: the shape (doc, viewer) unconditionally, plus the ∃-expansion over
+#      instances of `doc`.
+#
+#      MOVED 2026-09-26 (TK106): until then `parent` was DERIVED (`[doc, doc:*] and gate`),
+#      a boolean tupleset, now a parse refusal. The fix site
+#      (`bulk_backfill.py::_stored_tupleset_subjects` / `_tupleset_parents`) is shared with
+#      the `derived-ttu` path, so the corpus now reaches it with an UNTAINTED
+#      `parent: [folder, doc, doc:*]` whose `folder#viewer` is derived. Sabotage S1 was
+#      re-run on the new corpus, 2026-09-26: dropping star parents from
+#      `bulk_backfill`'s `_stored_tupleset_subjects` ALONE, and separately from
+#      `DeltaProcessor._stored_tupleset_subjects` alone, each gave (literal)
+#      `AssertionError: [rc2_star_tupleset] snapshot_rows differ`, `1 failed`.
 #
 #      ⚠ WHY IT HAD TO BE ADDED. This gate was MEASURED BLIND to exactly this direction
 #      before the corpus existed. One-sided sabotage S1 (restore `w2 == ''` in
@@ -281,10 +280,14 @@ model
 
 type user
 
+type folder
+  relations
+    define banned: [user]
+    define viewer: [user] but not banned
+
 type doc
   relations
-    define gate: [doc, doc:*]
-    define parent: [doc, doc:*] and gate
+    define parent: [folder, doc, doc:*]
     define viewer: [user]
     define inherited: viewer from parent
     define access: [user] but not viewer from parent
@@ -295,14 +298,16 @@ def _rc2_star_tupleset_tuples(nusers=3, ndocs=4) -> list[tuple]:
     users = [f'u{i}' for i in range(1, nusers + 1)]
     docs = [f'd{i}' for i in range(1, ndocs + 1)]
     out: list[tuple] = []
-    # the star tupleset parent, on both arms of the derived `parent` so it survives the
-    # `and gate` intersection and actually lands on a storage leaf
+    # the star tupleset parent
     out.append(('...', 'doc', '*', 'parent', 'doc', 'd1'))
-    out.append(('...', 'doc', '*', 'gate', 'doc', 'd1'))
     # a CONCRETE parent on another object, so the corpus drives both shapes and a
     # star-only regression cannot hide behind the concrete path
     out.append(('...', 'doc', 'd3', 'parent', 'doc', 'd2'))
-    out.append(('...', 'doc', 'd3', 'gate', 'doc', 'd2'))
+    # a FOLDER parent, whose derived `viewer` is what makes the TTUs derived at all
+    out.append(('...', 'folder', 'f1', 'parent', 'doc', 'd4'))
+    out.append(('...', 'user', 'u1', 'viewer', 'folder', 'f1'))
+    out.append(('...', 'user', 'u2', 'viewer', 'folder', 'f1'))
+    out.append(('...', 'user', 'u2', 'banned', 'folder', 'f1'))
     for i, u in enumerate(users):
         for j, d in enumerate(docs):
             if (i + j) % 2 == 0:
@@ -568,38 +573,30 @@ def _assert_r4bf_features(name: str, compiled, nodes: dict, edges: dict,
             '[derived_member] expected processor-written derived edges'
 
     if name == 'demorgan1':
-        # (c) derived-tupleset-ttu leaf + (d) >= 3 boolean strata; and an edge-free
-        #     explicit rc=0 node (e).
-        assert 'derived-tupleset-ttu' in _leaf_kinds(compiled), \
-            '[demorgan1] expected a derived-tupleset-ttu leaf kind'
-        assert len(compiled.strata) >= 3, \
-            f'[demorgan1] expected >= 3 boolean strata; got {len(compiled.strata)}'
+        # an edge-free explicit rc=0 node (e). ((c) and (d) retired 2026-09-26, TK106.)
         assert edge_free_explicit, \
             '[demorgan1] expected an edge-free explicit rc=0 node (residue-anchored)'
 
     if name == 'rc2_star_tupleset':
         # (f) RC2. Three separate things must hold, because each is a way this corpus
         #     could silently stop testing what it was added for:
-        #       1. the leaf kind is reached at all (the tupleset really is derived);
-        #       2. a `doc:*` subject really holds an edge into a STORAGE leaf of
-        #          `parent` -- not merely into `gate` or a rule-routed leaf, which is
-        #          what makes it a stored TTU parent rather than decoration;
+        #       1. the leaf kind is reached at all (the TTU target really is derived);
+        #       2. a `doc:*` subject really holds an edge into `parent` -- a stored TTU
+        #          parent rather than decoration (before TK106, 2026-09-26, into a
+        #          STORAGE leaf of the then-derived `parent`);
         #       3. some residue carries the star SHAPE (doc, viewer), which is the half
         #          of the star rule the ∃-expansion over instances cannot express.
         #     Without 2 and 3 a regression could drop the star arm and still pass 1.
-        assert 'derived-tupleset-ttu' in _leaf_kinds(compiled), \
-            '[rc2_star_tupleset] expected a derived-tupleset-ttu leaf kind'
-        storage_leaves = {spec.predicate
-                          for spec in compiled.plans[('doc', 'parent')].leaves
-                          if spec.storage}
-        assert storage_leaves, '[rc2_star_tupleset] `parent` has no storage leaf'
-        star_on_storage = [(a, b) for (a, b) in edges
-                           if a[2] == '*' and a[3] == 'any' and a[1] == 'doc'
-                           and b[1] == 'doc' and b[0] in storage_leaves]
-        assert star_on_storage, (
-            '[rc2_star_tupleset] no `doc:*` subject edge lands on a STORAGE leaf of '
-            f'`parent` ({sorted(storage_leaves)}) -- the corpus is not driving the '
-            'star tupleset parent it exists for')
+        assert 'derived-ttu' in _leaf_kinds(compiled), \
+            '[rc2_star_tupleset] expected a derived-ttu leaf kind'
+        assert ('doc', 'parent') not in compiled.plans, \
+            '[rc2_star_tupleset] `parent` must stay an UNTAINTED (direct) tupleset'
+        star_on_parent = [(a, b) for (a, b) in edges
+                          if a[2] == '*' and a[3] == 'any' and a[1] == 'doc'
+                          and b[1] == 'doc' and b[0] == 'parent']
+        assert star_on_parent, (
+            '[rc2_star_tupleset] no `doc:*` subject edge lands on `parent` -- the corpus '
+            'is not driving the star tupleset parent it exists for')
         assert any(('doc', 'viewer') in {tuple(s) for s in stars}
                    for (stars, _neg, _upos, _v) in residues.values()), \
             '[rc2_star_tupleset] no residue carries the star shape (doc, viewer); the ' \

@@ -30,9 +30,80 @@ from here.
 
 ---
 
+## 2026-09-26b — `TK106` CLOSED: a `from`-tupleset must be direct-only; `ASK-2`: keep wildcard extensions, warn
+
+rows: ASK-2 NEW (LATER, comment, brief), TK106 (comment ×2, size M -> L, closed), TK107 NEW (LATER), TK108 NEW (LATER), TK71 (NEXT -> NOW: back where it was before the TK106 demotion).
+
+`task lint: clean (13 checks, 225 task file(s) parsed), 33 warning(s)`
+
+`read: board + note`
+
+The session started from the previous session's hand-off summary, `task.py show TK106` and
+`HANDOFF.md`. The board query ran only after the user redirected the session to the top
+board item. The receipt vocabulary has no closer value.
+
+* **`ASK-2` asked and answered.** Question: keep the three wildcard extensions OpenFGA lacks
+  (wildcard usersets `[T:*#p]`, star tuplesets, object wildcards)? They are outside
+  `W4Fragment` (`wsBare` / `bareStar` / `ttuStarFree`). **User answer: keep them, track the
+  question.** Then, at the user's request, `zanzibar_utils_v1.py::derive_schema_info` emits
+  `UnprovenExtensionWarning` when a schema uses any of them. A bare `[T:*]` stays silent.
+  `pytest.ini` ignores it suite-wide. It is pinned by
+  `tests/test_unproven_extension_warning.py`; sabotage gave `6 failed, 2 passed`.
+* **`TK106` DONE (user decision, as OpenFGA does).** Both parsers now refuse, at parse time,
+  any tupleset that is not Directs or a union of Directs, tainted or not
+  (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+  `tests/oracle.py::_validate_tuplesets_direct`). `from` walks STORED tuples, so such arms
+  were silently ignored. Map, decisions and every measurement:
+  [`docs/tk106-boolean-tuplesets-2026-09-26.md`](../tk106-boolean-tuplesets-2026-09-26.md),
+  with a per-test triage and two subagent reports beside it.
+  - **Decisions (the model's):**
+    - parse-time, not graph compile time, because `SetEngine` degrades past
+      `UnsupportedByGraphIndex`;
+    - untainted computed tuplesets included, which is the same bug and closes a
+      graph-refuses / set-engine-answers divergence;
+    - userset restrictions in tuplesets NOT folded in; filed as `TK108` for the user.
+  - **Fixtures:**
+    - `tupleset_shapes.fga` retired, with its golden;
+    - `demorgans_law_1.fga` trimmed to its legal `non_labels` core (its `from` chain had
+      always been constantly empty), and its golden regenerated deliberately;
+    - `docs/spec-deviations.md` `## 2026-09-26b`.
+  - **Pins kept alive on legal schemas, each re-sabotaged first-hand:**
+    - **RC2**, via a star parent under a derived TTU target. The hypothesis agent found
+      the property tests no longer reach RC2's fix site at all, so these pins are its
+      only net.
+    - **The memo star-expansion liveness net.**
+    - **The bulk path.**
+    - **The 2026-08-21 userset-bridge release leak.** The triage called it lost; a
+      first-hand probe showed the fix is still reachable. Under the pre-fix order, all
+      three candidate legal schemas leak `(2, 1)`.
+    - **RC1**, which is now a refusal pin plus its class on a multi-type tupleset.
+  - **New module `tests/test_tupleset_must_be_direct.py` (75 tests):**
+    - every blocked pattern refused on every construction path, with legal controls;
+    - the rewrite `parent_link: [...]` gives the old answers;
+    - mutation sweep M0-M5: every mutant caught, and only where expected.
+  - **Generator:** 685 enumerator cells, 0 generator-gap cells; all 229 lost cells involve
+    a now-unreachable feature.
+  - **Floors:**
+    - `MIN_TESTS_ALL` 1328 -> 1405, attributed by a test-id diff against HEAD;
+    - `MIN_CONF_ALL` 1038 -> 1081 (REST 903 -> 946);
+    - generator cell floors 800/900/830 -> 650/665/820;
+    - `MIN_COOCCURRING_PAIRS` 813 -> 591.
+  - **Formal docs:** `GraphAdmission.ttuDirect` is LOUD, so the classification is
+    LOUD 13 / MIXED 1 / SILENT 0.
+* **The previous session's owed write-back** (the `TK106` row, the `TK71` demotion, its
+  session-log addendum and `HANDOFF.md`) is committed with this session's work, behind one
+  full gate run.
+* **Delegation:** a read-only triage agent, a strategy-trim agent, and a conformance agent,
+  each confined to its own files. Their reports were transcribed verbatim into tracked docs
+  and re-checked by the gate. The RC / memo / bulk / leak pins were done and sabotaged
+  first-hand.
+
+Still owed: nothing. `TK107` (the dead tainted-tupleset code) and `TK108` (userset
+restrictions; needs the user) are rows, not omissions.
+
 ## 2026-09-26 — `ASK-1` ANSWERED and IMPLEMENTED: schemas must be self-consistent; no SILENT GraphAdmission field
 
-rows: ASK-1 (comment ×2, closed).
+rows: ASK-1 (comment ×2, closed), TK106 NEW (comment, NOW), TK71 (NOW → NEXT, demoted to make room).
 
 `task lint: clean (13 checks, 221 task file(s) parsed), 30 warning(s)`
 
@@ -80,8 +151,25 @@ close): [`docs/ask1-schema-self-consistency-2026-09-26.md`](../ask1-schema-self-
 * **Mutation sweep:** 16 of 16 caught, with an M0 control attributed correctly.
 * **Floors:** `MIN_TESTS_ALL` 1288 -> 1328 and `MIN_CONF_ALL` 990 -> 1038 (REST 855 -> 903).
   The growth is fully attributed in `verify.sh`; there was no drift.
+* **After the commit (`9d1bedf`): `TK106` filed at `NOW`, by user decision.** The user asked
+  what else could be made stricter to close proof gaps. The answer went through every non-LOUD
+  row of both scope pins:
+  - The 7 boolean-shape `W4Fragment` fields are ordinary OpenFGA modeling, so the proofs
+    should widen rather than the product narrow.
+  - The wildcard extensions (star tuplesets, `[T:*#p]`, object wildcards) are what OpenFGA
+    lacks. Whether to keep them is an OPEN product question, not yet asked as an `ASK-*`.
+  - Boolean tuplesets are refused by OpenFGA.
 
-Still owed: nothing.
+  The user took the last. PROBED on ParityEngine: `from` walks STORED tuples, so a boolean
+  tupleset's condition is silently ignored (`check(f1 parent d1)` False, yet `alice view d1`
+  via f1 True). The user asked for it as the next item rather than done this session. The
+  pattern list, the rewrites and the implementation map are on the row
+  (`task.py show TK106`). **Nothing in code changed for it.**
+
+Still owed (session `2026-09-26`): **commit the post-`9d1bedf` write-back** -- the `TK106` row,
+the `TK71` demotion, this entry and `HANDOFF.md`. It is docs/tree-only, but it stales the
+gate (`t2a` and `t2c`), and re-running all ten phases was not worth it for a note. Commit it
+together with `TK106`'s own gated commit.
 
 ## 2026-09-25 — `TK104` CLOSED: `GraphAdmission` decided in Lean, the whole premise too, SILENT fields reported
 

@@ -522,18 +522,27 @@ def test_nested_reconcile_entry_points_keep_one_cache():
 # `parent` is DERIVED (`and gate`), so its stored tuples live on its storage leaf and
 # the TTU reads them through `derived_stored_parents`. A stored `doc:*` tupleset parent
 # is expanded over the instances of `doc` — the expansion this test keeps live.
+# Until TK106 (2026-09-26) this was `parent: [doc, doc:*] and gate`, a DERIVED tupleset,
+# which is now a parse refusal. The star expansion is shared with the live `derived-ttu`
+# path (untainted tupleset, derived target), so the probe moved there: `folder#viewer` is
+# derived, which puts `inherited` on `PDerivedTTU` with parent_types ('doc', 'folder').
 _RC2_SCHEMA = '''model
   schema 1.1
 
 type user
 
+type folder
+  relations
+    define banned: [user]
+    define viewer: [user] but not banned
+
 type doc
   relations
-    define gate: [doc, doc:*]
-    define parent: [doc, doc:*] and gate
+    define parent: [folder, doc, doc:*]
     define viewer: [user]
     define inherited: viewer from parent
 '''
+_RC2_PARENT_TYPES = ('doc', 'folder')
 
 
 def test_star_expansion_is_not_frozen_by_the_memo():
@@ -556,25 +565,32 @@ def test_star_expansion_is_not_frozen_by_the_memo():
     net) AND all 12 of ``tests/test_matrix.py`` stayed GREEN while this one went red
     (module docstring for the literal runs). Do not remove it as redundant with the
     RC1/RC2 pins.
+
+    RE-SABOTAGED 2026-09-26 after TK106 moved it off a derived tupleset onto the live
+    `derived-ttu` path (`_RC2_SCHEMA` above). Memoizing `_expand_tupleset_parents` (S2)
+    and, separately, `_instances_of_type` (S2c) inside the scope each gave (literal)::
+
+        E   AssertionError: FROZEN STAR EXPANSION: a `doc:*` tupleset parent must
+            expand over the instances that exist NOW -- doc:d3 was interned inside the
+            scope (exactly what _reconcile step 2a does) and tupleset_parents did not
+            see it.
+        1 failed
     """
     session, widx, proc, write = _build(_RC2_SCHEMA)
-    write('add', ('...', 'doc', 'd2', 'gate', 'doc', 'd1'))      # interns doc:d2
+    write('add', ('...', 'user', 'alice', 'viewer', 'doc', 'd2'))     # interns doc:d2
     write('add', ('...', 'doc', '*', 'parent', 'doc', 'd1'))
-    write('add', ('...', 'doc', '*', 'gate', 'doc', 'd1'))
 
-    leaf, = proc._ts_leaf_predicates('doc', 'parent')
-
-    # EVERY entry point above `_stored_tupleset_subjects` is probed, not just one:
-    # after step A the three are no longer nested (`derived_stored_parents` reaches
-    # `_expand_tupleset_parents` through `_split_parents`, not through
-    # `tupleset_parents`), so a memo bolted onto any ONE of them must redden this.
+    # EVERY live entry point above `_stored_tupleset_subjects` is probed, not just one,
+    # so a memo bolted onto any ONE of them must redden this. (A third route,
+    # `derived_stored_parents`, served DERIVED tuplesets only and has been unreachable
+    # since TK106, 2026-09-26; the untainted tupleset has no storage leaf, so the routes
+    # read `parent` itself.)
     def parents_by_every_route():
         return {
-            'tupleset_parents': proc.tupleset_parents('doc', 'd1', leaf, ('doc',)),
-            'derived_stored_parents':
-                proc.derived_stored_parents('doc', 'd1', 'parent', ('doc',)),
+            'tupleset_parents':
+                proc.tupleset_parents('doc', 'd1', 'parent', _RC2_PARENT_TYPES),
             '_expand_tupleset_parents': proc._expand_tupleset_parents(
-                *proc._stored_tupleset_subjects('doc', 'd1', leaf, ('doc',))),
+                *proc._stored_tupleset_subjects('doc', 'd1', 'parent', _RC2_PARENT_TYPES)),
         }
 
     with proc._stored_cache_scope():
@@ -611,23 +627,19 @@ def test_expand_tupleset_parents_matches_the_public_wrapper():
     ordering and the dedup — so the dedup cannot drift from the anchored wrappers."""
     session, widx, proc, write = _build(_RC2_SCHEMA)
     write('add', ('...', 'doc', 'd2', 'parent', 'doc', 'd1'))
-    write('add', ('...', 'doc', 'd2', 'gate', 'doc', 'd1'))
     write('add', ('...', 'doc', '*', 'parent', 'doc', 'd1'))
-    write('add', ('...', 'doc', '*', 'gate', 'doc', 'd1'))
+    write('add', ('...', 'folder', 'f1', 'parent', 'doc', 'd1'))
 
-    for leaf in proc._ts_leaf_predicates('doc', 'parent'):
-        concretes, stars = proc._stored_tupleset_subjects('doc', 'd1', leaf, ('doc',))
-        assert proc._expand_tupleset_parents(concretes, stars) == \
-            proc.tupleset_parents('doc', 'd1', leaf, ('doc',))
-        assert stars == proc.tupleset_star_types('doc', 'd1', leaf, ('doc',))
-
-    split = proc._derived_stored_split('doc', 'd1', 'parent', ('doc',))
-    assert split, 'no storage leaves — probe ran on nothing'
-    assert proc._split_parents(split) == \
-        proc.derived_stored_parents('doc', 'd1', 'parent', ('doc',))
-    assert proc._split_star_types(split) == \
-        proc.derived_stored_star_types('doc', 'd1', 'parent', ('doc',))
-    assert proc._split_star_types(split) == ['doc'], proc._split_star_types(split)
+    concretes, stars = proc._stored_tupleset_subjects('doc', 'd1', 'parent',
+                                                      _RC2_PARENT_TYPES)
+    assert concretes and stars == ['doc'], (concretes, stars)
+    assert proc._expand_tupleset_parents(concretes, stars) == \
+        proc.tupleset_parents('doc', 'd1', 'parent', _RC2_PARENT_TYPES)
+    assert stars == proc.tupleset_star_types('doc', 'd1', 'parent', _RC2_PARENT_TYPES)
+    # (Until TK106, 2026-09-26, this also pinned `_split_parents` / `_split_star_types`
+    # against `derived_stored_parents` / `derived_stored_star_types`. Those serve DERIVED
+    # tuplesets only, now a parse refusal, so they are unreachable; dead-code follow-up on
+    # the TK106 row.)
 
 
 def test_memoized_results_are_not_shared_mutable_state():

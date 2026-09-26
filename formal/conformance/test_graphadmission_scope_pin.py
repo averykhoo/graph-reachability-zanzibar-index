@@ -1,5 +1,16 @@
 """**The `GraphAdmission` SCOPE pin -- the other half of the headline premise, classified.**
 
+**UPDATE 2026-09-26 (TK106): `ttuDirect` is LOUD. LOUD 13, MIXED 1, SILENT 0.** The user
+decided boolean tuplesets are refused, as OpenFGA refuses them: a relation used as a TTU
+tupleset must be direct-only, and both parsers refuse anything else at parse time
+(`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+`tests/oracle.py::_validate_tuplesets_direct`). Both `ttuDirect` probes now raise
+`ValueError` ("tupleset must be direct"), including the formerly SILENT derived-tupleset
+half and the untainted computed-arm half that used to raise `UnsupportedByGraphIndex` from
+the graph compiler. `test_conformance_fragment.py` (L) checks that every sweep input Lean's
+decider says fails `ttuDirect` is refused by both parsers. `storeValid` is the one MIXED
+row left. The ASK-1 paragraph below and the 2026-09-24 finding are as-written.
+
 **UPDATE 2026-09-26 (ASK-1): SILENT is now 0. LOUD 12, MIXED 2.** The user decided schemas
 must be self-consistent, so both parsers refuse a dangling reference and a reference cycle
 (`zanzibar_utils_v1.py::_validate_ast_consistency`, oracle twin
@@ -85,6 +96,7 @@ Probe output, literal (`graphadmission_scope_probes.py` inputs, 2026-09-24):
     storeValid.derived/userset-subject-on-derived-direct-arm: CS+SE ADMITTED (check=True)
     storeValid.derived/bare-subject-beside-a-userset-restriction: CS+SE ADMITTED (check=True)
     storeValid/in-scope-control(bare-on-derived): CS+SE ADMITTED (check=True)
+    # (annotation 2026-09-26: the next line's figure was the curated count then; TK106 moved one out)
     corpus sweep, silent-field mirror: 36 curated corpora, 0 failing
 
 (`CS` = `ConnectedStore.add_tuple`, `SE` = standalone `SetEngine.add_tuple`. The two
@@ -166,15 +178,16 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
             "Every TTU's tupleset relation, when declared on the same object type, is "
             "defined by direct restrictions only -- derived tuplesets included."
         ),
-        "classification": "MIXED",
-        "shadowed_by": "computedOrDirect",
-        "evidence": "zanzibar_utils_v1.py::_validate_ttu_tuplesets",
+        "classification": "LOUD",
+        "evidence": "zanzibar_utils_v1.py::_validate_tuplesets_direct",
         "note": (
-            "LOUD sub-case: an UNTAINTED tupleset with a computed/TTU arm raises "
-            "`UnsupportedByGraphIndex`. SILENT sub-case: a DERIVED tupleset is exempted by "
-            "design (`ts_key not in tainted`), which FullScope.lean's own field comment "
-            "concedes ('stronger than the mechanism it cites'). Its container is then a "
-            "derived def with a `.ttu` leaf, so `W4Fragment.computedOrDirect` fails too."
+            "MIXED until TK106 (2026-09-26, shadowed by `computedOrDirect`): an untainted "
+            "tupleset with a computed/TTU arm raised `UnsupportedByGraphIndex` from "
+            "`_validate_ttu_tuplesets`, but a DERIVED tupleset was exempted by design and "
+            "admitted. The user decided boolean tuplesets are refused, as OpenFGA does, so "
+            "both parsers now refuse every non-direct tupleset at parse time, derived or "
+            "not (`ValueError`, 'tupleset must be direct'). test_conformance_fragment.py (L) "
+            "checks every sweep input Lean fails on this field is refused by both."
         ),
     },
     "matchDecl": {
@@ -411,12 +424,14 @@ def test_every_scope_row_is_well_formed(field):
 
 def test_the_classification_ratio_is_the_finding():
     """LOUD 10 / MIXED 2 / SILENT 2 (2026-09-24), then LOUD 12 / MIXED 2 / SILENT 0 when
-    ASK-1 (2026-09-26) made `matchDecl` and `ranked` refusals. A row that changes class
-    has to come here and say so; see the module docstring for what each number means."""
+    ASK-1 (2026-09-26) made `matchDecl` and `ranked` refusals, then LOUD 13 / MIXED 1 /
+    SILENT 0 when TK106 (2026-09-26) made `ttuDirect` a parse-time refusal. A row that
+    changes class has to come here and say so; see the module docstring for what each
+    number means."""
     counts = {c: 0 for c in _VALID_CLASSIFICATIONS}
     for row in GRAPHADMISSION_SCOPE.values():
         counts[row["classification"]] += 1
-    assert counts == {"LOUD": 12, "MIXED": 2, "SILENT": 0}, (
+    assert counts == {"LOUD": 13, "MIXED": 1, "SILENT": 0}, (
         f"GraphAdmission classification moved: {counts}. The SILENT rows are the unreported "
         f"part of every headline theorem's premise; a change here changes that sentence.")
 

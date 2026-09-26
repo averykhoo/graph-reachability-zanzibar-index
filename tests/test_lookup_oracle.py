@@ -578,6 +578,21 @@ def test_lookup_oracle_gate_generated_schemas_graph_join_rate():
         and asserting nothing
 
     Do not lower this floor to make a change pass; find out why the fragment shrank.
+
+    ⚠ TK106 (2026-09-26): the provenance, per-kind rates and sabotage above are PRE-TK106
+    HISTORY. ``intersection`` / ``negonly-multitype`` / ``negonly-star`` left
+    ``tests/test_hypothesis.py::_TUPLESET_BODIES`` (a tupleset must be direct; refused at
+    parse time). RE-MEASURED 2026-09-26 over the same 240 seeds on the 5-body table:
+    **join 185/240 = 77%**, rejected 55 (all recorded star-tupleset families), 0 empty
+    pools. Per-kind, 120 seeds each with the tupleset pinned: ``plain`` / ``multitype`` /
+    ``union`` 100%, ``wildcard`` / ``multitype-wildcard`` 60/120 = 50%. The floor stays at
+    60% and ``rejected > 0`` still holds via the two star bodies. RE-OBSERVED sabotage,
+    2026-09-26, pinning every draw to ``'wildcard'`` (``tupleset_kind = 'wildcard'`` in
+    ``_schema_ast``), ``1 failed``:
+
+        AssertionError: only 116/240 = 48% of generated schemas join the graph index
+        (floor 60%); test_lookup_oracle_gate_generated_schemas is skipping most draws
+        and asserting nothing
     """
     joined = rejected = 0
     for seed in range(240):

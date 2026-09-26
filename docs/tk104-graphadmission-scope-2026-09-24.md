@@ -69,7 +69,7 @@ both directions. The file also has the `Decidable` instance, the per-field repor
     fails. This is § 0's SHADOWED claim, machine-checked.
   - **(I)** each sizing probe fails the field its label names, BY LEAN. § 0 had this as
     REASONED; it is now checked.
-  - **(J)** the silent-field report equals Lean on `matchDecl` / `ranked`, over 36 corpora
+  - **(J)** the silent-field report equals Lean on `matchDecl` / `ranked`, over 36 corpora [count as it was then; TK106 changed it 2026-09-26]
     plus the 11 schema probes the production parser accepts (47 inputs).
 
 **Step 3: the operator report (built, gated).**
@@ -281,7 +281,7 @@ storeValid.untainted/write-on-undeclared-relation: CS RAISED AdmissionRejected: 
 storeValid.derived/userset-subject-on-derived-direct-arm: CS ADMITTED (check=True)   SE ADMITTED (check=True)
 storeValid.derived/bare-subject-beside-a-userset-restriction: CS ADMITTED (check=True)   SE ADMITTED (check=True)
 storeValid/in-scope-control(bare-on-derived): CS ADMITTED (check=True)   SE ADMITTED (check=True)
-== corpus sweep: 36 curated corpora, SILENT-field mirror ==
+== corpus sweep: 36 curated corpora, SILENT-field mirror == [count as it was then; TK106 changed it 2026-09-26]
 corpora failing a SILENT GraphAdmission field: 0
 == mirror self-check on the schema probes ==
 matchDecl/undeclared-computed-ref: ('matchDecl',)

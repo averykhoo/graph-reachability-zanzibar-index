@@ -294,13 +294,22 @@ def ast_features(schema_text: str, owc=frozenset()) -> set[str]:
     return f
 
 
-def features(schema_text: str, owc=frozenset()) -> set[str]:
+def features(schema_text: str, owc=frozenset(), *, checked: bool = True) -> set[str]:
     """Full feature set of one ``(schema, object_wildcard_shapes)`` config.
 
-    Raises whatever the compiler raises — the caller classifies the refusal."""
+    Raises whatever the compiler raises — the caller classifies the refusal.
+
+    ``checked=False`` skips the PARSE-time refusals and compiles the unchecked AST with the
+    real compiler. It exists only for `_witness_features`: a witness refused at parse by
+    `TUPLESET_MUST_BE_DIRECT` (TK106) still describes what the compiler WOULD have built,
+    which is how the now-unreachable tainted-tupleset features stay accounted for."""
     f = ast_features(schema_text, owc)
-    ast = parse_schema_ast(schema_text)
-    rs = parse_openfga_schema(schema_text, object_wildcard_shapes=owc)
+    if checked:
+        ast = parse_schema_ast(schema_text)
+        rs = parse_openfga_schema(schema_text, object_wildcard_shapes=owc)
+    else:
+        ast = Z._parse_schema_ast_unchecked(schema_text)
+        rs = Z.compile_ruleset(ast, Z.derive_schema_info(ast, frozenset(owc)))
     compiled = rs.compiled
     tainted = compiled.tainted if compiled else frozenset()
     if rs.schema_info.object_wildcard_shapes:
@@ -431,8 +440,8 @@ def swarm_schema_asts(draw, sw=None):
             leaves.append(Direct(draw(st.sampled_from(base))))
         if i > 0:
             ref = draw(st.sampled_from(names[:i]))
-            if tupleset and 'ts_computed' in sw:
-                leaves.append(Computed(ref))
+            # TK106 (2026-09-26): a Computed tupleset arm is a parse refusal, so the swarm
+            # no longer draws one; `witness` keeps `ts_computed` as a refusal-proving arm.
             if not tupleset:
                 if 'body_computed' in sw:
                     leaves.append(Computed(ref))
@@ -445,7 +454,11 @@ def swarm_schema_asts(draw, sw=None):
         boolean_on = ('ts_boolean' if tupleset else 'body_boolean') in sw
         if depth >= 2 or not boolean_on:
             return draw(leaf)
-        kind = draw(st.sampled_from(['leaf', 'leaf', 'union', 'intersection', 'exclusion']))
+        # TK106 (2026-09-26): a tupleset may only be a union of Directs; `and` / `but not`
+        # there is a parse refusal, which `witness` still proves live.
+        kinds = (['leaf', 'union'] if tupleset
+                 else ['leaf', 'leaf', 'union', 'intersection', 'exclusion'])
+        kind = draw(st.sampled_from(kinds))
         if kind == 'leaf':
             return draw(leaf)
         a, b = expr(i, depth + 1, tupleset=tupleset), expr(i, depth + 1, tupleset=tupleset)
@@ -458,7 +471,10 @@ def swarm_schema_asts(draw, sw=None):
     ast = {}
     for i, name in enumerate(names):
         if i == ppos:
-            ast[('doc', 'parent')] = _tupleset_body(expr(i, 0, tupleset=True), sw)
+            # The neg-only arm (`ts_negonly`) is NOT applied here since TK106 (2026-09-26):
+            # it makes the tupleset boolean, a parse refusal, so every such draw was
+            # discarded and the all-on stratum never compiled. `witness` builds it.
+            ast[('doc', 'parent')] = expr(i, 0, tupleset=True)
         ast[('doc', name)] = expr(i, 0, tupleset=False)
     ast.setdefault(('doc', 'parent'), Direct((Restriction('doc', '...', False),)))
     if 'body_negttu' in sw and n >= 2:
@@ -475,15 +491,6 @@ def swarm_schema_asts(draw, sw=None):
     if 'multi_type' in sw:
         ast[('folder', names[0])] = Direct(_BASE_DIRECTS_PLAIN)
     return ast
-
-
-def _tupleset_body(body, sw):
-    """Apply the neg-only arm, if enabled. See ``_neg_only_arms``' docstring for why the
-    subtrahend type must occur NOWHERE in the base."""
-    if 'ts_negonly' not in sw:
-        return body
-    return Exclusion(body, Direct((Restriction(
-        'folder' if 'multi_type' in sw else 'doc', '...', False),)))
 
 
 def swarm_op_pool(ast) -> list[RawTuple]:
@@ -543,7 +550,12 @@ def witness(sw) -> tuple[dict, frozenset]:
     if 'ts_computed' in sw:
         ts = Union((ts, Computed('r0')))
     if 'ts_boolean' in sw:
-        ts = Intersection((ts, Direct(tuple(ts_rs))))
+        # TK106 (2026-09-26): `and` / `but not` in a tupleset is a parse refusal
+        # (`ts_computed` and `ts_negonly` still prove it live; the `tupleset-intersection`
+        # witness carries its features). The LEGAL boolean-adjacent tupleset is a union of
+        # Directs, `[..] or [doc]`, which carries `ttu.ts:Union` -- reached before only
+        # through refused shapes (MEASURED: docs/tk106-boolean-tuplesets-2026-09-26.md).
+        ts = Union((ts, Direct((Restriction('doc', '...', False),))))
     if negonly:
         ts = Exclusion(ts, Direct((Restriction('doc', '...', False),)))
 
@@ -570,6 +582,20 @@ def witness(sw) -> tuple[dict, frozenset]:
         # show this is where a dropped TTU parent becomes an authorization FAIL-OPEN.
         ast[('doc', 'r3')] = Exclusion(
             Direct((Restriction('user', '...', False),)), TTU('r1', 'parent'))
+    if 'body_boolean' in sw or 'ts_boolean' in sw:
+        # TK106 (2026-09-26): `plan:PIntersection` used to be reached only through a
+        # boolean TUPLESET (`ts_boolean`), which is now a parse refusal. A body-level
+        # `and` reaches it legally. Under `ts_boolean` too, so its pairs with the tupleset
+        # wildcard axes (`ts_wildcard`, `body_wc_userset`) survive: under `body_boolean`
+        # those configs are refused (star tupleset over a derived target).
+        # `r8: ([user] and r0) or [user]` -- a derived UNION over the `and`, so `plan:PUnion`
+        # meets the tupleset axes too -- and `r9: [user] but not r8`, a second derived
+        # stratum, so `schema:multi-stratum` does (MEASURED gap cells, same doc).
+        ast[('doc', 'r8')] = Union((
+            Intersection((Direct((Restriction('user', '...', False),)), Computed('r0'))),
+            Direct((Restriction('user', '...', False),))))
+        ast[('doc', 'r9')] = Exclusion(Direct((Restriction('user', '...', False),)),
+                                       Computed('r8'))
     if 'body_computed' in sw:
         # A Computed arm over r1. `via:computed` / `leaf:derived-computed` /
         # `plan:PDerivedComputed` only appear when the REFERENT is tainted, which is why
@@ -651,6 +677,10 @@ class Rejection:
 
 _REJ_HEAD = 'type user\ntype folder\n  relations\n    define r0: [user]\n'
 
+#: The TK106 parse refusal's stable message substring
+#: (`zanzibar_utils_v1.py::_validate_tuplesets_direct`).
+TUPLESET_MUST_BE_DIRECT = 'tupleset must be direct'
+
 
 REJECTION_WITNESSES: tuple[Rejection, ...] = (
     Rejection(
@@ -673,6 +703,9 @@ REJECTION_WITNESSES: tuple[Rejection, ...] = (
         UnsupportedByGraphIndex,
         'tupleset relations must be directly assignable types'),
     Rejection(
+        # Refused at PARSE time since TK106 (2026-09-26): a tupleset must be direct. Until
+        # then the graph refused it at compile time ('Zanzibar tupleset semantics read
+        # stored tuples only', UnsupportedByGraphIndex) and the set engine degraded past it.
         'tupleset-rewritten-arms',
         _REJ_HEAD + ('type doc\n  relations\n'
                      '    define r0: [user]\n'
@@ -680,8 +713,8 @@ REJECTION_WITNESSES: tuple[Rejection, ...] = (
                      '    define parent: [doc] or own\n'
                      '    define r2: r0 from parent\n'),
         frozenset(),
-        UnsupportedByGraphIndex,
-        'Zanzibar tupleset semantics read stored tuples only'),
+        ValueError,
+        TUPLESET_MUST_BE_DIRECT),
     Rejection(
         # carries `ttu.ts:TTU` -- a TTU whose tupleset is itself a TTU. Design README
         # §6.2 names this as "not designed; named"; as a rejection witness it is
@@ -693,8 +726,37 @@ REJECTION_WITNESSES: tuple[Rejection, ...] = (
                      '    define parent: r0 from gp\n'
                      '    define r2: r0 from parent\n'),
         frozenset(),
-        UnsupportedByGraphIndex,
-        'Zanzibar tupleset semantics read stored tuples only'),
+        ValueError,
+        TUPLESET_MUST_BE_DIRECT),
+    Rejection(
+        # TK106 (2026-09-26, user decision): a BOOLEAN tupleset is refused at parse.
+        # Carries `ttu.ts:Intersection` and, through `_witness_features`, the compiled
+        # tainted-tupleset features (`ttu.ts:tainted`, `plan:PDerivedTuplesetTTU`,
+        # `leaf:derived-tupleset-ttu`, `via:tupleset-ttu`) that no accepted schema can
+        # reach any more.
+        'tupleset-intersection',
+        _REJ_HEAD + ('    define r1: [user]\n'
+                     'type doc\n  relations\n'
+                     '    define r1: [user]\n'
+                     '    define vetted: [doc]\n'
+                     '    define parent: [doc] and vetted\n'
+                     '    define r2: r1 from parent\n'),
+        frozenset(),
+        ValueError,
+        TUPLESET_MUST_BE_DIRECT),
+    Rejection(
+        # RC1's shape: `doc` reaches the tupleset only through the negative arm. Carries
+        # `ttu.ts:neg-only-type`. Its fixture pin (`tupleset_shapes.fga::mixed_parent`)
+        # was retired with TK106.
+        'tupleset-neg-only-type',
+        _REJ_HEAD + ('    define r1: [user]\n'
+                     'type doc\n  relations\n'
+                     '    define r1: [user]\n'
+                     '    define parent: [folder] but not [doc]\n'
+                     '    define r2: r1 from parent\n'),
+        frozenset(),
+        ValueError,
+        TUPLESET_MUST_BE_DIRECT),
     Rejection(
         'star-tupleset-over-derived-target',
         _REJ_HEAD + ('type doc\n  relations\n'
@@ -706,15 +768,14 @@ REJECTION_WITNESSES: tuple[Rejection, ...] = (
         frozenset(),
         UnsupportedByGraphIndex,
         'derives the wildcard userset shape'),
-    Rejection(
-        'owc-on-derived-relation',
-        _REJ_HEAD + ('type doc\n  relations\n'
-                     '    define blk: [user]\n'
-                     '    define parent: [doc] but not blk\n'
-                     '    define r2: blk from parent\n'),
-        frozenset({('doc', 'parent')}),
-        UnsupportedByGraphIndex,
-        'targets a derived (boolean-tainted) relation'),
+    # RETIRED with TK106 (2026-09-26): 'owc-on-derived-relation' (`parent: [doc] but not
+    # blk` with an object wildcard on that DERIVED tupleset, family 'targets a derived
+    # (boolean-tainted) relation'). A boolean tupleset is now a parse refusal, and the
+    # enumerator reached this family ONLY through one (`ts_boolean` + `owc`), so
+    # `test_every_rejection_witness_family_is_actually_exercised_by_the_enumerator` called
+    # it stale. `witness` keeps object wildcards off derived relations on purpose (see its
+    # `owc` arm). The refusal itself stays pinned by
+    # `tests/test_boolean_compile.py::test_object_wildcard_on_derived_rejected`.
     Rejection(
         'owc-on-a-ttu-tupleset',
         _REJ_HEAD + ('type doc\n  relations\n'
@@ -784,9 +845,23 @@ def rejection_message_families() -> tuple[str, ...]:
     return tuple(sorted({w.message for w in REJECTION_WITNESSES}))
 
 
+def _witness_features(w: Rejection) -> set[str]:
+    """What a refused witness would have carried. A TK106 parse refusal is compiled on the
+    unchecked AST by the real compiler (`features(checked=False)`), because the features it
+    exempts are compiled ones; every other witness stays AST-only (`ast_features`)."""
+    if w.message == TUPLESET_MUST_BE_DIRECT:
+        try:
+            return features(w.schema, w.owc, checked=False)
+        except Exception:
+            # An UNTAINTED computed tupleset is also refused by the graph compiler
+            # (`_validate_ttu_tuplesets`), so there is nothing compiled to describe.
+            pass
+    return ast_features(w.schema, w.owc)
+
+
 def rejection_features() -> dict[str, set[str]]:
-    """``witness name -> the AST features the refused config would have carried``."""
-    return {w.name: ast_features(w.schema, w.owc) for w in REJECTION_WITNESSES}
+    """``witness name -> the features the refused config would have carried``."""
+    return {w.name: _witness_features(w) for w in REJECTION_WITNESSES}
 
 
 def rejection_explained_cells() -> set[frozenset]:

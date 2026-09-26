@@ -727,7 +727,8 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     #     against the ORACLE and against a fresh add-only build. Their own
     #     docstring: "(Scope: sem/Lean deferred)". No Lean claim, which is the
     #     same licence `TTU_USERSET_SCHEMAS` already grants the python-only
-    #     differentials on `wildcard_userset` / `derived_tupleset_ttu`.
+    #     differentials on `wildcard_userset` / `derived_tupleset_ttu` (the latter
+    #     moved to `REFUSED_TUPLESET_SCHEMAS` by TK106, 2026-09-26).
     # The Lean-claiming gates exclude it BY CONSTRUCTION, not by promise:
     # `test_conformance_graph/state/bulk_state.py` parametrize over
     # `GRAPH_FRAGMENT`, and `test_conformance_remove_graph.py::_REMOVABLE` is
@@ -958,6 +959,11 @@ MULTI_STRATUM_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # `test_conformance_fragment.py::test_lean_verdict_matches_the_independent_mirror`.
 # That settles the `W4Fragment` half only. Moving them into GRAPH_FRAGMENT still needs the
 # `GraphAdmission` half argued, and nobody has done that.
+#
+# ⚠ 2026-09-26 (`TK106`): `derived_tupleset_ttu` LEFT this dict for
+# `REFUSED_TUPLESET_SCHEMAS` below. The user decided boolean tuplesets are refused, as
+# OpenFGA refuses them, so every checked parser now rejects it and it can no longer be a
+# positive spec-side or three-backend case. The "two 2026-07-28 additions" above are one.
 # ---------------------------------------------------------------------------
 
 TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
@@ -1128,6 +1134,46 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
          mk_tuple("...", "user", "bob", "banned", "doc", "d1")],
         (),
     ),
+}
+
+# ---------------------------------------------------------------------------
+# REFUSED corpora — `TK106` (user decision 2026-09-26: refuse boolean tuplesets, as
+# OpenFGA does). NOT a conformance family: no consumer may compare answers on these.
+#
+# A relation used as a TTU tupleset must be DIRECT-ONLY (`[folder]`, `[folder, doc]`,
+# `[folder] or [doc]`, wildcards allowed). Anything else is refused at parse time by
+# `zanzibar_utils_v1.py::_validate_tuplesets_direct` and by the oracle's independent twin
+# `tests/oracle.py::_validate_tuplesets_direct`, so `parse_openfga_schema`, `SetEngine`
+# and `Oracle` all raise `ValueError` ("tupleset must be direct"). The UNCHECKED parsers
+# (`zanzibar_utils_v1._parse_schema_ast_unchecked`,
+# `tests.oracle.parse_schema_ast_unchecked`) still accept them, and the reports and
+# `encode.py` read those, so Lean's deciders still see these schemas.
+#
+# Why the entry is KEPT rather than deleted: it is the only carrier of the compiled
+# plan-leaf kind `derived-tupleset-ttu` (`zanzibar_utils_v1.py::_plan_leaves`), which no
+# checked parse can reach any more, since a direct tupleset is never tainted. The
+# consumers turn that into ASSERTED exclusions, each of which is revoked if the refusal
+# ever relaxes:
+#   * `test_conformance_nary_strata.py` — the leaf kind is excluded from the "every kind
+#     is reached" floor ONLY while this carrier is refused by every checked entry point
+#     and still mints the kind on the unchecked compile; the three-backend leg asserts
+#     all three backends REFUSE it (agreement by refusal);
+#   * `test_conformance_fragment.py` — the Lean deciders' verdicts on it are still
+#     pinned (reports read the unchecked parse), and (K) asserts both checked parsers
+#     refuse it.
+# Measured 2026-09-26 (`.scratch/tk106/conf_probe1.py`, transcribed into the consumers'
+# docstrings): prod parse, oracle parse, `Oracle()`, `parse_openfga_schema` and
+# `SetEngine()` all raised `ValueError ... tupleset must be direct`; the unchecked
+# compile produced leaf kinds `['closure', 'derived-tupleset-ttu']`.
+# ---------------------------------------------------------------------------
+
+REFUSED_TUPLESET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
+    # ⚠ The (f) block below is AS-WRITTEN 2026-07-28 and describes the pre-TK106
+    # semantics, in which `from` read the stored tuples of a boolean tupleset. That is
+    # exactly the behaviour TK106 abolished: `inherited(bob, d1)` was True although
+    # `parent(f2, d1)` was False. The store is kept so the carrier stays a real,
+    # driven instance of the shape, not so that anyone compares answers on it.
+    #
     # (f) **`PDerivedTuplesetTTU`** — `target from tupleset` where the TUPLESET
     # relation is itself DERIVED. Added 2026-07-28 (board item C); this was the
     # last plan-leaf kind produced by NO corpus (histogram 2026-07-27 over all 69
@@ -1163,7 +1209,10 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     # Measured 2026-07-28: oracle == set engine == real graph index == Lean `sem`
     # over the full 200-query grid (8 True), zcli 0.08 s.
     #
-    # Load-bearing store (pinned by `test_derived_tupleset_ttu_corpus_features`):
+    # Load-bearing store (pinned by `test_derived_tupleset_ttu_corpus_features` until
+    # TK106, 2026-09-26; that test is now `test_conformance_nary_strata.py::
+    # test_derived_tupleset_ttu_carrier_is_refused_and_still_mints_the_leaf`, which pins
+    # the refusal and the leaf, not these answers):
     #   parent(f1, d1)      True   — plain stored parent
     #   parent(f2, d1)      False  — the DERIVED tupleset's exclusion bites HERE
     #   inherited(alice,d1) True   — alice views f1, f1 is a parent

@@ -21,17 +21,21 @@ existing module sees all four leaf kinds.
 the three derived leaf kinds. On a schema where every derived relation has a positive
 leaf of its own -- e.g. ``tests/test_invariants_derived.py::_SCHEMA``, whose ``viewer``
 is ``(public but not blocked) or editor`` -- the recursion never has to fire and a pin
-written over it is VACUOUS. ``_SCHEMA`` below gives ``access`` / ``alias`` / ``deep`` a
-single positive leaf each, of kind ``derived-ttu`` / ``derived-computed`` /
-``derived-tupleset-ttu`` respectively, so the branch under test is the only way those
-objects can be found. ``test_fixture_keeps_the_enumeration_load_bearing`` refuses a
+written over it is VACUOUS. ``_SCHEMA`` below gives ``access`` / ``alias`` a
+single positive leaf each, of kind ``derived-ttu`` / ``derived-computed`` respectively,
+so the branch under test is the only way those objects can be found. (A third,
+``deep: ok from liveparent`` over ``liveparent: [folder] but not dead``, carried the
+``derived-tupleset-ttu`` kind until 2026-09-26, when TK106 made a non-direct tupleset a
+parse refusal. That recursion branch is unreachable from a checked parse now; dead-code
+follow-up on the TK106 row.) ``test_fixture_keeps_the_enumeration_load_bearing`` refuses a
 future edit that gives any of them a storage family -- do not "fix" a failure there by
 relaxing it.
 
 GROUND TRUTH is "every key the live cascade's ``reconcile`` actually CHANGED", not
 "every key it scheduled". The cascade over-schedules: measured here 2026-09-20, the live
-run reconciles ``('doc', 'deep', 'f1')`` -- a FOLDER name under a doc relation, mapped in
-by ``_map_deltas_to_keys`` off the ``folder#ok`` derived edge. That reconcile is a no-op
+run reconciled ``('doc', 'deep', 'f1')`` -- a FOLDER name under a doc relation, mapped in
+by ``_map_deltas_to_keys`` off the ``folder#ok`` derived edge (``deep`` left the fixture
+with TK106). That reconcile is a no-op
 and demanding the enumerator reach it would be wrong. The same asymmetry is recorded
 from the other side in ``DeltaProcessor._check_cascade_fixpoint``'s docstring.
 
@@ -55,6 +59,8 @@ omitted.
                                                      demorgan]
     drop derived-tupleset-ttu     RED           RED [rc2_star_    green
                                                      tupleset]
+      (row VACUOUS since TK106, 2026-09-26: the kind is unreachable, `deep` is gone,
+       and `rc2_star_tupleset` now runs on the `derived-ttu` path)
     drop derived-userset from     RED           RED [derived_     green
       the preds list                                 member]
     drop `rel` from preds         green         green             green   <- INERT
@@ -117,7 +123,7 @@ from tests.wildcard_helpers import make_wildcard_index
 from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
 
 
-# `access`, `alias` and `deep` each have EXACTLY ONE positive leaf, and it is a
+# `access` and `alias` each have EXACTLY ONE positive leaf, and it is a
 # recursive kind -- see the module docstring. `shared` is the `derived-userset` case,
 # which rides the `preds` list rather than the recursion.
 _SCHEMA = '''
@@ -134,15 +140,13 @@ _SCHEMA = '''
     type doc
       relations
         define parent: [folder]
-        define dead: [folder]
-        define liveparent: [folder] but not dead
         define access: ok from parent
         define alias: access
-        define deep: ok from liveparent
         define shared: [group#member]
 '''
 
-# add-only (see docstring); `d4` is the negative arm -- a liveparent that is also dead.
+# add-only (see docstring). (`liveparent` / `dead` tuples on d3 / d4 left with `deep`,
+# TK106 2026-09-26.)
 _OPS = [
     ('...', 'user', 'alice', 'viewer', 'folder', 'f1'),
     ('...', 'user', 'bob', 'viewer', 'folder', 'f1'),
@@ -150,9 +154,6 @@ _OPS = [
     ('...', 'user', 'carol', 'viewer', 'folder', 'f2'),
     ('...', 'folder', 'f1', 'parent', 'doc', 'd1'),
     ('...', 'folder', 'f2', 'parent', 'doc', 'd2'),
-    ('...', 'folder', 'f1', 'liveparent', 'doc', 'd3'),
-    ('...', 'folder', 'f2', 'liveparent', 'doc', 'd4'),
-    ('...', 'folder', 'f2', 'dead', 'doc', 'd4'),
     ('...', 'user', 'dave', 'member', 'group', 'g1'),
     ('member', 'group', 'g1', 'shared', 'doc', 'd5'),
 ]
@@ -161,7 +162,6 @@ _OPS = [
 _LOAD_BEARING = {
     ('doc', 'access'): 'derived-ttu',
     ('doc', 'alias'): 'derived-computed',
-    ('doc', 'deep'): 'derived-tupleset-ttu',
 }
 
 
@@ -245,7 +245,7 @@ def test_fixture_keeps_the_enumeration_load_bearing():
     """Property guarded: the three recursive branches of ``_live_keys_of`` are the ONLY
     way this fixture's derived objects can be enumerated at bootstrap.
 
-    Reds if a future schema edit gives `access` / `alias` / `deep` a storage family of
+    Reds if a future schema edit gives `access` / `alias` a storage family of
     its own, which would make every other test in this module pass without ever entering
     the branch it claims to pin. The correct repair is to restore the fixture, never to
     relax this test.
@@ -335,8 +335,6 @@ def test_backfill_equals_live_on_the_load_bearing_fixture():
               ('...', 'user', 'carol', 'access', 'doc', 'd2'),
               ('...', 'user', 'alice', 'alias', 'doc', 'd1'),
               ('...', 'user', 'bob', 'alias', 'doc', 'd1'),
-              ('...', 'user', 'alice', 'deep', 'doc', 'd3'),
-              ('...', 'user', 'carol', 'deep', 'doc', 'd4'),
               ('...', 'user', 'dave', 'shared', 'doc', 'd5'),
               ('...', 'user', 'ghost', 'alias', 'doc', 'd2')]:
         assert live_widx.check(*q) == boot_widx.check(*q), q

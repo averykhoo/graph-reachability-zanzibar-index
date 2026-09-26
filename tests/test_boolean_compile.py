@@ -15,7 +15,7 @@ import pytest
 from zanzibar_utils_v1 import (
     Entity, Exclusion, Intersection, RelationalTriple, RewriteFilter, Rule, Union,
     UnsupportedByGraphIndex,
-    PClosureLeaf, PDerivedComputed, PDerivedTTU, PDerivedTuplesetTTU, PExclusion,
+    PClosureLeaf, PDerivedTTU, PExclusion,
     PIntersection, PUnion,
     compute_taint, parse_openfga_schema, parse_schema_ast, unparse_schema_ast,
 )
@@ -115,11 +115,12 @@ def test_taint_propagates_through_pure_union_reference():
 
 
 def test_taint_demorgans_law_1(load_fga_schema):
+    """TRIMMED 2026-09-26 (TK106). The fixture used to chain three `from`s over boolean
+    tuplesets (`unmatchable_conds`, `matched_roles`, `matched_users`), five tainted
+    relations in all; a non-direct tupleset is now a parse refusal, and only the legal
+    `non_labels` core is left."""
     ast = parse_schema_ast(load_fga_schema('demorgans_law_1.fga'))
-    assert compute_taint(ast) == frozenset({
-        ('doc', 'non_labels'), ('doc', 'unmatchable_conds'), ('doc', 'matchable_conds'),
-        ('doc', 'matched_roles'), ('doc', 'matched_users'),
-    })
+    assert compute_taint(ast) == frozenset({('doc', 'non_labels')})
 
 
 # ---------------------------------------------------------------------------
@@ -162,41 +163,23 @@ def test_plan_shapes_boolean_wildcards(load_fga_schema):
 
 
 def test_plan_shapes_demorgans_law_1(load_fga_schema):
-    """The derived-tupleset TTU chain (decision-15 override; see spec-deviations)."""
+    """The star-minus-concrete `non_labels` plan.
+
+    Until 2026-09-26 this also pinned the derived-tupleset TTU chain (three
+    `PDerivedTuplesetTTU` plans over five strata, and `target_feeders` for their untainted
+    targets). TK106 made a non-direct tupleset a parse refusal and the fixture was trimmed
+    to its legal core, so the chain cannot be written; the compiler path it exercised is
+    unreachable from a checked parse (dead-code follow-up on the TK106 row)."""
     rs = parse_openfga_schema(load_fga_schema('demorgans_law_1.fga'), enable_boolean=True)
     plans = rs.compiled.plans
 
     non_labels = plans[('doc', 'non_labels')]
     assert non_labels.tree == PExclusion(
         PClosureLeaf('non_labels.0', True), PClosureLeaf('non_labels.1', False))
-
-    unmatchable = plans[('doc', 'unmatchable_conds')]
-    assert unmatchable.tree == PDerivedTuplesetTTU('required_by', 'non_labels', True, ('attr',))
-    assert unmatchable.deps == (('doc', 'non_labels'),)
-
-    matchable = plans[('doc', 'matchable_conds')]
-    assert matchable.tree == PExclusion(
-        PClosureLeaf('matchable_conds.0', True),
-        PDerivedComputed('unmatchable_conds', False))
-
-    assert plans[('doc', 'matched_roles')].tree == \
-        PDerivedTuplesetTTU('assigned', 'matchable_conds', True, ('cond',))
-    assert plans[('doc', 'matched_users')].tree == \
-        PDerivedTuplesetTTU('granted', 'matched_roles', True, ('role',))
-
-    # five strata, in chain order
-    assert rs.compiled.strata == [
-        [('doc', 'non_labels')], [('doc', 'unmatchable_conds')],
-        [('doc', 'matchable_conds')], [('doc', 'matched_roles')],
-        [('doc', 'matched_users')]]
-
-    # untainted targets of derived-tupleset TTUs are registered as feeders
-    feeders = rs.compiled.target_feeders
-    assert {k: [e.dependent for e in v] for k, v in feeders.items()} == {
-        ('attr', 'required_by'): [('doc', 'unmatchable_conds')],
-        ('cond', 'assigned'): [('doc', 'matched_roles')],
-        ('role', 'granted'): [('doc', 'matched_users')],
-    }
+    assert set(plans) == {('doc', 'non_labels')}
+    assert rs.compiled.strata == [[('doc', 'non_labels')]]
+    assert not rs.compiled.target_feeders
+    # (The retired chain assertions are in git history: `git show 9d1bedf:tests/test_boolean_compile.py`.)
 
 
 @pytest.mark.parametrize('fixture', BOOLEAN_FIXTURES)
@@ -375,8 +358,15 @@ def test_object_wildcard_upstream_of_derived_ttu_target_rejected():
 def test_rewritten_untainted_tupleset_rejected():
     """Zanzibar tupleset semantics read STORED tuples only. An untainted tupleset
     with computed arms would let the graph's TTU rule illegally propagate rewritten
-    members (which the oracle and set engine, reading raw tuples, would not) --
-    rejected at compile instead of diverging silently."""
+    members (which the oracle and set engine, reading raw tuples, would not).
+
+    Since TK106 (2026-09-26, user decision) the schema is refused at PARSE time by every
+    backend, as OpenFGA refuses it. Until then only the graph refused it
+    (`UnsupportedByGraphIndex`, 'stored tuples only'), and the set engine degraded to
+    ruleset-less evaluation and answered, silently ignoring the `or alias` arm, which is
+    what this test pinned. The graph compiler's own refusal
+    (`_validate_ttu_tuplesets`) is now unreachable from a checked parse. The whole
+    refused family is pinned in `tests/test_tupleset_must_be_direct.py`."""
     schema = '''
         type user
         type folder
@@ -388,33 +378,26 @@ def test_rewritten_untainted_tupleset_rejected():
             define parent: [folder] or alias
             define viewer: [user] or viewer from parent
     '''
-    with pytest.raises(UnsupportedByGraphIndex, match='stored tuples only'):
+    with pytest.raises(ValueError, match='tupleset must be direct'):
         parse_openfga_schema(schema)
-    with pytest.raises(UnsupportedByGraphIndex, match='stored tuples only'):
+    with pytest.raises(ValueError, match='tupleset must be direct'):
         parse_openfga_schema(schema, enable_boolean=False)
 
-    # the set engine degrades gracefully (evaluates raw-tuple semantics, no ruleset)
+    # the set engine refuses too; it no longer degrades past the schema
     from sqlmodel import Session, SQLModel, create_engine
     from setengine import SetEngine
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
-        se = SetEngine(session, 's', schema)
-        assert se._ruleset is None
-        se.add_tuple('...', 'folder', 'f1', 'alias', 'doc', 'd1')
-        se.add_tuple('...', 'user', 'alice', 'viewer', 'folder', 'f1')
-        session.commit()
-        # alice is a viewer of f1, and f1 is an alias of d1 -- but alias-derived
-        # parent membership does NOT feed the TTU (stored parent tuples only)
-        assert se.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is False
+        with pytest.raises(ValueError, match='tupleset must be direct'):
+            SetEngine(session, 's', schema)
 
 
-def test_derived_tupleset_still_compiles(load_fga_schema):
-    """The rejection targets UNTAINTED rewritten tuplesets only: derived (tainted)
-    tuplesets keep compiling -- their stored tuples live on dedicated storage
-    leaves, which the boolean path reads exclusively (demorgans_law_1's chain)."""
-    rs = parse_openfga_schema(load_fga_schema('demorgans_law_1.fga'))
-    assert ('doc', 'unmatchable_conds') in rs.compiled.plans
+# `test_derived_tupleset_still_compiles` was RETIRED 2026-09-26 (TK106). It asserted that a
+# DERIVED (tainted) tupleset keeps compiling, via demorgans_law_1's `required_by from
+# non_labels`. That is now false by design: every non-direct tupleset is a parse refusal
+# (`tests/test_tupleset_must_be_direct.py`), because `from` walks stored tuples and would
+# silently ignore the boolean arm.
 
 
 # ---------------------------------------------------------------------------

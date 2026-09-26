@@ -1,6 +1,8 @@
 """Language-feature coverage: n-ARY operators, >= 3 STRATA (ZT-P4-4), PLAN-LEAF
 kinds, and the two 2026-07-28 zero-coverage shapes (wildcard usersets `[T:*#p]`
 and the `derived-tupleset-ttu` leaf; see section (d) for their scope arguments).
+Since `TK106` (2026-09-26) the second shape is REFUSED by both parsers, so for it this
+module pins the refusal and the leaf-kind exclusion, not answers (sections (c), (d)).
 
 Two holes were measured across the whole conformance harness on 2026-07-26:
 
@@ -320,16 +322,88 @@ def test_nary_union_derived4_arms_load_bearing():
 # The tuple is checked against the compiler below (`test_required_leaf_kinds_are_
 # exactly_the_compilers_kinds`) so a NEW plan-leaf kind cannot be added to
 # `zanzibar_utils_v1` and silently stay uncovered.
+#
+# ⚠ 2026-09-26 (`TK106`, user decision: refuse boolean tuplesets, as OpenFGA does):
+# `derived-tupleset-ttu` is UNREACHABLE from every checked parse. The leaf is minted only
+# when a TTU's tupleset relation is tainted, and a tupleset must now be direct-only, which
+# is never tainted. Its carrier moved to `corpus.py::REFUSED_TUPLESET_SCHEMAS`. The kind
+# stays in `_REQUIRED_LEAF_KINDS`, because that tuple must equal what the compiler can emit
+# (the test after next), and is EXCLUDED from the reached-by-some-corpus floor through
+# `_REFUSED_LEAF_KINDS`. The exclusion is asserted, not skipped: it holds only while its
+# carrier is refused by every checked entry point AND still mints the kind on the
+# unchecked compile, and it goes red if any accepted corpus reaches the kind again.
 _REQUIRED_LEAF_KINDS = ("closure", "derived-computed", "derived-ttu",
                         "derived-userset", "derived-tupleset-ttu")
+
+#: kind -> the `corpus.py::REFUSED_TUPLESET_SCHEMAS` entry that carries it (`TK106`).
+_REFUSED_LEAF_KINDS: dict[str, str] = {"derived-tupleset-ttu": "derived_tupleset_ttu"}
+
+#: The fixed fragment both parsers' refusal messages contain
+#: (`zanzibar_utils_v1.py::_validate_tuplesets_direct`,
+#: `tests/oracle.py::_validate_tuplesets_direct`).
+_TUPLESET_REFUSAL = "tupleset must be direct"
+
+
+def _checked_refusals(schema_text: str, ow=()) -> dict[str, str]:
+    """What each CHECKED schema entry point says about `schema_text`: the refusal message,
+    or `"ACCEPTED"`. A ValueError without the TK106 fragment is re-raised, so an unrelated
+    refusal cannot pass for this one."""
+    out: dict[str, str] = {}
+    for name, parse in (
+            ("zanzibar_utils_v1.parse_schema_ast", prod_parse_schema_ast),
+            ("tests.oracle.parse_schema_ast", parse_schema_ast),
+            ("zanzibar_utils_v1.parse_openfga_schema",
+             lambda s: parse_openfga_schema(s, frozenset(ow)))):
+        try:
+            parse(schema_text)
+        except ValueError as e:
+            if _TUPLESET_REFUSAL not in str(e):
+                raise
+            out[name] = str(e)
+        else:
+            out[name] = "ACCEPTED"
+    return out
+
+
+def _unchecked_leaf_kinds(schema_text: str, ow=()) -> set[str]:
+    """The plan-leaf kinds `compile_ruleset` mints for `schema_text` on the UNCHECKED parse,
+    i.e. what the compiler would do if the TK106 refusal were removed."""
+    from zanzibar_utils_v1 import (
+        _parse_schema_ast_unchecked, compile_ruleset, derive_schema_info)
+    ast = _parse_schema_ast_unchecked(schema_text)
+    compiled = compile_ruleset(ast, derive_schema_info(ast, frozenset(ow))).compiled
+    if compiled is None:
+        return set()
+    return {leaf.kind for plan in compiled.plans.values() for leaf in plan.leaves}
 
 
 def test_every_plan_leaf_kind_is_reached_by_some_corpus():
     """Every compiled plan-leaf KIND in `_REQUIRED_LEAF_KINDS` is produced by at
     least one corpus the harness actually runs. A `compile_ruleset` branch that
-    no corpus reaches is a branch no differential ever exercises."""
+    no corpus reaches is a branch no differential ever exercises.
+
+    Since `TK106` (2026-09-26) the kinds in `_REFUSED_LEAF_KINDS` are the exception, and
+    the exception is itself asserted three ways: no accepted corpus reaches the kind (else
+    the exclusion is stale and the kind goes back under the floor), its carrier is refused
+    by every checked entry point, and its carrier still mints the kind on the unchecked
+    compile (else the carrier no longer demonstrates what it is cited for).
+
+    SABOTAGE 2026-09-26 (in-process monkeypatch, no file edited,
+    `.scratch/tk106/conf_sabotage.py`). Production refusal narrowed to the pre-TK106
+    rule (derived tuplesets exempt), the narrowest plausible weakening::
+
+        AssertionError: `derived-tupleset-ttu`'s carrier REFUSED_TUPLESET_SCHEMAS['derived_tupleset_ttu'] is ACCEPTED by ['zanzibar_utils_v1.parse_openfga_schema', 'zanzibar_utils_v1.parse_schema_ast']. ...
+
+    Oracle refusal alone disabled: same assertion, `ACCEPTED by
+    ['tests.oracle.parse_schema_ast']`. Instrument control, both refusals disabled AND the
+    carrier injected back into `TTU_USERSET_SCHEMAS`, which reaches the stale-exclusion
+    branch::
+
+        AssertionError: `derived-tupleset-ttu` is excluded from the coverage floor as unreachable since TK106 (2026-09-26), but ACCEPTED corpora reach it: ['TTU_USERSET_SCHEMAS:derived_tupleset_ttu']. ...
+    """
     from formal.conformance.corpus import (
-        MULTI_STRATUM_SCHEMAS, SELF_REFERENTIAL_SCHEMAS, TTU_USERSET_SCHEMAS)
+        MULTI_STRATUM_SCHEMAS, REFUSED_TUPLESET_SCHEMAS, SELF_REFERENTIAL_SCHEMAS,
+        TTU_USERSET_SCHEMAS)
 
     where: dict[str, set[str]] = {}
     n_leaves = 0
@@ -349,12 +423,35 @@ def test_every_plan_leaf_kind_is_reached_by_some_corpus():
     assert n_leaves > 0, (
         "ANTI-VACUITY: no compiled plan leaves found in ANY corpus — the "
         "coverage assertion below would be about an empty histogram")
-    missing = [k for k in _REQUIRED_LEAF_KINDS if not where.get(k)]
+    missing = [k for k in _REQUIRED_LEAF_KINDS
+               if not where.get(k) and k not in _REFUSED_LEAF_KINDS]
     assert not missing, (
         f"plan-leaf kind(s) {missing} are produced by NO corpus — the "
         f"corresponding `compile_ruleset` branch is unexercised by every "
         f"conformance differential. Observed histogram: "
         f"{ {k: len(v) for k, v in sorted(where.items())} }")
+
+    # The TK106 exclusion, asserted rather than assumed.
+    assert set(_REFUSED_LEAF_KINDS) <= set(_REQUIRED_LEAF_KINDS), (
+        f"_REFUSED_LEAF_KINDS names a kind the compiler does not emit: "
+        f"{sorted(set(_REFUSED_LEAF_KINDS) - set(_REQUIRED_LEAF_KINDS))}")
+    for kind, carrier in _REFUSED_LEAF_KINDS.items():
+        assert not where.get(kind), (
+            f"`{kind}` is excluded from the coverage floor as unreachable since TK106 "
+            f"(2026-09-26), but ACCEPTED corpora reach it: {sorted(where[kind])}. The "
+            f"exclusion is stale: delete it from _REFUSED_LEAF_KINDS so the floor covers "
+            f"the kind again, and find out how an accepted schema taints a tupleset.")
+        schema_text, _t, ow = REFUSED_TUPLESET_SCHEMAS[carrier]
+        verdicts = _checked_refusals(schema_text, ow)
+        accepted = sorted(n for n, v in verdicts.items() if v == "ACCEPTED")
+        assert not accepted, (
+            f"`{kind}`'s carrier REFUSED_TUPLESET_SCHEMAS[{carrier!r}] is ACCEPTED by "
+            f"{accepted}. The TK106 refusal relaxed, so `{kind}` is reachable again and "
+            f"its exclusion from the coverage floor no longer holds: move the carrier "
+            f"back into a conformance family and drop it from _REFUSED_LEAF_KINDS.")
+        assert kind in _unchecked_leaf_kinds(schema_text, ow), (
+            f"REFUSED_TUPLESET_SCHEMAS[{carrier!r}] no longer mints `{kind}` even on the "
+            f"unchecked compile, so it is not the carrier of the kind it is cited for")
 
 
 def test_required_leaf_kinds_are_exactly_the_compilers_kinds():
@@ -431,6 +528,17 @@ def test_required_leaf_kinds_are_exactly_the_compilers_kinds():
 #   * `derived-tupleset-ttu` IS reachable, but only non-vacuously when the derived
 #     tupleset carries a Direct restriction (TTU parents are STORED tuples), which
 #     is why the one pre-existing schema compiling this leaf could not test it.
+#
+# ⚠ 2026-09-26 (`TK106`): the `derived_tupleset_ttu` half of this section is SUPERSEDED.
+# The user decided boolean tuplesets are refused, as OpenFGA refuses them, so the shape
+# is rejected at parse time by both parsers (`zanzibar_utils_v1.py::
+# _validate_tuplesets_direct`, `tests/oracle.py::_validate_tuplesets_direct`) and the
+# corpus moved to `corpus.py::REFUSED_TUPLESET_SCHEMAS`. The "graph index ADMITS both
+# shapes" sentence above is now true of `wildcard_userset` only. What this section pins
+# for the refused shape is the refusal itself: all three backends refuse it
+# (`test_refused_tupleset_three_way_refusal`), and it still carries the leaf kind the
+# floor in section (c) excludes
+# (`test_derived_tupleset_ttu_carrier_is_refused_and_still_mints_the_leaf`).
 # --------------------------------------------------------------------------- #
 
 _WILDCARD_USERSET = "wildcard_userset"
@@ -548,73 +656,106 @@ def test_wildcard_userset_corpus_features():
         f"shape is defined by is not being exercised")
 
 
-def test_derived_tupleset_ttu_corpus_features():
-    """`derived_tupleset_ttu` really compiles a `derived-tupleset-ttu` leaf, and
-    that leaf is really DRIVEN: the derived tupleset's exclusion changes
-    `parent`'s own answer while the STORED tupleset tuple keeps feeding the TTU.
+def test_derived_tupleset_ttu_carrier_is_refused_and_still_mints_the_leaf():
+    """`TK106` (2026-09-26). Until then this test was `test_derived_tupleset_ttu_corpus_
+    features` and pinned the corpus's ANSWERS: `parent(f2, d1)` False while
+    `inherited(bob, d1)` stayed True, because `from` read the STORED tuples of a boolean
+    tupleset. The user decided that shape is refused, as OpenFGA refuses it, so the
+    answers are no longer anyone's semantics and nothing may compare them.
 
-    That asymmetry is the whole semantic content of the kind (parents are STORED
-    tupleset tuples, never computed membership — docs/spec-deviations.md
-    2026-07-07 P5 #1). Without it the corpus would compile the branch and compare
-    nothing distinctive, which is the state `demorgans_law_1.fga` was in: its
-    derived tuplesets have no Direct restriction, so every dependent TTU is empty
-    by construction."""
-    from formal.conformance.corpus import TTU_USERSET_SCHEMAS
+    What it pins now: the carrier (`corpus.py::REFUSED_TUPLESET_SCHEMAS[
+    'derived_tupleset_ttu']`) is refused by every checked entry point with the TK106
+    message, it is kept out of every conformance family, and on the UNCHECKED compile it
+    still mints `derived-tupleset-ttu` with a storage leaf on the tupleset, so it is still
+    a driven instance of the shape the refusal exists to keep out.
 
-    schema_text, tuples, _ow = TTU_USERSET_SCHEMAS[_DERIVED_TS_TTU]
-    prod = parse_openfga_schema(schema_text)
-    assert prod.compiled is not None, f"[{_DERIVED_TS_TTU}] compiled no plans"
+    Measured 2026-09-26 (`.scratch/tk106/conf_probe1.py`)::
 
-    kinds = {leaf.kind for plan in prod.compiled.plans.values()
-             for leaf in plan.leaves}
+        prod parse_schema_ast: ValueError: doc#inherited: 'viewer' from 'parent': a tupleset must be direct (...)
+        oracle parse_schema_ast: ValueError: doc#inherited: tupleset must be direct, but doc#parent is not
+        parse_openfga_schema: ValueError: doc#inherited: 'viewer' from 'parent': a tupleset must be direct (...)
+        unchecked compile leaf kinds: ['closure', 'derived-tupleset-ttu']
+    """
+    from formal.conformance.corpus import (
+        REFUSED_TUPLESET_SCHEMAS, SELF_REFERENTIAL_SCHEMAS, TTU_USERSET_SCHEMAS)
+    from zanzibar_utils_v1 import (
+        _parse_schema_ast_unchecked, compile_ruleset, derive_schema_info)
+
+    schema_text, _tuples, ow = REFUSED_TUPLESET_SCHEMAS[_DERIVED_TS_TTU]
+
+    verdicts = _checked_refusals(schema_text, ow)
+    assert len(verdicts) == 3, verdicts
+    accepted = sorted(n for n, v in verdicts.items() if v == "ACCEPTED")
+    assert not accepted, (
+        f"[{_DERIVED_TS_TTU}] a boolean tupleset is ACCEPTED by {accepted}. TK106 "
+        f"(2026-09-26) made it a parse-time refusal on both parsers; if that was relaxed "
+        f"on purpose, the corpus goes back to TTU_USERSET_SCHEMAS with answers "
+        f"re-adjudicated, not with the pre-TK106 ones restored")
+
+    # SCOPE: a refused schema must sit in no family any differential reads.
+    for fam_name, fam in (("SCHEMAS", SCHEMAS), ("GRAPH_FRAGMENT", GRAPH_FRAGMENT),
+                          ("MULTI_STRATUM_SCHEMAS", MULTI_STRATUM_SCHEMAS),
+                          ("TTU_USERSET_SCHEMAS", TTU_USERSET_SCHEMAS),
+                          ("SELF_REFERENTIAL_SCHEMAS", SELF_REFERENTIAL_SCHEMAS)):
+        assert _DERIVED_TS_TTU not in fam, (
+            f"[{_DERIVED_TS_TTU}] is refused by both parsers but sits in {fam_name}")
+
+    # The carrier is still the carrier: unchecked, it mints the leaf and DRIVES it.
+    ast = _parse_schema_ast_unchecked(schema_text)
+    compiled = compile_ruleset(ast, derive_schema_info(ast, frozenset(ow))).compiled
+    assert compiled is not None, f"[{_DERIVED_TS_TTU}] compiled no plans, unchecked"
+    kinds = {leaf.kind for plan in compiled.plans.values() for leaf in plan.leaves}
     assert "derived-tupleset-ttu" in kinds, (
-        f"[{_DERIVED_TS_TTU}] no longer compiles a `derived-tupleset-ttu` leaf — "
-        f"the tupleset relation `parent` is presumably no longer derived. Kinds: "
-        f"{sorted(kinds)}")
-    # and the tupleset relation must keep a STORAGE leaf, or the TTU is empty.
-    parent_leaves = prod.compiled.plans[("doc", "parent")].leaves
-    assert any(l.storage for l in parent_leaves), (
-        f"[{_DERIVED_TS_TTU}] the derived tupleset `parent` has no storage leaf, "
-        f"so it can hold no stored tuples and `inherited` is constantly EMPTY — "
-        f"the leaf would be compiled but never driven: {parent_leaves}")
-
-    # SCOPE: outside W4Fragment.computedOnly AND outside GraphAdmission.ttuDirect.
-    assert _DERIVED_TS_TTU not in SCHEMAS, (
-        f"[{_DERIVED_TS_TTU}] leaked into SCHEMAS — a derived TTU tupleset fails "
-        f"`GraphAdmission.ttuDirect` (TtuTuplesetsDirect) as well as "
-        f"`W4Fragment.computedOnly`, and zcli would NOT refuse it")
-    assert _DERIVED_TS_TTU not in GRAPH_FRAGMENT, \
-        f"[{_DERIVED_TS_TTU}] leaked into GRAPH_FRAGMENT"
-
-    orc = Oracle(schema_text, list(tuples))
-
-    def chk(sp, st, sn, rel):
-        return orc.check(sp, st, sn, rel, "doc", "d1")
-
-    # The exclusion is load-bearing ON THE TUPLESET RELATION ITSELF.
-    assert chk("...", "folder", "f1", "parent"), \
-        f"[{_DERIVED_TS_TTU}] f1 is not a parent — the corpus is vacuous"
-    assert not chk("...", "folder", "f2", "parent"), (
-        f"[{_DERIVED_TS_TTU}] `detached` no longer excludes f2 from `parent`, so "
-        f"the tupleset relation is effectively untainted and the leaf under test "
-        f"is a plain `derived-ttu`")
-    # ...and it is NOT load-bearing on the dependent TTU, because parents are the
-    # STORED tuples. This is the pinned divergence; if it ever flips, the fix that
-    # flipped it changed adjudicated semantics.
-    assert chk("...", "user", "alice", "inherited"), \
-        f"[{_DERIVED_TS_TTU}] the TTU grants nothing — vacuous corpus"
-    assert chk("...", "user", "bob", "inherited"), (
-        f"[{_DERIVED_TS_TTU}] bob lost `inherited` even though he views f2 and "
-        f"`folder:f2 parent doc:d1` is STORED. TTU parents are the stored "
-        f"tupleset tuples, never computed membership (spec-deviations 2026-07-07 "
-        f"P5 #1) — a change here is a semantics change, not a refactor")
-    assert not chk("...", "user", "carol", "inherited"), (
-        f"[{_DERIVED_TS_TTU}] carol inherits without viewing any parent folder — "
-        f"the TTU has collapsed into 'everyone'")
+        f"[{_DERIVED_TS_TTU}] no longer mints a `derived-tupleset-ttu` leaf on the "
+        f"unchecked compile; kinds {sorted(kinds)}")
+    assert any(leaf.storage for leaf in compiled.plans[("doc", "parent")].leaves), (
+        f"[{_DERIVED_TS_TTU}] the tupleset `parent` has no storage leaf, so the carrier "
+        f"would only compile the kind, never drive it")
 
 
 @pytest.mark.parametrize("ops", ALL_SETOPS, ids=lambda o: o.name)
-@pytest.mark.parametrize("name", [_WILDCARD_USERSET, _DERIVED_TS_TTU])
+def test_refused_tupleset_three_way_refusal(ops):
+    """`TK106` (2026-09-26): the three backends that used to be compared on
+    `derived_tupleset_ttu` now AGREE BY REFUSING it. The independent oracle (`Oracle()`),
+    the real `SetEngine` under this SetOps, and the graph-index compile
+    (`parse_openfga_schema`, which `backends.graphindex_answers` starts from) each raise
+    `ValueError` containing the TK106 fragment. A backend that started accepting it again
+    would be a divergence between backends, which this makes a red test rather than a
+    shrunk parametrization. Replaces the `derived_tupleset_ttu` rows of
+    `test_zero_coverage_shapes_three_way`, one per SetOps, like them."""
+    from formal.conformance.corpus import REFUSED_TUPLESET_SCHEMAS
+
+    schema_text, tuples, obj_wild = REFUSED_TUPLESET_SCHEMAS[_DERIVED_TS_TTU]
+    ow = frozenset(obj_wild)
+
+    def refused(make) -> str:
+        try:
+            make()
+        except ValueError as e:
+            assert _TUPLESET_REFUSAL in str(e), f"refused for another reason: {e}"
+            return "REFUSED"
+        return "ACCEPTED"
+
+    def set_engine():
+        engine = create_engine("sqlite:///:memory:")
+        SQLModel.metadata.create_all(engine)
+        session = Session(engine)
+        try:
+            SetEngine(session, "s1", schema_text, ops=ops, object_wildcard_shapes=ow)
+        finally:
+            session.close()
+
+    got = {
+        "oracle": refused(lambda: Oracle(schema_text, list(tuples))),
+        "setengine": refused(set_engine),
+        "graph": refused(lambda: parse_openfga_schema(schema_text, ow)),
+    }
+    assert got == {"oracle": "REFUSED", "setengine": "REFUSED", "graph": "REFUSED"}, (
+        f"[{_DERIVED_TS_TTU}/{ops.name}] backends disagree on a refused shape: {got}")
+
+
+@pytest.mark.parametrize("ops", ALL_SETOPS, ids=lambda o: o.name)
+@pytest.mark.parametrize("name", [_WILDCARD_USERSET])
 def test_zero_coverage_shapes_three_way(name, ops):
     """PYTHON-ONLY three-backend differential on the two 2026-07-28 corpora:
     independent oracle == real `SetEngine` == real graph index (`WildcardIndex` +
@@ -625,7 +766,11 @@ def test_zero_coverage_shapes_three_way(name, ops):
     and lives in `test_conformance_spec.py`. This leg exists because the graph
     index genuinely ADMITS both shapes — a scope rejection would make it
     impossible, and a rejection is exactly what the wildcard-userset finding
-    looked like until it was measured."""
+    looked like until it was measured.
+
+    Since `TK106` (2026-09-26) only `wildcard_userset` runs here. `derived_tupleset_ttu`
+    is refused by every backend, and `test_refused_tupleset_three_way_refusal` pins
+    that the three agree on the refusal."""
     from formal.conformance.corpus import TTU_USERSET_SCHEMAS
 
     schema_text, tuples, obj_wild = TTU_USERSET_SCHEMAS[name]

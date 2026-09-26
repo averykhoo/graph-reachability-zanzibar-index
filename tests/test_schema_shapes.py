@@ -30,10 +30,11 @@ uniqueness is the wrong bar:
     so ``parent_types`` was never exercised with breadth > 1 -- and ``parent_types``
     breadth is exactly what RC1 got wrong. A single-type corpus cannot distinguish
     "computes the set correctly" from "returns the only candidate".
-  * ``tupleset_shapes``        -- tupleset-axis features at once: a tupleset defined by an
-    Intersection, and a type reaching the tupleset ONLY through an Exclusion's negative
-    arm. (Its third, an UNDECLARED tupleset, was removed 2026-09-26: ASK-1 made that a
-    parse refusal.)
+  * ``tupleset_shapes``        -- RETIRED 2026-09-26 (TK106). It carried a tupleset defined
+    by an Intersection and a type reaching the tupleset ONLY through an Exclusion's
+    negative arm; TK106 (user decision) made every non-direct tupleset a parse refusal,
+    so no relation in it survived. Its features are now carried by the genswarm
+    rejection witnesses ``tupleset-intersection`` / ``tupleset-neg-only-type``.
   * ``wildcard_userset_cross``  -- contributes no NEW feature; its value is entirely
     CO-OCCURRENCE, and that is the point. ``restr:wildcard-userset`` (``group:*#member``)
     lived only in ``wildcards.fga``, a schema with no boolean operator anywhere, so the
@@ -43,8 +44,11 @@ uniqueness is the wrong bar:
     fixture that only crosses existing features still earns its place. It also chains a
     subject wildcard (``user:*`` member of a group) INTO the wildcard userset INTO a TTU.
 
-★ **``tupleset_shapes`` is a genuine RC1 regression pin, and the only one of the three
-that is.** Its ``via_negonly`` arm is RC1's exact shape. Under the RC1 sabotage
+★ **RETIRED 2026-09-26 (TK106), kept as history: ``tupleset_shapes`` WAS a genuine RC1
+regression pin, and the only one of the three that was.** RC1's shape (a type reaching a
+tupleset only through a ``but not`` arm) is now a parse refusal in both parsers, so the
+bug class cannot be written; the refusal is pinned in
+``tests/test_ttu_tupleset_parent_types.py``. What follows is the pin as it stood. Its ``via_negonly`` arm is RC1's exact shape. Under the RC1 sabotage
 (``_member_types``'s Exclusion branch narrowed to ``walk(e.base)``) it does not merely
 answer wrong -- it refuses to compile, because the 2026-08-11 invariant catches the
 class before any tuple is written::
@@ -175,16 +179,6 @@ _HETEROGENEOUS_POOL = [
     ('...', 'user', 'alice', 'quarantined', 'doc', 'd1'),
 ]
 
-_TUPLESET_SHAPES_POOL = [
-    ('...', 'user', 'alice', 'viewer', 'folder', 'f1'),
-    # carol is reachable ONLY through the neg-only `doc` parent -- the RC1 witness
-    ('...', 'user', 'carol', 'viewer', 'doc', 'd2'),
-    ('...', 'folder', 'f1', 'vetted', 'doc', 'd1'),
-    ('...', 'folder', 'f1', 'approved_parent', 'doc', 'd1'),
-    ('...', 'folder', 'f1', 'mixed_parent', 'doc', 'd1'),
-    ('...', 'doc', 'd2', 'mixed_parent', 'doc', 'd1'),
-]
-
 _WILDCARD_USERSET_CROSS_POOL = [
     ('...', 'user', 'alice', 'member', 'group', 'g1'),
     ('...', 'user', '*', 'member', 'group', 'g2'),
@@ -211,9 +205,8 @@ REQUIRED = {
     'userset_over_derived': {'family:userset-storage', 'leaf:derived-userset',
                              'plan:PDerivedUserset', 'via:userset'},
     'heterogeneous_tupleset': {'ttu.ts:multitype'},
-    # `ttu.ts:undeclared` left this set on 2026-09-26: ASK-1 made an undeclared tupleset
-    # a parse refusal, so no fixture can carry it (see EXPECTED_UNREACHED).
-    'tupleset_shapes': {'ttu.ts:Intersection', 'ttu.ts:neg-only-type'},
+    # `tupleset_shapes` ({'ttu.ts:Intersection', 'ttu.ts:neg-only-type'}) RETIRED
+    # 2026-09-26 by TK106: both are now parse refusals (see EXPECTED_UNREACHED).
     # Contributes no NEW feature -- its value is co-occurrence. `restr:wildcard-userset`
     # lived only in the non-boolean wildcards.fga and had never met a boolean operator;
     # 21 of its 35 unpaired combinations close here.
@@ -224,7 +217,6 @@ REQUIRED = {
 POOLS = {
     'userset_over_derived': _USERSET_OVER_DERIVED_POOL,
     'heterogeneous_tupleset': _HETEROGENEOUS_POOL,
-    'tupleset_shapes': _TUPLESET_SHAPES_POOL,
     'wildcard_userset_cross': _WILDCARD_USERSET_CROSS_POOL,
 }
 
@@ -274,7 +266,12 @@ def _corpus():
 #: leave-one-out masking artifact where two fixtures jointly hold something unique and
 #: hide it from each other. (Checked: 0 features and 0 pairs are held by exactly two
 #: fixtures both on this list.)
-KNOWN_SUBSUMED = {'confluence', 'custom_roles', 'gdrive', 'github', 'master_store'}
+#:
+#: `demorgans_law_1` joined 2026-09-26 (TK106): trimmed to its legal `non_labels` core,
+#: it adds no feature or pair of its own. It is kept because it is the only corpus
+#: asserted to reach `test_bulk_build.py`'s edge-free explicit rc=0 node (check (e)).
+KNOWN_SUBSUMED = {'confluence', 'custom_roles', 'demorgans_law_1', 'gdrive', 'github',
+                  'master_store'}
 
 #: ★ A DIFFERENT THING FROM `KNOWN_SUBSUMED`, AND THE DISTINCTION IS LOAD-BEARING.
 #: Groups of fixtures that score "subsumed" ONLY because they mask each other -- the
@@ -476,7 +473,21 @@ def test_masked_groups_cite_a_live_guard():
 #: to `genswarm.features` with the refusal switched off) gives 839 and the new one 813;
 #: all 26 lost pairs contain `ttu.ts:undeclared`, which is now unreachable by design
 #: (EXPECTED_UNREACHED), and no other pair moved.
-MIN_COOCCURRING_PAIRS = 813
+#: LOWERED to 597 on 2026-09-26, deliberately: TK106 (user decision) made every non-direct
+#: tupleset a parse refusal, retiring `tupleset_shapes.fga` and trimming
+#: `demorgans_law_1.fga` to its legal `non_labels` core. MEASURED that day
+#: (`.scratch/tk106/probe_corpus_now.py`: HEAD's two fixture texts fed to
+#: `genswarm.features` with the refusal patched off): 813 -> 591, 222 pairs lost, 218 of
+#: them containing a now-unreachable feature. The other 4 are LEGAL and were lost on
+#: purpose: `ast:Intersection` / `plan:PIntersection` x `schema:storage-leaf` /
+#: `ttu.ts:multitype`. Adding `cleared: [user] and viewer` to
+#: `heterogeneous_tupleset.fga` recovers them (597), but MEASURED it also covers the 6
+#: pairs the `demorgans_law_2` / `star_admitting_intersection` group holds uniquely,
+#: dissolving that MASKED_PAIRS exemption and making `demorgans_reverse` subsumed too.
+#: Four pairs do not justify that, and all four stay covered where interactions are
+#: generated: each is a cell of the genswarm enumerator at K<=2 (MEASURED,
+#: `.scratch/tk106/probe_4cells.py`, all True).
+MIN_COOCCURRING_PAIRS = 591
 
 
 def test_corpus_pair_coverage_does_not_regress():
@@ -567,24 +578,9 @@ def test_heterogeneous_tupleset_answers(driven, query, expected):
     assert driven['heterogeneous_tupleset'].check(*query) is expected
 
 
-@pytest.mark.parametrize('query,expected', [
-    # tupleset defined by an INTERSECTION: folder:f1 is both a direct arm member and
-    # `vetted`, so it survives the `and` and carries alice through
-    (('...', 'user', 'alice', 'via_intersection', 'doc', 'd1'), True),
-    # ★ RC1's SHAPE. carol is viewer on doc:d2, and doc:d2 is a STORED mixed_parent of
-    # doc:d1 -- reachable only because `doc` appears in the Exclusion's negative arm.
-    # CLAUDE.md pins stored-tuple TTU semantics: the TTU walks the stored tuple whatever
-    # the exclusion decides about d2's membership. Under the RC1 sabotage this schema
-    # does not even compile.
-    (('...', 'user', 'carol', 'via_negonly', 'doc', 'd1'), True),
-    # positive-arm control: alice arrives via folder:f1, the POSITIVE arm. If this were
-    # the only probe, RC1 would be invisible -- it is what makes carol attributable.
-    (('...', 'user', 'alice', 'via_negonly', 'doc', 'd1'), True),
-    # (`via_undeclared`, an UNDECLARED tupleset answering constantly empty, was dropped
-    # 2026-09-26: ASK-1 made the whole schema a parse refusal.)
-])
-def test_tupleset_shapes_answers(driven, query, expected):
-    assert driven['tupleset_shapes'].check(*query) is expected
+# (`test_tupleset_shapes_answers` was RETIRED with its fixture on 2026-09-26, TK106: its
+# three queries ran through `approved_parent: [folder] and vetted` and RC1's
+# `mixed_parent: [folder] but not [doc]`, both now parse refusals.)
 
 
 # --------------------------------------------------------------------------- #
@@ -607,9 +603,14 @@ EXPECTED_UNREACHED = {
     # {('folder','viewer'), ('doc','viewer')}; scoring a bare file cannot see it.
     'schema:owc',
     # Refused by scope; witnesses: tupleset-userset-restriction,
-    # tupleset-wildcard-userset-restriction, tupleset-rewritten-arms.
+    # tupleset-wildcard-userset-restriction.
     'ttu.ts.restr:userset',
     'ttu.ts.restr:wildcard-userset',
+    # ⚠ NOT refused: a union of Directs (`[a] or [b]`) is a LEGAL tupleset, before and
+    # after TK106. No fixture happens to carry one (genswarm reaches it through
+    # `ts_boolean`), and it is listed so the exact-set assertion below holds; a fixture
+    # adopting the form is the "Good news" branch. The old comment called it "refused by
+    # scope" on the strength of `tupleset-rewritten-arms`, which is a COMPUTED arm.
     'ttu.ts:Union',
     # Reachable in some configurations but refused in the common ones; witnesses:
     # owc-on-a-ttu-tupleset, owc-on-derived-relation. Same parameter caveat as above.
@@ -618,6 +619,20 @@ EXPECTED_UNREACHED = {
     # self-consistent); witness: dangling-reference. `tupleset_shapes.fga` carried it
     # until then as `via_undeclared`.
     'ttu.ts:undeclared',
+    # Refused at PARSE time since TK106 (2026-09-26, user decision: a tupleset must be
+    # direct-only). The tupleset-body shapes and their compiled consequences, which only
+    # a tainted tupleset produced. Witnesses: tupleset-intersection,
+    # tupleset-neg-only-type, tupleset-rewritten-arms, tupleset-is-itself-a-ttu.
+    # `tupleset_shapes.fga` and `demorgans_law_1.fga` carried them until then.
+    'ttu.ts:Computed',
+    'ttu.ts:Exclusion',
+    'ttu.ts:Intersection',
+    'ttu.ts:TTU',
+    'ttu.ts:neg-only-type',
+    'ttu.ts:tainted',
+    'plan:PDerivedTuplesetTTU',
+    'leaf:derived-tupleset-ttu',
+    'via:tupleset-ttu',
 }
 
 

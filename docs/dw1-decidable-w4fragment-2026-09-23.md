@@ -45,7 +45,7 @@ session's diff, with the `zcli` that `8b3ab46` built.
   - `PYTHON_OUTCOME` re-checks ADMITTED / RAISED for every schema-side probe. All 13
     match the 2026-08-31 record.
 - **The differential lives in `formal/conformance/test_conformance_fragment.py`:**
-  - (D) the report equals Lean per field and on `tainted`, over the 36 corpora and 18
+  - (D) the report equals Lean per field and on `tainted`, over the 36 corpora and 18 [count as it was then; TK106 changed it 2026-09-26]
     probes;
   - (E) each probe's verdict equals the hand derivation, by both sides;
   - (F) `PYTHON_OUTCOME` still holds;
@@ -139,7 +139,7 @@ the remaining owner of goal step 3.
 - **Step 2: `zcli mode="fragment"`, `runner.py::run_fragment` and
   `formal/conformance/test_conformance_fragment.py`.** The module collects 98 tests.
   - (A) holds every `_THEOREM_BACKED` corpus inside the fragment.
-  - (B) pins Lean's per-field verdict on all 36 curated corpora against the probe-derived
+  - (B) pins Lean's per-field verdict on all 36 curated corpora against the probe-derived [count as it was then; TK106 changed it 2026-09-26]
     `_EXPECTED_FAILURES`.
   - (C) pins Lean `taintedKeys` == `compute_taint`.
   - First run: `98 passed`, green immediately, so four sabotages followed.

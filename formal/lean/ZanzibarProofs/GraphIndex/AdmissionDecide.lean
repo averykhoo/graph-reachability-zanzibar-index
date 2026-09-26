@@ -19,6 +19,8 @@ MIXED but shadowed by `W4Fragment`, and two SILENT (`matchDecl`, `ranked`). This
 what a Python report of the two SILENT fields gets differential-pinned to. Since `ASK-1`
 (2026-09-26) Python REFUSES both at parse time, so no field is SILENT; the report stays, and
 `formal/conformance/test_conformance_fragment.py` (K) ties the refusal to this decider.
+Since `TK106` (2026-09-26) `ttuDirect` is LOUD as well (a tupleset must be direct-only,
+refused at parse), so only `storeValid` is still MIXED.
 
 ## The one real proof: `RewriteRanked`
 

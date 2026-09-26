@@ -210,15 +210,18 @@ def test_the_census_reproduces_the_known_intersections():
 
     A walker that found nothing would make
     `test_corpus_has_a_star_admitting_intersection_with_a_derived_dep` fail loudly, but it
-    would make the *uniqueness* half of it pass silently. Pin the three intersections
+    would make the *uniqueness* half of it pass silently. Pin the intersections
     `docs/tk74-staleness-net-2026-09-18.md` §10.5 measured, star column included, so a
-    broken walker cannot masquerade as a finding.
+    broken walker cannot masquerade as a finding. (Three were measured; two remain since
+    TK106 retired `tupleset_shapes.fga` on 2026-09-26.)
     """
     got = {(stem, key): starred for stem, key, _, _, starred in intersection_census()}
     for expected_key, expected_star in {
             (CONTROL, ISECT_KEY): False,
-            ('boolean_wildcards', ('doc', 'restricted')): True,
-            ('tupleset_shapes', ('doc', 'approved_parent')): False}.items():
+            ('boolean_wildcards', ('doc', 'restricted')): True}.items():
+        # (A third, ('tupleset_shapes', ('doc', 'approved_parent')): False, left with its
+        # fixture on 2026-09-26: TK106 made `[folder] and vetted` as a tupleset a parse
+        # refusal and `tupleset_shapes.fga` was retired.)
         assert expected_key in got, (
             f'the census lost {expected_key}, measured by §10.5 on 2026-09-18c. The '
             f'walker is broken or a fixture changed; nothing else here is evidence.')

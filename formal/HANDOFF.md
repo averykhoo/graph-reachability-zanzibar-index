@@ -415,6 +415,11 @@ board are the two blocks below, verbatim.**
 > `W4Fragment.wsBare`; `derived_tupleset_ttu` falsifies `W4Fragment.computedOnly`
 > AND `GraphAdmission.ttuDirect`. Detail + all seven sabotage runs:
 > `formal/history/nary-strata-coverage-2026-07-27.md` (2026-07-28 addendum).
+> ⚠ **2026-09-26 (`TK106`):** a boolean tupleset is now a parse refusal, so
+> `derived_tupleset_ttu` moved from `TTU_USERSET_SCHEMAS` to a refused-schema registry
+> and the `derived-tupleset-ttu` leaf kind is EXCLUDED from the floor as unreachable by
+> design (asserted refused, so the exclusion is revoked if the refusal relaxes). The
+> "CLOSED" above is history.
 > Verdict: Python OVERTAKEN · Lean DECLARED-OUT-OF-SCOPE (no action) · conformance
 > CLOSED for both.
 

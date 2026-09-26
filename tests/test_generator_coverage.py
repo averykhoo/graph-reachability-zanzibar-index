@@ -582,9 +582,18 @@ def test_every_alphabet_feature_is_hit_or_rejection_explained():
 #   pytest tests/test_generator_coverage.py -q          (ci)
 #   HYPOTHESIS_PROFILE=deep pytest tests/...            (deep)
 # universe = 1275 pair cells; baseline generators at `git show HEAD:tests/...` = 514.
-_CELL_FLOOR_CI = 800        # measured 841 (enumerator K<=2, compile-only)
-_CELL_FLOOR_DEEP = 900      # measured 957 (enumerator K<=3)
-_CELL_FLOOR_WITH_REJ = 830  # measured 871 (K<=2 + rejection witnesses)
+#
+# LOWERED 2026-09-26 by TK106, deliberately (user decision: a `from`-tupleset must be
+# direct-only). MEASURED that day, docs/tk106-boolean-tuplesets-2026-09-26.md § 4: HEAD's
+# genswarm with the refusal patched off gives 808 (K<=2) / 912 (K<=3), already below the
+# 841 / 957 recorded here (drift); the TK106 genswarm gives 685 / 701. EVERY lost cell
+# (229 at K<=2, 271 at K<=3) contains a feature no accepted schema reaches any more --
+# `ttu.ts:{Computed,Exclusion,Intersection,neg-only-type,tainted}`,
+# `plan:PDerivedTuplesetTTU`, `leaf:derived-tupleset-ttu`, `via:tupleset-ttu` -- and
+# 0 are generator gaps. With rejection witnesses: 866. Floors ~5% under, as before.
+_CELL_FLOOR_CI = 650        # measured 685 (enumerator K<=2, compile-only), 2026-09-26
+_CELL_FLOOR_DEEP = 665      # measured 701 (enumerator K<=3), 2026-09-26
+_CELL_FLOOR_WITH_REJ = 820  # measured 866 (K<=2 + rejection witnesses), 2026-09-26
 _BASELINE_CELLS = 514       # `git show HEAD:tests/test_hypothesis.py`, 400 draws each
 
 
@@ -610,7 +619,7 @@ def test_enumerator_cell_coverage_floor():
     floor = _CELL_FLOOR_DEEP if DEEP else _CELL_FLOOR_CI
     assert len(cells) >= floor, (
         f'enumerator cell coverage {len(cells)}/{len(_UNIVERSE)} is below the floor '
-        f'{floor} (measured 841 on 2026-08-10)')
+        f'{floor} (measured 685 at K<=2 / 701 at K<=3 on 2026-09-26)')
     with_rej = cells | G.rejection_explained_cells()
     assert len(with_rej) >= _CELL_FLOOR_WITH_REJ
     assert len(with_rej) > _BASELINE_CELLS * 1.5, (
@@ -994,9 +1003,12 @@ def _fmt(kind, found):
 # 6. THE NEGATIVE CONTROL — the driving discipline, guarded permanently
 # ===========================================================================
 
-# The witness the control runs on: `parent: [folder] but not [doc]` with both a positive
-# TTU (`r2: r1 from parent`) and a negated one (`r3: [user] but not r1 from parent`).
-_CONTROL_SWITCHES = frozenset({'ts_negonly', 'multi_type', 'body_negttu'})
+# The witness the control runs on: `parent: [doc, folder]` with both a positive TTU
+# (`r2: r1 from parent`) and a negated one (`r3: [user] but not r1 from parent`).
+# Until TK106 (2026-09-26) it was `parent: [folder] but not [doc]` (`ts_negonly`), RC1's
+# shape, which is now a parse refusal. The injected defect (drop every `doc`-typed parent,
+# a missing `parent_types` entry) is just as meaningful on a legal multi-type tupleset.
+_CONTROL_SWITCHES = frozenset({'ts_multitype', 'multi_type', 'body_negttu'})
 
 
 def test_full_pool_driving_is_blind_to_what_subset_driving_detects():
@@ -1045,6 +1057,18 @@ def test_full_pool_driving_is_blind_to_what_subset_driving_detects():
             direction -- the dense knockout has stopped working, so the design gap
             §6.7 named is open again
 
+    RE-HOMED 2026-09-26 (TK106): the witness moved off RC1's refused
+    `parent: [folder] but not [doc]` to the legal `parent: [doc, folder]`, and the grid
+    now omits `parent` itself (the defect models a `parent_types` omission, which only a
+    `from` sees). Both halves observed that day: without the grid filter, full-pool
+    driving DETECTED the defect (`full-pool driving DETECTED the injected defect ...
+    ('...', 'doc', 'd1', 'parent', 'doc', 'd1'), True, False)`); with it, S7 above
+    re-observed on the new witness (`.scratch` probe, DENSE -> `[tuple(pool)]`)::
+
+        SABOTAGE S7: RED -> the DENSE regime detected nothing in the FAIL-OPEN direction
+        -- the dense knockout has stopped working, so the design gap §6.7 named is open
+        again
+
     KNOWN LIMIT (sabotage S8, executed and GREEN): folding the wildcard bit out of
     `genswarm._shape` — so a `doc:*` parent and a `doc:d1` parent knock out together —
     does NOT redden this control. The wildcard bit is kept because RC2 is a divergence
@@ -1071,8 +1095,14 @@ def test_full_pool_driving_is_blind_to_what_subset_driving_detects():
         comparisons = 0
         over, under = [], []
         for subset in G.subsets_for(pool, regime, k, random.Random(0), ast):
-            n, bad = G.detect_synthetic(
-                schema, set(subset), G.grid_for(ast, subset), defect)
+            # Only the TTU CONSEQUENCES are observed, never `parent` itself (TK106,
+            # 2026-09-26). The defect models a missing `parent_types` entry, which
+            # changes what a `from` walks and never the tupleset's own membership. Until
+            # TK106 the witness's tupleset was RC1's `[folder] but not [doc]`, so `doc`
+            # tuples were not `parent` members anyway and the filter was implicit; on the
+            # now-required direct tupleset it has to be stated.
+            grid = [q for q in G.grid_for(ast, subset) if q[3] != 'parent']
+            n, bad = G.detect_synthetic(schema, set(subset), grid, defect)
             comparisons += n
             over += [b for b in bad if not b[1] and b[2]]
             under += [b for b in bad if b[1] and not b[2]]
@@ -1175,7 +1205,9 @@ def test_a_sweep_with_an_empty_pool_would_have_reported_success():
 
     MEASURED 2026-08-10: comparisons=192, attempted=0, divergences=0.
     """
-    ast, owc = G.witness(frozenset({'ts_negonly'}))
+    # `{'ts_negonly'}` until TK106 (2026-09-26) made its boolean tupleset a parse refusal;
+    # any config that compiles serves, since the point is the EMPTY store.
+    ast, owc = G.witness(frozenset({'ts_multitype'}))
     schema = unparse_schema_ast(ast)
     d = G.Diff(schema, owc)
     try:

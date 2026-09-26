@@ -284,79 +284,54 @@ def _neg_names(session, widx, row):
 
 
 # ---------------------------------------------------------------------------
-# The derived-tupleset TTU chain (demorgans_law_1 shape, §10 De Morgan groundwork)
+# demorgans_law_1's star-minus-concrete residue
 # ---------------------------------------------------------------------------
 
-def test_derived_tupleset_ttu_chain(load_fga_schema):
-    """The pinned TTU semantics (oracle ttu_leaf): parents come from STORED tupleset
-    tuples only, never computed membership. demorgans_law_1's derived tuplesets
-    (non_labels, matchable_conds, matched_roles) have no Direct restrictions, so no
-    tuple can ever be stored on them -- their dependent TTUs are constantly empty,
-    exactly as the oracle answers. The residue algebra still drives non_labels /
-    matchable_conds."""
+def test_demorgans_law_1_star_minus_concrete_residue(load_fga_schema):
+    """`non_labels = _all_attrs but not labels`: the residue algebra over a star minus a
+    concrete member.
+
+    Until 2026-09-26 this was `test_derived_tupleset_ttu_chain`, which also drove the
+    fixture's `from` chain (`unmatchable_conds: required_by from non_labels` and two more)
+    and pinned it CONSTANTLY EMPTY: no tuple can be stored on a tupleset with no Direct
+    restriction, so `from` found no parent even when `non_labels` had computed members.
+    That silent emptiness is what TK106 (user decision) refuses: a non-direct tupleset is
+    now a parse refusal, the chain was trimmed from the fixture, and the refusal is pinned
+    in `tests/test_tupleset_must_be_direct.py`."""
     session, widx, proc, write = build(load_fga_schema('demorgans_law_1.fga'))
 
     write('add', ('...', 'attr', '*', '_all_attrs', 'doc', 'd'))
     write('add', ('...', 'attr', 'a1', 'labels', 'doc', 'd'))
-    write('add', ('...', 'cond', 'c1', 'required_by', 'attr', 'a1'))
-    write('add', ('...', 'cond', 'c2', 'required_by', 'attr', 'a2'))
-    write('add', ('...', 'cond', '*', '_all_conds', 'doc', 'd'))
 
     # non_labels(d): all attrs but a1 (star-minus-concrete residue)
     assert proc.derived_check('doc', 'non_labels', 'd', ('...', 'attr', 'a2')) is True
     assert proc.derived_check('doc', 'non_labels', 'd', ('...', 'attr', 'a1')) is False
-
-    # unmatchable_conds(d) = required_by from non_labels: no STORED non_labels tuple
-    # can exist (no restrictions) => empty, even though a2 is a computed member
-    assert proc.derived_check('doc', 'unmatchable_conds', 'd', ('...', 'cond', 'c2')) is False
-    assert proc.derived_check('doc', 'unmatchable_conds', 'd', ('...', 'cond', 'c1')) is False
-
-    # matchable_conds(d) = all conds but unmatchable = the star, for everyone
-    for name in ('c1', 'c2', 'ghost'):
-        assert proc.derived_check('doc', 'matchable_conds', 'd', ('...', 'cond', name)) is True
-    assert proc.derived_check('doc', 'matchable_conds', 'd', ('...', 'cond', '*')) is True
-
-    # matched_roles / matched_users: TTUs over storable-tuple-less tuplesets => empty
-    write('add', ('...', 'role', 'r1', 'assigned', 'cond', 'c1'))
-    write('add', ('...', 'user', 'u1', 'granted', 'role', 'r1'))
-    assert proc.derived_check('doc', 'matched_roles', 'd', ('...', 'role', 'r1')) is False
-    assert proc.derived_check('doc', 'matched_users', 'd', ('...', 'user', 'u1')) is False
+    assert proc.derived_check('doc', 'non_labels', 'd', ('...', 'attr', 'ghost')) is True
 
     proc.audit_fixpoint()
     session.close()
 
 
-def test_derived_tupleset_ttu_with_stored_tuples():
-    """A derived tupleset WITH Direct restrictions: stored tuples (routed onto its
-    leaves) are the TTU parents; membership of the parent in the tupleset does not
-    gate them (stored-tuple semantics), and target membership is evaluated through
-    the derived target's edge+residue state."""
-    session, widx, proc, write = build('''
-        type user
-        type folder
-          relations
-            define banned: [folder]
-            define linked: [folder] but not banned
-            define owner: [user]
-            define reachable_owner: owner from linked
-        type doc
-    ''')
-    # f2 is linked from f1 (stored tuple), and alice owns f2
-    write('add', ('...', 'folder', 'f2', 'linked', 'folder', 'f1'))
-    write('add', ('...', 'user', 'alice', 'owner', 'folder', 'f2'))
-    assert proc.derived_check('folder', 'reachable_owner', 'f1', ('...', 'user', 'alice')) is True
+def test_derived_tupleset_with_stored_tuples_is_refused():
+    """A derived tupleset WITH Direct restrictions (`linked: [folder] but not banned`).
 
-    # banning f2 flips linked's membership but NOT the stored tuple: parents are
-    # stored tuples, so alice remains a reachable_owner (oracle semantics)
-    write('add', ('...', 'folder', 'f2', 'banned', 'folder', 'f1'))
-    assert proc.derived_check('folder', 'reachable_owner', 'f1', ('...', 'user', 'alice')) is True
-
-    # removing the stored tuple retracts the parent
-    write('remove', ('...', 'folder', 'f2', 'linked', 'folder', 'f1'))
-    assert proc.derived_check('folder', 'reachable_owner', 'f1', ('...', 'user', 'alice')) is False
-
-    proc.audit_fixpoint()
-    session.close()
+    Until 2026-09-26 this was `test_derived_tupleset_ttu_with_stored_tuples`, and it
+    pinned that banning f2 does NOT stop `owner from linked` walking the stored f2 link:
+    `from` reads stored tuples, so the `but not banned` arm was silently ignored. That is
+    exactly the behaviour TK106 (user decision, as OpenFGA does) refuses, so the schema is
+    now a parse refusal. The behaviour-preserving rewrite (`linked_link: [folder]`, used
+    by the `from`) is pinned in `tests/test_tupleset_must_be_direct.py`."""
+    with pytest.raises(ValueError, match='tupleset must be direct'):
+        build('''
+            type user
+            type folder
+              relations
+                define banned: [folder]
+                define linked: [folder] but not banned
+                define owner: [user]
+                define reachable_owner: owner from linked
+            type doc
+        ''')
 
 
 # ---------------------------------------------------------------------------

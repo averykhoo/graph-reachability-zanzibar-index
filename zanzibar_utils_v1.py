@@ -1,4 +1,5 @@
 import re
+import warnings
 from dataclasses import dataclass, field, replace
 from functools import reduce
 from types import EllipsisType
@@ -861,6 +862,7 @@ def parse_schema_ast(schema: str) -> SchemaAST:
     """
     ast = _parse_schema_ast_unchecked(schema)
     _validate_ast_consistency(ast)
+    _validate_tuplesets_direct(ast)
     return ast
 
 
@@ -1062,6 +1064,42 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
                 stack.append(iter(sorted(deps[nxt])))
 
 
+def _validate_tuplesets_direct(ast: SchemaAST) -> None:
+    """A relation used as a TTU tupleset (the ``parent`` in ``viewer from parent``) must be
+    DIRECT-ONLY: ``[folder]``, ``[folder, doc]`` or ``[folder] or [doc]`` (TK106, user
+    decision 2026-09-26). OpenFGA refuses the rest: "the relation is referenced in at least
+    one tupleset and thus must be a direct relation"
+    (`pkg/typesystem/typesystem.go::isUsersetRewriteValid`).
+
+    ``from`` walks the STORED tuples of the tupleset, never its computed membership. So a
+    boolean arm (``[folder] but not blocked``), a computed arm (``[folder] or other``) or
+    a nested ``from`` on a tupleset was silently ignored by every ``from`` that used it.
+    ``parent: [folder] but not [doc]`` even let a doc link be written only because it was
+    excluded. Before this, the graph refused the untainted form at compile time and the
+    set engine degraded past it, and nothing refused the tainted form. The behaviour-
+    preserving rewrite is ``parent_link: [<every type parent names>]``, used by the ``from``.
+
+    Wildcard restrictions (``[folder:*]``, star tuplesets, ASK-2) stay legal here. Userset
+    restrictions (``[folder#member]``) are refused by the graph compiler
+    (`_validate_ttu_tuplesets`), not by this parse-time check.
+
+    Every message contains ``tupleset must be direct``; `tests/genswarm.py::
+    REJECTION_WITNESSES` matches on it. The oracle carries an independent twin
+    (`tests/oracle.py::_validate_tuplesets_direct`)."""
+    for (object_type, relation), expr in ast.items():
+        for ttu in _iter_ttus(expr):
+            ts_key = (object_type, ttu.tupleset_rel)
+            if ts_key in ast and not _directs_only(ast[ts_key]):
+                raise ValueError(
+                    f'{object_type}#{relation}: {ttu.target_rel!r} from '
+                    f'{ttu.tupleset_rel!r}: a tupleset must be direct (only type '
+                    f'restrictions such as [folder] or [folder, doc]), but '
+                    f'{object_type}#{ttu.tupleset_rel} has computed, "from", "and" or '
+                    f'"but not" arms that "from" would silently ignore, because it '
+                    f'walks stored tuples only. Store the links on a direct relation '
+                    f'(parent_link: [...]) and use that in the "from" (OpenFGA rule)')
+
+
 def _iter_directs(expr: Expr):
     if isinstance(expr, Direct):
         yield expr
@@ -1116,10 +1154,58 @@ def derive_schema_info(
                     if r.wildcard and r.predicate == '...':
                         subject_wildcard_shapes.add((r.type, ttu.target_rel))
 
+    _warn_unproven_extensions(ast, object_wildcard_shapes)
     return SchemaInfo(
         subject_wildcard_shapes=frozenset(subject_wildcard_shapes),
         object_wildcard_shapes=frozenset(object_wildcard_shapes),
     )
+
+
+class UnprovenExtensionWarning(UserWarning):
+    """A schema uses a wildcard extension beyond OpenFGA that the formal proofs do not cover.
+
+    The three extensions (wildcard usersets ``[T:*#p]``, star tuplesets, object wildcards)
+    are excluded from the headline equivalence theorems' premise
+    (``FullScope.lean::W4Fragment`` fields ``wsBare`` / ``bareStar`` / ``ttuStarFree``), so
+    backend agreement on them rests on the differential tests alone. Kept by user decision
+    2026-09-26 (task ``ASK-2``); this warning is how a caller learns that. Silence it with
+    ``warnings.filterwarnings('ignore', category=UnprovenExtensionWarning)``."""
+
+
+def unproven_extensions(ast: SchemaAST,
+                        object_wildcard_shapes=frozenset()) -> list[str]:
+    """Human-readable list of the ``UnprovenExtensionWarning`` features this schema admits
+    (empty for a schema inside OpenFGA's wildcard surface; a bare ``[T:*]`` is standard)."""
+    found: list[str] = []
+    ws = sorted(wildcard_userset_restriction_shapes(ast))
+    if ws:
+        found.append('wildcard usersets ' + ', '.join(f'[{t}:*#{p}]' for t, p in ws))
+    star_ts: set[tuple[str, str]] = set()
+    for (object_type, _rel), expr in ast.items():
+        for ttu in _iter_ttus(expr):
+            ts_expr = ast.get((object_type, ttu.tupleset_rel))
+            if ts_expr is None:
+                continue
+            for direct in _iter_directs(ts_expr):
+                if any(r.wildcard and r.predicate == '...' for r in direct.restrictions):
+                    star_ts.add((object_type, ttu.tupleset_rel))
+    if star_ts:
+        found.append('star tuplesets ' + ', '.join(f'{t}#{r}' for t, r in sorted(star_ts)))
+    if object_wildcard_shapes:
+        found.append('object wildcards ' + ', '.join(
+            f'{t}:*#{r}' for t, r in sorted(object_wildcard_shapes)))
+    return found
+
+
+def _warn_unproven_extensions(ast: SchemaAST, object_wildcard_shapes) -> None:
+    found = unproven_extensions(ast, object_wildcard_shapes)
+    if found:
+        warnings.warn(
+            'UNPROVEN: this schema uses wildcard extensions beyond OpenFGA ('
+            + '; '.join(found) + '). They are not covered by the formal equivalence '
+            'proofs (formal/, W4Fragment); graph-index / set-engine agreement on them is '
+            'established by tests only. See task ASK-2.',
+            UnprovenExtensionWarning, stacklevel=3)
 
 
 def _restriction_pattern(r: Restriction, object_type: str,
@@ -2357,6 +2443,7 @@ def parse_openfga_json(model) -> SchemaAST:
     # compiled leaf families open through JSON metadata.
     _validate_ast_references(ast)
     _validate_ast_consistency(ast)
+    _validate_tuplesets_direct(ast)
     return ast
 
 

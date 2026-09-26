@@ -98,22 +98,27 @@ _BASE_DIRECTS = [
 # The bodies below are Direct-leaf-only on purpose: ``compile_ruleset`` REFUSES a tupleset
 # carrying computed/rewritten arms ("Zanzibar tupleset semantics read stored tuples only")
 # and refuses userset restrictions on a tupleset outright, so drawing those would just
-# measure the rejection path. Booleans, multi-type and subject-wildcard leaves are all
-# admissible and are all drawn.
+# measure the rejection path. Multi-type, subject-wildcard and union-of-Directs leaves are
+# admissible and are all drawn. (Until TK106 this also said "Booleans"; see below.)
 _R_DOC = Restriction('doc', '...', False)
 _R_FOLDER = Restriction('folder', '...', False)
 _R_DOC_STAR = Restriction('doc', '...', True)
 
-# ⚠ THE NEG-ONLY TRAP, recorded because a reviewer cannot see it by eye. A subtrahend
-# whose type ALSO occurs in the base -- e.g. ``Exclusion(Direct([doc, folder]),
-# Direct([doc]))`` -- *looks* like a neg-only arm, compiles, reads correctly in review,
-# and yields ``parent`` ≡ ∅: the same raw tuple routes to both arms and cancels. That is a
-# "compiled but never driven" cell (`docs/sabotage-procedure.md`, the 2026-07-28 row), and
-# the design's first witness builder shipped exactly it and found ZERO divergences. Every
-# ``negonly-*`` body below has base types DISJOINT from subtrahend types, which is
-# asserted mechanically -- and independently of the production ``_member_types`` walk,
-# which is itself the seat of RC1 -- by
-# ``test_negonly_tupleset_bodies_really_have_a_type_only_in_the_negative_arm``.
+# TK106 (2026-09-26, user decision): THREE BODIES LEFT THIS TABLE -- 'intersection'
+# (``Intersection((Direct([doc, folder]), Direct([doc])))``), 'negonly-multitype'
+# (``Exclusion(Direct([folder]), Direct([doc]))``, RC1's shape) and 'negonly-star'
+# (``Exclusion(Direct([doc:*]), Direct([folder]))``, RC2's shape). A relation used as a TTU
+# tupleset must now be DIRECT-ONLY (a Direct, or a Union of Directs), and both checked
+# parsers refuse the rest with ``tupleset must be direct``
+# (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+# `tests/oracle.py::_validate_tuplesets_direct`) -- so ``SetEngine``, ``parse_openfga_schema``
+# and ``ParityEngine`` refuse them too, and drawing them would only measure the refusal. The
+# refusal itself is pinned elsewhere (`tests/genswarm.py::REJECTION_WITNESSES`, message
+# ``TUPLESET_MUST_BE_DIRECT``), not here. Reason: ``from`` walks STORED tuples only, so a
+# boolean/computed arm on a tupleset was silently ignored; RC1 and RC2 are unwritable now.
+# Consequently the tupleset axis has NO tainted body any more, which is correct by design.
+# (The pre-TK106 "NEG-ONLY TRAP" note and its guard
+# ``test_negonly_tupleset_bodies_really_have_a_type_only_in_the_negative_arm`` went with them.)
 _TUPLESET_BODIES = {
     # untainted (plain `parent`): the pre-2026-08-10 behaviour, kept as a stratum so the
     # new grammar cannot regress what the old one reached.
@@ -121,15 +126,12 @@ _TUPLESET_BODIES = {
     'multitype': Direct((_R_DOC, _R_FOLDER)),
     'wildcard': Direct((_R_DOC, _R_DOC_STAR)),
     'multitype-wildcard': Direct((_R_DOC, _R_FOLDER, _R_DOC_STAR)),
-    # tainted (`parent` becomes a DERIVED predicate with storage leaves)
+    # A Union of Directs -- still an AST ``Union``, so it drives the parser/unparser's Union
+    # path, but it compiles UNTAINTED, exactly like ``[doc, folder]``: probed 2026-09-26,
+    # ``parent: [doc] or [folder]`` -> ``compute_taint`` = {} and ``CompiledBooleans.plans``
+    # = {} (also `docs/tk106-triage-2026-09-26.md` §3). Until 2026-09-26 this comment claimed it
+    # was tainted ("a DERIVED predicate with storage leaves"); that was false.
     'union': Union((Direct((_R_DOC,)), Direct((_R_FOLDER,)))),
-    'intersection': Intersection((Direct((_R_DOC, _R_FOLDER)), Direct((_R_DOC,)))),
-    # RC1's shape: `doc` occurs ONLY in the subtrahend, so `_member_types`' `walk(e.base)`
-    # drops it from the compiled `parent_types` and the TTU stops walking a stored
-    # `doc:dX parent doc:dY` tuple.
-    'negonly-multitype': Exclusion(Direct((_R_FOLDER,)), Direct((_R_DOC,))),
-    # RC2's shape: a STORED `doc:*` parent on a DERIVED tupleset relation.
-    'negonly-star': Exclusion(Direct((_R_DOC_STAR,)), Direct((_R_FOLDER,))),
 }
 _TUPLESET_KINDS = sorted(_TUPLESET_BODIES)
 
@@ -232,7 +234,9 @@ def schema_asts(draw, allow_usersets: bool = True, tupleset_kind: str | None = N
     ``tupleset_kind`` (item (c), 2026-08-10) selects the body of ``parent`` -- the tupleset
     of EVERY generated TTU -- from ``_TUPLESET_BODIES`` instead of the pre-2026-08-10
     hardcoded ``[doc]``. Left as ``None`` it is DRAWN, so the campaign fuzzes multi-type,
-    subject-wildcard, boolean and neg-only-arm tuplesets. The parameter exists so a caller
+    subject-wildcard and union-of-Directs tuplesets (boolean and neg-only-arm tuplesets
+    were drawn too until TK106, 2026-09-26, which refuses them at parse time -- see the
+    note above ``_TUPLESET_BODIES``). The parameter exists so a caller
     can pin one cell deterministically (see the pins below); it must never be used to
     narrow the campaign back to ``'plain'``.
 
@@ -402,46 +406,15 @@ def _ts_probe_schema(kind: str, negated: bool = False) -> str:
     return unparse_schema_ast(ast)
 
 
-def test_negonly_tupleset_bodies_really_have_a_type_only_in_the_negative_arm():
-    """★ THE ANTI-VACUITY GUARD FOR THE NEG-ONLY CELL.
-
-    Property: for every ``negonly-*`` tupleset body the campaign can draw, some entity
-    type occurs in the SUBTRAHEND and in no base arm. That is what makes it the RC1 shape;
-    a body whose subtrahend type also occurs in the base compiles, reads correctly in
-    review, and yields ``parent`` ≡ ∅ -- a compiled-but-never-driven cell, and the
-    documented first-draft failure of the 2026-08-10 design (its sweep found ZERO
-    divergences until the construction was corrected).
-
-    The check is derived from ``_TUPLESET_BODIES`` itself, so a new body cannot be added
-    without being covered, and it walks the AST with the LOCAL ``_restriction_types``
-    rather than the production ``_member_types`` -- which takes ``walk(e.base)`` only and
-    is RC1 itself. An instrument that shares its subject's defect measures nothing.
-
-    Sabotage (observed 2026-08-10): changing `negonly-multitype` to the plausible-looking
-    ``Exclusion(Direct((_R_DOC, _R_FOLDER)), Direct((_R_DOC,)))`` -- which still *is* an
-    exclusion with a subtrahend, still compiles, still drives an Exclusion plan node --
-    fires this test:
-        AssertionError: tupleset body 'negonly-multitype' has NO type that occurs only in
-        the negative arm (base={'doc', 'folder'} neg={'doc'}); it compiles and drives
-        `parent` = empty
-    """
-    negonly = [k for k in _TUPLESET_KINDS if k.startswith('negonly')]
-    assert negonly, 'the neg-only tupleset cell disappeared from _TUPLESET_BODIES'
-    for kind in negonly:
-        body = _TUPLESET_BODIES[kind]
-        assert isinstance(body, Exclusion), f'{kind} is not an Exclusion'
-        base = _restriction_types(body.base)
-        neg = _restriction_types(body.subtract)
-        assert neg - base, (
-            f"tupleset body {kind!r} has NO type that occurs only in the negative arm "
-            f"(base={set(base)} neg={set(neg)}); it compiles and drives `parent` = empty")
-        # ...and the neg-only type must be WRITABLE as a stored parent, or the cell is
-        # still never driven. The pool is the thing that drives it.
-        pool = _op_pool({('doc', 'parent'): body})
-        for t in sorted(neg - base):
-            assert any(raw[1] == t and raw[3] == 'parent' for raw in pool), (
-                f'{kind}: no candidate write carries the neg-only type {t!r} onto '
-                f'`parent`, so the stored-parent path is never exercised')
+# TK106 (2026-09-26): ``test_negonly_tupleset_bodies_really_have_a_type_only_in_the_negative_arm``
+# was DELETED here. It was the anti-vacuity guard for the ``negonly-*`` tupleset bodies (some
+# type occurs only in the subtrahend -- RC1's shape -- and is writable as a stored parent).
+# Its subject no longer exists: a boolean tupleset is refused at parse time
+# (`zanzibar_utils_v1.py::_validate_tuplesets_direct`), both ``negonly-*`` bodies left
+# ``_TUPLESET_BODIES``, and the test would only have asserted that the cell is gone. Its
+# 2026-08-10 sabotage record (``negonly-multitype`` -> ``Exclusion(Direct([doc, folder]),
+# Direct([doc]))`` fired ``tupleset body 'negonly-multitype' has NO type that occurs only in
+# the negative arm``) is history; see git for the full text.
 
 
 def test_op_pool_is_schema_valid_and_co_varies_with_the_grid():
@@ -451,7 +424,10 @@ def test_op_pool_is_schema_valid_and_co_varies_with_the_grid():
     (1) ADMISSION -- every candidate ``_op_pool`` emits is accepted by the set engine,
         which validates restrictions strictly (the graph admits a restriction-invalid
         tuple as a silent no-op). Measured 2026-08-10: 3550/3550 = 100.0 % over the
-        deterministic sweep, and zero refusals over every tupleset kind here.
+        deterministic sweep, and zero refusals over every tupleset kind here. Re-measured
+        2026-09-26 after TK106 trimmed the tupleset table to 5 bodies: 3730/3730 =
+        100.0 % (one ``SetEngine`` per ``_sweep_schema_asts`` draw, every ``_op_pool``
+        candidate added in order).
 
     (2) UNIVERSE -- every entity a candidate writes to is an entity the CHECK GRID
         queries. A pool and a grid that disagree on the universe produce a corpus that is
@@ -467,13 +443,18 @@ def test_op_pool_is_schema_valid_and_co_varies_with_the_grid():
     mentions. Measured 2026-08-10 with the untyped fallback restored:
         1 passed        <- the admission-only version of this test, GREEN over the defect
     The damage is silent inertness, not rejection, which is strictly harder to notice --
-    so the guard has to be the universe check, and it is:
-        AssertionError: tupleset kind 'intersection': 4/14 candidates write to entities
-        the check grid never queries, so they are admitted and inert:
+    so the guard has to be the universe check, and it is. RE-OBSERVED 2026-09-26 after
+    TK106 removed the 'intersection' body the original record named (same sabotage, the
+    untyped fallback above restored in ``_op_pool``; ``1 failed``):
+        AssertionError: tupleset kind 'multitype': 4/14 candidates write to entities the
+        check grid never queries, so they are admitted and inert:
         [('...', 'folder', 'd1', 'parent', 'doc', 'd1'),
          ('...', 'folder', 'd1', 'parent', 'doc', 'd2'),
          ('...', 'folder', 'd2', 'parent', 'doc', 'd1'),
          ('...', 'folder', 'd2', 'parent', 'doc', 'd2')]
+    Pre-TK106 history (observed 2026-08-10; the kind no longer exists):
+        AssertionError: tupleset kind 'intersection': 4/14 candidates write to entities
+        the check grid never queries, so they are admitted and inert: [same 4 tuples]
     """
     for kind in _TUPLESET_KINDS:
         schema = _ts_probe_schema(kind)
@@ -511,7 +492,11 @@ def test_every_tupleset_kind_is_reachable_and_the_grid_queries_it():
 
     The kind list is DERIVED from the table (``_TUPLESET_KINDS = sorted(...)``), so adding
     a body without wiring it into the draw is a red test rather than a silent gap."""
-    assert len(_TUPLESET_KINDS) >= 8, _TUPLESET_KINDS
+    # Floor LOWERED 8 -> 5 deliberately on 2026-09-26 (TK106, user decision): the three
+    # non-direct bodies ('intersection', 'negonly-multitype', 'negonly-star') are refused at
+    # parse time and left ``_TUPLESET_BODIES``; the five direct-only bodies remain. Zero
+    # headroom on purpose -- dropping another body must be a reviewed edit here too.
+    assert len(_TUPLESET_KINDS) >= 5, _TUPLESET_KINDS
     for kind in _TUPLESET_KINDS:
         schema = _ts_probe_schema(kind)
         ast = parse_schema_ast(schema)
@@ -570,7 +555,42 @@ def test_every_tupleset_kind_is_driven_against_the_oracle():
     follows recorded that its prototype sweep could NOT reproduce that direction
     (`docs/design/generator-coverage/README.md` §6.7) -- driving both polarities as
     SEPARATE schemas is what surfaces it. When the fix lands this test goes green with no
-    edit; if it needs an edit to go green, the fix is wrong."""
+    edit; if it needs an edit to go green, the fix is wrong.
+
+    ⚠ TK106 (2026-09-26): everything above from "Measured 2026-08-10" down is PRE-TK106
+    HISTORY. The two bodies whose cells were red -- ``negonly-multitype`` (RC1) and
+    ``negonly-star`` (RC2) -- are refused at parse time now (a tupleset must be direct), so
+    those four cells no longer exist and this test no longer pins RC1 or RC2. It now drives
+    5 bodies x 2 polarities = 10 cells, ALL DRIVEN (none skipped as out-of-fragment;
+    probed 2026-09-26). ``driven >= 2 * len(_TUPLESET_KINDS)`` derives, so it adapted.
+    Re-observed sabotages, 2026-09-26, both applied IN-PROCESS by monkeypatch (the subjects
+    live in files outside this change):
+
+    * RED -- graph-only: ``zanzibar_utils_v1.derive_schema_info`` (the module global
+      ``parse_openfga_schema`` reads; the set engine's own import untouched) returns its
+      ``SchemaInfo`` minus the star-tupleset through-shapes (``(S, target_rel)`` for an
+      ``[S:*]`` on a tupleset) -- ``1 failed``:
+          AssertionError: the generated tupleset grammar DRIVES a backend divergence on
+          [('multitype-wildcard', 'negated TTU'), ('multitype-wildcard', 'positive TTU'),
+           ('wildcard', 'negated TTU'), ('wildcard', 'positive TTU')]:
+            wildcard / positive TTU: (('...', 'doc', '*', 'parent', 'doc', 'd1'),
+                                      ('...', 'user', 'u1', 'r0', 'doc', 'd1'))
+               accept/reject disagreement on add ('...', 'doc', '*', 'parent', 'doc', 'd1'):
+               {'graph': False, 'set:py': True, 'set:roaring': True}
+          [the other three rows carry the same accept/reject line]
+      The other 6 cells (multitype, plain, union x both polarities) stay green.
+    * ⚠ GREEN -- the RC2 regression re-introduced at its live processor site:
+      ``DeltaProcessor._expand_tupleset_parents`` ignoring ``star_types`` (a stored ``T:*``
+      parent no longer expanded into instances) -> ``1 passed``. Every remaining probe
+      cell has an untainted tupleset AND an untainted TTU target (``r0: [user]``), so the
+      TTU leaf is rule-routed through the star bridge and never reaches
+      ``_EvalContext.ttu_check``. This test does NOT guard that processor branch any more;
+      RC2's surviving pins are the direct-tupleset rewrites in
+      ``tests/test_ttu_tupleset_parent_types.py`` (TK106 triage §2/§19).
+    * REASONED, not sabotaged: the probe grants ``r0`` only on ``doc:d1``, so a stored
+      ``folder:f1 parent doc:d1`` answers ``r1`` False on every backend whether or not the
+      graph walks it -- the ``folder`` arm of multitype / multitype-wildcard / union is
+      driven here but not discriminated."""
     grant = ('...', 'user', 'u1', 'r0', 'doc', 'd1')       # makes d1 an r0-member
     base = ('...', 'user', 'u1', 'r1', 'doc', 'd1')        # the negated TTU's base arm
     diverged, driven, checked = {}, 0, 0
@@ -638,7 +658,8 @@ def _sweep_schema_asts(n=_SWEEP_N, seeds=_SWEEP_SEEDS):
 
 def test_schema_asts_draws_the_whole_tupleset_grammar():
     """The DRAW, not just the table: the sweep must realise EVERY body in
-    ``_TUPLESET_BODIES``, including a boolean one and a genuine neg-only one. A future
+    ``_TUPLESET_BODIES`` (until TK106, 2026-09-26, that included a boolean one and a
+    genuine neg-only one; both are refused at parse time now). A future
     edit that pins the tupleset back to a single body -- the literal state of the tree
     before 2026-08-10 -- fires here.
 
@@ -652,6 +673,13 @@ def test_schema_asts_draws_the_whole_tupleset_grammar():
         AssertionError: 180 draws realised only 1 of the 8 tupleset bodies; missing
         ['intersection', 'multitype', 'multitype-wildcard', 'negonly-multitype',
         'negonly-star', 'union', 'wildcard'] -- the TTU tupleset is hardcoded again
+    That is pre-TK106 history (8 bodies). RE-OBSERVED 2026-09-26 on the 5-body table, same
+    sabotage, ``1 failed``:
+        AssertionError: 180 draws realised only 1 of the 5 tupleset bodies; missing
+        ['multitype', 'multitype-wildcard', 'union', 'wildcard'] -- the TTU tupleset is
+        hardcoded again
+    Measured 2026-09-26, the unsabotaged sweep draws every body: multitype 32,
+    multitype-wildcard 37, plain 44, union 35, wildcard 32 (of 180).
     """
     seen = {}
     for ast in _sweep_schema_asts():
@@ -664,12 +692,14 @@ def test_schema_asts_draws_the_whole_tupleset_grammar():
         f'{_SWEEP_N * len(_SWEEP_SEEDS)} draws realised only {len(seen)} of the '
         f'{len(_TUPLESET_KINDS)} tupleset bodies; missing {missing} -- the TTU tupleset '
         f'is hardcoded again')
-    assert any(isinstance(_TUPLESET_BODIES[k], (Union, Intersection, Exclusion))
-               for k in seen), 'no BOOLEAN tupleset body was drawn'
-    assert any(isinstance(_TUPLESET_BODIES[k], Exclusion)
-               and (_restriction_types(_TUPLESET_BODIES[k].subtract)
-                    - _restriction_types(_TUPLESET_BODIES[k].base))
-               for k in seen), 'no NEG-ONLY tupleset body was drawn'
+    # TK106 (2026-09-26): two asserts were DROPPED here -- 'no BOOLEAN tupleset body was
+    # drawn' (any Union/Intersection/Exclusion body in ``seen``) and 'no NEG-ONLY tupleset
+    # body was drawn' (an Exclusion whose subtrahend has a type absent from its base). A
+    # boolean or neg-only tupleset is now refused at parse time
+    # (`zanzibar_utils_v1.py::_validate_tuplesets_direct`), so the NEG-ONLY assert would be
+    # unsatisfiable, and the BOOLEAN one's intent (a TAINTED tupleset was drawn) is gone:
+    # the one remaining ``Union`` body, 'union', compiles untainted. The derived ``missing``
+    # check above still covers every body the table holds.
 
 
 # The floor's provenance: measured 2026-08-10 at this commit -- 172/200 = 86 % of drawn
@@ -678,6 +708,12 @@ def test_schema_asts_draws_the_whole_tupleset_grammar():
 # The floor is set well below the measurement so ordinary drift is not flaky, but a
 # change that pushes most draws out of the graph fragment (which would make the 4-way
 # campaign quietly 3-way, and the graph-only properties quietly filtered) is red.
+# RE-MEASURED 2026-09-26 after TK106 trimmed ``_TUPLESET_BODIES`` to 5 direct-only bodies:
+# 144/180 = 80.0 % over the deterministic sweep (was 158/180 = 88 %; the 200-draw
+# hypothesis figure above was not re-measured). Joins per body: plain 44/44, multitype
+# 32/32, union 35/35, multitype-wildcard 19/37, wildcard 14/32; all 36 drops are the same
+# decision-15 star-tupleset family. Pinning every draw to ``'wildcard'`` gives 49 %, so the
+# floor still fires on the narrowest weakening. Floor UNCHANGED at 60 %.
 _SCHEMA_ASTS_FOUR_WAY_FLOOR = 0.60
 
 
@@ -700,6 +736,14 @@ def test_schema_asts_four_way_rate():
         index (floor 60%); the campaign has drifted into fuzzing 3-way. Reasons:
         ["relation doc#r1: star tupleset [doc:*] on 'parent' derives the wildcard userset
         shape (doc, r0) over the derived relation doc#r0, ...", ...]
+    That is pre-TK106 history: ``'negonly-star'`` is refused at parse time since TK106.
+    RE-OBSERVED 2026-09-26 with the same edit on the remaining star-bearing body
+    (``tupleset_kind = 'wildcard'`` in ``_schema_ast``), ``1 failed``:
+        AssertionError: only 89/180 = 49% of generated schemas compile for the graph
+        index (floor 60%); the campaign has drifted into fuzzing 3-way. Reasons:
+        ["relation doc#r1: star tupleset [doc:*] on 'parent' derives the wildcard userset
+        shape (doc, r0) over the derived relation doc#r0, which needs symbolic composition
+        through residues (v1 scope hook; see spec-deviations)", ...]
     """
     joined, dropped, reasons = 0, 0, []
     for ast in _sweep_schema_asts():
@@ -1199,7 +1243,8 @@ class ParityMachine(RuleBasedStateMachine):
     That schema is RC1's shape ASSEMBLED BY THE GENERATOR, not transcribed from the bug
     report. Seeds 7/19/31/71 do not reach it and 53/97 do, so the stateful machine alone
     is a sample; ``test_every_tupleset_kind_is_driven_against_the_oracle`` is the
-    deterministic version of the same claim.
+    deterministic version of the same claim. (Pre-TK106 history: since 2026-09-26 that
+    Exclusion tupleset is refused at parse time and the generator can no longer draw it.)
 
     completeness gaps are now FIXED (the `processor._leaf_concretes` upos lift) and pinned:
     ``test_lookup_oracle.py::test_graph_from_chain_userset_through_boolean_ttu_arm``,

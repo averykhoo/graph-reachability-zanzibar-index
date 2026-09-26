@@ -2,7 +2,17 @@
 TTU tupleset parents that COMPILE-TIME metadata throws away: two live divergences.
 
 **★ BOTH CAUSES ARE NOW FIXED — RC1 on 2026-08-10 (``ed46e54``), RC2 on 2026-08-11 — and
-this module is GREEN. It stays as the regression pin for both.** Baseline for every
+this module is GREEN. It stays as the regression pin for both.**
+
+**★★ TK106 (2026-09-26, user decision): a tupleset must be DIRECT-ONLY, as in OpenFGA.**
+Both hand-minimised repros below used a BOOLEAN tupleset (RC1 ``[folder] but not [doc]``,
+RC2 ``[doc, doc:*] and gate``), and both are now parse refusals. RC1's shape is therefore
+unwritable and is pinned as a refusal (``test_rc1_shape_is_refused_by_every_backend``),
+with its CLASS pinned on the path that stays live (a multi-type direct tupleset under a
+derived target). RC2's fix site is shared with that live path, so its pins moved to a
+direct ``[folder, doc, doc:*]`` tupleset and were re-sabotaged there (the RC2 section
+comment). Everything below this paragraph is the record as it stood; the schemas it quotes
+are the pre-TK106 ones. Baseline for every
 "measured" number below: commit ``e136c8c`` (``git show e136c8c:<file>``), 2026-08-10, with
 the conda env under ``C:/Users/user/anaconda3/envs/graph-reachability-zanzibar-index``;
 those numbers describe the BUGS, not the tree.
@@ -18,7 +28,8 @@ tupleset parent *is* expanded and pins nothing about the expansion staying *live
 cascade that interns or GCs nodes. Measured 2026-08-20b: freezing the expansion (memoizing
 ``processor.py::DeltaProcessor.tupleset_parents``, and separately ``::derived_stored_parents``
 and ``::_instances_of_type``) leaves **all 12 tests here green** — and so are
-``test_matrix.py`` (``24 passed``) and ``test_lookup_oracle.py``. The only pin for liveness
+``test_matrix.py`` (``24 passed``) and ``test_lookup_oracle.py`` (2026-08-20b, before
+TK106 changed this module's test count). The only pin for liveness
 is ``test_stored_cache_scope.py::test_star_expansion_is_not_frozen_by_the_memo``. The same
 limitation was recorded for a different fix in the ``## 2026-07-26`` entry of
 ``docs/spec-deviations.md`` ("those write in one batch and reconcile once") and was not
@@ -254,8 +265,17 @@ def _assert_parity(oracle, graph, sets, expected_oracle, what):
 
 
 # ---------------------------------------------------------------------------
-# RC1 fixtures — the tupleset relation's negative arm carries the parent type
+# RC1 — the shape is REFUSED since TK106 (2026-09-26)
 # ---------------------------------------------------------------------------
+#
+# RC1 needed a type that reaches the tupleset only through a `but not` arm. TK106 (user
+# decision, as OpenFGA does) made every non-direct tupleset a parse refusal, so the shape
+# cannot be written and the class is structurally impossible: `_member_types` now only
+# ever walks a Direct or a union of Directs. The six RC1 tests that stood here (two pins,
+# four controls; `git show 9d1bedf:tests/test_ttu_tupleset_parent_types.py`) are replaced
+# by (a) a refusal pin over every RC1 schema they used, and (b) the RC1 CLASS on the path
+# that is still live: `parent_types` breadth on a MULTI-TYPE direct tupleset under a
+# DERIVED target, where a missing type would drop stored parents exactly as RC1 did.
 
 _RC1_HEAD = """model
   schema 1.1
@@ -274,31 +294,54 @@ type doc
 """
 _RC1_ACCESS = '    define access: [user] but not viewer from parent\n'
 
-# the divergent schema: `doc` reachable ONLY through the subtrahend
-_RC1_SCHEMA = _RC1_HEAD.format(parent='[folder] but not [doc]')
-_RC1_SCHEMA_NEGATED_TTU = _RC1_SCHEMA + _RC1_ACCESS
+_RC1_REFUSED = {
+    'rc1': _RC1_HEAD.format(parent='[folder] but not [doc]'),
+    'rc1-negated-ttu': _RC1_HEAD.format(parent='[folder] but not [doc]') + _RC1_ACCESS,
+    'rc1-control-type-in-both-arms': _RC1_HEAD.format(parent='[folder, doc] but not [doc]'),
+    'rc1-control-computed-right-arm': _RC1_HEAD.format(
+        parent='[folder, doc] but not blocked').replace(
+            '    define parent:', '    define blocked: [doc]\n    define parent:'),
+}
 
-# control schema: the SAME composition with `doc` in BOTH arms
-_RC1_CONTROL_SCHEMA = _RC1_HEAD.format(parent='[folder, doc] but not [doc]')
-_RC1_CONTROL_SCHEMA_NEGATED_TTU = _RC1_CONTROL_SCHEMA + _RC1_ACCESS
 
-# control schema: an Exclusion whose right arm is a COMPUTED relation, not a Direct
-_RC1_COMPUTED_ARM_SCHEMA = """model
+@pytest.mark.parametrize('name', sorted(_RC1_REFUSED))
+def test_rc1_shape_is_refused_by_every_backend(name):
+    """★ RC1's pin since TK106 (2026-09-26): the shape is refused, by the graph, both set
+    engines and the oracle alike (`_Gate` builds all of them), so it cannot be stored.
+    Before TK106 the graph compiled it and, while RC1 was live, answered
+    `inherited` False and the negated `access` True (a fail-open) where the other three
+    backends said True / False."""
+    from tests.oracle import parse_schema_ast as oracle_parse
+    from zanzibar_utils_v1 import parse_schema_ast
+    schema = _RC1_REFUSED[name]
+    for build in (parse_schema_ast, oracle_parse,
+                  lambda s: _Gate(s, _NO_OBJECT_WILDCARDS, _RC1_POOL)):
+        with pytest.raises(ValueError, match='tupleset must be direct'):
+            build(schema)
+
+
+# The RC1 class on the live path. Both viewers are DERIVED, so `inherited` / `access`
+# compile to `PDerivedTTU` with `parent_types` ('doc', 'folder'); dropping 'doc' there is
+# RC1's mechanism (and `test_compile_refuses_parent_types_narrower_than_admission` refuses
+# it at compile time).
+_RC1_LIVE_SCHEMA = """model
   schema 1.1
 
 type user
 
 type folder
   relations
-    define viewer: [user]
+    define banned: [user]
+    define viewer: [user] but not banned
 
 type doc
   relations
-    define blocked: [doc]
-    define parent: [folder, doc] but not blocked
-    define viewer: [user]
+    define banned: [user]
+    define parent: [folder, doc]
+    define viewer: [user] but not banned
     define inherited: viewer from parent
-""" + _RC1_ACCESS
+"""
+_RC1_LIVE_SCHEMA_NEGATED_TTU = _RC1_LIVE_SCHEMA + _RC1_ACCESS
 
 _RC1_POOL = [
     ('...', 'doc', 'd2', 'parent', 'doc', 'd1'),
@@ -316,185 +359,104 @@ _RC1_INHERITED_Q = ('...', 'user', 'alice', 'inherited', 'doc', 'd1')
 _RC1_ACCESS_Q = ('...', 'user', 'alice', 'access', 'doc', 'd1')
 
 
-def test_rc1_positive_control_type_in_both_arms():
-    """CONTROL (green today, must stay green through the fix).
-
-    Identical composition to the RC1 pin — same tuples, same query, same
-    ``[...] but not [doc]`` exclusion on the tupleset relation — except that ``doc`` also
-    appears in the POSITIVE arm, so ``_member_types`` puts it in ``parent_types`` anyway.
-    Measured: oracle=True graph=True sets=[True, True]. Note the stored parent ``doc:d2``
-    is still EXCLUDED from ``parent`` by the ``but not`` (all four backends agree on
-    ``check(doc:d2, parent, doc:d1)``), so this control also demonstrates the stored-tuple
-    TTU semantics working on a derived tupleset relation.
-
-    This proves the harness, the schema, the admission path and the query are sound, so a
-    failure of the pin below is about ``parent_types`` and nothing else.
-
-    Do not weaken: if this ever goes red, the fix at
-    ``zanzibar_utils_v1.py::_member_types`` broke a case that already worked.
-    """
+def test_rc1_class_negative_control_no_stored_tupleset_tuple():
+    """CONTROL / non-vacuity: no stored parent, so nothing may be inherited. Proves the
+    pins below expect True / False for a REASON (the stored ``(doc:d2, parent, doc:d1)``
+    tuple). Measured 2026-09-26: oracle=False graph=False sets=[False, False]."""
     oracle, graph, sets = _answers(
-        _RC1_CONTROL_SCHEMA, _RC1_POOL,
+        _RC1_LIVE_SCHEMA, _RC1_POOL, [_RC1_VIEWER_ON_PARENT], _RC1_INHERITED_Q)
+    _assert_parity(oracle, graph, sets, False, 'RC1 class, negative control (no parent)')
+
+
+def test_rc1_class_second_tupleset_type_is_a_ttu_parent():
+    """★ The RC1 class, fail-closed direction, on a legal tupleset: a stored parent of the
+    tupleset's SECOND type (``doc``) is a TTU parent of a derived target. Measured
+    2026-09-26: oracle=True graph=True sets=[True, True]."""
+    oracle, graph, sets = _answers(
+        _RC1_LIVE_SCHEMA, _RC1_POOL,
         [_RC1_STORED_PARENT, _RC1_VIEWER_ON_PARENT], _RC1_INHERITED_Q)
-    _assert_parity(oracle, graph, sets, True, 'RC1 control (type in both arms)')
+    _assert_parity(oracle, graph, sets, True,
+                   'RC1 class: a stored parent of the tupleset\'s second type')
 
 
-def test_rc1_negative_control_no_stored_tupleset_tuple():
-    """CONTROL / non-vacuity (green today, must stay green through the fix).
-
-    The RC1 schema and query with the stored tupleset tuple OMITTED: ``doc:d1`` has no
-    parent at all, so nothing may be inherited. Measured: oracle=False graph=False
-    sets=[False, False]. This is the instrument's negative control — it proves the pin
-    below expects True for a REASON (the stored ``(doc:d2, parent, doc:d1)`` tuple) rather
-    than because this query is unconditionally true.
-
-    Do not weaken: this must stay False after ``zanzibar_utils_v1.py::_member_types`` is
-    fixed. A fix that makes it True has invented a parent.
-    """
+def test_rc1_class_second_tupleset_type_dropped_would_fail_open():
+    """★★ The RC1 class, FAIL-OPEN direction: the same parent under
+    ``access: [user] but not viewer from parent``. A graph that dropped ``doc`` from
+    ``parent_types`` would see an empty subtrahend and GRANT. Measured 2026-09-26:
+    oracle=False graph=False sets=[False, False]."""
     oracle, graph, sets = _answers(
-        _RC1_SCHEMA, _RC1_POOL, [_RC1_VIEWER_ON_PARENT], _RC1_INHERITED_Q)
-    _assert_parity(oracle, graph, sets, False, 'RC1 negative control (no stored parent)')
-
-
-def test_rc1_negative_arm_type_is_still_a_stored_ttu_parent():
-    """★ CURRENTLY RED — RC1, fail-closed direction (the graph under-grants).
-
-    Property guarded: a TTU walks every STORED tupleset tuple, including one whose subject
-    type reaches the tupleset relation only through the exclusion's SUBTRAHEND
-    (``define parent: [folder] but not [doc]`` — ``doc`` is a storable subject type on
-    ``parent``, so ``(doc:d2, parent, doc:d1)`` is a stored parent of ``doc:d1``).
-
-    Measured at ``e136c8c``: oracle=True graph=False sets=[True, True] — three backends to
-    one. Cause: ``_member_types('doc', 'parent', ast, frozenset()) == {'folder'}``, so the
-    compiled ``PDerivedTuplesetTTU`` carries ``parent_types=('folder',)`` and
-    ``index_v4/processor.py::tupleset_parents`` filters the ``doc``-typed parent out with
-    ``n.type in parent_types``. The write itself lands correctly, on storage leaf
-    ``doc:d1#parent.1`` (module docstring).
-
-    Do NOT weaken this to ``graph is False`` and do NOT xfail it. Fix
-    ``zanzibar_utils_v1.py::_member_types`` (the ``Exclusion`` branch must union
-    ``walk(e.subtract)``), and mirror it into ``index_v4/bulk_backfill.py:453-455``.
-    """
-    oracle, graph, sets = _answers(
-        _RC1_SCHEMA, _RC1_POOL,
-        [_RC1_STORED_PARENT, _RC1_VIEWER_ON_PARENT], _RC1_INHERITED_Q)
-    _assert_parity(
-        oracle, graph, sets, True,
-        'RC1: the graph drops a stored TTU parent whose type appears only in the '
-        'negative arm of the tupleset relation (parent_types is missing "doc")')
-
-
-def test_rc1_positive_control_negated_ttu_type_in_both_arms():
-    """CONTROL for the fail-open pin (green today, must stay green through the fix).
-
-    Same schema as ``test_rc1_positive_control_type_in_both_arms`` plus
-    ``define access: [user] but not viewer from parent``, same tuples plus the direct
-    ``access`` grant. With ``doc`` in the positive arm the subtrahend sees the stored
-    parent and correctly cancels the grant. Measured: oracle=False graph=False
-    sets=[False, False].
-
-    Do not weaken: this pins that the NEGATED TTU is wired up at all, so the fail-open pin
-    below cannot be dismissed as "the subtrahend never fires in this schema shape".
-    """
-    oracle, graph, sets = _answers(
-        _RC1_CONTROL_SCHEMA_NEGATED_TTU, _RC1_POOL,
+        _RC1_LIVE_SCHEMA_NEGATED_TTU, _RC1_POOL,
         [_RC1_STORED_PARENT, _RC1_VIEWER_ON_PARENT, _RC1_ACCESS_GRANT], _RC1_ACCESS_Q)
     _assert_parity(oracle, graph, sets, False,
-                   'RC1 control (negated TTU, type in both arms)')
-
-
-def test_rc1_positive_control_negated_ttu_computed_right_arm():
-    """CONTROL (green today, must stay green through the fix).
-
-    The exclusion's right arm is a COMPUTED relation (``but not blocked`` where
-    ``blocked: [doc]``) rather than an inline ``[doc]``, with ``doc`` in the left arm.
-    ``_member_types`` reaches ``doc`` through ``walk(e.base)``, the negated TTU cancels the
-    grant, and everything agrees. Measured: oracle=False graph=False sets=[False, False].
-
-    This is the second half of the control pair: it shows the ``Exclusion`` node shape per
-    se is not what breaks, only which ARM the parent type comes from.
-
-    Do not weaken: a fix at ``zanzibar_utils_v1.py::_member_types`` that unions the
-    subtrahend must keep this exact answer.
-    """
-    oracle, graph, sets = _answers(
-        _RC1_COMPUTED_ARM_SCHEMA, _RC1_POOL,
-        [_RC1_STORED_PARENT, _RC1_VIEWER_ON_PARENT, _RC1_ACCESS_GRANT], _RC1_ACCESS_Q)
-    _assert_parity(oracle, graph, sets, False,
-                   'RC1 control (negated TTU, computed right arm)')
-
-
-def test_rc1_negative_arm_type_dropped_is_an_authorization_fail_open():
-    """★★ CURRENTLY RED — RC1, FAIL-OPEN direction. Pin this one hardest.
-
-    Same dropped parent as the pin above, read through a NEGATED TTU:
-    ``define access: [user] but not viewer from parent``. Because the graph cannot see the
-    stored parent ``doc:d2``, the subtrahend is empty for it and the direct ``access``
-    grant survives.
-
-    Measured at ``e136c8c``: oracle=False graph=True sets=[False, False].
-    **The graph GRANTS what the oracle and both set engines DENY.** This is an
-    authorization fail-open, not an under-grant.
-
-    ⚠ This CORRECTS the record. ``docs/spec-deviations.md`` (2026-08-10 entry) and the
-    ``HANDOFF.md`` item since archived to ``docs/history/handoff-status-2026-08.md`` §1
-    "The two TTU-tupleset divergences" (archived from ``HANDOFF.md`` 2026-08-16)
-    originally classified this bug as *"Fail-closed (under-grant), so not a security
-    fail-open"*.
-    That conclusion was reached from the ``inherited`` probe only; one extra relation in
-    the SAME schema inverts the sign. The bug is a live authorization fail-open and should
-    be triaged as one.
-
-    Do NOT weaken this to ``graph is True`` and do NOT xfail it. Fix
-    ``zanzibar_utils_v1.py::_member_types`` (Exclusion must union the subtrahend), then
-    ``index_v4/bulk_backfill.py:453-455``.
-    """
-    oracle, graph, sets = _answers(
-        _RC1_SCHEMA_NEGATED_TTU, _RC1_POOL,
-        [_RC1_STORED_PARENT, _RC1_VIEWER_ON_PARENT, _RC1_ACCESS_GRANT], _RC1_ACCESS_Q)
-    _assert_parity(
-        oracle, graph, sets, False,
-        'RC1 FAIL-OPEN: the graph grants `access` because it dropped the stored TTU '
-        'parent that the `but not viewer from parent` subtrahend needed')
+                   'RC1 class FAIL-OPEN: the negated TTU must see the second-type parent')
 
 
 # ---------------------------------------------------------------------------
-# RC2 fixtures — a stored `T:*` tupleset parent on a DERIVED tupleset relation
+# RC2 — a stored `T:*` tupleset parent under a DERIVED target
 # ---------------------------------------------------------------------------
+#
+# Until TK106 (2026-09-26) these pins used `parent: [doc, doc:*] and gate`, a DERIVED
+# tupleset, which is now a parse refusal. The fix site is still live:
+# `index_v4/processor.py::_stored_tupleset_subjects` / `::_expand_tupleset_parents` are
+# shared with the `derived-ttu` path (untainted tupleset, derived target). So the star
+# parent now reaches them through `folder#viewer` being derived, which puts `inherited` /
+# `access` on `PDerivedTTU` with `parent_types` ('doc', 'folder'); `doc#viewer` stays plain
+# `[user]`, because a star tupleset whose OWN type's target is derived is a scope refusal
+# (`zanzibar_utils_v1.py::_reject_object_wildcard_scope`).
+#
+# SABOTAGE, 2026-09-26 (literal, `.scratch` probe; docs/tk106-boolean-tuplesets-2026-09-26.md
+# § 6). (A) `_stored_tupleset_subjects` returning no star types, and (B)
+# `_expand_tupleset_parents` ignoring `star_types`, each give::
+#
+#     RC2 star inherited             oracle=True graph=False sets=[True, True]
+#     RC2 star access(neg)           oracle=False graph=True sets=[False, False]
+#
+# while the concrete-parent controls stay green -- RC2's original signature, both signs.
+# The hypothesis campaign no longer reaches this path at all (every generated tupleset is
+# untainted with an untainted target), so THESE are RC2's pins.
 
 _RC2_HEAD = """model
   schema 1.1
 
 type user
 
+type folder
+  relations
+    define banned: [user]
+    define viewer: [user] but not banned
+
 type doc
   relations
-    define gate: [doc, doc:*]
     define parent: {parent}
     define viewer: [user]
     define inherited: viewer from parent
 """
 
-# divergent: `parent` is TAINTED (`and gate`), so the derived read path is used
-_RC2_SCHEMA = _RC2_HEAD.format(parent='[doc, doc:*] and gate')
+_RC2_SCHEMA = _RC2_HEAD.format(parent='[folder, doc, doc:*]')
 _RC2_SCHEMA_NEGATED_TTU = _RC2_SCHEMA + _RC1_ACCESS
 
-# control: identical shape with an UNTAINTED tupleset relation
-_RC2_CONTROL_SCHEMA = _RC2_HEAD.format(parent='[doc, doc:*]')
+# control: the star parent with an UNTAINTED target, i.e. the ordinary closure path
+_RC2_CONTROL_SCHEMA = """model
+  schema 1.1
+
+type user
+
+type doc
+  relations
+    define parent: [doc, doc:*]
+    define viewer: [user]
+    define inherited: viewer from parent
+"""
 
 _RC2_POOL = [
     ('...', 'doc', '*', 'parent', 'doc', 'd1'),
-    ('...', 'doc', '*', 'gate', 'doc', 'd1'),
     ('...', 'user', 'alice', 'viewer', 'doc', 'd2'),
     ('...', 'doc', 'd2', 'parent', 'doc', 'd1'),
-    ('...', 'doc', 'd2', 'gate', 'doc', 'd1'),
     ('...', 'user', 'alice', 'access', 'doc', 'd1'),
 ]
 
 _RC2_STAR_PARENT = ('...', 'doc', '*', 'parent', 'doc', 'd1')
-_RC2_STAR_GATE = ('...', 'doc', '*', 'gate', 'doc', 'd1')
 _RC2_CONCRETE_PARENT = ('...', 'doc', 'd2', 'parent', 'doc', 'd1')
-_RC2_CONCRETE_GATE = ('...', 'doc', 'd2', 'gate', 'doc', 'd1')
 _RC2_VIEWER_ON_PARENT = ('...', 'user', 'alice', 'viewer', 'doc', 'd2')
 _RC2_ACCESS_GRANT = ('...', 'user', 'alice', 'access', 'doc', 'd1')
 
@@ -502,119 +464,65 @@ _RC2_INHERITED_Q = ('...', 'user', 'alice', 'inherited', 'doc', 'd1')
 _RC2_ACCESS_Q = ('...', 'user', 'alice', 'access', 'doc', 'd1')
 
 
-def test_rc2_positive_control_concrete_stored_parent_on_derived_tupleset():
-    """CONTROL (green today, must stay green through the fix). The tight one.
-
-    The SAME derived tupleset relation (``define parent: [doc, doc:*] and gate``) and the
-    same query, with a CONCRETE stored parent ``doc:d2`` instead of ``doc:*``. Measured:
-    oracle=True graph=True sets=[True, True].
-
-    This isolates the defect to the ``n.wildcard == ''`` clause alone: the derived-tupleset
-    TTU read path (``derived_stored_parents`` -> ``tupleset_parents`` over the storage
-    leaves of a tainted tupleset relation) demonstrably works here, so the pin below cannot
-    be explained by "derived tuplesets are broken in general".
-
-    Do not weaken: a fix at ``index_v4/processor.py::tupleset_parents`` must keep this True.
-    """
+def test_rc2_positive_control_concrete_stored_parent_on_derived_ttu():
+    """CONTROL: the same derived-target TTU with a CONCRETE stored parent ``doc:d2``.
+    Isolates any failure of the pins below to the star arm. Measured 2026-09-26:
+    oracle=True graph=True sets=[True, True], and green under both RC2 sabotages."""
     oracle, graph, sets = _answers(
-        _RC2_SCHEMA, _RC2_POOL,
-        [_RC2_CONCRETE_PARENT, _RC2_CONCRETE_GATE, _RC2_VIEWER_ON_PARENT],
+        _RC2_SCHEMA, _RC2_POOL, [_RC2_CONCRETE_PARENT, _RC2_VIEWER_ON_PARENT],
         _RC2_INHERITED_Q)
     _assert_parity(oracle, graph, sets, True,
-                   'RC2 control (concrete stored parent on a derived tupleset)')
+                   'RC2 control (concrete stored parent, derived target)')
 
 
 def test_rc2_positive_control_star_parent_on_untainted_tupleset():
-    """CONTROL (green today, must stay green through the fix).
-
-    The same ``doc:*`` stored tupleset parent, but with ``define parent: [doc, doc:*]``
-    (UNTAINTED — no ``and gate``). Measured: oracle=True graph=True sets=[True, True].
-
-    Honest limit: an untainted tupleset makes ``inherited`` untainted too, so this exercises
-    the ordinary closure path, NOT the delta processor. It controls the star-parent x TTU
-    COMPOSITION (the write shape and the query are fine, and the graph handles them when it
-    is not going through ``tupleset_parents``); the control for the derived read path is
-    ``test_rc2_positive_control_concrete_stored_parent_on_derived_tupleset`` above. Both are
-    needed, neither substitutes for the other.
-
-    Do not weaken: a fix must not regress the untainted path.
-    """
+    """CONTROL: the same ``doc:*`` stored parent with an UNTAINTED target, so the ordinary
+    closure path answers, not the delta processor. Controls the star-parent x TTU
+    COMPOSITION; the derived-path control is the test above. Unchanged by TK106."""
     oracle, graph, sets = _answers(
-        _RC2_CONTROL_SCHEMA, _RC2_POOL,
-        [_RC2_STAR_PARENT, _RC2_VIEWER_ON_PARENT], _RC2_INHERITED_Q)
+        _RC2_CONTROL_SCHEMA, _RC2_POOL, [_RC2_STAR_PARENT, _RC2_VIEWER_ON_PARENT],
+        _RC2_INHERITED_Q)
     _assert_parity(oracle, graph, sets, True,
                    'RC2 control (star parent on an untainted tupleset)')
 
 
-def test_rc2_star_stored_parent_on_derived_tupleset_is_a_ttu_parent():
-    """★ CURRENTLY RED — RC2, fail-closed direction (the graph under-grants).
+def test_rc2_star_stored_parent_on_derived_ttu_is_a_ttu_parent():
+    """★ RC2, fail-closed direction: a stored ``doc:*`` tupleset tuple is a TTU parent of a
+    derived target, expanded over the instances of ``doc`` (so ``doc:d2``, where alice is
+    a viewer). Measured 2026-09-26: oracle=True graph=True sets=[True, True]; RED
+    (graph=False) under both sabotages in the section comment above.
 
-    Property guarded: a stored ``T:*`` tupleset tuple is a TTU parent, on a DERIVED
-    tupleset relation exactly as on an untainted one. ``(doc:*, parent, doc:d1)`` is a
-    legal ``[doc, doc:*]`` write, admitted by all three backends.
-
-    Measured at ``e136c8c``: oracle=True graph=False sets=[True, True]. No exclusion and no
-    ``object_wildcard_shapes`` are involved — the tupleset relation only has to be tainted.
-    Cause: ``index_v4/processor.py::tupleset_parents`` filters ``n.wildcard == ''``, and the
-    ``doc:*`` subject node has ``wildcard='any'``. The edge is on the STORAGE leaf
-    (``doc:*#... -> doc:d1#parent.0``, ``storage=True``), so the storage-leaf split is
-    honoured; only this filter drops it.
-
-    Do NOT weaken and do NOT xfail. Fix ``index_v4/processor.py::tupleset_parents`` — but
-    see the module docstring: naively deleting the clause breaks admission parity, the star
-    parent has to be represented, not just admitted. Mirror into
-    ``index_v4/bulk_backfill.py:453-455``.
-    """
+    Do NOT weaken and do NOT xfail."""
     oracle, graph, sets = _answers(
-        _RC2_SCHEMA, _RC2_POOL,
-        [_RC2_STAR_PARENT, _RC2_STAR_GATE, _RC2_VIEWER_ON_PARENT], _RC2_INHERITED_Q)
+        _RC2_SCHEMA, _RC2_POOL, [_RC2_STAR_PARENT, _RC2_VIEWER_ON_PARENT],
+        _RC2_INHERITED_Q)
     _assert_parity(
         oracle, graph, sets, True,
-        'RC2: the graph drops a stored `doc:*` TTU parent when the tupleset relation is '
-        'DERIVED (the n.wildcard == "" filter in tupleset_parents)')
+        'RC2: the graph drops a stored `doc:*` TTU parent on the derived-ttu path '
+        '(processor.py::_stored_tupleset_subjects / _expand_tupleset_parents)')
 
 
 def test_rc2_positive_control_negated_ttu_concrete_parent():
-    """CONTROL for the RC2 fail-open pin (green today, must stay green through the fix).
-
-    ``define access: [user] but not viewer from parent`` over the same derived tupleset,
-    with a CONCRETE stored parent. The subtrahend sees the parent and cancels the grant.
-    Measured: oracle=False graph=False sets=[False, False].
-
-    Do not weaken: this pins that the negated TTU over a DERIVED tupleset is wired up, so
-    the fail-open pin below is about the star parent alone.
-    """
+    """CONTROL for the fail-open pin: the negated TTU with a CONCRETE stored parent cancels
+    the grant. Measured 2026-09-26: oracle=False graph=False sets=[False, False]."""
     oracle, graph, sets = _answers(
         _RC2_SCHEMA_NEGATED_TTU, _RC2_POOL,
-        [_RC2_CONCRETE_PARENT, _RC2_CONCRETE_GATE, _RC2_VIEWER_ON_PARENT,
-         _RC2_ACCESS_GRANT], _RC2_ACCESS_Q)
+        [_RC2_CONCRETE_PARENT, _RC2_VIEWER_ON_PARENT, _RC2_ACCESS_GRANT], _RC2_ACCESS_Q)
     _assert_parity(oracle, graph, sets, False,
                    'RC2 control (negated TTU, concrete stored parent)')
 
 
 def test_rc2_star_stored_parent_dropped_is_an_authorization_fail_open():
-    """★★ CURRENTLY RED — RC2, FAIL-OPEN direction. Reproduced, so pinned.
+    """★★ RC2, FAIL-OPEN direction. Pin this one hardest: the same ``doc:*`` parent read
+    through ``access: [user] but not viewer from parent``. A graph that drops the star
+    parent sees an empty subtrahend and GRANTS what the oracle and both set engines deny.
+    Measured 2026-09-26: oracle=False graph=False sets=[False, False]; graph=True (the
+    fail-open) under both sabotages in the section comment above.
 
-    The sweep that reported an RC2 fail-open direction was right, and this is it: the same
-    dropped ``doc:*`` parent read through ``define access: [user] but not viewer from
-    parent``. The graph cannot see the star parent, so the subtrahend is empty and the
-    direct ``access`` grant survives.
-
-    Measured at ``e136c8c``: oracle=False graph=True sets=[False, False].
-    **The graph GRANTS what the oracle and both set engines DENY.**
-
-    So BOTH root causes in this file have a fail-open direction, by the same mechanism: a
-    dropped TTU parent is a false negative under a positive TTU and a false POSITIVE under
-    a negated one. Any triage that reads either one as "fails closed" is looking at half
-    the schema.
-
-    Do NOT weaken and do NOT xfail. Fix ``index_v4/processor.py::tupleset_parents``, then
-    ``index_v4/bulk_backfill.py:453-455``.
-    """
+    Do NOT weaken and do NOT xfail."""
     oracle, graph, sets = _answers(
         _RC2_SCHEMA_NEGATED_TTU, _RC2_POOL,
-        [_RC2_STAR_PARENT, _RC2_STAR_GATE, _RC2_VIEWER_ON_PARENT, _RC2_ACCESS_GRANT],
-        _RC2_ACCESS_Q)
+        [_RC2_STAR_PARENT, _RC2_VIEWER_ON_PARENT, _RC2_ACCESS_GRANT], _RC2_ACCESS_Q)
     _assert_parity(
         oracle, graph, sets, False,
         'RC2 FAIL-OPEN: the graph grants `access` because it dropped the stored `doc:*` '
@@ -658,11 +566,11 @@ def test_compile_refuses_parent_types_narrower_than_admission():
     """
     import zanzibar_utils_v1 as zu
 
-    schema = ('model\n  schema 1.1\n\ntype user\n\ntype folder\n\ntype doc\n'
-              '  relations\n'
-              '    define parent: [folder] but not [doc]\n'
-              '    define viewer: [user]\n'
-              '    define inherited: viewer from parent\n')
+    # Until TK106 (2026-09-26) this was RC1's own `parent: [folder] but not [doc]`, now a
+    # parse refusal. The invariant only inspects `PDerivedTTU` / `PDerivedTuplesetTTU`
+    # plan nodes, so the tupleset going direct is not enough on its own: the TARGET must be
+    # derived, or no plan node exists and the sabotage below would pass silently.
+    schema = _RC1_LIVE_SCHEMA
 
     # control: the tree as it stands compiles, so the red below is the sabotage's doing
     zu.parse_openfga_schema(schema)

@@ -27,10 +27,10 @@ number INTO it over restating it.
 
 | quantity | value |
 |---|---|
-| `formal/conformance/` collected | **1038** |
-| `tests/` collected | **1328** |
-| whole-repo suite | **2366** |
-| differential conformance tests | **957** across **16** files |
+| `formal/conformance/` collected | **1081** |
+| `tests/` collected | **1405** |
+| whole-repo suite | **2486** |
+| differential conformance tests | **1000** across **16** files |
 | gate-tooling conformance tests | **81** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **704** |
 | audit identity pin (`audited_theorems.txt`) | **704** |
@@ -38,8 +38,8 @@ number INTO it over restating it.
 | `CORRESPONDENCE.md` anchors | **715** (**399** Python + **316** Lean) |
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
-| spec-scope corpora (four dicts) | **36** = 27 + 6 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1038 (=135+903), `MIN_TESTS_ALL`=1328, `EXPECTED_MIN_AUDITS`=460 |
+| spec-scope corpora (four dicts) | **35** = 27 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1081 (=135+946), `MIN_TESTS_ALL`=1405, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
 Driven fresh over all **25** `GRAPH_FRAGMENT` corpora through the real graph
@@ -61,10 +61,10 @@ Per conformance file:
 
 | file | tests | kind |
 |---|---|---|
-| `test_conformance_fragment.py` | 380 | differential |
+| `test_conformance_fragment.py` | 427 | differential |
 | `test_conformance_remove.py` | 135 | differential |
-| `test_conformance_spec.py` | 108 | differential |
-| `test_graphadmission_scope_pin.py` | 66 | differential |
+| `test_conformance_spec.py` | 105 | differential |
+| `test_graphadmission_scope_pin.py` | 65 | differential |
 | `test_conformance_state.py` | 56 | differential |
 | `test_conformance_graph.py` | 51 | differential |
 | `test_sorry_scan.py` | 44 | tooling |

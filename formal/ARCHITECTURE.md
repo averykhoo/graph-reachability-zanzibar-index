@@ -183,7 +183,7 @@ restriction comes from (`FullScope.lean`):
 - **`GraphAdmission S T`** — the **Python-admission mirror**: what the Python compiler +
   write admission already guarantee for every accepted schema/store. Fields (each
   docstring cites the enforcing Python mechanism): `wf`, `nodup`, `strat`, `ttuDirect`
-  (untainted TTU tuplesets direct-only), `matchDecl`, `ranked`, `objWild` (object-wildcard
+  (TTU tuplesets direct-only; since `TK106`, 2026-09-26, tainted or not), `matchDecl`, `ranked`, `objWild` (object-wildcard
   shapes never on derived relations), `storeValid`, and six name-shape/scope fields added
   since (`usWild`, `ttuNotLeaf`, `directRestrNotLeaf`, `computedRefsNotLeaf`,
   `noLeafSubjects`, `keysNonempty`). **Not quite a mirror, measured 2026-09-24 (`TK104`)**:
@@ -193,7 +193,10 @@ restriction comes from (`FullScope.lean`):
   admits an untainted computed cycle). **Since 2026-09-26 (`ASK-1`, user decision) both
   are LOUD too**: the parsers refuse dangling references and reference cycles
   (`zanzibar_utils_v1.py::_validate_ast_consistency`), so it is LOUD 12 / MIXED 2 /
-  SILENT 0. The classification and its probes are
+  SILENT 0. **Since 2026-09-26 (`TK106`, user decision) `ttuDirect` is LOUD as well**:
+  both parsers refuse every non-direct tupleset
+  (`zanzibar_utils_v1.py::_validate_tuplesets_direct`), so it is LOUD 13 / MIXED 1
+  (`storeValid`) / SILENT 0. The classification and its probes are
   `conformance/test_graphadmission_scope_pin.py`. **Decided since 2026-09-25**
   (`GraphIndex/AdmissionDecide.lean::graphAdmissionB_iff`, exact), and the two SILENT
   fields are reported to an operator by `zanzibar_utils_v1.py::graph_admission_report`,

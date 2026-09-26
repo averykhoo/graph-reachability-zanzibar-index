@@ -162,10 +162,54 @@ def test_both_sides_of_but_not_may_be_chains():
 # ---------------------------------------------------------------------------
 
 def test_demorgans_law_1_ast(load_fga_schema):
+    """The fixture as TRIMMED on 2026-09-26 (TK106) to its legal `non_labels` core."""
     ast = parse_schema_ast(load_fga_schema('demorgans_law_1.fga'))
     assert ast[('doc', '_all_attrs')] == Direct((Restriction('attr', '...', True),))
     assert ast[('doc', 'labels')] == Direct((Restriction('attr', '...', False),))
     assert ast[('doc', 'non_labels')] == Exclusion(Computed('_all_attrs'), Computed('labels'))
+    assert set(ast) == {('doc', '_all_attrs'), ('doc', 'labels'), ('doc', 'non_labels')}
+
+
+#: `demorgans_law_1.fga`'s `doc` type as it stood until TK106 (2026-09-26): a De Morgan
+#: chain whose tuplesets are themselves COMPUTED (`required_by from non_labels`, where
+#: `non_labels` is a `but not`). `from` walks stored tuples only, and nothing is ever
+#: stored on `non_labels`, so the whole chain was constantly EMPTY on every backend -- the
+#: author's evident intent (computed-tupleset semantics) exists neither here nor in
+#: OpenFGA. It is the realistic form of what TK106 refuses, so it is kept as a pin.
+_DEMORGANS_LAW_1_PRE_TK106 = """
+type user
+type role
+  relations
+    define granted: [user]
+type cond
+  relations
+    define assigned: [role]
+type attr
+  relations
+    define required_by: [cond]
+type doc
+  relations
+    define _all_attrs: [attr:*]
+    define labels: [attr]
+    define non_labels: _all_attrs but not labels
+    define _all_conds: [cond:*]
+    define unmatchable_conds: required_by from non_labels
+    define matchable_conds: _all_conds but not unmatchable_conds
+    define matched_roles: assigned from matchable_conds
+    define matched_users: granted from matched_roles
+"""
+
+
+def test_demorgans_law_1_pre_tk106_is_refused_but_still_parses_unchecked():
+    """The checked parse REFUSES the old chain (TK106); the UNCHECKED parse, which the
+    reports and the conformance encoder read, still returns its AST unchanged."""
+    from tests import oracle
+    from zanzibar_utils_v1 import _parse_schema_ast_unchecked
+    with pytest.raises(ValueError, match='tupleset must be direct'):
+        parse_schema_ast(_DEMORGANS_LAW_1_PRE_TK106)
+    with pytest.raises(ValueError, match='tupleset must be direct'):
+        oracle.parse_schema_ast(_DEMORGANS_LAW_1_PRE_TK106)
+    ast = _parse_schema_ast_unchecked(_DEMORGANS_LAW_1_PRE_TK106)
     assert ast[('doc', 'matchable_conds')] == Exclusion(
         Computed('_all_conds'), Computed('unmatchable_conds'))
     assert ast[('doc', 'unmatchable_conds')] == TTU('required_by', 'non_labels')

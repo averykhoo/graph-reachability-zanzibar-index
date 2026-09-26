@@ -255,6 +255,7 @@ def parse_schema_ast(text: str) -> dict[tuple[str, str], object]:
     refusing a schema that is not self-consistent (``_validate_consistency``)."""
     ast = parse_schema_ast_unchecked(text)
     _validate_consistency(ast)
+    _validate_tuplesets_direct(ast)
     return ast
 
 
@@ -340,6 +341,26 @@ def _validate_consistency(ast) -> None:
             if k not in seen:
                 seen.add(k)
                 todo.extend(edges[k])
+
+
+def _validate_tuplesets_direct(ast) -> None:
+    """Independent twin of ``zanzibar_utils_v1.py::_validate_tuplesets_direct`` (TK106,
+    2026-09-26), NOT shared with it (independence contract above). A relation named as a
+    TTU tupleset must be only type restrictions, alone or joined by ``or``: ``from`` walks
+    stored tuples, so any other arm would be silently ignored. OpenFGA refuses it too."""
+    def direct_only(expr) -> bool:
+        if isinstance(expr, ODirect):
+            return True
+        if isinstance(expr, OUnion):
+            return all(direct_only(c) for c in expr.children)
+        return False
+
+    for (typ, rel), expr in ast.items():
+        for node in _oracle_nodes(expr):
+            if isinstance(node, OTTU) and (typ, node.tupleset_rel) in ast \
+                    and not direct_only(ast[(typ, node.tupleset_rel)]):
+                raise ValueError(f'{typ}#{rel}: tupleset must be direct, but '
+                                 f'{typ}#{node.tupleset_rel} is not')
 
 
 # ---------------------------------------------------------------------------

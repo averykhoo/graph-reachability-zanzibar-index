@@ -223,7 +223,10 @@ Enforced in `zanzibar_utils_v1.py` and mirrored by the oracle parser:
   `WF`-level precondition — see §11 ambiguity A3).
 - **TTU tupleset restriction rule** (`_validate_ttu_tuplesets:898`): a TTU's
   tupleset must resolve to **stored** (Direct) tuples; the graph rejects TTU
-  tuplesets with computed/rewritten arms (`correctness.md` §4). This is the
+  tuplesets with computed/rewritten arms (`correctness.md` §4). **Since 2026-09-26
+  (`TK106`) this is a parse-time rule of the whole system**, tainted tuplesets
+  included: `zanzibar_utils_v1.py::_validate_tuplesets_direct` and the oracle's
+  independent twin refuse any tupleset that is not Directs or a union of Directs. This is the
   stored-parent rule (§5.5).
 
 ### 4.3 Taint / derived vs untainted (affects the GRAPH model only)
@@ -635,8 +638,9 @@ name, the code wins):
 - `hA : GraphAdmission S T` (`FullScope.lean`) — the model-level **admission
   bundle**: what the Python compiler + write admission guarantee for EVERY
   accepted schema/store (each field's docstring cites the enforcing Python
-  mechanism): `wf`, `nodup`, `strat`, `ttuDirect` (untainted TTU tuplesets
-  direct-only, `_validate_ttu_tuplesets`), `matchDecl`, `ranked`, `objWild`
+  mechanism): `wf`, `nodup`, `strat`, `ttuDirect` (TTU tuplesets
+  direct-only; since `TK106`, 2026-09-26, refused at parse for tainted tuplesets too,
+  `_validate_tuplesets_direct`), `matchDecl`, `ranked`, `objWild`
   (object-wildcard shapes never on derived relations), `storeValid`. Graph
   theorems only.
 - `hF : W4Fragment S T` (`FullScope.lean`) — the **honest fragment carries**:

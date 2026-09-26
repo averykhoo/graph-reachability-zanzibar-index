@@ -43,6 +43,11 @@ from formal.conformance.backends import setengine_answers
 # is scope-clean at any stratum count, whereas `W4Fragment.twoStrata` and the
 # fixed two-round `runCascade2` make >= 3 strata genuinely outside the Lean
 # OPERATIONAL model. See the `MULTI_STRATUM_SCHEMAS` block in corpus.py.
+#
+# `corpus.py::REFUSED_TUPLESET_SCHEMAS` is deliberately NOT here (`TK106`, 2026-09-26):
+# the oracle and the set engine both refuse a boolean tupleset, so there are no answers to
+# compare with `sem`. `derived_tupleset_ttu` ran here until then; its refusal is pinned in
+# `test_conformance_nary_strata.py` and `test_conformance_fragment.py` (K)/(L).
 _SPEC_SCHEMAS = {**SCHEMAS, **TTU_USERSET_SCHEMAS, **SELF_REFERENTIAL_SCHEMAS,
                  **MULTI_STRATUM_SCHEMAS}
 

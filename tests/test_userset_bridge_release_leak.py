@@ -72,7 +72,13 @@ unbounded node/edge state under add/remove churn.
 Load-bearing (measured by dropping each feature in turn): the DERIVED tupleset
 (Exclusion and Intersection both leak; a plain star tupleset is clean), the
 object-star arm in the tupleset (no star -> clean), the TTU over it (dropped ->
-clean), and the userset-shaped subject write. NOT load-bearing: the wildcard on
+clean), and the userset-shaped subject write.
+
+⚠ CORRECTED 2026-09-26 (TK106). "The DERIVED tupleset" is too narrow: in that schema it
+was what made ``r1`` derived, and ``r1`` recording the subject is what matters. A plain
+star tupleset is clean only while ``r1`` stays untainted. TK106 made a derived tupleset a
+parse refusal, and the pins below moved to a legal schema that leaks identically under
+the pre-fix order (see ``MINIMAL_SCHEMA``). NOT load-bearing: the wildcard on
 the target relation, the self-referential subject, and the extra
 Computed/folder relations of the original counterexample.
 """
@@ -80,15 +86,26 @@ Computed/folder relations of the original counterexample.
 from index_v4.invariants import snapshot_rows
 from tests.test_processor import build
 
-# The minimized repro: one type, three relations. ``parent`` is derived (any
-# taint works; Exclusion here) with an object-star arm, ``r1`` hosts a TTU over
-# it plus the direct userset arm that admits the tuple.
+# The repro on a LEGAL schema (TK106, 2026-09-26). The filed one was
+#     parent: [doc:*] but not [doc]; r0: [user]; r1: r0 from parent or [doc#r0]
+# -- a DERIVED tupleset, now a parse refusal. What the leak needs is (a) the userset shape
+# (doc, r0) subject-bridged, which the star tupleset's TTU through-shape `r0 from parent`
+# provides, and (b) a DERIVED relation that records the userset subject in its residue and
+# promotes it explicit, which `r1: [doc#r0] but not blk` provides. MEASURED 2026-09-26
+# (`.scratch` probe, docs/tk106-boolean-tuplesets-2026-09-26.md § 7): with
+# `_gc_subject_node` put back in the pre-fix order (strip, then demote), this schema leaks
+# (2 nodes, 1 edge), exactly the filed schema's leak with the refusal patched off, and so do
+# `r1: (r0 from parent or [doc#r0]) but not blk` and
+# `r1: r0 from parent or ([doc#r0] but not blk)`; with the fix, all leak (0, 0).
 MINIMAL_SCHEMA = '''
+    type user
     type doc
       relations
-        define parent: [doc:*] but not [doc]
+        define parent: [doc:*]
+        define blk: [user]
         define r0: [user]
-        define r1: r0 from parent or [doc#r0]
+        define x: r0 from parent
+        define r1: [doc#r0] but not blk
 '''
 
 # A userset-shaped subject on r1 (self-reference NOT required; d1 -> d2 leaks too).

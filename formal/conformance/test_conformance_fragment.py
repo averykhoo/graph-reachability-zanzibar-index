@@ -50,6 +50,14 @@ Since `TK104` (2026-09-25), `zcli` also decides `GraphAdmission`
 (G)-(J) at the end of this module hold the corpora, the sizing probes and the REASONED
 silent-field mirror to it. Their record is `docs/tk104-graphadmission-scope-2026-09-24.md`.
 
+Since `TK106` (2026-09-26, user decision: refuse boolean tuplesets, as OpenFGA does) the
+sweep also carries `REFUSED_CORPORA`: `corpus.py::REFUSED_TUPLESET_SCHEMAS`, schemas both
+checked parsers refuse. They are not curated corpora (`ALL_CORPORA` excludes them), but
+Lean's deciders and the production reports read the UNCHECKED parse, so (B)-(D), (G), (J)
+still hold them to Lean; (K) asserts both parsers refuse them, and (L) checks on the whole
+sweep that every input Lean says fails `GraphAdmission.ttuDirect` is refused, which is what
+makes that field LOUD.
+
 SABOTAGE (2026-09-23d for (A)-(C), 2026-09-23e for (D)-(F), `docs/sabotage-procedure.md`):
 recorded in `docs/dw1-decidable-w4fragment-2026-09-23.md`, literal output quoted there. The
 (D)-(F) record is a 19-mutation sweep of the report with an attribution control.
@@ -62,6 +70,7 @@ from formal.conformance import runner
 from formal.conformance.corpus import (
     GRAPH_FRAGMENT,
     MULTI_STRATUM_SCHEMAS,
+    REFUSED_TUPLESET_SCHEMAS,
     SCHEMAS,
     SELF_REFERENTIAL_SCHEMAS,
     TTU_USERSET_SCHEMAS,
@@ -80,10 +89,24 @@ ALL_CORPORA: dict[str, tuple] = {
     f"{label}:{name}": spec for label, fam in _FAMILIES for name, spec in fam.items()
 }
 
+#: `TK106` (2026-09-26): schemas BOTH checked parsers refuse (a boolean tupleset). Kept in
+#: the Lean-facing sweep because the deciders and the reports read the unchecked parse, so
+#: their verdicts on these are still statements about shipped code. NOT curated corpora:
+#: nothing may compare answers on them, and (K) asserts the refusal.
+REFUSED_CORPORA: dict[str, tuple] = {
+    f"REFUSED_TUPLESET:{name}": spec for name, spec in REFUSED_TUPLESET_SCHEMAS.items()
+}
+
+#: Every input the per-corpus Lean sweeps ((B), (C), (G)) read.
+REPORTED_INPUTS: dict[str, tuple] = {**ALL_CORPORA, **REFUSED_CORPORA}
+
 #: Anti-vacuity floor on the corpus sweep. Measured 2026-09-23 with the probe named in
-#: the module docstring (`agree=33 disagree=3`, i.e. 36 corpora). A `>=`, so adding a
+#: the module docstring (`agree=33 disagree=3`, i.e. 36 corpora then). A `>=`, so adding a
 #: corpus is free; it catches a family import that silently went empty.
-MIN_CORPORA = 36
+#: LOWERED 36 -> 35 on 2026-09-26, deliberately (`TK106`): `TTU_USERSET:derived_tupleset_ttu`
+#: moved to `REFUSED_CORPORA`, measured `len(ALL_CORPORA) == 35`, `len(REFUSED_CORPORA) == 1`
+#: that day. The Lean sweep (`REPORTED_INPUTS`) still reads 36 inputs.
+MIN_CORPORA = 35
 
 #: The ten `W4Fragment` field names, in declaration order (`FullScope.lean::W4Fragment`).
 W4_FIELDS = (
@@ -100,7 +123,8 @@ _EXPECTED_FAILURES: dict[str, tuple[str, ...]] = {
     "SCHEMAS:object_wildcard": ("bareStar",),
     "MULTI_STRATUM:three_strata_chain": ("twoStrata",),
     "TTU_USERSET:derived_ttu_fromchain": ("computedOrDirect",),
-    "TTU_USERSET:derived_tupleset_ttu": ("computedOrDirect",),
+    # `TTU_USERSET:derived_tupleset_ttu` until TK106 moved it (2026-09-26); same verdict.
+    "REFUSED_TUPLESET:derived_tupleset_ttu": ("computedOrDirect",),
     "TTU_USERSET:derived_userset": ("directArmsBare", "noUnionDirects", "term"),
     "TTU_USERSET:wildcard_userset": ("wsBare", "bareStar"),
     "SELF_REF:self_ttu_parent": ("computedOrDirect", "directArmsConcrete", "noUnionDirects"),
@@ -112,7 +136,7 @@ def _fragment_report(key: str) -> dict:
         runner.zcli_path()
     except runner.ZcliUnavailable:
         pytest.skip("zcli not built (run `lake build zcli` in formal/lean)")
-    schema_text, tuples, obj_wild = ALL_CORPORA[key]
+    schema_text, tuples, obj_wild = REPORTED_INPUTS[key]
     return runner.run_fragment(build_request(schema_text, tuples, [], obj_wild, mode="fragment"))
 
 
@@ -122,11 +146,13 @@ def test_corpus_sweep_is_not_vacuous():
     assert len(ALL_CORPORA) >= MIN_CORPORA, (
         f"only {len(ALL_CORPORA)} curated corpora found; floor {MIN_CORPORA}. A corpus "
         f"family import went empty, and a sweep over nothing reports green.")
-    stale = sorted(set(_EXPECTED_FAILURES) - set(ALL_CORPORA))
+    assert REFUSED_CORPORA, "REFUSED_TUPLESET_SCHEMAS went empty (TK106 carrier lost)"
+    assert not set(REFUSED_CORPORA) & set(ALL_CORPORA)
+    stale = sorted(set(_EXPECTED_FAILURES) - set(REPORTED_INPUTS))
     assert not stale, f"_EXPECTED_FAILURES names corpora that no longer exist: {stale}"
     bad = sorted({f for fs in _EXPECTED_FAILURES.values() for f in fs} - set(W4_FIELDS))
     assert not bad, f"_EXPECTED_FAILURES names non-fields: {bad}"
-    n_in = len(ALL_CORPORA) - len(_EXPECTED_FAILURES)
+    n_in = len(REPORTED_INPUTS) - len(_EXPECTED_FAILURES)
     assert n_in > 0 and _EXPECTED_FAILURES, "need both IN and OUT corpora to discriminate"
 
 
@@ -147,7 +173,7 @@ def test_theorem_backed_corpora_are_inside_w4fragment(name):
         f"or fix the corpus. Do NOT edit the decider to agree.")
 
 
-@pytest.mark.parametrize("key", sorted(ALL_CORPORA))
+@pytest.mark.parametrize("key", sorted(REPORTED_INPUTS))
 def test_lean_verdict_matches_the_independent_mirror(key):
     """(B) Lean's per-field verdict equals the independently derived expectation."""
     rep = _fragment_report(key)
@@ -163,15 +189,26 @@ def test_lean_verdict_matches_the_independent_mirror(key):
         f"changing either.")
 
 
-@pytest.mark.parametrize("key", sorted(ALL_CORPORA))
+@pytest.mark.parametrize("key", sorted(REPORTED_INPUTS))
 def test_lean_taint_equals_python_compute_taint(key):
-    """(C) `isDerived` (Lean `taintedKeys`) == `zanzibar_utils_v1.compute_taint`."""
-    from zanzibar_utils_v1 import compute_taint, parse_schema_ast
+    """(C) `isDerived` (Lean `taintedKeys`) == `zanzibar_utils_v1.compute_taint`.
+
+    A `REFUSED_CORPORA` input is parsed UNCHECKED (`TK106`, 2026-09-26). Decision: keep it
+    rather than exclude it. Taint equality is a claim about the ANALYSIS, and the
+    analysis still runs on refused schemas in shipped code: `w4_fragment_report` and
+    `graph_admission_report` compute taint on `_parse_schema_ast_unchecked`. It is also the
+    only input in the sweep where taint reaches a def THROUGH a tupleset reference
+    (`inherited` is tainted because `parent` is), i.e. the `.ttu` case of `exprRefs`.
+    Curated corpora keep the checked parse, so the production parse path stays under test,
+    and (K) pins that the refused ones really are refused, so the unchecked parse hides no
+    accepted schema."""
+    from zanzibar_utils_v1 import _parse_schema_ast_unchecked, compute_taint, parse_schema_ast
 
     rep = _fragment_report(key)
     lean = {tuple(k) for k in rep["tainted"]}
     assert len(lean) == len(rep["tainted"]), f"[{key}] Lean taintedKeys has duplicates"
-    python = set(compute_taint(parse_schema_ast(ALL_CORPORA[key][0])))
+    parse = _parse_schema_ast_unchecked if key in REFUSED_CORPORA else parse_schema_ast
+    python = set(compute_taint(parse(REPORTED_INPUTS[key][0])))
     assert lean == python, (
         f"[{key}] derived-relation sets differ: Lean-only {sorted(lean - python)}, "
         f"Python-only {sorted(python - lean)}")
@@ -193,9 +230,10 @@ from formal.conformance.w4_scope_probes import PYTHON_OUTCOME, SCOPE_PROBES  # n
 #: adding a probe is free.
 MIN_SCOPE_PROBES = 18
 
-#: Every input the differential sweeps: all curated corpora plus the scope probes.
+#: Every input the differential sweeps: all curated corpora plus the scope probes, plus
+#: (`TK106`, 2026-09-26) the refused corpora, since the report reads the unchecked parse.
 DIFFERENTIAL_INPUTS: dict[str, tuple] = {
-    **{k: spec for k, spec in ALL_CORPORA.items()},
+    **{k: spec for k, spec in REPORTED_INPUTS.items()},
     **{f"PROBE:{k}": (s, t, ow) for k, (s, t, ow, _exp) in SCOPE_PROBES.items()},
 }
 
@@ -320,15 +358,20 @@ GA_FIELDS = (
 #: three corpora carry one. `derived_tupleset_ttu`'s `inherited` reads a derived
 #: tupleset (the `ttuDirect` silent half). The two `derived_userset` corpora write a
 #: userset subject onto a derived `Direct` arm (the `storeValid` silent half).
+#: `TK106` (2026-09-26): `ttuDirect` is LOUD now and `derived_tupleset_ttu` is a
+#: `REFUSED_CORPORA` input. Lean's verdict on it is unchanged (the unchecked parse is the
+#: same schema), so its row is re-keyed, not edited.
 _EXPECTED_ADMISSION_FAILURES: dict[str, tuple[str, ...]] = {
     "SCHEMAS:derived_userset_subject": ("storeValid",),
     "TTU_USERSET:derived_userset": ("storeValid",),
-    "TTU_USERSET:derived_tupleset_ttu": ("ttuDirect",),
+    "REFUSED_TUPLESET:derived_tupleset_ttu": ("ttuDirect",),
 }
 
 #: The `W4Fragment` field that also takes a MIXED field's silent half out of the premise
 #: (`graphadmission_scope_probes.py::SHADOWED`, per field rather than per probe).
-_SHADOW_FIELD = {"ttuDirect": "computedOrDirect", "storeValid": "directArmsBare"}
+#: `ttuDirect -> computedOrDirect` was removed on 2026-09-26 (`TK106`): `ttuDirect` is
+#: LOUD, so no ACCEPTED corpus may fail it at all, and (H) now says so if one does.
+_SHADOW_FIELD = {"storeValid": "directArmsBare"}
 
 
 def _field_of(label: str) -> str:
@@ -337,7 +380,7 @@ def _field_of(label: str) -> str:
 
 
 def test_admission_expectation_table_is_well_formed():
-    stale = sorted(set(_EXPECTED_ADMISSION_FAILURES) - set(ALL_CORPORA))
+    stale = sorted(set(_EXPECTED_ADMISSION_FAILURES) - set(REPORTED_INPUTS))
     assert not stale, f"_EXPECTED_ADMISSION_FAILURES names corpora that do not exist: {stale}"
     bad = sorted({f for fs in _EXPECTED_ADMISSION_FAILURES.values() for f in fs}
                  - set(GA_FIELDS))
@@ -352,7 +395,7 @@ def test_admission_field_list_is_the_lean_structure():
     assert live == GA_FIELDS, f"GraphAdmission fields: Lean source {live}, this module {GA_FIELDS}"
 
 
-@pytest.mark.parametrize("key", sorted(ALL_CORPORA))
+@pytest.mark.parametrize("key", sorted(REPORTED_INPUTS))
 def test_lean_admission_verdict_matches_the_prediction(key):
     """(G) Lean's per-field `GraphAdmission` verdict on every curated corpus equals the
     prediction made from the sizing, field for field."""
@@ -375,7 +418,11 @@ def test_lean_admission_verdict_matches_the_prediction(key):
 def test_no_corpus_is_in_w4fragment_but_outside_admission(key):
     """(H) The shadowing claim, machine-checked on the corpora: a corpus that fails a
     `GraphAdmission` field also fails that field's `W4Fragment` shadow, so the joint
-    premise never covers it silently through the other bundle."""
+    premise never covers it silently through the other bundle.
+
+    Accepted corpora only (`ALL_CORPORA`): shadowing is about what the premise could
+    silently cover, and a `REFUSED_CORPORA` input is covered by nothing because Python
+    refuses it ((K)). Its `ttuDirect` failure is checked by (G) and (L) instead."""
     rep = _fragment_report(key)
     for f in rep["admission"]["failures"]:
         assert f in _SHADOW_FIELD, (
@@ -475,7 +522,7 @@ def _mirror_inputs() -> dict[str, tuple]:
     failing inputs and leave this differential comparing `()` with `()`."""
     from zanzibar_utils_v1 import _parse_schema_ast_unchecked as parse_schema_ast
 
-    out = {k: (s, t, ow) for k, (s, t, ow) in ALL_CORPORA.items()}
+    out = {k: (s, t, ow) for k, (s, t, ow) in REPORTED_INPUTS.items()}
     for label, (s, ow, _) in GA_SCHEMA_PROBES.items():
         try:
             parse_schema_ast(s)
@@ -485,7 +532,8 @@ def _mirror_inputs() -> dict[str, tuple]:
     return out
 
 
-#: Floor on `_mirror_inputs()`: 36 corpora + 11 parseable schema probes, 2026-09-25.
+#: Floor on `_mirror_inputs()`: the 36 corpora there were then + 11 parseable schema probes, 2026-09-25.
+#: Unchanged by `TK106` (2026-09-26): measured then as 35 curated + 1 refused + 11 probes.
 MIN_MIRROR_INPUTS = 47
 
 
@@ -528,7 +576,9 @@ def _refused_by(parse, text: str) -> bool:
 @pytest.mark.parametrize("key", sorted(_mirror_inputs()))
 def test_reported_failures_are_refused_by_both_parsers(key):
     """(K) If the report (== Lean, by (J)) says this input fails `matchDecl` or `ranked`,
-    the production parser AND the oracle's refuse it. A curated corpus is accepted by both."""
+    the production parser AND the oracle's refuse it. A curated corpus is accepted by both.
+    A `REFUSED_CORPORA` input (`TK106`, 2026-09-26) is refused by both, with the TK106
+    message, whatever the report says."""
     from tests.oracle import parse_schema_ast as oracle_parse
     from zanzibar_utils_v1 import parse_schema_ast as prod_parse
 
@@ -539,6 +589,13 @@ def test_reported_failures_are_refused_by_both_parsers(key):
         if key in ALL_CORPORA:
             assert not fails and not refused, (
                 f"[{key}] a curated corpus fails {fails} / the {name} parser refuses it")
+        elif key in REFUSED_CORPORA:
+            assert refused, (
+                f"[{key}] is a TK106 refused corpus (boolean tupleset), but the {name} "
+                f"parser accepts it. If the refusal was relaxed on purpose, move the "
+                f"corpus back into a conformance family; do not delete this branch.")
+            with pytest.raises(ValueError, match=_TK106_REFUSAL):
+                parse(schema_text)
         elif fails:
             assert refused, f"[{key}] fails {fails}, but the {name} parser accepts it"
 
@@ -549,3 +606,64 @@ def test_refusal_sweep_sees_both_fields_fail():
     seen = {f for k in _mirror_inputs()
             for f in silent_admission_failures(_mirror_inputs()[k][0])}
     assert seen == {"matchDecl", "ranked"}, seen
+
+
+# --------------------------------------------------------------------------- #
+# (L) TK106 (2026-09-26): `ttuDirect` is REFUSED, not just reported
+# --------------------------------------------------------------------------- #
+# The user decided boolean tuplesets are refused, as OpenFGA refuses them: a relation used
+# as a TTU tupleset must be direct-only, else both parsers raise
+# (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+# `tests/oracle.py::_validate_tuplesets_direct`). That made `GraphAdmission.ttuDirect`
+# LOUD (`test_graphadmission_scope_pin.py`). (L) makes the refusal answer to LEAN, the
+# (K) idiom one field over: every sweep input Lean's decider says fails `ttuDirect` is
+# refused by both checked parsers. That the refusal is EXACTLY the field is not claimed
+# (REASONED only: both read "a tupleset declared on the same object type is directs-only",
+# but nothing compares them on inputs Lean passes), so the converse is not asserted; the
+# curated corpora are the "must still be accepted" side, by (K).
+
+_TK106_REFUSAL = "tupleset must be direct"
+
+#: Inputs Lean fails on `ttuDirect`, so (L) is not vacuous. That Lean fails them is
+#: asserted by (G) for the corpus and by (I) for the two probes (their label names the
+#: field); this pins that the (L) sweep still contains them. Measured 2026-09-26.
+_TTUDIRECT_WITNESSES = frozenset({
+    "REFUSED_TUPLESET:derived_tupleset_ttu",
+    "GA_PROBE:ttuDirect.derived/derived-tupleset",
+    "GA_PROBE:ttuDirect.untainted/tupleset-with-computed-arm",
+})
+
+
+@pytest.mark.parametrize("key", sorted(_mirror_inputs()))
+def test_lean_ttudirect_failures_are_refused_by_both_parsers(key):
+    """(L) If Lean's `graphAdmissionB` says this input fails `ttuDirect`, the production
+    parser AND the oracle's refuse it with the TK106 message.
+
+    SABOTAGE 2026-09-26 (in-process monkeypatch, no file edited,
+    `.scratch/tk106/conf_sabotage.py`): with the production refusal narrowed to the
+    pre-TK106 rule (derived tuplesets exempt, untainted computed arms still refused),
+    exactly the two DERIVED witnesses go red and the untainted one stays green::
+
+        FAILED ...::test_lean_ttudirect_failures_are_refused_by_both_parsers[GA_PROBE:ttuDirect.derived/derived-tupleset]
+        FAILED ...::test_lean_ttudirect_failures_are_refused_by_both_parsers[REFUSED_TUPLESET:derived_tupleset_ttu]
+        E   Failed: DID NOT RAISE ValueError
+
+    With either parser's refusal disabled outright, all three witnesses go red."""
+    from tests.oracle import parse_schema_ast as oracle_parse
+    from zanzibar_utils_v1 import parse_schema_ast as prod_parse
+
+    schema_text, tuples, obj_wild = _mirror_inputs()[key]
+    rep = _lean_report(schema_text, tuples, obj_wild)
+    if rep["admission"]["fields"]["ttuDirect"]:
+        assert key not in _TTUDIRECT_WITNESSES, (
+            f"[{key}] is a recorded ttuDirect witness but Lean says the field holds")
+        return
+    for name, parse in (("production", prod_parse), ("oracle", oracle_parse)):
+        with pytest.raises(ValueError, match=_TK106_REFUSAL):
+            parse(schema_text)
+
+
+def test_ttudirect_refusal_sweep_is_not_vacuous():
+    """Anti-vacuity for (L): the witnesses are still in the sweep."""
+    missing = sorted(_TTUDIRECT_WITNESSES - set(_mirror_inputs()))
+    assert not missing, f"(L) lost its ttuDirect witnesses: {missing}"

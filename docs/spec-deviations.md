@@ -29,6 +29,49 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-09-26b — `TK106`: a `from`-tupleset must be direct-only; boolean and computed tuplesets are refused
+
+**User adjudication, not a spec divergence found by a session.** The user decided: *"Okay
+yes let's close block this shape then"*: refuse a boolean tupleset, as OpenFGA does ("the
+relation is referenced in at least one tupleset and thus must be a direct relation").
+
+**Why.** `from` walks the STORED tuples of its tupleset, never its computed membership. So
+any non-direct arm on a tupleset was silently IGNORED by every `from` that used it, on
+every backend alike. PROBED 2026-09-26 on ParityEngine: with `parent: [folder] but not
+blockedp`, `check(f1 parent d1)` was False, yet `alice view d1` via f1 was True.
+
+**Before this, the backends disagreed about refusing the shape:**
+- the graph refused the UNTAINTED computed form at compile time
+  (`_validate_ttu_tuplesets`, `UnsupportedByGraphIndex`);
+- the set engine degraded past that refusal and answered;
+- nothing refused the TAINTED (boolean) form.
+
+**Now it is a parse-time rule of the whole system**, tainted or not
+(`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+`tests/oracle.py::_validate_tuplesets_direct`). Only Directs, or a union of Directs, may
+be a tupleset, wildcard restrictions included. `GraphAdmission.ttuDirect` goes MIXED ->
+LOUD. The behaviour-preserving rewrite for every refused schema is
+`parent_link: [<every type parent names>]`, used by the `from`. It is pinned to give the
+old answers in `tests/test_tupleset_must_be_direct.py`.
+
+**Golden and fixture changes, deliberate:**
+- `tests/fga_schemas/tupleset_shapes.fga` is RETIRED with its snapshot golden: every
+  relation in it was a refused shape.
+- `tests/fga_schemas/demorgans_law_1.fga` is TRIMMED to its legal
+  `_all_attrs` / `labels` / `non_labels` core. Its `from` chain over boolean tuplesets
+  had always evaluated CONSTANTLY EMPTY.
+- The `demorgans_law_1` golden was regenerated: the old golden file was deleted, then
+  `ZANZIBAR_UPDATE_SNAPSHOTS=1`. The new golden is exactly the old one restricted to the
+  three kept relations.
+
+The RC1 regression pin (a type reaching a tupleset only through `but not`) now pins a
+REFUSAL, because the shape cannot be written. RC2's star-parent fix and the 2026-08-21
+userset-bridge release-leak fix are still live, and their pins moved to legal schemas and
+were re-sabotaged.
+
+Detail, measurements and sabotage:
+[`tk106-boolean-tuplesets-2026-09-26.md`](tk106-boolean-tuplesets-2026-09-26.md).
+
 ## 2026-09-26 — `ASK-1`: schemas must be self-consistent; dangling references and reference cycles are refused
 
 **User adjudication, not a spec divergence found by a session.** The user decided: *"I
