@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-22
-moved: 2026-09-27c
-updated: 2026-09-27c
+moved: 2026-09-27d
+updated: 2026-09-27d
 closed:
 ---
 
@@ -83,3 +83,7 @@ Three pieces of build work:
   line goes, and the `ready ...` line it should mirror.
 
 ## Log
+
+### 2026-09-27d
+
+IMPLEMENTED in a workflow worktree (branch worktree-wf_5557c336-8fc-4, base master d4ea804); map, decisions D1-D8 and literal evidence: docs/tk96-ask-channel-2026-09-27.md. LANDED: (1) task.py asks -- open ASK-* oldest first by created, age in days, blocks, NEXT flag; (2) board prints one asks line under ready, ALWAYS (0 open included), with "K at NEXT -- raise in chat" when K>0, and asks joined NEXT_COMMANDS; (3) handoff_lint.py::check_session_receipt requires asked: naming EVERY open NEXT ask (asked: none is RED then; unknown ids RED). SABOTAGE: handoff_lint on a tree copy with ASK-2 at NEXT and no asked: line -> rc=1; same copy with the block disabled -> clean rc=0. Mutation sweep 29/29 killed, both M0 controls green. NOT RUN here: lean and conf-tiles (no .lake in a worktree). Still owed by the write-back: the session-log header still says two receipt lines. Next action: merge, run lean on main, close TK96.

@@ -63,7 +63,10 @@ IVM delta processor.
     the output of `python scripts/task.py lint`, and `read: board only` /
     `read: board + note` — an honest self-report of what you actually read to start
     work. The lint line is the visible hole if the tree was left unlinted; the read line
-    is the only way to learn whether the query actually REPLACED the file read.
+    is the only way to learn whether the query actually REPLACED the file read. **A third
+    line is conditional** (`TK96`, 2026-09-27): while any open `ASK-*` row sits at `NEXT`,
+    raise each with the user in chat and write `asked: ASK-<n>[, ASK-<m>]` naming all of
+    them — `asked: none` is red then (`python scripts/task.py asks` lists them).
   * ⚠ **A `close -m` / `comment -m` message with backticks inside DOUBLE quotes is
     command-substituted by the shell** — the backticked text vanishes silently. Use single
     quotes, or a heredoc, or a file.

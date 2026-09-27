@@ -860,8 +860,9 @@ def test_board_footer_names_every_advertised_verb():
                              '(known: %s)' % (verb, sorted(ops)))
         assert entry in footer, 'footer lost %r:\n%s' % (entry, footer)
 
-    # Every verb the BODY advertises must be reachable from the footer too.
-    for verb in ('show', 'ready'):
+    # Every verb the BODY advertises must be reachable from the footer too. `asks` joined
+    # 2026-09-27d (TK96): the board's `asks ...` line names it, same shape as `ready`.
+    for verb in ('show', 'ready', 'asks'):
         assert verb in body, 'the board body no longer advertises %r:\n%s' % (verb, body)
         assert verb in [e.split()[0] for e in TM.NEXT_COMMANDS], (
             'the board advertises `python %s %s` in its body but the footer does not '
@@ -2945,6 +2946,10 @@ def test_board_stays_under_its_size_ceiling():
         % out_text(out))
     assert len(lines) >= 30, ('this corpus cannot produce a board this short -- the '
                               'ceiling is being met by an empty view:\n%s' % out_text(out))
+    # The `asks ...` line (TK96, 2026-09-27d) is printed at zero too, so it is part of
+    # every board this ceiling measures -- asserted, so a later change that drops it at
+    # zero cannot quietly buy the ceiling a line.
+    assert sum(1 for l in lines if l.startswith('asks   ')) == 1, out_text(out)
 
     assert len(lines) <= TM.BOARD_MAX_LINES, (
         'the full-budget board is %d lines, over the stated ceiling of %d. The number is '
@@ -4031,6 +4036,166 @@ def test_the_sabotage_record_is_complete():
     assert len(live) == 4, sorted(live)
     assert len(bprime) == 3, sorted(bprime)
     assert len(rf) == 2, sorted(rf)
+    # The `asks` view's two write-path sabotages (TK96, 2026-09-27d), own bucket again.
+    ask = [n for n in names if n.startswith('test_sabotage_ask_')]
+    assert len(ask) == 2, sorted(ask)
     # And the harness the whole file rests on is the real tool, not a leftover copy.
     assert TASK_PY == REAL_TASK_PY, TASK_PY
     assert os.path.isfile(REAL_TASK_PY), REAL_TASK_PY
+
+
+# --- `asks`: the ASK-* channel (TK96, 2026-09-27d) -------------------------------------
+#
+# `task.py asks` lists open `ASK-*` rows (questions only the USER can answer) oldest
+# first, with age in days and what each blocks; `board` prints one `asks ...` line under
+# `ready ...`. The fail-red half -- the ledger's `asked:` receipt -- is
+# `scripts/handoff_lint.py::check_session_receipt`, pinned in
+# tests/test_handoff_lint_b_prime.py. Decisions: docs/tk96-ask-channel-2026-09-27.md.
+
+def _days_ago(n):
+    return (datetime.date.today() - datetime.timedelta(days=n)).isoformat()
+
+
+def ask_tree(name):
+    """Asks whose order differs under EVERY plausible wrong key, so a sort by the wrong
+    field is red rather than lucky:
+
+      * ASK-2  filed 12 days ago, re-ranked TODAY (`moved`), at NEXT, blocks T2 -- first
+        by `created`, LAST by `moved`;
+      * ASK-5 / ASK-10 filed the same day -- the tie is broken by the id's NUMBER, where a
+        string sort puts `ASK-10` first;
+      * `ASK-3b` and `TASK-4` are OLDER than all of them and are not asks (the pattern is
+        anchored), and a CLOSED `ASK-1` at NEXT is not open.
+    """
+    root = fresh(name)
+    os.makedirs(os.path.join(root, 'tasks', 'closed'))
+    today = _days_ago(0)
+    place(root, 'T1', 'now', title='the now row', pri='NOW')
+    place(root, 'T2', 'blocked', title='blocked on the user', deps=['ASK-2'],
+          created=today, moved=today)
+    place(root, 'ASK-2', 'two', title='ask two', pri='NEXT', created=_days_ago(12),
+          moved=today)
+    place(root, 'ASK-10', 'ten', title='ask ten', created=_days_ago(3), moved=_days_ago(3))
+    place(root, 'ASK-5', 'five', title='ask five', created=_days_ago(3),
+          moved=_days_ago(3))
+    place(root, 'ASK-3b', 'not-an-ask', title='not an ask', created=_days_ago(50),
+          moved=_days_ago(50))
+    place(root, 'TASK-4', 'not-an-ask', title='not an ask either', created=_days_ago(40),
+          moved=_days_ago(40))
+    place(root, 'ASK-1', 'answered', closed_dir=True, title='answered', pri='NEXT',
+          created=_days_ago(60), moved=today, closed=today)
+    return root
+
+
+def test_asks_lists_open_asks_oldest_first_with_age_and_blockers():
+    """The view the row asked for (TK96 step 1). Guarded by two permanent sabotages below
+    (`test_sabotage_ask_*`): the sort keyed on `moved`, and the age taken from `moved`."""
+    root = ask_tree('asks')
+    rc, out, err = run(root, 'asks')
+    assert rc == 0, err
+    lines = out_lines(out)
+    rows = [l for l in lines if re.match(r'ASK-', l)]
+    assert [r.split()[0] for r in rows] == ['ASK-2', 'ASK-5', 'ASK-10'], (
+        'asks are not oldest-first by `created`, id number breaking ties:\n%s'
+        % out_text(out))
+    assert rows[0].split()[1:4] == ['NEXT', '12', 'days'], rows[0]
+    assert rows[1].split()[1:4] == ['LATER', '3', 'days'], rows[1]
+    text = out_text(out)
+    assert 'blocks T2' in text, text
+    assert text.count('NEXT: raise it with the user') == 1, text
+    assert '3 open ask(s)' in text, text
+
+    rc, data, err = rj(root, 'asks')
+    assert rc == 0, err
+    assert [(d['id'], d['age_days'], d['blocks']) for d in data] == [
+        ('ASK-2', 12, ['T2']), ('ASK-5', 3, []), ('ASK-10', 3, [])], data
+
+
+def test_board_prints_one_asks_line_under_ready():
+    """TK96 step 2: one line, directly under `ready ...`, naming the count, the OLDEST
+    age, and -- when any ask is at NEXT -- that the session owes the user a question."""
+    root = ask_tree('asks-board')
+    rc, out, err = run(root, 'board')
+    assert rc == 0, err
+    lines = out_lines(out)
+    ready = [i for i, l in enumerate(lines) if l.startswith('ready  ')]
+    asks = [i for i, l in enumerate(lines) if l.startswith('asks   ')]
+    assert len(ready) == 1 and len(asks) == 1, out_text(out)
+    assert asks[0] == ready[0] + 1, 'the asks line is not directly under ready:\n%s' % (
+        out_text(out))
+    line = lines[asks[0]]
+    assert line.startswith('asks   3 open, oldest 12 days, 1 at NEXT -- raise in chat   '
+                           '(python '), line
+    assert line.endswith(' asks)'), line
+
+    rc, data, err = rj(root, 'board')
+    assert rc == 0, err
+    assert data['asks'] == ['ASK-2', 'ASK-5', 'ASK-10'], data['asks']
+    assert data['asks_next'] == ['ASK-2'], data['asks_next']
+
+
+def test_asks_line_is_printed_at_zero_too():
+    """Decision D4: the line never disappears. A line that vanishes at zero is
+    indistinguishable from a board that lost the feature, and a constant line keeps
+    BOARD_MAX_LINES a sum of constants. No `at NEXT` clause when nothing is at NEXT."""
+    root = good_tree('asks-zero')
+    rc, out, err = run(root, 'board')
+    assert rc == 0, err
+    asks = [l for l in out_lines(out) if l.startswith('asks   ')]
+    assert len(asks) == 1 and asks[0].startswith('asks   0 open   (python '), asks
+    rc, out, err = run(root, 'asks')
+    assert rc == 0, err
+    assert '(no open ASK-* rows' in out_text(out), out_text(out)
+    rc, data, err = rj(root, 'asks')
+    assert rc == 0 and data == [], (err, data)
+
+    # One ask, not at NEXT: count and age, still no `at NEXT` clause.
+    place(root, 'ASK-9', 'nine', title='ask nine', created=_days_ago(1), moved=_days_ago(1))
+    rc, out, err = run(root, 'board')
+    asks = [l for l in out_lines(out) if l.startswith('asks   ')]
+    assert asks[0].startswith('asks   1 open, oldest 1 day   (python '), asks
+
+
+def test_ask_age_is_whole_days_from_created_and_honest_when_malformed():
+    today = datetime.date(2026, 9, 27)
+    t = TM.Task('x', {'id': 'ASK-1', 'created': '2026-09-15b'}, '', False)
+    assert TM.ask_age_days(t, today) == 12
+    for bad in ('', '2026-9-15', '2026-02-30', 'yesterday'):
+        t = TM.Task('x', {'id': 'ASK-1', 'created': bad}, '', False)
+        assert TM.ask_age_days(t, today) is None, bad
+    assert [TM.days_text(n) for n in (None, 0, 1, 2)] == [
+        '? days', '0 days', '1 day', '2 days']
+    assert TM.ASK_ID.match('ASK-12') and not TM.ASK_ID.match('ASK-12b')
+    assert not TM.ASK_ID.match('XASK-1') and not TM.ASK_ID.match('ask-1')
+
+
+def test_sabotage_ask_sort_keyed_on_moved():
+    """`open_asks` sorted by `moved` instead of `created` -- the plausible refactor
+    ("moved is what the staleness warning reads"). ASK-2 was re-ranked today, so it sinks
+    to the bottom and the oldest question stops being first.
+
+    Observed 2026-09-27d::
+
+        AssertionError: asks are not oldest-first by `created`, id number breaking ties:
+    """
+    message = writepath_sabotage(
+        'sab_ask_sort.py',
+        "key=lambda t: (t.created or '',", "key=lambda t: (t.moved or '',",
+        test_asks_lists_open_asks_oldest_first_with_age_and_blockers)
+    assert 'oldest-first' in message, message
+
+
+def test_sabotage_ask_age_from_moved():
+    """`ask_age_days` reading `moved` -- the same plausible confusion one function over.
+    A question filed 12 days ago and re-ranked today would report its age as 0.
+
+    Observed 2026-09-27d (the guarding assertion's message is the offending row)::
+
+        AssertionError: ASK-2    NEXT    0 days    ask two
+    """
+    message = writepath_sabotage(
+        'sab_ask_age.py',
+        "    created = task.created or ''\n    if not SESSION_KEY.match(created):",
+        "    created = task.moved or ''\n    if not SESSION_KEY.match(created):",
+        test_asks_lists_open_asks_oldest_first_with_age_and_blockers)
+    assert 'NEXT    0 days' in message, message

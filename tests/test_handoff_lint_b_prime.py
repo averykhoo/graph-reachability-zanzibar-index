@@ -311,3 +311,162 @@ def test_the_two_checks_are_in_the_list_and_nothing_was_inserted():
     assert names[10] == "check_session_receipt", names
     assert names[11] == "check_restated_counts", names
     assert len(names) == 12, names
+
+
+# --- check_session_receipt: the conditional `asked:` receipt (TK96, 2026-09-27) ----------
+#
+# An `ASK-<n>` row at NEXT is a question the session must raise with the user in chat; the
+# newest ledger entry then carries `asked: <every NEXT ask>`. Decisions and the full
+# sabotage/mutation record: docs/tk96-ask-channel-2026-09-27.md. The mutation sweep's
+# literal observations are transcribed on `test_asked_receipt_is_red_until_every_next_ask_
+# is_named` below.
+
+BOTH = "task lint: clean (13 checks, 227 task file(s) parsed)\nread: board only"
+
+
+def _write_closed(root: Path, tid: str, pri: str) -> None:
+    d = root / "tasks" / "closed"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{tid}-x.md").write_text(TASK_FILE.format(tid=tid, pri=pri), encoding="utf-8")
+
+
+def test_asked_receipt_is_red_until_every_next_ask_is_named(tmp_path, monkeypatch):
+    """THE property that makes the nag fail-red (TK96 Traps: steps 1-2 alone are a doc
+    warning). Two asks at NEXT; the receipt must name BOTH. The OLDER entry names both in
+    every case, so a check that read the whole ledger instead of the newest entry passes
+    here -- the same control `test_receipt_is_red_when_either_line_is_missing_from_the_
+    newest_entry` carries for the other two receipts.
+
+    Sabotage, observed 2026-09-27d before this was believed (the new block in
+    `check_session_receipt` deleted -- i.e. steps 1-2 landed and step 3 did not)::
+
+        AssertionError: []
+
+    and end to end, `scripts/handoff_lint.py` (what `verify.sh lean` step 4f runs) on a
+    copy of the live tree with `ASK-2` flipped to NEXT and no `asked:` line -- rc=1,
+    `handoff_lint: 1 violation(s)`, the one failure being (headline elided)::
+
+        FAIL: docs/history/session-log.md: the newest entry (## 2026-09-27c ...) -- it
+        has no `asked:` line, but ASK-2 sit(s) at NEXT. A NEXT ask is a question only
+        the user can answer, ...
+
+    while the same copy with the new block disabled printed `handoff_lint: clean (12
+    checks)`, rc=0 -- steps 1-2 alone failing by passing, as the row's Traps predicted.
+    Full transcript: docs/tk96-ask-channel-2026-09-27.md section 4.
+    """
+    monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
+    _write_tasks(tmp_path, {"TK1": "NOW", "ASK-3": "NEXT", "ASK-5": "NEXT",
+                            "ASK-4": "LATER"})
+    older = BOTH + "\nasked: ASK-3, ASK-5"
+
+    _write_ledger(tmp_path, BOTH, older_body=older)
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "it has no `asked:` line" in out[0], out
+    assert "ASK-3, ASK-5 sit(s) at NEXT" in out[0], out
+    assert "2026-09-06c newest" in out[0], out
+
+    # An honest `none` is the one report this receipt exists to refuse.
+    _write_ledger(tmp_path, BOTH + "\nasked: none", older_body=older)
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "it says `asked: none`" in out[0], out
+
+    # Naming one of two is not the receipt. Ids are compared exactly.
+    _write_ledger(tmp_path, BOTH + "\nasked: ASK-3", older_body=older)
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "does not name ASK-5, but ASK-5 sit(s)" in out[0], out
+
+    _write_ledger(tmp_path, BOTH + "\nasked: ASK-5, ASK-35", older_body=older)
+    out = _run(handoff_lint.check_session_receipt)
+    assert any("does not name ASK-3," in o for o in out), out
+
+    # `none` then an id reads as `none`: the id after it is not a receipt.
+    _write_ledger(tmp_path, BOTH + "\nasked: none, ASK-3, ASK-5", older_body=older)
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "it says `asked: none`" in out[0], out
+
+    # GREEN: both named, on one line or across two, in any order.
+    for body in ("asked: ASK-3, ASK-5", "asked: ASK-5,ASK-3",
+                 "asked: ASK-3\nasked: ASK-5", "asked: ASK-3, ASK-4, ASK-5"):
+        _write_ledger(tmp_path, BOTH + "\n" + body, older_body=older)
+        assert _run(handoff_lint.check_session_receipt) == [], body
+
+
+ASKED_SHAPES = (
+    "asked: ASK-3",
+    "`asked: ASK-3`",
+    "**asked: ASK-3.**",
+    "asked: ASK-3 (raised at session start; the user said: later)",
+    "  - asked: ASK-3",
+    "asked: `ASK-3`",        # a backticked id: only the NORMALISED line reads as a receipt
+)
+
+ASKED_NEAR_MISSES = (
+    "asked ASK-3",           # no colon
+    "asked: ask-3",          # the id is case-exact, as in the tree
+    "asked: ASK-3b",         # not the id ASK-3
+    "asked: ASK-3-x",
+    "unasked: ASK-3",        # a different word
+    "asked: nonetheless ASK-3",
+    "asked: ASK 3",
+)
+
+
+@pytest.mark.parametrize("line", ASKED_SHAPES)
+def test_asked_receipt_accepts_the_shapes_the_other_receipts_accept(tmp_path, monkeypatch,
+                                                                    line):
+    """Same normalisation as the lint and read receipts (backticks and `**` dropped,
+    searched not anchored), so the ledger's existing writing habits carry over."""
+    monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
+    _write_tasks(tmp_path, {"TK1": "NOW", "ASK-3": "NEXT"})
+    _write_ledger(tmp_path, "prose\n%s\n%s\nmore prose" % (BOTH, line))
+    assert _run(handoff_lint.check_session_receipt) == []
+
+
+@pytest.mark.parametrize("line", ASKED_NEAR_MISSES)
+def test_asked_receipt_refuses_near_misses(tmp_path, monkeypatch, line):
+    monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
+    _write_tasks(tmp_path, {"TK1": "NOW", "ASK-3": "NEXT"})
+    _write_ledger(tmp_path, "%s\n%s" % (BOTH, line))
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "ASK-3 sit(s) at NEXT" in out[0], (line, out)
+
+
+def test_asked_receipt_is_optional_without_a_next_ask(tmp_path, monkeypatch):
+    """No open ask at NEXT, no requirement -- not for a LATER ask, not for a CLOSED file
+    whose frontmatter still says NEXT (closed/ is not a standing nag), and not for an id
+    that merely resembles the series. `asked: none` is accepted here."""
+    monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
+    _write_tasks(tmp_path, {"TK1": "NOW", "ASK-3": "LATER", "ASKX-4": "NEXT",
+                            "TASK-5": "NEXT", "ASK-8b": "NEXT"})
+    _write_closed(tmp_path, "ASK-7", "NEXT")
+    for body in (BOTH, BOTH + "\nasked: none", BOTH + "\nasked: ASK-7"):
+        _write_ledger(tmp_path, body)
+        assert _run(handoff_lint.check_session_receipt) == [], body
+
+    # Optional is not unchecked: a line that IS written must still name real ids.
+    _write_ledger(tmp_path, BOTH + "\nasked: ASK-9")
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "names ASK-9 on its `asked:` line" in out[0], out
+
+    # The instrument control for the loop above: the SAME tree with ASK-3 promoted is red,
+    # so the green was the harvester reading NEXT correctly, not reading nothing.
+    _write_tasks(tmp_path, {"TK1": "NOW", "ASK-3": "NEXT"})
+    _write_closed(tmp_path, "ASK-7", "NEXT")
+    _write_ledger(tmp_path, BOTH)
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "ASK-3 sit(s) at NEXT" in out[0], out
+
+
+def test_asked_receipt_refuses_an_id_the_tree_does_not_know(tmp_path, monkeypatch):
+    """A typo guard: `ASK-9` named beside the real `ASK-3` would otherwise pass. A CLOSED
+    ask is known (ask, get the answer, close -- all in one session), so it is accepted."""
+    monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
+    _write_tasks(tmp_path, {"TK1": "NOW", "ASK-3": "NEXT"})
+    _write_closed(tmp_path, "ASK-7", "LATER")
+
+    _write_ledger(tmp_path, BOTH + "\nasked: ASK-3, ASK-7")
+    assert _run(handoff_lint.check_session_receipt) == []
+
+    _write_ledger(tmp_path, BOTH + "\nasked: ASK-3, ASK-9")
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "names ASK-9 on its `asked:` line" in out[0], out

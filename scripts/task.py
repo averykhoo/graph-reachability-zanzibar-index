@@ -8,6 +8,7 @@ Run it from anywhere inside a tree that contains ``tasks/config.json``::
     python task.py list --pri NEXT
     python task.py show P3
     python task.py ready
+    python task.py asks                   # open ASK-* rows: questions for the USER
     python task.py lint                   # exit 1 on any violation
     python task.py counts                 # measure the corpus (see NO RESTATED COUNTS)
 
@@ -723,6 +724,16 @@ PROGRESS_OPS = ('new', 'set', 'promote', 'dep', 'comment', 'touch', 'close', 're
 # turn off: a HOLD item with satisfied deps is still held, and offering it as ready is how
 # a hold quietly stops meaning anything.
 READY_PRIS = ('NOW', 'NEXT', 'LATER')
+
+# THE `ASK-*` SERIES (`TK96`, decided with the user 2026-09-22): a question only the USER
+# can answer, filed as an ordinary row via `new --id ASK-<n>`. No schema change -- the id
+# prefix IS the marker, which is why the pattern is anchored and exact: `ASKX-1` or
+# `ASK-1b` is not an ask, and a row that is not an ask must not be counted as one. An ask
+# at NEXT is a standing nag: the session must raise it in chat, and
+# `scripts/handoff_lint.py::check_session_receipt` makes the ledger say it did (its own
+# copy of this pattern, `_ASK_ID`, is deliberately NOT imported from here -- that script
+# cross-checks this one). `asks` lists them; `board` prints one line about them.
+ASK_ID = re.compile(r'^ASK-(\d+)$')
 
 # Session key = YYYY-MM-DD with an optional single lowercase suffix, matching the repo's
 # session-ledger heading keys (docs/history/session-log.md). PLAIN STRING comparison sorts
@@ -1999,6 +2010,8 @@ def op_board(store, args):
             'open_counts': counts,
             'stale_before': stale,
             'stale': [t.id for t in now + nxt if t.moved and t.moved < stale],
+            'asks': [t.id for t in open_asks(store)],
+            'asks_next': [t.id for t in open_asks(store) if t.pri == 'NEXT'],
         })
         return 0
 
@@ -2049,6 +2062,7 @@ def op_board(store, args):
     emit()
     emit('ready  %d open task(s) have all deps closed  (python %s ready)'
          % (len(ready), prog()))
+    emit(asks_line(store, prog()))
     emit('open   %s' % '  '.join('%s %d' % (p, counts.get(p, 0)) for p in PRI_VALUES))
     for i, line in enumerate(footer_lines(prog())):
         emit('%s%s' % ('next   ' if i == 0 else '       ', line))
@@ -2062,7 +2076,7 @@ def op_board(store, args):
 # list it can be asserted against: `test_board_footer_names_every_advertised_verb` requires
 # every op the board's own body advertises to appear here, and every entry to be a real
 # subcommand, so a fourth silent omission fails the suite instead of shipping.
-NEXT_COMMANDS = ('show <id>', 'ready', 'list --pri LATER', 'lint')
+NEXT_COMMANDS = ('show <id>', 'ready', 'list --pri LATER', 'lint', 'asks')
 
 
 def footer_lines(prog_name, width=78):
@@ -2363,6 +2377,89 @@ def op_ready(store, args):
         emit('%-8s %-7s %-2s %s' % (t.id, t.pri, t.size or '?', t.title))
     emit()
     emit('%d ready (HOLD and SOMEDAY are excluded by definition)' % len(rows))
+    return 0
+
+
+def ask_age_days(task, today=None):
+    """Whole days since the ask was FILED (`created`), or None if `created` is malformed.
+
+    `created`, not `moved`: an ask re-ranked yesterday is still a question the user has
+    been sitting on since it was filed, and the age is the nag's whole argument. This is
+    the one place the tool parses a session key as a date (see SESSION_KEY: everywhere
+    else keys only ever compare as strings); the date part is the first ten characters
+    because the optional letter suffix orders sessions within a day, not days.
+    """
+    created = task.created or ''
+    if not SESSION_KEY.match(created):
+        return None
+    try:
+        filed = datetime.date(*[int(p) for p in created[:10].split('-')])
+    except ValueError:
+        return None
+    return ((today or datetime.date.today()) - filed).days
+
+
+def days_text(age):
+    return '? days' if age is None else '%d day%s' % (age, '' if age == 1 else 's')
+
+
+def open_asks(store):
+    """Open `ASK-*` rows, OLDEST FIRST: by `created` (a string sort, sound for session
+    keys -- see SESSION_KEY), then by the id's number so `ASK-2` precedes `ASK-10`."""
+    rows = [t for t in store.open_tasks() if ASK_ID.match(t.id)]
+    return sorted(rows, key=lambda t: (t.created or '', int(ASK_ID.match(t.id).group(1))))
+
+
+def asks_line(store, prog_name):
+    """The board's one line about asks. ALWAYS printed, zero included (`TK96` decision D4):
+    a line that disappears at zero is indistinguishable from a board that lost the
+    feature, and a constant line keeps BOARD_MAX_LINES a sum of constants."""
+    asks = open_asks(store)
+    at_next = [t for t in asks if t.pri == 'NEXT']
+    if not asks:
+        head = '0 open'
+    else:
+        age = ask_age_days(asks[0])
+        head = '%d open, oldest %s' % (len(asks), days_text(age))
+    if at_next:
+        head += ', %d at NEXT -- raise in chat' % len(at_next)
+    return 'asks   %s   (python %s asks)' % (head, prog_name)
+
+
+def op_asks(store, args):
+    """Open `ASK-*` rows, oldest first, with their age and what each one blocks.
+
+    `blocks` is the dep graph read backwards: the OPEN tasks whose `deps` name the ask.
+    An ask with no dependents is a question; one with dependents is a hard blocker
+    (`TK96`'s composition argument), and this is the view where that difference is read.
+    A NEXT ask is flagged because the session owes the user that question in chat, and
+    the ledger must say so (`handoff_lint.py::check_session_receipt`, `asked:` line).
+    """
+    asks = open_asks(store)
+    blocked_by = {}
+    for t in store.open_tasks():
+        for d in t.deps:
+            blocked_by.setdefault(d, []).append(t.id)
+    if args.json:
+        emit_json([dict(t.as_dict(), age_days=ask_age_days(t),
+                        blocks=sorted(blocked_by.get(t.id, [])))
+                   for t in asks])
+        return 0
+    if not asks:
+        emit('(no open ASK-* rows: nothing is waiting on the user)')
+        return 0
+    for t in asks:
+        age = ask_age_days(t)
+        emit('%-8s %-7s %-9s %s' % (t.id, t.pri, days_text(age), t.title))
+        blocks = sorted(blocked_by.get(t.id, []))
+        if blocks:
+            emit('         blocks %s' % ', '.join(blocks))
+        if t.pri == 'NEXT':
+            emit('         NEXT: raise it with the user in chat this session, and name it '
+                 'on the ledger\'s `asked:` line')
+    emit()
+    emit('%d open ask(s), oldest first (filed = `created`; answer one with close -m)'
+         % len(asks))
     return 0
 
 
@@ -3954,6 +4051,8 @@ def build_parser():
                         % SHOW_LOG_HEAD)
 
     read_op('ready', 'open NOW/NEXT/LATER tasks whose deps are all closed')
+    read_op('asks', 'open ASK-* rows (questions only the user can answer), oldest first, '
+                    'with age in days and what each blocks')
     read_op('lint', 'mechanical checks; exit 1 on any violation')
     read_op('counts', 'corpus size, measured -- the value min_tasks_parsed must carry')
 
@@ -4056,6 +4155,7 @@ def build_parser():
 
 OPS = {
     'board': op_board, 'list': op_list, 'show': op_show, 'ready': op_ready,
+    'asks': op_asks,
     'lint': op_lint, 'counts': op_counts, 'new': op_new, 'set': op_set,
     'ack': retired_verb, 'sync': retired_verb,
     'promote': op_promote,

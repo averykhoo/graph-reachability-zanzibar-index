@@ -95,6 +95,15 @@ schema feature — it is the `--id` escape above used deliberately, exactly as `
 * **`LATER` by default; `NEXT` means "remind me every session."** A session that sees an
   `ASK-*` at `NEXT` must raise it with the user, in chat, at least once that session.
   `NEXT` is capped at 3, so there are at most three standing nags.
+* **The nag is mechanical (`TK96`, 2026-09-27).** While any open `ASK-*` sits at `NEXT`,
+  the newest session-log entry must carry `asked: ASK-<n>[, ASK-<m>]` naming EVERY one of
+  them, or `handoff_lint.py::check_session_receipt` turns `verify.sh lean` red. `asked:
+  none` is red then (an honest "did not ask" is exactly what the receipt refuses); to stop
+  the nag, demote the row to `LATER`. With no ask at `NEXT` the line is optional.
+* **Where to see them.** `python scripts/task.py asks` lists the open ones oldest first
+  (by `created`), with age in days, what each one blocks, and a flag on the `NEXT` ones.
+  `board` always prints one line under `ready`: `asks   N open, oldest D days` (plus
+  `K at NEXT -- raise in chat` when K is nonzero).
 * **Keep it narrow.** An engineering call the model should simply take — "mechanise this
   ratchet or not" — is a plain `TK` row. [`../CLAUDE.md`](../CLAUDE.md) § "Who decides" is
   the test. A series that accepts everything is a series nobody reads.
