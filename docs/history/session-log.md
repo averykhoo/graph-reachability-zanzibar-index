@@ -30,6 +30,49 @@ from here.
 
 ---
 
+## 2026-09-27b — `TK71` CLOSED: the enum gate could not shrink; three absorbing drivers could, now pinned exactly
+
+rows: TK71 (closed), TK110 NEW (LATER), TK95 (NEXT -> NOW, to refill the empty slot), TK101 (read-first pointer re-aimed at the closed TK71 file)
+
+`task lint: clean (13 checks, 227 task file(s) parsed), 33 warning(s)`
+
+`read: board only`
+
+The user asked for the next items, then said "go for it" on `TK71`.
+
+* **The row's premise was wrong for the module it named.** `test_conformance_enum.py`
+  cannot shrink quietly. Both legs raise on a refusal, and the space size and store count
+  are pinned exactly, so survival is 100% by construction. Sabotage S3 (refuse every write
+  to `d2`) reddened it with a propagating `AdmissionRejected`. Its docstring now says why it
+  carries no floor.
+* **`CORRESPONDENCE.md` §7 was wrong in two places, and is corrected in place.** The 132/299
+  rejections belong to `group_userset` (excluded from the enum module), not
+  `two_stratum_cascade`. The exact `== 132` pin exists
+  (`tests/test_zt_p5_readjudication.py::test_zt_p5_group_userset_admission_domains_are_identical`).
+* **The real gap: three drivers ABSORBED a refusal and nothing counted it.** These were
+  `test_conformance_remove.py::_drive` (bare `ValueError`), `backends.py::graphindex_drive_ops`
+  and `test_conformance_generated.py`. Measured over 27 corpora x 5 seeds: only `deep_grid`
+  poisons anything, `(2, 4, 1, 3, 1)`, and all of those are legitimate `parent` cycles. The
+  graph poisons the same tuples in 135 of 135. The generated test refuses 0 of its ops on
+  every seed. All are now EXACT pins (`::_assert_poisoned`, via a new `poisoned_out`
+  argument on the graph side), and `_drive` catches `AdmissionRejected` only.
+* **Sabotage, pre-fix vs fixed:** S1 (over-eager cycle guard), S2 (a silent cycle guard) and
+  S4 (a plain `ValueError` engine bug) were GREEN on the pre-fix remove module and are RED
+  now. G1 (graph over-reject) is RED. S3 left the pre-fix generated module green on 38 of 40
+  seeds. The table is in [`docs/tk71-admission-survival-2026-09-27.md`](../tk71-admission-survival-2026-09-27.md)
+  § 4 (FROZEN).
+* **`TK110` filed:** `tests/` was not censused. It has 17 files with refusal catches, all
+  unclassified.
+* **Lessons:** a sabotage runner that reads pytest's log as UTF-8 crashes on its cp1252 em
+  dash *after* the restore. The restore was fine, but its receipt was lost, so read logs
+  with `errors="replace"`. And a Bash-heredoc `\n` inside a Python edit script landed as a
+  real newline (the known memory trap). Parse-check every edited module.
+* **Floors:** unchanged. No test was added or removed; the pins live inside existing tests.
+
+Still owed: nothing.
+
+---
+
 ## 2026-09-27 — `TK108` CLOSED: a tupleset may not restrict to a userset; every refusal says WHY and INSTEAD
 
 rows: TK108 (LATER -> NOW, comment, closed), TK71 (NOW -> NEXT -> NOW: bumped for the user's task, restored on close), TK109 NEW (LATER)

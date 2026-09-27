@@ -306,7 +306,8 @@ class GraphDriver:
         self.session.close()
 
 
-def graphindex_drive_ops(schema_text: str, ops, object_wildcards=()):
+def graphindex_drive_ops(schema_text: str, ops, object_wildcards=(),
+                         poisoned_out: set | None = None):
     """Drive the real graph index through an interleaved add/remove op sequence,
     landing on a final graph state, and return the ACCEPTED final tuple set.
 
@@ -324,6 +325,11 @@ def graphindex_drive_ops(schema_text: str, ops, object_wildcards=()):
     `ops` is a list of `(kind, tuple)` with `kind in {'add', 'remove'}`. Returns
     `(session, widx, proc, store_id, accepted_final)`; the caller owns closing
     the session (via `widx.idx.session` or the returned `session`).
+
+    `poisoned_out` (TK71, 2026-09-27): if given, the poisoned tuples are added to
+    it, so a caller can pin HOW MANY writes were absorbed. Without that pin an
+    over-reject shrinks `accepted_final`, the oracle is built from the smaller
+    store, and every comparison stays green.
     """
     drv = GraphDriver(schema_text, object_wildcards)
     poisoned: set = set()
@@ -341,4 +347,6 @@ def graphindex_drive_ops(schema_text: str, ops, object_wildcards=()):
             ok = drv.apply(tup, "remove")
             assert ok, f"remove of a present tuple was rejected: {tup}"
             present.discard(tup)
+    if poisoned_out is not None:
+        poisoned_out.update(poisoned)
     return drv.session, drv.widx, drv.proc, drv.store_id, present

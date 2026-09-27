@@ -26,10 +26,12 @@ keeping this suite inside verify.sh's fail-closed formal gate.
 
 Stores: seeded random subsets of the schema-valid raw-tuple pool over the tiny
 {u1,u2} x {d1,d2} universe (the hypothesis suite's `_op_pool` shape, Direct
-restrictions only, wildcard `*` rows included). Adds the engine rejects
-(graph-parity validation) are excluded from the compared store on all three
-corners — this gate pins READ semantics; accept/reject parity is pinned by the
-matrix/hypothesis suites.
+restrictions only, wildcard `*` rows included). No add may be REFUSED: over
+the 40 seeds the engine refuses 0 of the offered ops (measured 2026-09-27,
+`TK71`), so a refusal is a red here, not a quietly smaller store. Until then a
+refused add was dropped from the compared store on all three corners, and an
+over-reject shrank what this gate compares while it stayed green. Accept/reject
+parity itself is pinned by the matrix/hypothesis suites.
 
 Properties, per case, over the shared grid (grid built from the FULL pool so
 out-of-store subjects/objects stay probed): zcli spec == oracle (adjudication
@@ -54,6 +56,7 @@ from formal.conformance.grid import (
     assert_grid_nonvacuous, queries_for, fmt_mismatches as _fmt)
 from formal.conformance import runner
 from formal.conformance.backends import _fresh_session
+from zanzibar_utils_v1 import AdmissionRejected
 
 _N_CASES = 40
 
@@ -160,12 +163,24 @@ def test_generated_schema_zcli_parity(seed):
     from setengine import SetEngine
     eng = SetEngine(session, 's1', schema_text)
     accepted = []
+    refused = []
     for op in store_ops:
         try:
             eng.add_tuple(*op)
-        except ValueError:
-            continue                       # graph-parity rejection: excluded
+        except AdmissionRejected as e:
+            refused.append((op, str(e)))
+            continue
         accepted.append(mk_tuple(*op))
+    # ADMISSION SURVIVAL (TK71, 2026-09-27): EXACT, measured 0 refusals over all
+    # 40 seeds. This used to catch bare `ValueError` and silently exclude it,
+    # so an over-reject (or an engine bug raising `ValueError`) shrank the store
+    # while every comparison below stayed green. A new seed or generator change
+    # that legitimately produces a refusal must change this pin deliberately.
+    assert not refused, (
+        f"[generated seed={seed}] {len(refused)} of {len(store_ops)} generated "
+        f"add(s) were REFUSED at admission; none are expected (TK71):\n"
+        + "\n".join(f"  {op} -> {msg}" for op, msg in refused)
+        + f"\nschema:\n{schema_text}")
 
     # Grid from the FULL pool: names u1,u2,d1,d2 (+ ghosts, *) are always
     # probed, including subjects/objects the store never mentions.

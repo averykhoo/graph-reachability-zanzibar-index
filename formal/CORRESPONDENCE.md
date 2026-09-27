@@ -1133,10 +1133,20 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   `::SetEngine._flow_remove_edge` / `::SetEngine._flow_pair` / `::SetEngine._shape_node_ref`. Only step (2)
   has any Lean counterpart, and even that is a **premise**
   (`Spec/Confine.lean::StoreDeclared`), not an algorithm twin. **This is
-  load-bearing for the gates themselves:** `test_conformance_enum.py` enumerates
-  all stores ≤ K tuples and this code decides which are admission-valid (its
-  docstring records 132 of `two_stratum_cascade`'s 299 stores being rejected). A
-  bug here silently shrinks the enumerated space — and nothing formal watches it.
+  load-bearing for the gates themselves:** it decides which writes the
+  conformance drivers get to compare. No proof watches it. **Corrected 2026-09-27
+  (`TK71`):** this bullet used to say the enum gate "silently shrinks", and it
+  credited "132 of `two_stratum_cascade`'s 299 stores" as rejected. Both were
+  wrong. The 132/299 figure is `group_userset`'s, a shape the enum module
+  EXCLUDES, and it is pinned exactly by
+  `tests/test_zt_p5_readjudication.py::test_zt_p5_group_userset_admission_domains_are_identical`.
+  The enum module cannot shrink quietly either: a refusal there raises. A shrink
+  is possible only where a driver ABSORBS a refusal, and each such driver now pins
+  exactly how many it absorbs:
+  `formal/conformance/test_conformance_remove.py::_assert_poisoned` (set engine and
+  graph, per corpus × seed) and
+  `formal/conformance/test_conformance_generated.py::test_generated_schema_zcli_parity`
+  (zero refusals). Map: `docs/tk71-admission-survival-2026-09-27.md`.
 * **`index_v4/processor.py::DeltaProcessor.backfill` and `::DeltaProcessor.audit_fixpoint`.**
   `backfill()` is the bootstrap/repair path (and the `bulk=False` reference side
   of the bulk gate — so NEITHER side of `build_index` is the modeled

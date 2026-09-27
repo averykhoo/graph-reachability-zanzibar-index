@@ -71,7 +71,7 @@ Then say, per arm, WHICH branch newly runs. A new arm that passes is not evidenc
 - [`docs/goal-census-2026-09-22.md`](../docs/goal-census-2026-09-22.md) §2 — where this
   was censused and how it ranks against the other holes.
 - `formal/conformance/test_conformance_enum.py::_tuple_space` — the emitter, first-hand.
-- `tasks/TK71-test-conformance-enum-py-asserts-no-admission-su.md` traps — where the observation was originally recorded.
+- `tasks/closed/TK71-test-conformance-enum-py-asserts-no-admission-su.md` traps (closed 2026-09-27b) — where the observation was originally recorded.
 - `formal/conformance/test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE`, field `bareStar` —
   the Lean-side narrowness on the same shape, and the note naming its LOUD sub-case.
 

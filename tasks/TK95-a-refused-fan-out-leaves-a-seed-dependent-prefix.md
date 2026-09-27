@@ -2,7 +2,7 @@
 id: TK95
 title: a refused fan-out leaves a seed-dependent prefix of writes and nothing pins the rollback
 brief: MEASURED: 21 aborts a run, every one at fan-out position >=2; prefix moves with the hash seed
-pri: NEXT
+pri: NOW
 size: S
 deps: []
 related: [TK93]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-21b
-moved: 2026-09-21b
-updated: 2026-09-21b
+moved: 2026-09-27b
+updated: 2026-09-27b
 closed:
 ---
 

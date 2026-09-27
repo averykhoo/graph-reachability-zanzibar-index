@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-16b
-moved: 2026-09-27
-updated: 2026-09-27
-closed:
+moved: 2026-09-27b
+updated: 2026-09-27b
+closed: 2026-09-27b
 ---
 
 ## What it is
@@ -73,3 +73,15 @@ Nuance on this row's first trap, checked further the same session so the row doe
 (!) A related AGENT claim, UNVERIFIED: that an exact `== 132` rejected-store pin exists for the 299-store `group_userset` domain. If that pin is real it is STRONGER than the floor this row proposes -- an exact equality goes red on an over-reject AND an under-reject -- and this row should then be about extending that shape rather than inventing a new one. **Check for it before writing any floor.**
 
 -> NEXT: resolve (a) vs (b) by reading the graph leg's poison path next to the set-engine leg, and grep for the `== 132` pin. One measurement settles the row's real scope.
+
+### 2026-09-27b
+
+CLOSED 2026-09-27b. The premise was wrong for the module the row names, and the real gap was elsewhere. Map (FROZEN): docs/tk71-admission-survival-2026-09-27.md.
+
+**test_conformance_enum.py needs no survival floor (READ + sabotaged).** Both legs (`backends.py::setengine_answers`, `::graphindex_drive`) have no try/except around the write, and `len(space)` / `n_stores` are pinned exactly, so survival is 100% by construction. S3 (refuse every write to d2) reddened it with a propagating `AdmissionRejected`. The docstring now says so. Open question (a) vs (b) from 2026-09-16b: it is (a), plus a misattribution. CORRESPONDENCE.md section 7 credited 132/299 rejections to `two_stratum_cascade`, but they are `group_userset`'s, a shape the enum module excludes; the exact `== 132` pin EXISTS (`tests/test_zt_p5_readjudication.py::test_zt_p5_group_userset_admission_domains_are_identical`). The bullet is corrected in place.
+
+**The absorbers, pinned EXACTLY (MEASURED over 27 corpora x 5 seeds, and 40 generated seeds).** `test_conformance_remove.py::_drive` caught bare `ValueError` and nothing counted what it poisoned. It now catches `AdmissionRejected` only, and `::_assert_poisoned` pins `_EXPECTED_POISONED` (deep_grid = (2,4,1,3,1), all 11 legitimate parent cycles; 0 everywhere else) on the set-engine arm and both graph arms (a new `poisoned_out` argument on `backends.py::graphindex_drive_ops`). `test_conformance_generated.py` refused 0 of its ops on every seed, so that is now the pin, not a silent skip.
+
+**Sabotage, PRE-FIX vs FIXED:** S1 (over-eager cycle guard), S2 (a silent cycle guard) and S4 (a plain ValueError bug) were all GREEN on the pre-fix remove module and are RED now. G1 (graph over-reject) is RED on the graph pin. S3 left the pre-fix generated module green on 38 of 40 seeds; now 40 of 40 fail. Remove module: 135 passed; generated module: 40 passed.
+
+Follow-up: TK110 (tests/ is uncensused: 17 files with refusal catches).

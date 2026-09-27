@@ -48,6 +48,7 @@ from sqlmodel import select
 from tests.oracle import Oracle, t as mk_tuple
 from tests.wildcard_helpers import assert_wildcard_invariants
 from setengine.models import TupleV1
+from zanzibar_utils_v1 import AdmissionRejected
 
 from formal.conformance.corpus import SCHEMAS
 from formal.conformance.encode import build_request
@@ -67,6 +68,33 @@ SEEDS = list(range(5))
 # shared `assert_grid_nonvacuous`) and the running total of (query x store)
 # comparisons across the seed sweep.
 _MIN_SEQ_COMPARISONS = 6 * len(SEEDS)      # grid floor x seeds
+
+# ADMISSION SURVIVAL (TK71, 2026-09-27). Both drivers here POISON a refused add:
+# the tuple leaves the final store, the oracle is built from the smaller store,
+# and every comparison below stays green. The grid floor above counts QUERIES,
+# and `len(final) < len(universe)` is SATISFIED by a shrink. So an over-reject
+# (say, a cycle guard that fires on acyclic writes) made this module test less
+# and look the same. The pin is EXACT per corpus x seed (the `== 132` shape of
+# `tests/test_zt_p5_readjudication.py::test_zt_p5_group_userset_admission_domains_are_identical`),
+# so an under-reject goes red as well: a cycle guard that has gone quiet.
+# Measured 2026-09-27 over all 27 corpora x SEEDS: every corpus poisons 0 adds
+# on every seed EXCEPT `deep_grid`, whose `_extras` recombine `parent` names
+# into self-loops and 2-cycles (all 11 are `AdmissionRejected` "would create a
+# cycle in the userset membership topo"). Graph and set engine poisoned the
+# same tuples in 135 of 135 sequences. Map: docs/tk71-admission-survival-2026-09-27.md.
+_EXPECTED_POISONED: dict[str, tuple[int, ...]] = {
+    'deep_grid': (2, 4, 1, 3, 1),
+}
+
+
+def _assert_poisoned(arm: str, name: str, seed: int, poisoned: set) -> None:
+    """Exact admission-survival pin (TK71): see `_EXPECTED_POISONED`."""
+    want = _EXPECTED_POISONED.get(name, (0,) * len(SEEDS))[seed]
+    assert len(poisoned) == want, (
+        f'[{name} seed={seed}] {arm}: {len(poisoned)} add(s) refused at '
+        f'admission and poisoned, expected exactly {want}. More means an '
+        f'over-reject is silently shrinking the store this module compares; '
+        f'fewer means a refusal stopped firing. Refused: {sorted(poisoned)}')
 
 # Sequence-shape knobs (all rng-driven, deterministic per seed).
 _P_REMOVE_AFTER_ADD = 0.45   # chance to remove a present tuple after each add
@@ -144,12 +172,17 @@ def _build_engine(schema_text, obj_wild):
     return session, eng
 
 
-def _drive(eng, ops):
+def _drive(eng, ops, poisoned_out: set | None = None):
     """Apply the op sequence to the real engine INCREMENTALLY (the point of the
-    gate — never rebuild-from-final here). A rejected add (ValueError from the
-    engine's graph-parity validation) poisons that tuple: all its later ops are
-    skipped and it is excluded from the final store. Returns the accepted final
-    tuple set."""
+    gate — never rebuild-from-final here). A rejected add (`AdmissionRejected`
+    from the engine's graph-parity validation) poisons that tuple: all its later
+    ops are skipped and it is excluded from the final store. Returns the accepted
+    final tuple set; the poisoned tuples go into `poisoned_out` if given.
+
+    Only `AdmissionRejected` is absorbed (TK71, 2026-09-27 — the set-engine twin
+    of the ZT-P4-7 fix `backends.py::GraphDriver.apply` already carries). This
+    caught bare `ValueError` until then, so an engine bug raising one would have
+    been poisoned as a "refusal" and dropped from the store the test compares."""
     poisoned: set = set()
     present: set = set()
     for kind, tup in ops:
@@ -158,7 +191,7 @@ def _drive(eng, ops):
         if kind == 'add':
             try:
                 added = eng.add_tuple(*tup)
-            except ValueError:
+            except AdmissionRejected:
                 poisoned.add(tup)
                 continue
             assert added, f'duplicate add generated for {tup}'
@@ -167,6 +200,8 @@ def _drive(eng, ops):
             assert tup in present, f'remove of absent tuple generated: {tup}'
             eng.remove_tuple(*tup)
             present.discard(tup)
+    if poisoned_out is not None:
+        poisoned_out.update(poisoned)
     return present
 
 
@@ -242,8 +277,10 @@ def test_remove_sequences(name):
         n_compared += len(queries)
 
         session, eng = _build_engine(schema_text, obj_wild)
-        final = _drive(eng, ops)
+        poisoned: set = set()
+        final = _drive(eng, ops, poisoned)
         assert len(final) < len(universe), 'sequence must net-remove something'
+        _assert_poisoned('set engine', name, seed, poisoned)
 
         driven = [bool(eng.check(*q)) for q in queries]
         fp_driven = _fingerprint(eng)
@@ -425,9 +462,11 @@ def test_graph_remove_sequences(name):
         assert_grid_nonvacuous(f'{name} seed={seed}', queries)
         n_compared += len(queries)
 
+        poisoned: set = set()
         session, widx, proc, _store_id, final = graphindex_drive_ops(
-            schema_text, ops, obj_wild)
+            schema_text, ops, obj_wild, poisoned)
         assert len(final) < len(universe), 'sequence must net-remove something'
+        _assert_poisoned('graph', name, seed, poisoned)
 
         # (a) invariants + fixpoint audit on the driven final state
         assert_wildcard_invariants(widx)
@@ -912,9 +951,11 @@ def test_graph_remove_bulk_build_survivors(name):
         assert_grid_nonvacuous(f'{name} seed={seed}', queries)
         n_compared += len(queries)
 
+        poisoned: set = set()
         session, widx, _proc, store_id, final = graphindex_drive_ops(
-            schema_text, ops, obj_wild)
+            schema_text, ops, obj_wild, poisoned)
         assert len(final) < len(universe), 'sequence must net-remove something'
+        _assert_poisoned('graph (bulk arm)', name, seed, poisoned)
         driven_state = _graph_state(session, widx)
         driven_flags = _derived_edge_flags(session, store_id)
         driven = [bool(widx.check(*q)) for q in queries]
