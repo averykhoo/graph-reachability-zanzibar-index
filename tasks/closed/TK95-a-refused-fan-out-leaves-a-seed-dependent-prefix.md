@@ -11,9 +11,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-21b
-moved: 2026-09-27b
-updated: 2026-09-27b
-closed:
+moved: 2026-09-27c
+updated: 2026-09-27c
+closed: 2026-09-27c
 ---
 
 A rewrite fan-out that is REFUSED part-way through leaves a prefix of leaf writes already
@@ -70,3 +70,7 @@ as a fix it costs the live write path and buys nothing observable. The deliverab
 on outcome-equivalence, not a change to the order.
 
 ## Log
+
+### 2026-09-27c
+
+PINNED, no product change: tests/test_tk95_truncated_fanout_rollback.py (5 tests) drives each refused fan-out in ALL n! orders and asserts the store is byte-identical (ids + sqlite_sequence) to pre-write, a follow-up lands byte-identical to a never-refused control, and the grid matches oracle + both set engines. Fixture = the corpus own aborts (capture 2026-09-27: 22 at seed 0, all cycle refusals at position 3 of 3). Production arm runs advance_index with a good row ahead of the refused one, incl. cap-fanout (ClosureFanoutExceeded, the refusal an ADMITTED row can hit). Mutation sweep M0-M9: all as named in advance; M4 (outbox-buffer leak guard) INERT because every add-path refusal raises before the first _emit (READ). Map (FROZEN): docs/tk95-truncated-fanout-rollback-2026-09-27.md.

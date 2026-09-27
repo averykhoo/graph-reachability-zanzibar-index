@@ -2,7 +2,7 @@
 id: TK96
 title: the ASK-* channel: questions only the user can answer, filed as rows
 brief: decided with user 2026-09-22: ASK-* series, LATER by default; at NEXT the session must nag in chat
-pri: NEXT
+pri: NOW
 size: M
 deps: []
 related: [TK97]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-22
-moved: 2026-09-22
-updated: 2026-09-22
+moved: 2026-09-27c
+updated: 2026-09-27c
 closed:
 ---
 

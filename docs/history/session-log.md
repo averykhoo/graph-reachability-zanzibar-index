@@ -30,6 +30,53 @@ from here.
 
 ---
 
+## 2026-09-27c — `TK95` CLOSED: a refused fan-out leaves no trace in any order, now pinned on both write paths
+
+rows: TK95 (closed), TK96 (NEXT -> NOW, to refill the empty slot)
+
+`task lint: clean (13 checks, 227 task file(s) parsed), 33 warning(s)`
+
+`read: board only`
+
+The user said "Do the next task". The board ranked `TK95` as `NOW`.
+
+* **Pinned, and no product change was needed.** The new module is
+  `tests/test_tk95_truncated_fanout_rollback.py`, with 5 tests. It drives each refused
+  fan-out in all `n!` orders. For every order it asserts four things:
+  * the store is byte-identical to its pre-write state, row ids and `sqlite_sequence`
+    included;
+  * accepted follow-ups then land byte-identical to a control store that never saw the
+    refusal;
+  * the check grid matches the oracle and both set engines;
+  * the N15 node cache is gone after a failed `advance_index` batch.
+* **The fixture is the corpus's own.** A throwaway capture over
+  `tests/test_generator_coverage.py` found 22 refused leaves at seed 0. All were cycle
+  refusals, at position 3 of a 3-leaf recursive-TTU fan-out. `TK93` recorded 21 on
+  2026-09-21, some at position 2. The corpus has changed since then; that cause is UNVERIFIED.
+* **A production-only case was added: `cap-fanout`.** A cycle reaches `_apply_row` only as
+  corruption. The closure fan-out cap is the refusal an ADMITTED row can hit mid-fan-out,
+  and it escapes as `ClosureFanoutExceeded`, so the rollback of a completed prefix is a live
+  production path.
+* **Mutation sweep, M0 to M9.** Every row went red or green as written down in advance, M0
+  included. M4 (the outbox-buffer leak guard) was INERT for a reason read in the source:
+  every add-path refusal raises before the first `_emit`. M9 shows the
+  prefix-wrote-something clause can fire. The table is in the module docstring. The map is
+  [`docs/tk95-truncated-fanout-rollback-2026-09-27.md`](../tk95-truncated-fanout-rollback-2026-09-27.md)
+  (FROZEN).
+* **Lessons (instrument).**
+  * The first control-store comparison went red on `store_v4.created_at` alone. That is a
+    wall clock, so the cross-store dump now drops `created_at`.
+  * The sweep's log read crashed on pytest's cp1252 output. That is the same trap as
+    `2026-09-27b`; it is now read with `errors='replace'`.
+  * A Bash-heredoc `\n` again broke a Python edit script. Its count assert caught it and
+    nothing was written; the edit was redone with the Edit tool.
+* **Floors:** unchanged. The floors are `-ge`, so the 5 added tests are free. The counts
+  block was regenerated.
+
+Still owed: nothing.
+
+---
+
 ## 2026-09-27b — `TK71` CLOSED: the enum gate could not shrink; three absorbing drivers could, now pinned exactly
 
 rows: TK71 (closed), TK110 NEW (LATER), TK95 (NEXT -> NOW, to refill the empty slot), TK101 (read-first pointer re-aimed at the closed TK71 file)
