@@ -29,6 +29,71 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-09-27b — `P12`: the 2026-08-09 sibling's severity sign, MEASURED — fail-OPEN under a negated consumer
+
+**Closes the prediction the `## 2026-08-10` entry fenced off** (§"Severity: FAIL-OPEN,
+correcting the original filing", ⚠ "NOT claimed"). Its completion criterion was *"either
+this entry gains a measured severity for the 2026-08-09 sibling, or that sibling's 'fails
+closed' wording is corrected in place"*; this entry is the measurement, and dated
+blockquotes in both older entries point here (bodies untouched). Full record:
+[`p12-severity-sign-revert-probe-2026-09-27.md`](p12-severity-sign-revert-probe-2026-09-27.md).
+
+**The sign (MEASURED on the literal pre-fix tree, `33242de^`).** The OWC x star-parent x TTU
+defect (the graph under-reporting when `folder:f1` exists but no `(folder, viewer)` node is
+interned) is **fail-CLOSED under a positive consumer and fail-OPEN — an authorization
+over-grant — under a negated one**, exactly as the severity-sign rule
+(`docs/sabotage-procedure.md`, "Probe BOTH signs") predicted:
+
+```
+check(user:u1, access, doc:d1)   oracle=False  graph=True     schema: owc_star_ttu.fga +
+                                                               define access: [user] but not viewer
+tuples: (user:u9 editor folder:f1) (user:u1 viewer folder:*) (folder:* parent doc:d1)
+        (user:u1 access doc:d1)
+
+every subset of an 8-tuple pool, pre-fix tree, full check grid:
+  case=B   states=256 queries=3072  access fail-OPEN 12   viewer fail-CLOSED 24
+  case=D   states=256 queries=3072  access fail-OPEN  6   viewer fail-CLOSED 24
+  case=E   states=256 queries=3840  access fail-OPEN  6   viewer fail-CLOSED 24  blocked fail-CLOSED 12
+```
+
+Three negated consumers, three mechanisms (a Computed arm, a TTU arm, a userset subject);
+every OPEN cell is on a negated relation, every CLOSED cell on a positive one, zero
+admission refusals. **So the 2026-08-09 entry's "it fails closed, so it is not a security
+fail-open" is true only of the consumer it probed.**
+
+**The probe the 2026-08-10 entry prescribed cannot be run as written.** A negated TTU
+directly over the shape (`define access: [user] but not viewer from parent` on `doc`) is a
+graph compile refusal on the pre-fix tree and today alike — blind-audit D4,
+`zanzibar_utils_v1.py::_reject_object_wildcard_scope`: *"object-wildcard shape (folder,
+viewer) is the TTU target of derived relation doc#access"*. The consumers above read the
+defective relation one hop downstream instead. Also: the fix hashes the older entries cite
+(`c042056`, `ed46e54`) are not in `master`'s history; their byte-identical twins are
+`33242de` and `7cd12b5` (RC2's fix is `0838bcf`).
+
+**Kept permanently without shipping bad code.** `tests/test_p12_severity_sign.py` simulates
+the pre-fix graph by no-op'ing `index_v4/wildcard.py::WildcardIndex._ensure_entity_middles`
+on a paranoia-OFF store. That simulation on `d4ea804` reproduced the literal revert's
+counts exactly for all three consumers (B: `divergences=36`, OPEN 12, CLOSED 24; D: 30;
+E: 42; unsabotaged: 0), which is what makes the pin honest. It pins the sign for all three consumers, a live-code control, a
+healing control, and a refusal pin for the unrunnable consumer; mutation sweep `M0`–`M6` in
+its docstring.
+
+**A detector gap found on the way (MEASURED).** Under the same simulated regression,
+`ZANZIBAR_PARANOIA=residue` — the level `CLAUDE.md` recommends for production — does **not**
+fire: the negated answer is the same silent `oracle=False graph=True`. Only `full` and
+`fixpoint` abort (`I14: entity folder:f1 exists but its crossing middle folder:f1#viewer
+... is missing`), because I14 lives in `check_invariants`. Not a live bug — the shipped code
+maintains the middles — but a regression of the 2026-08-09 fix would be caught by the test
+suite and missed in production. Pinned by
+`test_which_paranoia_level_catches_the_simulated_revert`.
+
+**RC1 / RC2, for completeness** (both signs were already measured 2026-08-10; these are grid
+counts on their own pre-fix trees, both shapes are parse refusals since `TK106`):
+`7cd12b5^` RC1 — `access` fail-OPEN 6, `inherited` fail-CLOSED 12 of 512 queries;
+`0838bcf^` RC2 — `access` fail-OPEN 8, `inherited` fail-CLOSED 16 of 1024.
+
+---
+
 ## 2026-09-27 — `TK108`: a `from`-tupleset may not restrict to a userset
 
 **User adjudication, not a spec divergence found by a session.** Asked whether the graph
@@ -842,6 +907,11 @@ either this entry gains a measured severity for the 2026-08-09 sibling, or that 
 an observation** — do not propagate it as measured fact anywhere, including into the
 2026-08-09 entry itself.
 
+> **2026-09-27b — MEASURED; the prediction held.** On the literal pre-fix tree (`33242de^`,
+> the in-history twin of `c042056^`) the sibling is fail-OPEN under every negated consumer
+> the graph compiles and fail-CLOSED under every positive one. The consumer proposed above
+> does not compile (blind-audit D4). See `## 2026-09-27b`.
+
 *(Context for triage: this repo ships no service wrapper — the store is a plain callable
 API with no deployment — so this is a library correctness defect, not an exposed system.)*
 
@@ -998,6 +1068,12 @@ check(user:u1, viewer, doc:d1):
 Three backends to one, and the oracle is the spec — so the **graph** is wrong. It is a
 **false negative** (under-grant): it fails closed, so it is not a security fail-open, but
 it breaks the repo's central contract that the two backends have identical semantics.
+
+> **2026-09-27b — the "fails closed" half is true only of the POSITIVE consumer probed
+> here.** Measured on the pre-fix tree: under a negated consumer
+> (`define access: [user] but not viewer`) the same defect GRANTS what the oracle denies —
+> `check(user:u1, access, doc:d1) oracle=False graph=True`. It was an authorization
+> fail-open for any schema that subtracted this relation. See `## 2026-09-27b`.
 
 **Root cause — measured, not inferred.** `index_v4/wildcard.py::WildcardIndex._ensure_bridges` only ever
 links `w_all(T,p) -> concrete -> w_any(T,p)` through an **interned node of shape `(T,p)`**;

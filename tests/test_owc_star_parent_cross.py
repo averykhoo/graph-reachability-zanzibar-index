@@ -33,6 +33,10 @@ It is a **false negative** -- the graph under-grants, so it fails closed and is 
 security fail-open. It is still a semantics divergence between two backends whose whole
 contract is "identical semantics, opposite cost models".
 
+(2026-09-27, ``P12``: the paragraph above holds only for this POSITIVE consumer. Measured on
+the pre-fix tree, the same defect under a negated consumer is a fail-OPEN; the sign is
+pinned by ``tests/test_p12_severity_sign.py``, see ``docs/spec-deviations.md`` 2026-09-27b.)
+
 ## Root cause (measured, not inferred)
 
 ``index_v4/wildcard.py::_ensure_bridges`` only ever links

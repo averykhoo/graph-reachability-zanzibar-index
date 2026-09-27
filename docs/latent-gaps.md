@@ -143,12 +143,6 @@ Listed so this file is a complete index of what is open, and pointed rather than
   closed by Python-mirroring `eraseDups` (§7.2 item 5c), so the residual is `+1` per
   reconcile of a key; the P3 flip had doubled the old base and timed out ten conformance
   tests (`formal/history/PROOF_STATUS.md` `2026-09-05b` §10).
-* **The 2026-08-09 entry's severity sign** — an explicit **prediction, not an
-  observation**: the 2026-08-10 rule (a dropped TTU parent is a false NEGATIVE under a
-  positive TTU and a false POSITIVE under a negated one) predicts the 2026-08-09 sibling's
-  "fails closed" wording inverts too. It was never re-tested. Home: board row `P12`; the
-  probe and its completion criterion are in [`spec-deviations.md`](spec-deviations.md)
-  `## 2026-08-10` §"Severity: FAIL-OPEN, correcting the original filing".
 * **Node GC and the node-flag lifecycle are unmodelled, and two named correctness bugs have
   landed inside that one region** — `ZT-P0-1` (the unsound `_keys_referencing` elision) and
   `BL-1` (the released-userset bridge leak, found by the hypothesis campaign). Home:

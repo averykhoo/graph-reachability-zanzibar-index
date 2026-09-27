@@ -86,6 +86,10 @@ re-tested**, because that bug is FIXED (``c042056``) and testing it would mean r
 fix. Treat it as an open question, not a correction. Do not propagate the prediction into
 that entry as if it were measured.
 
+(2026-09-27, ``P12``: now MEASURED on the pre-fix tree -- the prediction held, fail-OPEN
+under a negated consumer. ``tests/test_p12_severity_sign.py``; ``docs/spec-deviations.md``
+2026-09-27b.)
+
 ## RC2 — a stored ``T:*`` tupleset parent, when the tupleset relation is DERIVED
 
 ``index_v4/processor.py::tupleset_parents`` also filters ``n.wildcard == ''``, so a stored
