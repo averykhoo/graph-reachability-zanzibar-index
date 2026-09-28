@@ -7,6 +7,22 @@
 > Migrated verbatim out of `HANDOFF.md` on 2026-08-16 by the handoff-system migration —
 > it was a design record parked on the board, which is not the board's job.
 
+> **Correction 2026-09-27 (session `2026-09-27d`) — (B) and (C) are BUILT; (A) is
+> deliberately NOT.** `formal/conformance/claim_rot.py`, wired into `verify.sh`'s `lean`
+> phase as steps 4d2 (content pin, golden `formal/correspondence_anchor_pin.txt`) and
+> 4d3 (prose-number lint), pinned without a Lean build by `tests/test_claim_rot_gate.py`,
+> where both sabotage cases below are permanent tests. Build record, re-measured figures,
+> the literal sabotage output and the mutation sweep:
+> [`docs/p13-claim-rot-gate-2026-09-27.md`](../../docs/p13-claim-rot-gate-2026-09-27.md).
+> Three places the build departs from this body, each argued there: (C)'s pastness
+> exemption is scoped to the SENTENCE, not the row or 4e's three lines, because the row
+> that carried the "82/82" also carries "2026-08-16 … was measured WRONG"; a Lean
+> THEOREM anchor pins its statement, not its proof, and a Python CLASS anchor pins its
+> shell, not its methods; and (A) was not built, because it catches none of the four
+> defects above and its backlog grew from 253 to 369 non-theorem declarations
+> (measured 2026-09-27 by `claim_rot.py --coverage`). The figures in the body below are
+> as of 2026-08-16.
+
 ## Why this exists
 
 The anchor pin (`verify.sh` step 4d) resolves every `file::symbol` pointer in

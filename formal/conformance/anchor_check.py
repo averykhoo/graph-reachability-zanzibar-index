@@ -23,7 +23,7 @@ Usage:
     python formal/conformance/anchor_check.py            # check, exit 1 on failure
     python formal/conformance/anchor_check.py --list     # dump resolved anchors
 
-Gated by `formal/verify.sh` (the `lean` phase, step 4c).
+Gated by `formal/verify.sh` (the `lean` phase, step 4d; `claim_rot.py` is 4d2/4d3).
 """
 
 from __future__ import annotations
@@ -134,9 +134,17 @@ def extract_anchors(text: str) -> list[tuple[int, str, str]]:
 # --------------------------------------------------------------------------- #
 # Python resolution (ast; no import, no side effects)
 # --------------------------------------------------------------------------- #
-def python_symbols(path: Path) -> set[str]:
+def python_nodes(path: Path) -> dict[str, list[ast.stmt]]:
+    """Qualified name -> every AST statement that BINDS it, in source order.
+
+    The single walker behind both `python_symbols` (step 4d: does the anchor
+    resolve?) and `claim_rot.py`'s content pin (step 4d2: did its body change?).
+    One walker, so the two checks cannot disagree about what an anchor names.
+    A name bound more than once (a property and its setter, a constant assigned
+    twice) maps to all of its binding statements.
+    """
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    names: set[str] = set()
+    nodes: dict[str, list[ast.stmt]] = {}
 
     def targets(node: ast.stmt) -> list[str]:
         if isinstance(node, ast.AnnAssign):
@@ -149,7 +157,7 @@ def python_symbols(path: Path) -> set[str]:
         for node in body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 qual = f"{prefix}{node.name}"
-                names.add(qual)
+                nodes.setdefault(qual, []).append(node)
                 walk(
                     node.body,
                     qual + ".",
@@ -161,9 +169,13 @@ def python_symbols(path: Path) -> set[str]:
                 # several rows) and module-level constants.  Deliberately NOT
                 # function locals -- those would leak and weaken the check.
                 for t in targets(node):
-                    names.add(f"{prefix}{t}")
+                    nodes.setdefault(f"{prefix}{t}", []).append(node)
     walk(tree.body, "", in_class=False, top=True)
-    return names
+    return nodes
+
+
+def python_symbols(path: Path) -> set[str]:
+    return set(python_nodes(path))
 
 
 # --------------------------------------------------------------------------- #

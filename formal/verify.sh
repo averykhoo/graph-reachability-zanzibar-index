@@ -70,6 +70,12 @@
 #        4d ANCHORS   -- formal/conformance/anchor_check.py resolves every
 #           `file::symbol` anchor in formal/CORRESPONDENCE.md (the model<->code
 #           map, which had NO drift detector at all)
+#        4d2 CONTENT (P13) -- formal/conformance/claim_rot.py hashes the BODY of
+#           every anchored symbol into formal/correspondence_anchor_pin.txt, so a
+#           symbol that changed under an unchanged name is RED, and
+#        4d3 PROSE -- the same script refuses an N/M or "N of M" claim in the map
+#           that neither cites a test / the generated counts block nor is dated
+#           and marked past (the retracted-but-live "82/82" of 2026-08-16)
 #      plus: a headline theorem reporting "does not depend on any axioms" is
 #      treated as SUSPICIOUS -- a real theorem over this development depends on
 #      at least propext.
@@ -1017,6 +1023,31 @@ run_lean() {
   echo "--- [4d/7] CORRESPONDENCE.md anchor pin ---"
   "$PY" "$REPO_ROOT/formal/conformance/anchor_check.py" \
     || { echo "FAIL: CORRESPONDENCE.md anchors (see above)"; exit 1; }
+
+  # -------------------------------------------------------------------------- #
+  # 4d2 / 4d3. CORRESPONDENCE.md CLAIM-ROT gate (P13, 2026-09-27). Step 4d keeps
+  # the map NAVIGABLE and nothing else: a 2026-08-16 audit found a retracted
+  # "82/82 derived keys agree" still live in a row and two rows describing a model
+  # that had since changed, all green. formal/conformance/claim_rot.py adds:
+  #   4d2  CONTENT pin -- a hash of every anchored symbol's BODY (Lean def text /
+  #        theorem statement; Python code minus docstrings; a class's shell) in
+  #        formal/correspondence_anchor_pin.txt. A body edit under an unchanged
+  #        name is RED and names the rows citing it; --generate is the deliberate
+  #        re-read step.
+  #   4d3  PROSE-NUMBER lint -- every N/M or "N of M" in the map cites a test or
+  #        the generated counts block, or carries a date AND a pastness word, in
+  #        its own sentence (4e's contract, sentence-scoped).
+  # Neither verifies a row is TRUE; they turn silently-stale into loudly-must-look
+  # (the module docstring says what each still cannot see). Pure Python, no Lean
+  # toolchain, ~6 s -- it rides `lean` for the reason 4d/4e do.
+  # SABOTAGE (docs/p13-claim-rot-gate-2026-09-27.md, and permanent in
+  # tests/test_claim_rot_gate.py): a one-token edit to the BODY of
+  # GraphIndex/Leaf.lean::persistedLeaves turned 4d2 red while 4d stayed green;
+  # re-inserting "82/82 derived keys agree" into the PLeaf row turned 4d3 red.
+  # -------------------------------------------------------------------------- #
+  echo "--- [4d2/7] CORRESPONDENCE.md anchor CONTENT pin + [4d3/7] prose-number lint ---"
+  "$PY" "$REPO_ROOT/formal/conformance/claim_rot.py" --check \
+    || { echo "FAIL: CORRESPONDENCE.md claim-rot gate (see above)"; exit 1; }
 
   # -------------------------------------------------------------------------- #
   # 4e. FINAL_REVIEW.md COUNTS pin. `ZT-P3-5` found every number in every claim
