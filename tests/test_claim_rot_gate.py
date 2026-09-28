@@ -288,7 +288,7 @@ def test_C_a_pastness_word_without_a_date_is_still_refused():
 
 
 @pytest.mark.parametrize("sentence", [
-    "Validated: 82/82 derived keys agree (`tests/test_matrix.py::test_matrix`).",
+    "Validated: 82/82 derived keys agree (`tests/test_matrix.py::test_matrix_4way_boolean`).",
     "82/82 derived keys agree. Pinned by `formal/conformance/test_conformance_state.py`.",
     "The 82/82 figure lives in FINAL_REVIEW.md's generated counts block.",
     "It was 82/82 when it was measured 2026-08-16, and was retracted.",
@@ -318,10 +318,10 @@ def test_C_n_of_m_form_and_the_non_claims():
 
 
 @pytest.mark.parametrize("doc", [
-    "| a | 3/3 agree |\n| b | pinned by `tests/test_matrix.py::test_matrix` |\n",
-    "| a | 3/3 agree |\nSee `tests/test_matrix.py::test_matrix`.\n",
-    "| a | 3/3 agree\n| `tests/test_matrix.py::test_matrix` | b |\n",
-    "Keys: 3/3 agree\n| `tests/test_matrix.py::test_matrix` | b |\n",
+    "| a | 3/3 agree |\n| b | pinned by `tests/test_matrix.py::test_matrix_4way_boolean` |\n",
+    "| a | 3/3 agree |\nSee `tests/test_matrix.py::test_matrix_4way_boolean`.\n",
+    "| a | 3/3 agree\n| `tests/test_matrix.py::test_matrix_4way_boolean` | b |\n",
+    "Keys: 3/3 agree\n| `tests/test_matrix.py::test_matrix_4way_boolean` | b |\n",
 ], ids=["row-row", "row-then-paragraph", "row-without-trailing-pipe",
         "paragraph-then-row"])
 def test_C_a_table_row_cannot_borrow_its_neighbours_citation(doc):
@@ -332,3 +332,95 @@ def test_C_a_table_row_cannot_borrow_its_neighbours_citation(doc):
     citation and went GREEN (probe, 2026-09-28: shipped 1 complaint each, M19 0)."""
     assert [b.split(" | ")[0] for b in claim_rot.check_prose_numbers(doc)] == [
         "CORRESPONDENCE.md:1: '3/3'"]
+
+
+# --------------------------------------------------------------------------- #
+# (C) holes found by the P13 verifier, 2026-09-28 -- each was a live-CLI green
+# sabotage or a surviving mutant against 76c471e; each is now refused.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("sentence, ratio", [
+    ("Validated: around 80/82 derived keys agree.", "80/82"),
+    ("Validated against the baseline 82/82 derived keys.", "82/82"),
+    ("The pipeline 82/82 derived keys agree.", "82/82"),
+    ("Validated: 1,227/1,227 derived keys agree.", "1,227/1,227"),
+    ("Validated: 1,227 of 1,227 derived keys agree.", "1,227 of 1,227"),
+    ("Validated: 999/1,000 derived keys agree.", "999/1,000"),
+    ("Validated: 82 / 82 derived keys agree.", "82 / 82"),
+    ("Validated: 82/82 derived keys agree (see doc_counts for suite size).", "82/82"),
+    ("Validated: the discipline" + " " * 20 + "82/82 derived keys agree.", "82/82"),
+], ids=["around-contains-round", "baseline-contains-line", "pipeline-contains-line",
+        "thousands-slash", "thousands-of", "thousands-denominator", "spaced-slash", "bare-doc_counts-word",
+        "window-starts-mid-word"])
+def test_C_verifier_green_sabotages_are_refused(sentence, ratio):
+    """On 76c471e every one of these, in the PLeaf row, left `claim_rot.py --check`
+    at rc=0 with '8 N/M claim(s), 0 uncited and unmarked'.  Causes: `ORDINAL_RE` had
+    no leading `\\b` (so `around` ended in the ordinal `round`); `\\d+` read
+    `1,227/1,227` as `227/1` (N > M, dropped) and never matched a spaced slash; and
+    `GEN_RE` accepted the bare word `doc_counts` as a citation.  The last case is the
+    fix's own trap: search the ordinal window in a SLICE of the block and `\\b` fires
+    at the slice edge, so `discipline` + 20 spaces is skipped as the ordinal `line`
+    (`claim_rot.py::_ordinal` searches the whole block with pos/endpos instead)."""
+    doc, line_no = _into_pleaf_row(sentence)
+    assert [b.split(" | ")[0] for b in claim_rot.check_prose_numbers(doc)] == [
+        f"CORRESPONDENCE.md:{line_no}: '{ratio}'"]
+
+
+def test_C_ordinal_words_and_chains_are_still_not_claims():
+    """The other side of the `\\b` and spaced-slash fixes: whole ordinal words and
+    one link of a spaced split chain (the map's line-71 shape) stay exempt, and a
+    comma-grouped number that is not a ratio is not matched."""
+    assert claim_rot.check_prose_numbers(
+        "Phase 0/2; the rows 46/56 discharge it; tile 1/5; line 3/9.\n\n"
+        "Then 24 / 23 / 33 / 15 files, 13 / 20 / 33 tests; ~3,000 lines; 4,000-op runs.\n"
+    ) == []
+
+
+def test_C_a_semicolon_ends_the_sentence():
+    """Mutant K1 (`;` dropped from `SENT_END_RE`) survived: the date and `was` of the
+    next clause then exempt a current-tense claim."""
+    doc, line_no = _into_pleaf_row(
+        "Validated: 82/82 derived keys agree; the 2026-08-16 figure was wrong.")
+    assert [b.split(" | ")[0] for b in claim_rot.check_prose_numbers(doc)] == [
+        f"CORRESPONDENCE.md:{line_no}: '82/82'"]
+
+
+def test_C_a_table_cell_ends_the_sentence():
+    """Mutant K7 (`|` dropped from `SENT_END_RE`) survived: the cells merge and the
+    neighbouring cell's date and pastness word exempt the claim."""
+    assert [b.split(" | ")[0] for b in claim_rot.check_prose_numbers(
+        "| x | Validated: 82/82 agree | 2026-08-16 was wrong |\n")] == [
+        "CORRESPONDENCE.md:1: '82/82'"]
+
+
+def test_C_out_of_form_is_a_claim():
+    """Mutant K2 (`(?:out )?` dropped from `OF_RE`) survived, though the module
+    docstring advertises `18 out of 171`."""
+    assert [b.split(" | ")[0] for b in claim_rot.check_prose_numbers(
+        "Only 18 out of 171 corpora agree.\n")] == ["CORRESPONDENCE.md:1: '18 out of 171'"]
+
+
+@pytest.mark.parametrize("word", ["retracted", "refuted"])
+def test_C_retracted_and_refuted_are_pastness_words(word):
+    """Mutant K3 (the two words `claim_rot.py::PAST_WORDS` adds to 4e's list dropped)
+    survived, though the CLI's own fix advice gives '82/82, retracted 2026-08-16b' as
+    the model form.  No other pastness word is in these sentences (`is`, not `was`)."""
+    doc, _ = _into_pleaf_row(f"It is 82/82, {word} 2026-08-16b.")
+    assert claim_rot.check_prose_numbers(doc) == []
+
+
+def test_B_every_binding_of_a_python_name_is_hashed(monkeypatch, tmp_path):
+    """Mutant K4 (hash only the FIRST binding) survived, inert on today's map (no
+    anchored Python name is multiply bound, verifier probe 2026-09-28).  The
+    docstring promises a property AND its setter are hashed; pin it synthetically."""
+    src = ("class C:\n"
+           "    @property\n    def p(self):\n        return self._p\n\n"
+           "    @p.setter\n    def p(self, v):\n        self._p = v\n")
+    bodies = []
+    for i, text in enumerate([src, src.replace("self._p = v", "self._p = -v")]):
+        f = tmp_path / f"v{i}" / "fake_mod.py"
+        f.parent.mkdir()
+        f.write_text(text, encoding="utf-8")
+        monkeypatch.setattr(anchor_check, "resolve_path", lambda _f, f=f: f)
+        bodies.append(claim_rot.anchor_body("x/fake_mod.py", "C.p", {}))
+    assert bodies[0] is not None and bodies[0][1].count("def p(") == 2
+    assert bodies[0][1] != bodies[1][1]

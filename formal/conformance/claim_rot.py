@@ -63,10 +63,17 @@ WHAT NEITHER CHECK DOES -- read this before trusting either for more than it cla
     module-level import or decorator definition.  The Python body is `ast.unparse`
     under the gate's interpreter: a Python upgrade that changes `unparse` output moves
     every Python hash at once (that is loud, not silent -- regenerate and say why).
+  * (B)'s Lean body is whitespace-NORMALISED (`statement_pin.normalize`, as the
+    definition pin), so an indentation-only edit that re-nests a `match` arm or a
+    `where` clause does not move the hash.  Lean is layout-sensitive; this is a hole.
   * (C) cannot tell whether a cited test asserts the number it sits next to, whether a
     past-marked number was ever true, or anything about numbers not shaped `N/M` /
-    `N of M`.  A ratio with N > M (`194/41`, a split) is not treated as a claim, and
-    ordinal enumerations (`Phase 0/2`, `tile 1/5`) are skipped by `ORDINAL_RE`.
+    `N of M` -- `all 82 of the 82 keys` is not matched.  A ratio with N > M
+    (`194/41`, a split) is not treated as a claim, and neither is one link of a spaced
+    chain (`24 / 23 / 33`).  A ratio right after an ordinal WORD (`Phase 0/2`,
+    `tile 1/5`, `rows 46/56`; `ORDINAL_RE`) is skipped -- so `Validated: rows 82/82
+    agree` is exempt too.  That is the price of not flagging row/line references; the
+    word must be whole (`baseline 82/82` is NOT skipped).
   * One of the four motivating defects is not mechanizable at all: knowing that a newly
     discovered Python fact belongs in §7's drift log is irreducibly human.
 
@@ -305,19 +312,42 @@ def check_content_pin(
 # --------------------------------------------------------------------------- #
 # (C) prose-number lint
 # --------------------------------------------------------------------------- #
-#: `82/82`, `744/744`, `132/299`; not a path (`a/1/2`), a tile (`tile:1/5`), a
-#: version, a date fragment or a decimal.
-SLASH_RE = re.compile(r"(?<![\w/.:-])(\d+)/(\d+)(?![\w/]|\.\d)")
-#: `5 of 21`, `**11 of 13**`, `18 out of 171`.
-OF_RE = re.compile(r"(?<![\w.])(\d+) (?:out )?of (\d+)(?![\w.]|\.\d)")
-#: Ordinal enumerations are positions, not validation claims.
+#: One number: `1,227` (thousands separators; the map writes `~3,000 lines`) or `82`.
+#: Before 2026-09-28 it was `\d+`, and `1,227/1,227` was read as `227/1` -- N > M,
+#: dropped as a non-claim, gate green (verifier probe; now a permanent test).
+_NUM = r"(\d{1,3}(?:,\d{3})+|\d+)"
+#: `82/82`, `744/744`, `132/299`, `1,227/1,227`, `82 / 82`; not a path (`a/1/2`), a
+#: tile (`tile:1/5`), a version, a date fragment, a decimal, or one link of a spaced
+#: chain (`24 / 23 / 33 / 15`, a split).  A malformed grouping (`10,5/7`) is left
+#: to match what it can: a lint should err toward flagging.
+SLASH_RE = re.compile(r"(?<![\w/.:-])(?<!/ )" + _NUM + r" ?/ ?" + _NUM
+                      + r"(?![\w/]|\.\d| /)")
+#: `5 of 21`, `**11 of 13**`, `18 out of 171`, `1,227 of 1,227`.
+OF_RE = re.compile(r"(?<![\w.])" + _NUM + r" (?:out )?of " + _NUM
+                   + r"(?![\w.]|\.\d)")
+#: Ordinal enumerations are positions, not validation claims.  The leading `\b` is
+#: load-bearing: without it `around 80/82`, `baseline 82/82`, `pipeline ...` were
+#: skipped as ordinals (round, line) and the gate stayed green (verifier live-CLI
+#: sabotage, 2026-09-28).  `_ordinal` searches the WHOLE block with a window, so `\b`
+#: sees the real preceding character rather than a slice boundary.
 ORDINAL_RE = re.compile(
-    r"(?:phase|step|leg|tile|part|round|stage|rows?|lines?)\s*\**\s*$", re.I)
+    r"\b(?:phase|step|leg|tile|part|round|stage|rows?|lines?)\s*\**\s*$", re.I)
+ORDINAL_WINDOW = 24
 #: A citation: a test file or test anchor that EXISTS (`_cites` resolves the file;
-#: step 4d additionally resolves the `::symbol` of the anchored form), or the
-#: generated counts block (step 4e proves its numbers).
+#: step 4d additionally resolves the `::symbol` of the anchored form), or
+#: `FINAL_REVIEW.md`'s generated counts block (step 4e proves its numbers).  Named
+#: in full: the bare words `doc_counts` / `generated block` used to count, so "(see
+#: doc_counts for suite size)" exempted an unrelated 82/82 (verifier, 2026-09-28).
 CITE_RE = re.compile(r"`(?P<f>[^`\s]*\btest_[A-Za-z0-9_]*\.py)(?:::[^`]+)?`")
-GEN_RE = re.compile(r"generated (?:counts )?block|doc_counts")
+GEN_RE = re.compile(r"FINAL_REVIEW\.md\W{0,4}s?\s+generated counts block")
+
+
+def _num(s: str) -> int:
+    return int(s.replace(",", ""))
+
+
+def _ordinal(block: str, at: int) -> bool:
+    return bool(ORDINAL_RE.search(block, max(0, at - ORDINAL_WINDOW), at))
 
 
 def _cites(sentence: str) -> bool:
@@ -380,10 +410,10 @@ def ratio_claims(text: str):
         spans = _sentences(block)
         for rx in (SLASH_RE, OF_RE):
             for m in rx.finditer(block):
-                n, d = int(m.group(1)), int(m.group(2))
+                n, d = _num(m.group(1)), _num(m.group(2))
                 if d == 0 or n > d:
                     continue
-                if ORDINAL_RE.search(block[max(0, m.start() - 12):m.start()]):
+                if _ordinal(block, m.start()):
                     continue
                 k = next(i for i, (a, b) in enumerate(spans) if a <= m.start() <= b)
                 a, b = spans[k]
