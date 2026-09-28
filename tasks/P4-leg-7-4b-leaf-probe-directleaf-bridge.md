@@ -2,7 +2,7 @@
 id: P4
 title: leg 7 4b -- leaf-probe <-> directLeaf bridge
 brief: sec 7.3 correspondence item, NOT the milestone: 4b premise is FALSE; 6 witness pins landed, general theorem owed
-pri: LATER
+pri: NOW
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 015e6dd88c0d
 created: 2026-08-16
-moved: 2026-09-23
-updated: 2026-09-23
+moved: 2026-09-27d
+updated: 2026-09-27d
 closed:
 ---
 
@@ -175,3 +175,7 @@ P5s row and in the W4NarrowT2a docstring. Also stale: that docstring says the hy
 used "in exactly four places"; ten Inv-preservation declarations exist today, four of them
 on the leaf/bridged write path (Leaf.lean:836, LeafRules.lean:435, UsStarWrite.lean:769 and
 :812, all gated on ResidueEmpty so they say nothing about the hard negEdgeFree case).
+
+### 2026-09-27d
+
+LATER -> NOW by user choice (2026-09-28): the NOW slot needed exactly one row once TK111 and TK112 were both put at NEXT; the user picked P4, the first step of the 2026-09-22 formal milestone (P4 -> P5 + P14).

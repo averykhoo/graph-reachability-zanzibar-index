@@ -2,7 +2,7 @@
 id: TK111
 title: path-count overflow wedges async catch_up; untokened ConnectedStore.check serves a stale ALLOW
 brief: LIVE fail-open: a poison row stalls async catch_up; untokened check keeps a revoked ALLOW (verified first-hand)
-pri: NOW
+pri: NEXT
 size: M
 deps: []
 related: [TK112]
@@ -70,3 +70,5 @@ lifetime log and node ids at `2^31-1` on PostgreSQL (fails closed).
 ### 2026-09-27d
 
 2026-09-27d, ORCHESTRATOR FIRST-HAND REPRODUCTION (the rule for anything that moves the live-bug count). Ran the P10 verifier's probe `.scratch/wf-0927/probes/pg-leg-outside-gate/verify/vprobe.py` with VK=63 VBATCH=1, SQLite, async. Literal: `K=63 sync=False writes=255 refused=0`; `catch_up attempt 0/1/2: OverflowError: Python int too large to convert to SQLite INTEGER | lag=2`; `check(user:mallory viewer doc:secret): ConnectedStore.check(untokened)=True set_engine=False oracle=False`; `tokened check(at_least=255) mallory=False`; `tokened lookup(u): LookupNotFresh`. So the untokened read serves a REVOKED grant, without bound, while tokened reads correctly refuse to be fresh. The body calls this H4 and its sibling H2; those ids are local to docs/p10-scope-audit-2026-09-27.md -- H2 is TK112, and the stall-aware freshness fix is shared with it. The probe lives in gitignored .scratch; the vprobe source is short (81 lines) and its schema+write list are in the body above, so the witness survives a sweep.
+
+NOW -> NEXT by user instruction (2026-09-28): both TK111 and TK112 sit at NEXT for now; NOW is left empty. The user has not asked for the fix to start.

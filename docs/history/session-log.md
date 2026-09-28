@@ -32,6 +32,23 @@ from here.
 
 ---
 
+## 2026-09-28 — TK111 NOW -> NEXT and P4 LATER -> NOW, both by user choice; 2026-09-27d pushed
+
+rows: TK111 (NOW -> NEXT), P4 (LATER -> NOW)
+
+`task lint: clean (13 checks, 236 task file(s) parsed), 42 warning(s)`
+
+`read: board only`
+
+The user said "bump 111 and 112 into next, for now just push". `TK112` was already `NEXT`, so
+only `TK111` moved. That left `NOW` empty, which task lint refuses, so the user was asked and picked `P4` (the first step of the 2026-09-22 formal milestone). The fix has not been started. `8285ca4` (gated
+COVERED) was pushed first, as `f5df040..8285ca4`, which also carried five earlier unpushed
+commits. This entry and the demote are a separate commit behind their own gate run, because
+a tree op stales the tiles. The 2026-09-27d entry below says `TK111` -> `NOW`; that was
+true when it was written and is superseded here.
+
+Still owed: (none)
+
 ## 2026-09-27d — P10/P12/P13/TK96 CLOSED; P10 found a LIVE async stale-ALLOW (TK111 NOW, TK112 NEXT)
 
 rows: P10 (closed), P12 (closed), P13 (closed), TK96 (closed), TK111 (new, NOW), TK112 (new, NEXT), TK113, TK114, TK115, TK116, TK117, TK118, TK119 (new, LATER), ASK-2, TK109, P23, SD-1, TK33 (comments)
