@@ -1,5 +1,10 @@
 # `TK96`: the `ASK-*` channel -- `asks`, the board line, and the `asked:` receipt
 
+**FROZEN 2026-09-27d, at `TK96`'s close -- provenance, not a living document.** Status lines
+below are as-of-then and several may now be false; live state: `HANDOFF.md` + the session
+ledger (`python scripts/task.py board`). Corrections are appended dated at the top, never
+edited into the body.
+
 **ACTIVE-PLAN 2026-09-27d.** Written FIRST, before the edit it was made for (CLAUDE.md
 "SCOUTING IS A DELIVERABLE"). Corrections are appended at the top with a date, never edited
 into the body. FROZEN when `TK96` closes. Figures were measured on `2026-09-27` against

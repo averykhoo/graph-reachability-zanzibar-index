@@ -21,7 +21,9 @@ from here.
   ids until the 2026-09-06 cutover).
 * **Two literal receipt lines**, enforced by `handoff_lint.py::check_session_receipt` on
   the newest entry only: the output of `python scripts/task.py lint`, and
-  `read: board only` / `read: board + note`.
+  `read: board only` / `read: board + note`. **Plus a third, conditional one (`TK96`,
+  2026-09-27d):** while any `ASK-*` row sits at `NEXT` or `NOW`, an `asked: ASK-<n>[, ...]`
+  line naming every one of them (rules: `docs/README.md` §7).
 * **`Still owed:`** closes every entry. If the session ran short of context and skipped
   a write-back step, list the skipped actions here *verbatim* — the next session
   executes them before its own work.
@@ -29,6 +31,61 @@ from here.
   root, so from this file they resolve against `../../`.
 
 ---
+
+## 2026-09-27d — P10/P12/P13/TK96 CLOSED; P10 found a LIVE async stale-ALLOW (TK111 NOW, TK112 NEXT)
+
+rows: P10 (closed), P12 (closed), P13 (closed), TK96 (closed), TK111 (new, NOW), TK112 (new, NEXT), TK113, TK114, TK115, TK116, TK117, TK118, TK119 (new, LATER), ASK-2, TK109, P23, SD-1, TK33 (comments)
+
+`task lint: clean (13 checks, 236 task file(s) parsed), 42 warning(s)`
+
+`read: board only`
+
+The user asked for `P10`, `P12` and `P13` using ultracode, plus `TK96` "if that parallelizes
+nicely". It did: all four were independent. Two workflows ran (`wf_5557c336-8fc`, 32 agents;
+`wf_cccb3dcc-9b1`, 7 agents). `P12`, `P13` and `TK96` were each built in an isolated git
+worktree, then attacked by an adversarial verifier in a separate fresh worktree. A fixer ran
+when the verifier returned must-fix findings. `P10` fanned out as discover → 12 × (audit →
+adversarial verify) → synthesis. The first run hit the weekly usage limit part-way:
+`build:P13`, `fix:TK96`, two `P10` verifies and the synthesis died. The resume workflow
+finished `P13` IN PLACE from its uncommitted worktree and crash bag rather than restarting.
+It ran the rest fresh.
+
+* **`P12` MEASURED (`5eff958`).** The prediction held. The 2026-08-09 sibling, run on the
+  literal pre-fix tree, is fail-OPEN under every negated consumer the graph compiles and
+  fail-CLOSED under positive ones. `tests/test_p12_severity_sign.py` pins the sign by a
+  simulated revert, which reproduced the literal counts exactly. Verifier: ACCEPT, with an
+  independent literal revert. One verifier nit was applied by the orchestrator: the dated
+  blockquote in `docs/spec-deviations.md`'s 2026-08-09 entry claimed "any schema"; it now
+  says the measured cases, plus REASONED for the rest.
+* **`P13` LANDED (`aae414e` + `57a05b7`).** `verify.sh` lean steps 4d2 (anchor BODY pin)
+  and 4d3 (prose-number lint), in `formal/conformance/claim_rot.py`. (A), the ratchet, was
+  deliberately not built. The verifier found green sabotages in (C): ordinal skip-words
+  matched inside ordinary words (`around` ⊃ `round`), and thousands-separator ratios slipped
+  through. The fixer fixed and pinned all of them. Stale ratios in `CORRESPONDENCE.md` were
+  marked past; the one with no test behind it is `TK119`.
+* **`TK96` LANDED (`5863a8e` + `0d79995`).** `task.py asks`, the board `asks` line, and the
+  fail-red `asked:` receipt. The verifier killed six weakenings that had survived the
+  implementer's own sweep. Decided: an ask at `NOW` nags like one at `NEXT`.
+* **`P10` DONE.** 9 HOLE / 3 SOUND, every verdict verifier-upheld. Map (FROZEN):
+  [`docs/p10-scope-audit-2026-09-27.md`](../p10-scope-audit-2026-09-27.md).
+  **Two of the holes are a LIVE authorization fail-open, reproduced FIRST-HAND by this
+  session before filing** (literal output on the rows' logs). An asynchronous `ConnectedStore`
+  row the index cannot apply stalls `catch_up` forever: path-count overflow `TK111`, or the
+  fan-out cap `TK112`. Every later row, revocations included, never reaches the index, and an
+  UNTOKENED `check` keeps serving the revoked grant: `mallory viewer doc:secret`
+  `untokened=True set_engine=False oracle=False`. Tokened reads are correct. `TK111` → `NOW`.
+  `TK113` (`remove_node` admin API) is a third, agent-verified divergence.
+* **Side finding fixed:** `tests/test_invariants_docstring_matches_body.py` now skips
+  `.claude/`. Workflow worktrees there turned it red on the main tree. Sabotaged both ways:
+  without `.claude` in the skip set, planting a bare call gave `1 failed`; with it, `1 passed`.
+* **`CLAUDE.md`:** the fan-out-cap bullet ("removals are exempt") gained a ⚠ naming the two
+  admitted cases where that is false, and the `residue` blind spot (`TK118`). TK96's fixer
+  updated the ASK bullet for `NEXT`-or-`NOW`.
+* **Cleanup:** all eight workflow worktrees and their branches were removed, after checking
+  none held a `.lake` or any reparse point (mathlib intact afterwards). `.scratch/wf-0927/`
+  holds the probes; their witnesses are transcribed into the `P10` doc and the rows.
+
+Still owed: (none)
 
 ## 2026-09-27c — `TK95` CLOSED: a refused fan-out leaves no trace in any order, now pinned on both write paths
 

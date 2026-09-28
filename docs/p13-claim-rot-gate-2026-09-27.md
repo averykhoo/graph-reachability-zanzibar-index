@@ -1,5 +1,10 @@
 # `P13`: the `CORRESPONDENCE.md` claim-rot gate — build record
 
+**FROZEN 2026-09-27d, at `P13`'s close -- provenance, not a living document.** Status lines
+below are as-of-then and several may now be false; live state: `HANDOFF.md` + the session
+ledger (`python scripts/task.py board`). Corrections are appended dated at the top, never
+edited into the body.
+
 **ACTIVE-PLAN (`docs/README.md` §3), opened 2026-09-27 (session `2026-09-27d`).** Corrections
 are appended dated at the top. FROZEN when `P13` closes. Live state is
 `python scripts/task.py show P13`, never this file. The design this executes is

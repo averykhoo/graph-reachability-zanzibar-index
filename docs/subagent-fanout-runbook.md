@@ -339,3 +339,13 @@ rejections.
 **Completion criterion:** roughly fifteen items each AUDITED **and** adversarially
 VERIFIED, with literal command output persisted per "What to persist" above. An unverified
 claim is not a finding in this repo.
+
+**2026-09-27: the re-run ran.** The transcripts this section said to mine were **gone**: no
+`wf_f8c85180*` directory exists anywhere under `~/.claude` (checked 2026-09-27, re-checked
+2026-09-28). So candidates were re-discovered from the live tree: a grep sweep, then the rule-2
+predicate applied by hand, which curated 12 items (2026-09-27). Each was AUDITED and then
+adversarially VERIFIED by a separate agent, with literal output persisted per agent. The
+reconciled result (9 HOLE, 3 SOUND as of 2026-09-28, with proposed rows and witnesses) is
+[`p10-scope-audit-2026-09-27.md`](p10-scope-audit-2026-09-27.md). The lesson for this file is
+that a transcript directory is not durable storage. The instruction above to mine the
+transcripts was already false when it was written down, because nothing tracked held them.

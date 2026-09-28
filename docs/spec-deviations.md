@@ -1073,7 +1073,8 @@ it breaks the repo's central contract that the two backends have identical seman
 > here.** Measured on the pre-fix tree: under a negated consumer
 > (`define access: [user] but not viewer`) the same defect GRANTS what the oracle denies —
 > `check(user:u1, access, doc:d1) oracle=False graph=True`. It was an authorization
-> fail-open for any schema that subtracted this relation. See `## 2026-09-27b`.
+> fail-open for every subtracting consumer measured (cases B/D/E); that it holds for
+> every schema subtracting this relation is REASONED, not measured. See `## 2026-09-27b`.
 
 **Root cause — measured, not inferred.** `index_v4/wildcard.py::WildcardIndex._ensure_bridges` only ever
 links `w_all(T,p) -> concrete -> w_any(T,p)` through an **interned node of shape `(T,p)`**;

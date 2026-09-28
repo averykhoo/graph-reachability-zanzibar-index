@@ -11,8 +11,8 @@ labels: []
 source: hand
 source_hash:
 created: 2026-09-27
-moved: 2026-09-27
-updated: 2026-09-27
+moved: 2026-09-27d
+updated: 2026-09-27d
 closed:
 ---
 
@@ -36,3 +36,9 @@ The oracle (`tests/oracle.py::parse_schema_ast`) is the independent referee, and
 Why it matters: a test that feeds such a schema to the oracle alone gets an answer where the system refuses, so the oracle cannot referee the refusal. The duplicate-relation case is `TK105`'s (the oracle keeps the last `define`).
 
 Fix shape: independent twins in `tests/oracle.py` (NOT shared code -- independence contract), each with a `# REFUSED SHAPE ... WHY ... INSTEAD` comment (the rule from TK108), plus a differential test over these probes that both parsers refuse. Census also noted `parse_openfga_json` has no empty-relation-name check (REASONED, not probed).
+
+## Log
+
+### 2026-09-27d
+
+P10 re-run (2026-09-27d): this row's REASONED JSON line (parse_openfga_json has no empty-relation-name check) is subsumed by TK115. The P10 audit probed that empty names fail loudly downstream; the live JSON holes are newline/colon names, duplicate keys and wildcard: false (docs/p10-scope-audit-2026-09-27.md sec 5 H5).

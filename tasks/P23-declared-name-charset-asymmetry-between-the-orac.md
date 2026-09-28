@@ -11,8 +11,8 @@ labels: [infra]
 source: board
 source_hash: c7f66db90464
 created: 2026-09-06b
-moved: 2026-09-06b
-updated: 2026-09-06b
+moved: 2026-09-27d
+updated: 2026-09-27d
 closed:
 ---
 
@@ -35,3 +35,7 @@ case is pinned. Ledger entry: `docs/spec-deviations.md` 2026-09-06.
 ### 2026-09-06b
 
 first reconciliation: filed from the board row this session; body and row say the same thing
+
+### 2026-09-27d
+
+P10 re-run (2026-09-27d): TK115 (JSON front-end fidelity) needs a declared-name refusal on the JSON path, and should reuse whatever charset contract this row decides. This row never mentions the JSON path today.

@@ -11,8 +11,8 @@ labels: [perf]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-09-10
-updated: 2026-09-10
+moved: 2026-09-27d
+updated: 2026-09-27d
 closed:
 ---
 
@@ -45,3 +45,7 @@ TK53 disposition 2026-09-10: NOT an append. Both the verify and the adversarial 
 I confirmed the two anchor phrases exist first-hand; I did not re-derive the whole store-level-quota argument. Deliberately citing them by PHRASE, not line: this session appended three dated entries to the top of that file, so every line number recorded for it before 2026-09-10 has shifted.
 
 No prose was written. The row stays open as work (the amortisation question is undecided); what it is no longer is a statement that exists only in `tasks/`.
+
+### 2026-09-27d
+
+P10 re-run (2026-09-27d): this row's premise that removals are exempt from the fan-out cap is FALSE under but-not (a revocation is an ADD on the subtrahend leaf) and on the async schedule (a capped row stalls every later removal). Verified first-hand; see TK112.

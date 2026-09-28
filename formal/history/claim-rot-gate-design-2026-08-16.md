@@ -1,5 +1,11 @@
 # Detecting `CORRESPONDENCE.md` claim-rot automatically — DESIGN, not built
 
+**FROZEN 2026-09-27d, at `P13`'s close -- provenance, not a living document.** Status lines
+below are as-of-then and several may now be false; live state: `HANDOFF.md` + the session
+ledger (`python scripts/task.py board`). Corrections are appended dated at the top, never
+edited into the body. Built as designed except (A); the build record is
+[`docs/p13-claim-rot-gate-2026-09-27.md`](../../docs/p13-claim-rot-gate-2026-09-27.md).
+
 > **ACTIVE-PLAN (2026-08-16) — designed and measured, NOT built.** This is the scope
 > doc for board row `P13` in [`HANDOFF.md`](../../HANDOFF.md); it stays live until that
 > row closes, then gets the frozen banner (see [`docs/README.md`](../../docs/README.md)

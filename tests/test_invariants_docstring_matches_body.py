@@ -203,7 +203,7 @@ def test_every_schema_backed_check_invariants_call_passes_schema_info():
     import ast
     import pathlib
 
-    skip = {'.scratch', '.gate-runs', '.git', '.lake', 'build', '.venv', '__pycache__'}
+    skip = {'.scratch', '.gate-runs', '.git', '.claude', '.lake', 'build', '.venv', '__pycache__'}
     root = pathlib.Path(__file__).resolve().parents[1]
     total = 0
     bare: dict = {}

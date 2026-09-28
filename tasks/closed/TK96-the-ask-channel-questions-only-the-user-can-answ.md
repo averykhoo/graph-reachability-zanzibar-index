@@ -13,7 +13,7 @@ source_hash:
 created: 2026-09-22
 moved: 2026-09-27d
 updated: 2026-09-27d
-closed:
+closed: 2026-09-27d
 ---
 
 The user needs a channel for work only THEY can do -- fact-finding, requirements gathering,
@@ -89,3 +89,5 @@ Three pieces of build work:
 IMPLEMENTED in a workflow worktree (branch worktree-wf_5557c336-8fc-4, base master d4ea804); map, decisions D1-D8 and literal evidence: docs/tk96-ask-channel-2026-09-27.md. LANDED: (1) task.py asks -- open ASK-* oldest first by created, age in days, blocks, NEXT flag; (2) board prints one asks line under ready, ALWAYS (0 open included), with "K at NEXT -- raise in chat" when K>0, and asks joined NEXT_COMMANDS; (3) handoff_lint.py::check_session_receipt requires asked: naming EVERY open NEXT ask (asked: none is RED then; unknown ids RED). SABOTAGE: handoff_lint on a tree copy with ASK-2 at NEXT and no asked: line -> rc=1; same copy with the block disabled -> clean rc=0. Mutation sweep 29/29 killed, both M0 controls green. NOT RUN here: lean and conf-tiles (no .lake in a worktree). Still owed by the write-back: the session-log header still says two receipt lines. Next action: merge, run lean on main, close TK96.
 
 FIXER pass after the adversarial verify of 9df76be (FIX_REQUIRED, 4 must-fix + 3 nits); all reconciled first-hand, map in docs/tk96-ask-channel-2026-09-27.md "Correction 2026-09-28". LANDED: asked: grammar decided and pinned (only the comma list right after asked: counts; parenthetical and prose ids name nothing); asks blocks column pinned (second open dependent T3, closed T8 with deps [ASK-2] excluded); HOLD asks listed and counted; D8 symbol corrected to handoff_lint.py::_tree_next_asks. DECIDED: an ask at NOW nags like NEXT (task.py::ASK_NAG_PRIS / handoff_lint.py::_ASK_NAG_PRIS; board clause now "K at NEXT or NOW -- raise in chat"); asked: none beside a names line is RED. Re-sweep: V7 V8 V5 V4r V6 V6r W1 W2 W3 W5 all KILLED, both M0 controls green. NOT RUN here: lean, conf-tiles (worktree). +3 tests: FINAL_REVIEW.md counts block needs regenerating on master. Next action: merge, regenerate counts, run lean on master, close TK96.
+
+LANDED (5863a8e + 0d79995). task.py asks lists every open ASK-* at any pri, oldest first, with age and the OPEN tasks it blocks; the board prints one asks line under ready, flagging asks at NEXT or NOW ("raise in chat"). handoff_lint.py::check_session_receipt makes lean RED unless the newest session-log entry carries asked: naming every open ask at NEXT or NOW (asked: none is then red; an unknown id is red; none beside names is red; only the comma list directly after asked: counts). Decided: an ask at NOW nags like one at NEXT, since promoting an ask must never silence it (ASK_NAG_PRIS). Adversarial verifier found six green mutants (id harvest, blocks column, HOLD asks) and a nonexistent cited symbol; all fixed. Final re-sweep: every mutant killed, both M0 controls green. Map: docs/tk96-ask-channel-2026-09-27.md.

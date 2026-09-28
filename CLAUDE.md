@@ -433,7 +433,11 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   `ZT-P0-1` escalation class, ~+5% on writes. `ZANZIBAR_MAX_CLOSURE_FANOUT` (default
   100,000, `0` disables) — per-write closure fan-out cap; **adds and node-adds only,
   removals are exempt** because a cap that can refuse a revocation is a fail-open, and
-  an over-large region must stay shrinkable. `index_v4.outbox.prune_outbox` — manual
+  an over-large region must stay shrinkable. ⚠ **That exemption does not hold in two
+  admitted cases (`TK112`, reproduced 2026-09-27d):** under `but not` a revocation is an
+  ADD on the subtrahend leaf and is capped, and on the async schedule a capped row stalls
+  every later row, removals included. `ZANZIBAR_PARANOIA=residue` also does not catch an
+  I14 regression; only `full`/`fixpoint` do (`TK118`). `index_v4.outbox.prune_outbox` — manual
   retention, never auto-called, and it keeps the head row so SQLite cannot recycle
   outbox ids under a held cursor. `SetEngine.log_governed` — set by `TupleSource`, makes
   a direct `add_tuple` on a logged store raise `UnloggedWriteRefused` instead of

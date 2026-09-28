@@ -11,8 +11,8 @@ labels: []
 source: hand
 source_hash:
 created: 2026-09-26b
-moved: 2026-09-26b
-updated: 2026-09-26b
+moved: 2026-09-27d
+updated: 2026-09-27d
 closed:
 ---
 
@@ -58,3 +58,7 @@ LANDED: `zanzibar_utils_v1.py::UnprovenExtensionWarning` (a `UserWarning`), emit
 Pinned by `tests/test_unproven_extension_warning.py` (8 tests). SABOTAGE 2026-09-26: with the call deleted, the result was `6 failed, 2 passed`: all six warning tests went red and the two silence tests stayed green. Restored: `8 passed`. `MIN_TESTS_ALL` 1328 -> 1336 (collect-only 1336, +8, no drift).
 
 Gate: see the session-log entry `2026-09-26b`.
+
+### 2026-09-27d
+
+P10 re-run (2026-09-27d, docs/p10-scope-audit-2026-09-27.md sec 6): star-userset subjects created by a star tupleset (e.g. doc:*#r0) agree 4-way but no grid asks them on the check surface. The coverage fix is owned by TK117.
