@@ -853,10 +853,23 @@ _READ_RECEIPT = re.compile(r'(?:^|\W)read: (%s)(?:\W|$)'
 # retired -- ask-then-close in one session is legal) is red too: `ASK-3` typed for `ASK-8`
 # would otherwise pass whenever the real one is also named. `asked: none, ASK-3` reads as
 # `none` -- the id after it is not a receipt.
+# THE GRAMMAR (decided 2026-09-28, TK96 fixer): the receipt is `asked: ` followed by ONE
+# comma-separated list of ids, and nothing else on the line counts. Commentary after the
+# list is allowed and ignored -- `asked: ASK-3 (ASK-5 deferred)` names ASK-3 only -- and an
+# id mentioned in prose on any other line names nothing. Otherwise a sentence ABOUT an
+# unasked question would be read as the receipt that it was asked.
+# `asked: none` beside an `asked:` line that names ids is RED, NEXT ask or not: the entry
+# then says both "I asked nothing" and "I asked these", and a receipt that contradicts
+# itself records neither.
+# "At NEXT" means at NEXT OR ABOVE (`_ASK_NAG_PRIS`, decided 2026-09-28): the nag exists
+# so the user is asked, and an ask promoted to NOW is at least as pressing as one at NEXT;
+# a promotion must never be the way to silence it.
 # The id pattern is a COPY of `scripts/task.py::ASK_ID`, not an import, for the reason
-# TASKS_NON_TASK_MD gives. The trailing guard is `[\w-]`, not `\W`, so `ASK-3b` and
-# `ASK-3-x` are not read as `ASK-3`, and `nonetheless` is not read as `none`.
+# TASKS_NON_TASK_MD gives (and `_ASK_NAG_PRIS` a copy of `task.py::ASK_NAG_PRIS`). The
+# trailing guard is `[\w-]`, not `\W`, so `ASK-3b` and `ASK-3-x` are not read as `ASK-3`,
+# and `nonetheless` is not read as `none`.
 _ASK_ID = re.compile(r'^ASK-\d+$')
+_ASK_NAG_PRIS = ('NOW', 'NEXT')
 _ASKED_RECEIPT = re.compile(r'(?:^|\W)asked: (none|ASK-\d+(?:\s*,\s*ASK-\d+)*)(?![\w-])')
 _ASKED_ID = re.compile(r'ASK-\d+')
 
@@ -866,7 +879,8 @@ def _ask_order(ask_id):
 
 
 def _tree_next_asks():
-    """Ids of the OPEN `ASK-*` rows at NEXT, sorted, or None if there is no tree.
+    """Ids of the OPEN `ASK-*` rows at NEXT or NOW (`_ASK_NAG_PRIS`), sorted, or None if
+    there is no tree.
 
     Same harvest as ``_tree_open_pris`` (frontmatter, first 20 lines, top level only -- a
     closed ask is not a standing nag) and the same None-versus-empty contract.
@@ -882,7 +896,7 @@ def _tree_next_asks():
             head = fh.read().split('\n')[:20]
         fm = dict((ln.split(':', 1)[0], ln.split(':', 1)[1].strip())
                   for ln in head if ln.startswith(('id:', 'pri:')))
-        if _ASK_ID.match(fm.get('id', '')) and fm.get('pri', '').upper() == 'NEXT':
+        if _ASK_ID.match(fm.get('id', '')) and fm.get('pri', '').upper() in _ASK_NAG_PRIS:
             out.append(fm['id'])
     return sorted(out, key=_ask_order)
 
@@ -916,7 +930,8 @@ def check_session_receipt(fail):
     ledger would be ignored.
 
     Plus a THIRD, conditional receipt (`TK96`, 2026-09-27): while any open `ASK-*` row
-    sits at NEXT, an `asked: ASK-<n>[, ASK-<m>]` line naming every one of them. See the
+    sits at NEXT (or NOW, 2026-09-28), an `asked: ASK-<n>[, ASK-<m>]` line naming every
+    one of them. See the
     comment above ``_ASKED_RECEIPT`` for why `asked: none` is red there. Pinned, with its
     sabotage and mutation record, by ``tests/test_handoff_lint_b_prime.py``'s
     ``test_asked_receipt_*`` cases (map: ``docs/tk96-ask-channel-2026-09-27.md``).
@@ -954,6 +969,11 @@ def check_session_receipt(fail):
                 said_none = True
             else:
                 named.update(_ASKED_ID.findall(m.group(1)))
+    if said_none and named:
+        fail('%s: the newest entry (%s) says `asked: none` AND names %s on an `asked:` '
+             'line. A receipt that contradicts itself records neither; keep the line that '
+             'is true and delete the other.'
+             % (ROOT_LEDGER, head[:80], ', '.join(sorted(named, key=_ask_order))))
     missing = [a for a in next_asks if a not in named]
     if missing:
         if named:
@@ -962,11 +982,11 @@ def check_session_receipt(fail):
             why = 'it says `asked: none`'
         else:
             why = 'it has no `asked:` line'
-        fail('%s: the newest entry (%s) -- %s, but %s sit(s) at NEXT. A NEXT ask is a '
-             'question only the user can answer, and the session must raise it with them '
-             'in chat at least once (TK96; tasks/README.md, "The ASK-* series"). Ask, '
+        fail('%s: the newest entry (%s) -- %s, but %s sit(s) at NEXT or NOW. A NEXT ask '
+             'is a question only the user can answer, and the session must raise it with '
+             'them in chat at least once (TK96; tasks/README.md, "The ASK-* series"). Ask, '
              'then write `asked: %s`. To stop the nag, demote the row to LATER instead -- '
-             '`none` is not accepted while an ask is at NEXT.'
+             '`none` is not accepted while an ask is at NEXT or NOW.'
              % (ROOT_LEDGER, head[:80], why, ', '.join(missing), ', '.join(next_asks)))
     unknown = sorted(named - (_tree_ids() or set()), key=_ask_order)
     if unknown:

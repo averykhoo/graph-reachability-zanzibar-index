@@ -384,9 +384,25 @@ def test_asked_receipt_is_red_until_every_next_ask_is_named(tmp_path, monkeypatc
     out = _run(handoff_lint.check_session_receipt)
     assert len(out) == 1 and "it says `asked: none`" in out[0], out
 
-    # GREEN: both named, on one line or across two, in any order.
+    # THE GRAMMAR (decided 2026-09-28): the receipt is the ONE comma list directly after
+    # `asked: `. Commentary after it is ignored, so an id mentioned there -- or in prose on
+    # another line of the entry -- names nothing. A sentence ABOUT an unasked question is
+    # not the receipt that it was asked. Mutants V7 (ids harvested from the whole line)
+    # and V8 (from every line of the entry once any `asked:` exists) were GREEN before
+    # these three cases existed; observed KILLED 2026-09-28, docs/tk96-ask-channel-
+    # 2026-09-27.md, the 2026-09-28 correction.
+    for body in ("asked: ASK-3 (ASK-5 deferred)", "asked: ASK-3 (ASK-5 later)",
+                 "asked: ASK-3\nASK-5 is still open"):
+        _write_ledger(tmp_path, BOTH + "\n" + body, older_body=older)
+        out = _run(handoff_lint.check_session_receipt)
+        assert len(out) == 1 and "does not name ASK-5, but ASK-5 sit(s)" in out[0], (
+            body, out)
+
+    # GREEN: both named, on one line or across two, in any order -- and two receipts on
+    # ONE line are unioned too (mutant V5, first match per line only, was GREEN).
     for body in ("asked: ASK-3, ASK-5", "asked: ASK-5,ASK-3",
-                 "asked: ASK-3\nasked: ASK-5", "asked: ASK-3, ASK-4, ASK-5"):
+                 "asked: ASK-3\nasked: ASK-5", "asked: ASK-3, ASK-4, ASK-5",
+                 "asked: ASK-3; asked: ASK-5"):
         _write_ledger(tmp_path, BOTH + "\n" + body, older_body=older)
         assert _run(handoff_lint.check_session_receipt) == [], body
 
@@ -437,7 +453,8 @@ def test_asked_receipt_is_optional_without_a_next_ask(tmp_path, monkeypatch):
     that merely resembles the series. `asked: none` is accepted here."""
     monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
     _write_tasks(tmp_path, {"TK1": "NOW", "ASK-3": "LATER", "ASKX-4": "NEXT",
-                            "TASK-5": "NEXT", "ASK-8b": "NEXT"})
+                            "TASK-5": "NEXT", "ASK-8b": "NEXT", "ASK-11": "HOLD",
+                            "ASK-12": "SOMEDAY"})
     _write_closed(tmp_path, "ASK-7", "NEXT")
     for body in (BOTH, BOTH + "\nasked: none", BOTH + "\nasked: ASK-7"):
         _write_ledger(tmp_path, body)
@@ -470,3 +487,46 @@ def test_asked_receipt_refuses_an_id_the_tree_does_not_know(tmp_path, monkeypatc
     _write_ledger(tmp_path, BOTH + "\nasked: ASK-3, ASK-9")
     out = _run(handoff_lint.check_session_receipt)
     assert len(out) == 1 and "names ASK-9 on its `asked:` line" in out[0], out
+
+
+def test_asked_receipt_counts_an_ask_at_now_as_at_next(tmp_path, monkeypatch):
+    """Decided 2026-09-28 (TK96 fixer): "at NEXT" means at NEXT OR ABOVE. The nag exists so
+    the user is asked; an ask promoted to NOW is at least as pressing as one at NEXT, and
+    a promotion must never be the way to silence it (`handoff_lint.py::_ASK_NAG_PRIS`).
+    Mutant V4r (the harvest back to NEXT only) observed KILLED 2026-09-28."""
+    monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
+    _write_tasks(tmp_path, {"TK1": "NEXT", "ASK-3": "NOW", "ASK-4": "LATER"})
+    _write_ledger(tmp_path, BOTH)
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "it has no `asked:` line" in out[0], out
+    assert "ASK-3 sit(s) at NEXT or NOW" in out[0], out
+
+    _write_ledger(tmp_path, BOTH + "\nasked: none")
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "it says `asked: none`" in out[0], out
+
+    _write_ledger(tmp_path, BOTH + "\nasked: ASK-3")
+    assert _run(handoff_lint.check_session_receipt) == []
+
+
+def test_asked_receipt_refuses_none_beside_names(tmp_path, monkeypatch):
+    """Decided 2026-09-28 (TK96 fixer; the verifier's V6 -- "none beats names" was GREEN,
+    i.e. unpinned either way): an entry that says `asked: none` on one line and names ids
+    on another contradicts itself, and is RED whether or not an ask is at NEXT. The
+    control: `asked: none, ASK-3` is ONE receipt that reads as `none` (the grammar pinned
+    in `test_asked_receipt_is_red_until_every_next_ask_is_named`), so with no ask at NEXT
+    it is green -- the contradiction check fires on two receipts, not on one."""
+    monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
+    _write_tasks(tmp_path, {"TK1": "NOW", "ASK-3": "NEXT", "ASK-5": "NEXT"})
+    _write_ledger(tmp_path, BOTH + "\nasked: none\nasked: ASK-3, ASK-5")
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1, out
+    assert "says `asked: none` AND names ASK-3, ASK-5" in out[0], out
+
+    _write_tasks(tmp_path, {"TK1": "NOW", "ASK-3": "LATER"})
+    _write_ledger(tmp_path, BOTH + "\nasked: ASK-3\nasked: none")
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "says `asked: none` AND names ASK-3" in out[0], out
+
+    _write_ledger(tmp_path, BOTH + "\nasked: none, ASK-3")
+    assert _run(handoff_lint.check_session_receipt) == []

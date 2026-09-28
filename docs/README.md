@@ -158,8 +158,8 @@ should simply take (`CLAUDE.md` § "Who decides"). It sits at `LATER` by default
 one to `NEXT` means **the session must raise it with the user, in chat, at least once that
 session**. `NEXT`'s cap of 3 therefore bounds the standing nags at three, and an `ASK-*`
 competes for those slots on the same terms as any other row. The nag is enforced, not
-remembered: while an ask sits at `NEXT`, the ledger entry names it on an `asked:` line
-(§7 step 1). Filing rules and the `asks` view:
+remembered: while an ask sits at `NEXT` (or `NOW`, which never silences it), the ledger
+entry names it on an `asked:` line (§7 step 1). Filing rules and the `asks` view:
 [`../tasks/README.md`](../tasks/README.md) § "The `ASK-*` series".
 
 **Emoji are category badges, never degree:**
@@ -275,9 +275,11 @@ trace is how the last accretion started.
    lint`, and `read: board only` or `read: board + note` — an honest report of whether
    the board query was the whole session-start read, or the note was needed as well.
    **A third line is conditional** (`TK96`, 2026-09-27): while any open `ASK-*` row sits
-   at `NEXT`, `asked: ASK-<n>[, ASK-<m>]` naming every one of them — the receipt that the
-   session raised each with the user in chat. `asked: none` is red while an ask is at
-   `NEXT`; the way to stop the nag is to demote the row (§4).
+   at `NEXT` or `NOW`, `asked: ASK-<n>[, ASK-<m>]` naming every one of them — the receipt
+   that the session raised each with the user in chat. `asked: none` is red while an ask
+   is at `NEXT`/`NOW`; the way to stop the nag is to demote the row (§4). Grammar and the
+   checks that apply even when the line is optional: [`../tasks/README.md`](../tasks/README.md)
+   § "The `ASK-*` series".
 2. **Rewrite the `## Banner` of [`HANDOFF.md`](../HANDOFF.md)** — the single copy: gate
    state as observed, the entry key just created on its FIRST line, the headline, what
    the next session must not repeat. At most `task.py::BANNER_MAX_LINES` lines, only

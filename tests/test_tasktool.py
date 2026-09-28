@@ -4066,6 +4066,15 @@ def ask_tree(name):
         string sort puts `ASK-10` first;
       * `ASK-3b` and `TASK-4` are OLDER than all of them and are not asks (the pattern is
         anchored), and a CLOSED `ASK-1` at NEXT is not open.
+
+    Added 2026-09-28 (TK96 fixer; the verifier's W1 / W2 / W3 mutants were GREEN):
+
+      * T3 is a SECOND open dependent of ASK-2, so `blocks` must be a list, not the last
+        writer (W3);
+      * T8 is CLOSED and still declares `deps: [ASK-2]` (`close` does not refuse that),
+        so a `blocks` built from every task rather than the open ones says T8 (W1);
+      * ASK-7 sits at HOLD, filed 5 days ago: an open ask at ANY pri is listed and
+        counted -- only the nag is pri-gated (W2).
     """
     root = fresh(name)
     os.makedirs(os.path.join(root, 'tasks', 'closed'))
@@ -4073,6 +4082,12 @@ def ask_tree(name):
     place(root, 'T1', 'now', title='the now row', pri='NOW')
     place(root, 'T2', 'blocked', title='blocked on the user', deps=['ASK-2'],
           created=today, moved=today)
+    place(root, 'T3', 'blocked-too', title='also blocked on the user', deps=['ASK-2'],
+          created=today, moved=today)
+    place(root, 'T8', 'done', closed_dir=True, title='closed but still naming the ask',
+          deps=['ASK-2'], created=_days_ago(20), moved=today, closed=today)
+    place(root, 'ASK-7', 'seven', title='ask seven', pri='HOLD', created=_days_ago(5),
+          moved=_days_ago(5))
     place(root, 'ASK-2', 'two', title='ask two', pri='NEXT', created=_days_ago(12),
           moved=today)
     place(root, 'ASK-10', 'ten', title='ask ten', created=_days_ago(3), moved=_days_ago(3))
@@ -4095,20 +4110,25 @@ def test_asks_lists_open_asks_oldest_first_with_age_and_blockers():
     assert rc == 0, err
     lines = out_lines(out)
     rows = [l for l in lines if re.match(r'ASK-', l)]
-    assert [r.split()[0] for r in rows] == ['ASK-2', 'ASK-5', 'ASK-10'], (
+    assert [r.split()[0] for r in rows] == ['ASK-2', 'ASK-7', 'ASK-5', 'ASK-10'], (
         'asks are not oldest-first by `created`, id number breaking ties:\n%s'
         % out_text(out))
     assert rows[0].split()[1:4] == ['NEXT', '12', 'days'], rows[0]
-    assert rows[1].split()[1:4] == ['LATER', '3', 'days'], rows[1]
+    assert rows[1].split()[1:4] == ['HOLD', '5', 'days'], rows[1]
+    assert rows[2].split()[1:4] == ['LATER', '3', 'days'], rows[2]
     text = out_text(out)
-    assert 'blocks T2' in text, text
+    # Both OPEN dependents, and not the closed T8 (W1 / W3, 2026-09-28).
+    assert [l.strip() for l in lines if 'blocks' in l] == ['blocks T2, T3'], text
+    assert 'T8' not in text, text
+    assert text.count('raise it with the user') == 1, text
     assert text.count('NEXT: raise it with the user') == 1, text
-    assert '3 open ask(s)' in text, text
+    assert '4 open ask(s)' in text, text
 
     rc, data, err = rj(root, 'asks')
     assert rc == 0, err
-    assert [(d['id'], d['age_days'], d['blocks']) for d in data] == [
-        ('ASK-2', 12, ['T2']), ('ASK-5', 3, []), ('ASK-10', 3, [])], data
+    assert [(d['id'], d['pri'], d['age_days'], d['blocks']) for d in data] == [
+        ('ASK-2', 'NEXT', 12, ['T2', 'T3']), ('ASK-7', 'HOLD', 5, []),
+        ('ASK-5', 'LATER', 3, []), ('ASK-10', 'LATER', 3, [])], data
 
 
 def test_board_prints_one_asks_line_under_ready():
@@ -4124,14 +4144,37 @@ def test_board_prints_one_asks_line_under_ready():
     assert asks[0] == ready[0] + 1, 'the asks line is not directly under ready:\n%s' % (
         out_text(out))
     line = lines[asks[0]]
-    assert line.startswith('asks   3 open, oldest 12 days, 1 at NEXT -- raise in chat   '
-                           '(python '), line
+    # 4 open: the HOLD ask counts (W2, 2026-09-28); 1 nagging: it does not nag.
+    assert line.startswith('asks   4 open, oldest 12 days, 1 at NEXT or NOW -- raise in '
+                           'chat   (python '), line
     assert line.endswith(' asks)'), line
 
     rc, data, err = rj(root, 'board')
     assert rc == 0, err
-    assert data['asks'] == ['ASK-2', 'ASK-5', 'ASK-10'], data['asks']
+    assert data['asks'] == ['ASK-2', 'ASK-7', 'ASK-5', 'ASK-10'], data['asks']
     assert data['asks_next'] == ['ASK-2'], data['asks_next']
+
+
+def test_an_ask_at_now_nags_like_one_at_next():
+    """Decided 2026-09-28 (TK96 fixer): "at NEXT" means at NEXT OR ABOVE
+    (`task.py::ASK_NAG_PRIS`, copied as `handoff_lint.py::_ASK_NAG_PRIS`). The nag exists
+    so the user is asked, and an ask promoted to NOW is at least as pressing; a promotion
+    must never silence it. Board line, `--json` `asks_next`, and the `asks` flag agree."""
+    root = fresh('asks-now')
+    os.makedirs(os.path.join(root, 'tasks', 'closed'))
+    place(root, 'ASK-4', 'four', title='ask four', pri='NOW', created=_days_ago(2),
+          moved=_days_ago(2))
+    place(root, 'T1', 'later', title='a later row', pri='LATER')
+    rc, out, err = run(root, 'board')
+    assert rc == 0, err
+    asks = [l for l in out_lines(out) if l.startswith('asks   ')]
+    assert len(asks) == 1 and asks[0].startswith(
+        'asks   1 open, oldest 2 days, 1 at NEXT or NOW -- raise in chat   (python '), asks
+    rc, data, err = rj(root, 'board')
+    assert rc == 0 and data['asks_next'] == ['ASK-4'], (err, data)
+    rc, out, err = run(root, 'asks')
+    assert rc == 0, err
+    assert out_text(out).count('NOW: raise it with the user') == 1, out_text(out)
 
 
 def test_asks_line_is_printed_at_zero_too():

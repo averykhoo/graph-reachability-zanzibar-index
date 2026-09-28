@@ -8,6 +8,84 @@ master `d4ea804` in a workflow worktree.
 Provenance labels: **READ** (first-hand, this session), **REASONED**, **MEASURED** (a run
 whose output is quoted), **UNVERIFIED**. No subagents were used.
 
+## Correction 2026-09-28 (TK96 fixer, after the adversarial verify of `9df76be`)
+
+The verifier (workflow agent, crash bag `.scratch/wf-0927/TK96-verify.md`, gitignored)
+returned FIX_REQUIRED with four must-fix findings and three nits. Each was reconciled
+first-hand in the fixer's worktree before acting; decisions are the model's (CLAUDE.md
+"Who decides").
+
+1. **D8 below cites a symbol that does not exist.** `_tree_open_rows` was never written;
+   the harvester is `scripts/handoff_lint.py::_tree_next_asks` (READ: `grep -n
+   _tree_open_rows scripts/` matches nothing). The body is left as written; read D8 as
+   "`_tree_next_asks() is None`".
+2. **The `asked:` id harvest was correct but unpinned** (READ: it reads
+   `_ASKED_RECEIPT`'s group 1 only). Mutants V7 (ids from the whole line) and V8 (ids from
+   every entry line once any `asked:` exists) were GREEN. **Grammar decided (REASONED):**
+   the receipt is the ONE comma list directly after `asked: `; commentary after it is
+   ignored, so `asked: ASK-3 (ASK-5 deferred)` names ASK-3 only, and prose on another line
+   names nothing -- a sentence ABOUT an unasked question is not a receipt that it was
+   asked. Pinned in `tests/test_handoff_lint_b_prime.py::test_asked_receipt_is_red_until_every_next_ask_is_named`
+   (three RED cases naming ASK-5; plus `asked: ASK-3; asked: ASK-5` GREEN, which kills V5).
+3. **`asks`' `blocks` column was correct but under-tested** (READ: built from
+   `store.open_tasks()`, appended). `tests/test_tasktool.py::ask_tree` gains a second OPEN
+   dependent `T3` and a CLOSED `T8` still declaring `deps: [ASK-2]` (`close` does not
+   refuse that); the list test asserts exactly `blocks T2, T3` and json `['T2', 'T3']`.
+4. **HOLD/SOMEDAY asks were listed but unpinned** (W2 GREEN). `ask_tree` gains `ASK-7` at
+   HOLD; `asks`, the board line (`4 open`) and both `--json` shapes assert it.
+5. **Nit V4 -- an ask at NOW. DECIDED: it nags** (REASONED from the row's intent: the nag
+   exists so the user is asked; an ask promoted to NOW is at least as pressing, and a
+   promotion must never be the way to silence it). "At NEXT" now means NEXT or NOW
+   everywhere: `scripts/task.py::ASK_NAG_PRIS` (board clause now reads `K at NEXT or NOW
+   -- raise in chat`, json `asks_next`, the `asks` flag line prints the row's pri) and its
+   copy `scripts/handoff_lint.py::_ASK_NAG_PRIS` (the receipt). Pinned by
+   `test_asked_receipt_counts_an_ask_at_now_as_at_next` and
+   `tests/test_tasktool.py::test_an_ask_at_now_nags_like_one_at_next`.
+6. **Nit V6 -- `asked: none` beside a line that names ids. DECIDED: RED**, NEXT ask or not
+   (a receipt that says both "asked nothing" and "asked these" records neither; the fix is
+   one deleted line). New failure in `check_session_receipt`; pinned by
+   `test_asked_receipt_refuses_none_beside_names`, whose control keeps `asked: none, ASK-3`
+   (ONE receipt, read as `none`) green with no ask at NEXT.
+7. **README omission:** that an OPTIONAL `asked:` line naming an unknown id is still RED is
+   now stated in `tasks/README.md` "The `ASK-*` series".
+
+**Mutation re-sweep (MEASURED 2026-09-28, literal last lines; runner
+`.scratch/tk96fix/mut.py` in the fixer worktree, gitignored -- fresh temp dir per mutant,
+the worktree never mutated, every anchor asserted to match once).**
+`pytest tests/test_handoff_lint_b_prime.py -k "asked or receipt"`:
+
+| id | mutant | verdict | last line | killed by |
+|---|---|---|---|---|
+| M0-HL | control: no change | green | `44 passed, 5 deselected in 2.52s` | -- |
+| V7 | ids harvested from the WHOLE line, not the receipt group | KILLED | `1 failed, 43 passed, 5 deselected in 2.02s` | `test_asked_receipt_is_red_until_every_next_ask_is_named` |
+| V8 | ids harvested from EVERY entry line once any `asked:` exists | KILLED | `1 failed, 43 passed, 5 deselected in 1.96s` | `test_asked_receipt_is_red_until_every_next_ask_is_named` |
+| V5 | only the first `asked:` match per line is read | KILLED | `1 failed, 43 passed, 5 deselected in 2.02s` | `test_asked_receipt_is_red_until_every_next_ask_is_named` |
+| V4r | NOW asks no longer nag (harvest back to NEXT only) | KILLED | `1 failed, 43 passed, 5 deselected in 1.99s` | `test_asked_receipt_counts_an_ask_at_now_as_at_next` |
+| V6 | the verifier's V6: `none` beats names | KILLED | `1 failed, 43 passed, 5 deselected in 2.07s` | `test_asked_receipt_refuses_none_beside_names` |
+| V6r | none-beside-names contradiction check disabled | KILLED | `1 failed, 43 passed, 5 deselected in 2.14s` | `test_asked_receipt_refuses_none_beside_names` |
+
+`pytest tests/test_tasktool.py -k "<the seven asks/board tests>"`:
+
+| id | mutant | verdict | last line | killed by |
+|---|---|---|---|---|
+| M0-TP | control: no change | green | `7 passed, 96 deselected in 7.28s` | -- |
+| W1 | `blocks` built from ALL tasks, closed included | KILLED | `1 failed, 6 passed, 96 deselected in 7.25s` | `test_asks_lists_open_asks_oldest_first_with_age_and_blockers` |
+| W2 | HOLD/SOMEDAY asks dropped (`open_asks` filtered to `READY_PRIS`) | KILLED | `2 failed, 5 passed, 96 deselected in 6.85s` | `..._oldest_first_with_age_and_blockers`; `test_board_prints_one_asks_line_under_ready` |
+| W3 | last dependent wins | KILLED | `1 failed, 6 passed, 96 deselected in 6.70s` | `test_asks_lists_open_asks_oldest_first_with_age_and_blockers` |
+| W5 | NOW asks no longer nag in `task.py` | KILLED | `1 failed, 6 passed, 96 deselected in 6.52s` | `test_an_ask_at_now_nags_like_one_at_next` |
+
+All 10 non-control mutants KILLED; both controls green. V7/V8/V5/W1/W2/W3 were GREEN
+against `9df76be`'s tests (verifier's record); V4r/V6r/W5 guard the two new decisions.
+The H1-H12 / T1-T17 table in section 4 is `9df76be`'s and was not re-run: T11 and T15's
+anchors (`t.pri == 'NEXT'`) no longer exist in the code (now `in ASK_NAG_PRIS`).
+
+Fixer runs (MEASURED 2026-09-28, fixer worktree, before the rebase onto `5eff958`):
+`pytest tests/test_tasktool.py tests/test_handoff_lint_b_prime.py` -> `152 passed`;
+`verify.sh tests-tile:1/4`..`4/4` each `=== verify.sh: phase 'tests-tile:N/4' PASSED ===`
+(`363`/`363`/`363`/`362 passed`, floors equal); `scripts/handoff_lint.py` -> `handoff_lint:
+clean (12 checks)`. NOT run: `lean`, `conf-tile`s. The fix adds three tests, so
+`formal/FINAL_REVIEW.md`'s generated counts block must be regenerated on master.
+
 ## § 0 The row, restated as three deliverables
 
 `tasks/TK96-...md` (READ) asks for:

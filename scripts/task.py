@@ -734,6 +734,12 @@ READY_PRIS = ('NOW', 'NEXT', 'LATER')
 # copy of this pattern, `_ASK_ID`, is deliberately NOT imported from here -- that script
 # cross-checks this one). `asks` lists them; `board` prints one line about them.
 ASK_ID = re.compile(r'^ASK-(\d+)$')
+# "At NEXT" means at NEXT OR ABOVE (decided 2026-09-28, TK96 fixer): the nag exists so the
+# user is asked, and an ask promoted to NOW is at least as pressing as one at NEXT -- a
+# promotion must never be the way to silence it. HOLD / SOMEDAY / LATER asks are still
+# LISTED and COUNTED by `asks` and the board line; they just do not nag.
+# `handoff_lint.py::_ASK_NAG_PRIS` is its copy.
+ASK_NAG_PRIS = ('NOW', 'NEXT')
 
 # Session key = YYYY-MM-DD with an optional single lowercase suffix, matching the repo's
 # session-ledger heading keys (docs/history/session-log.md). PLAIN STRING comparison sorts
@@ -2011,7 +2017,7 @@ def op_board(store, args):
             'stale_before': stale,
             'stale': [t.id for t in now + nxt if t.moved and t.moved < stale],
             'asks': [t.id for t in open_asks(store)],
-            'asks_next': [t.id for t in open_asks(store) if t.pri == 'NEXT'],
+            'asks_next': [t.id for t in open_asks(store) if t.pri in ASK_NAG_PRIS],
         })
         return 0
 
@@ -2415,14 +2421,14 @@ def asks_line(store, prog_name):
     a line that disappears at zero is indistinguishable from a board that lost the
     feature, and a constant line keeps BOARD_MAX_LINES a sum of constants."""
     asks = open_asks(store)
-    at_next = [t for t in asks if t.pri == 'NEXT']
+    at_next = [t for t in asks if t.pri in ASK_NAG_PRIS]
     if not asks:
         head = '0 open'
     else:
         age = ask_age_days(asks[0])
         head = '%d open, oldest %s' % (len(asks), days_text(age))
     if at_next:
-        head += ', %d at NEXT -- raise in chat' % len(at_next)
+        head += ', %d at NEXT or NOW -- raise in chat' % len(at_next)
     return 'asks   %s   (python %s asks)' % (head, prog_name)
 
 
@@ -2432,8 +2438,10 @@ def op_asks(store, args):
     `blocks` is the dep graph read backwards: the OPEN tasks whose `deps` name the ask.
     An ask with no dependents is a question; one with dependents is a hard blocker
     (`TK96`'s composition argument), and this is the view where that difference is read.
-    A NEXT ask is flagged because the session owes the user that question in chat, and
-    the ledger must say so (`handoff_lint.py::check_session_receipt`, `asked:` line).
+    A NEXT (or NOW: `ASK_NAG_PRIS`) ask is flagged because the session owes the user that
+    question in chat, and the ledger must say so (`handoff_lint.py::check_session_receipt`,
+    `asked:` line). Every OPEN ask is listed, whatever its pri -- a HOLD or SOMEDAY ask is
+    still a question nobody has answered.
     """
     asks = open_asks(store)
     blocked_by = {}
@@ -2454,9 +2462,9 @@ def op_asks(store, args):
         blocks = sorted(blocked_by.get(t.id, []))
         if blocks:
             emit('         blocks %s' % ', '.join(blocks))
-        if t.pri == 'NEXT':
-            emit('         NEXT: raise it with the user in chat this session, and name it '
-                 'on the ledger\'s `asked:` line')
+        if t.pri in ASK_NAG_PRIS:
+            emit('         %s: raise it with the user in chat this session, and name it '
+                 'on the ledger\'s `asked:` line' % t.pri)
     emit()
     emit('%d open ask(s), oldest first (filed = `created`; answer one with close -m)'
          % len(asks))
