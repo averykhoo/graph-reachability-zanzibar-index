@@ -426,6 +426,10 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   `W4Fragment`, so `zanzibar_utils_v1.py::derive_schema_info` emits
   `UnprovenExtensionWarning` on every construction path; a bare `[T:*]` stays silent.
   `pytest.ini` ignores it suite-wide; `tests/test_unproven_extension_warning.py` pins it.
+  **Do not propose the OpenFGA registry idiom to close that gap** (user decision
+  2026-09-29): it is a hand-maintained `*`, fail-open under `but not` when a registration
+  is missed, and is not supported as a substitute. Why:
+  `docs/architecture/decision-log.md` § "Wildcards beyond OpenFGA".
 - **Set-engine ids** are recycled int32 (roaring is uint32); the `(type, name, predicate)`
   key is the stable surrogate. State is in-memory — `rebuild()` replays from `TupleV1`.
 - **Operational knobs added 2026-07-27** (all default to today's behaviour):

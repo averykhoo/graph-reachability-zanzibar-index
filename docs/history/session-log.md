@@ -32,6 +32,33 @@ from here.
 
 ---
 
+## 2026-09-29 — docs: `*` is the supported way to say "every X"; the OpenFGA registry idiom is not (`ASK-2`)
+
+rows: ASK-2 (comment; stays LATER)
+
+`task lint: clean (13 checks, 236 task file(s) parsed), 42 warning(s)`
+
+`read: board only`
+
+Docs-only session. The user asked which of `NOW`/`NEXT` is smallest (answered in chat, no
+re-rank: all three are `M`; the shared stall-aware freshness fix under `TK111`+`TK112` is
+the smallest useful unit), then about `ASK-2`, then whether the OpenFGA registry /
+organization idiom can replace the three wildcard extensions. Reasoned answer: it can
+express the same `check` results, but it is a hand-maintained `*` — a missed registration
+is silently wrong, fail-open under `but not` — and it moves the proof gap into an unchecked
+application invariant. The user decided: document that the registry idiom is NOT supported
+as a substitute and `*` is. Nothing refuses the idiom (it is plain tuples), so the docs say
+"not supported as a substitute", not "refused". Landed:
+[`docs/architecture/decision-log.md`](../architecture/decision-log.md) § "Wildcards beyond
+OpenFGA" (the home), a pointer paragraph in [`README.md`](../../README.md)'s `*` section,
+and a do-not-propose clause on `CLAUDE.md`'s `ASK-2` bullet. Fixed en route: `README.md`
+called `group:*#member` an OpenFGA subject wildcard; it is one of the extensions (and star
+tuplesets were not listed). The equivalence of each rewrite is REASONED, not probed.
+
+Still owed: (none)
+
+---
+
 ## 2026-09-28 — TK111 NOW -> NEXT and P4 LATER -> NOW, both by user choice; 2026-09-27d pushed
 
 rows: TK111 (NOW -> NEXT), P4 (LATER -> NOW)

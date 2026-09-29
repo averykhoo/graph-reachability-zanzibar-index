@@ -11,8 +11,8 @@ labels: []
 source: hand
 source_hash:
 created: 2026-09-26b
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-09-29
+updated: 2026-09-29
 closed:
 ---
 
@@ -62,3 +62,7 @@ Gate: see the session-log entry `2026-09-26b`.
 ### 2026-09-27d
 
 P10 re-run (2026-09-27d, docs/p10-scope-audit-2026-09-27.md sec 6): star-userset subjects created by a star tupleset (e.g. doc:*#r0) agree 4-way but no grid asks them on the check surface. The coverage fix is owned by TK117.
+
+### 2026-09-29
+
+Follow-up, user decision 2026-09-29: the OpenFGA registry / organization idiom (one bookkeeping tuple linking each instance to a registry object) is NOT supported as a substitute for `*`. It is a hand-maintained `*`: a missed registration is silently wrong, fail-open under `but not`, and it moves the proof gap into an unchecked application invariant rather than closing it. Nothing refuses it (plain tuples). Recorded in docs/architecture/decision-log.md sec "Wildcards beyond OpenFGA", README.md sec "`*` wildcard entities", and the CLAUDE.md ASK-2 bullet. Also fixed: README called `group:*#member` an OpenFGA wildcard; it is one of the extensions. Row stays open at LATER; the answer to the original question is unchanged (keep them).

@@ -299,8 +299,9 @@ and cross-store ordering — deliberately out of scope here.
 
 Wildcards are supported as a first-class, **materialized** feature in `index_v4`
 (`index_v4/wildcard.py`, the `WildcardIndex` façade). We support the OpenFGA subject
-wildcards `user:*` and `group:*#member`, and — as a deliberate extension beyond OpenFGA
-— wildcard **objects** like `folder:*`. `check()` stays constant time (≤4 point lookups
+wildcard `user:*`, and — as deliberate extensions beyond OpenFGA — wildcard **usersets**
+like `group:*#member`, star **tuplesets** (a stored `doc:d1#parent@folder:*` walked by
+`viewer from parent`), and wildcard **objects** like `folder:*`. `check()` stays constant time (≤4 point lookups
 on a unique index) regardless of data size, nesting depth, or fan-out: all wildcard hops
 that can occur in the *interior* of a path are materialized as real edges at write time;
 only the two hops touching the literal query endpoints stay virtual.
@@ -341,6 +342,19 @@ OpenFGA syntax, so pass them to `parse_openfga_schema(schema,
 object_wildcard_shapes={(object_type, relation), ...})`. Filters stay strict on the subject
 (`[user]` still rejects a `user:*` subject) but permissive on the object so object-wildcard
 tuples flow through ingestion; the façade validates object-wildcard shapes.
+
+**Use `*`, not a registry object.** Stock OpenFGA has no wildcard usersets, star
+tuplesets or object wildcards, so OpenFGA models fake "every group" / "every folder" with a
+registry (or "organization") object that each instance is linked to by one bookkeeping
+tuple. **That idiom is not supported here as a substitute for `*`.** Nothing refuses it —
+it is ordinary tuples, so it parses and evaluates — but this repo does not offer it as
+the way to say "every X" and makes no promise that it matches a `*`: every new instance
+needs a registration write, and a missed one is silently wrong (fail-closed on a grant,
+but fail-**open** under `but not`). Write the `*` form. The three extensions are outside
+the proven fragment, so a schema using one emits `UnprovenExtensionWarning`; why they are
+kept anyway is in
+[`docs/architecture/decision-log.md`](./docs/architecture/decision-log.md) § "Wildcards
+beyond OpenFGA".
 
 **Strict ∀⇒∃ (the only mode).** "Granted on **all** S" implies "reaches **some** S" only if
 at least one concrete instance of S exists — realized structurally by
