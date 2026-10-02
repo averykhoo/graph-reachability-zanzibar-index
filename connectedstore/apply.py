@@ -73,7 +73,10 @@ def _apply_row(row: TupleLogV1, widx: WildcardIndex, ruleset: RuleSet) -> None:
         # exactly what `index_v4/core.py`'s raise site says it must not be. Re-raised
         # unchanged so the caller sees the cap's own actionable message; note the
         # consequence, which is real: the cursor cannot advance past this row until
-        # the cap is raised (or disabled with 0). See ZT-P1-6a.
+        # the cap is raised (or disabled with 0). See ZT-P1-6a. On the async schedule
+        # `ConnectedStore.catch_up` records the stall, and the read path then stops
+        # serving the index (TK111/TK112), so the consequence is an availability loss
+        # rather than a stale ALLOW.
         raise
     except ValueError as e:
         raise InvariantViolation(
@@ -177,6 +180,10 @@ def advance_index(session: Session, cursor: IndexCursorV1, widx: WildcardIndex,
             f'read snapshot predates it, so the apply step could not see it. Roll back '
             f'to start a fresh snapshot and retry the batch (nothing was committed).')
     cursor.applied_log_id = head
+    # TK111: a successful advance ends any recorded stall. Redundant with the
+    # ``stalled_after == applied_log_id`` liveness rule, kept so the row reads honestly.
+    cursor.stalled_after = None
+    cursor.stall_error = None
     session.add(cursor)
     session.flush()
     return len(rows)

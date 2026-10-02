@@ -1,7 +1,7 @@
 ---
 id: TK112
 title: fan-out cap vs revocation: under but not a revocation is an ADD; a capped async row strands removals
-brief: fan-out cap refuses revocations under but-not; a capped async row strands later removals (shares TK111 fix)
+brief: async case fixed for reads 2026-10-02b (TK111 stall marker); owed: polarity-aware cap exemption under but-not
 pri: NEXT
 size: M
 deps: []
@@ -11,8 +11,8 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-02b
+updated: 2026-10-02b
 closed:
 ---
 
@@ -68,3 +68,7 @@ a group of more than 100k members).
 ### 2026-09-27d
 
 2026-09-27d, ORCHESTRATOR FIRST-HAND REPRODUCTION. Ran `.scratch/wf-0927/probes/fanout-cap-boolean-revocation/verify/vprobe.py` (cap=20 set via ZANZIBAR_MAX_CLOSURE_FANOUT before import). Literal: A2 `ban group:big (30 members): REFUSED ClosureFanoutExceeded` then `graph viewer u0 after refused ban: True | set engine: True` (refusal is loud and the backends agree -- an operational fail-open for the caller, not a divergence); C2 async plain schema `catch_up: REFUSED ClosureFanoutExceeded`, `lag: 2`, `untokened check u0 viewer doc:old (revoked in source): True`, `tokened check (at_least=remove token): False`, `set engine: False` -- the SAME stale-ALLOW mechanism as TK111; D3 `un-ban REMOVE: REFUSED ClosureFanoutExceeded ... (0 ancestors x 30 descenda...`. At the 100,000 default this needs a >100k-member group. Body ids: H2 = this row, H4 = TK111.
+
+### 2026-10-02b
+
+2026-10-02b: case (c) is CLOSED FOR READS by the shared fix on TK111 (see that row and docs/tk111-stall-aware-freshness-2026-10-02.md). A capped async row still stalls catch_up, but the untokened check now falls back to the set engine and the untokened lookup refuses with IndexStalled; raising the cap and re-running catch_up clears the stall (pinned: tests/test_tk111_stall_aware_freshness.py::test_fanout_capped_row_stalls_and_untokened_check_stops_serving_revoked_allow). STILL OPEN: (1) the sync refusal of a revocation-shaped ADD under but-not; the plan doc sec 4 shows the exemption must key on the leaf NET POLARITY (a subtrahend of a subtrahend is a grant), not on subtrahend-ness, and proposes the compiler emit negative leaf families from _build_plan_tree (UNVERIFIED); (2) whether the async apply should cap at all (undecided); (b) the un-ban REMOVE capped via DeltaProcessor._write_derived fails CLOSED, an availability defect, rank below (1); plus the doc corrections listed in the body. NEXT ACTION: probe the polarity of every leaf in the compiled plans for a nested but-not schema, then implement (1).

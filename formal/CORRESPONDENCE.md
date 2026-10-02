@@ -1011,6 +1011,18 @@ The bullet is corrected in place below.
 These were neither mapped nor declared. None is a bug; each is a place where an
 auditor must know the pin is a Python↔Python differential, not a Lean twin.
 
+* **The async apply step's STALL marker and the read-path freshness fallback (added
+  2026-10-02b, `TK111`).** `connectedstore/store.py::ConnectedStore.catch_up` now
+  records any failure on the cursor row via `::ConnectedStore._record_stall`, and
+  `connectedstore/apply.py::advance_index` clears that marker when it advances the
+  cursor. Neither change touches the apply SCHEDULE that the rows above and the
+  sec 7.4 entries describe (the row loop, the cascade, the `rows_hint` fast path). All
+  of those were re-read on 2026-10-02b when the anchor CONTENT pin flagged both bodies,
+  and all still hold. The cursor, the stall and `ConnectedStore._fresh_enough` (which
+  untokened read is served by which backend) have NO Lean model. They are pinned
+  Python-to-Python by `tests/test_tk111_stall_aware_freshness.py`, whose mutation sweep
+  is in `docs/tk111-stall-aware-freshness-2026-10-02.md` sec 5.
+
 * **★ The CROSSABLE-SHAPE class, and the Lean wildcard leg could not have caught the
   2026-08-09 bug (added 2026-08-09).** Python's bridged-in set is WIDER than Lean's.
   `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes` folds in **star-tupleset

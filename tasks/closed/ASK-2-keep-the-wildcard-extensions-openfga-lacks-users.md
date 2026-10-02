@@ -11,9 +11,9 @@ labels: []
 source: hand
 source_hash:
 created: 2026-09-26b
-moved: 2026-09-29
-updated: 2026-09-29
-closed:
+moved: 2026-10-02b
+updated: 2026-10-02b
+closed: 2026-10-02b
 ---
 
 **Question for the user (product behaviour, not an engineering call):** should the repo keep
@@ -66,3 +66,7 @@ P10 re-run (2026-09-27d, docs/p10-scope-audit-2026-09-27.md sec 6): star-userset
 ### 2026-09-29
 
 Follow-up, user decision 2026-09-29: the OpenFGA registry / organization idiom (one bookkeeping tuple linking each instance to a registry object) is NOT supported as a substitute for `*`. It is a hand-maintained `*`: a missed registration is silently wrong, fail-open under `but not`, and it moves the proof gap into an unchecked application invariant rather than closing it. Nothing refuses it (plain tuples). Recorded in docs/architecture/decision-log.md sec "Wildcards beyond OpenFGA", README.md sec "`*` wildcard entities", and the CLAUDE.md ASK-2 bullet. Also fixed: README called `group:*#member` an OpenFGA wildcard; it is one of the extensions. Row stays open at LATER; the answer to the original question is unchanged (keep them).
+
+### 2026-10-02b
+
+ANSWERED by the user 2026-10-02b: KEEP all three wildcard extensions (userset stars, star tuplesets, object wildcards). Reason given: the OpenFGA registry idiom is not as good a substitute (the 2026-09-29 decision: a hand-maintained `*`, fail-open under `but not` on a missed registration). The UnprovenExtensionWarning (2026-09-26b) stays as the caller-facing notice that these rest on tests, not the headline theorems. Home: docs/architecture/decision-log.md sec "Wildcards beyond OpenFGA". No code change.

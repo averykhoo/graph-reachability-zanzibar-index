@@ -68,6 +68,26 @@ class LookupNotFresh(StaleRead):
     catch-up."""
 
 
+class IndexStalled(LookupNotFresh):
+    """An UNTOKENED ``lookup`` / ``lookup_reverse`` was refused because the apply step
+    has recorded a stall: the last ``catch_up`` failed to advance past the cursor, so
+    the index's staleness is no longer bounded (TK111/TK112).
+
+    An untokened read is documented as bounded-stale: the index trails the log by
+    whatever the async worker has not applied YET. A row the index cannot apply at all
+    (a path-count overflow, a fan-out-capped row) breaks that bound: every later row,
+    revocations included, waits behind it forever, and serving the index would keep a
+    revoked principal listed indefinitely. ``check`` falls back to the set engine in
+    this state; the lookup surfaces have no fallback (see ``LookupNotFresh``), so they
+    refuse.
+
+    RECOVERABLE once the stall clears: any successful ``catch_up`` batch ends it. A
+    stall recorded on a transient failure (a lock timeout, a lost connection) clears on
+    the next good batch. A poison row needs operator action -- raise the fan-out cap,
+    or rebuild the index -- and ``ConnectedStore.stall_error`` says which row failed
+    and why."""
+
+
 class ConnectedStore:
     """One permission store, end to end: validated writes into the tuple log +
     synchronously-maintained graph index; index-served reads with freshness
@@ -293,12 +313,52 @@ class ConnectedStore:
                     # pins the worker's read snapshot forever (blind daemon) and,
                     # on PostgreSQL, holds the FOR UPDATE store lock indefinitely.
                     self.session.rollback()
-            except Exception:
+            except Exception as e:
                 self.session.rollback()
+                self._record_stall(e)
                 raise
             if not applied:
                 return total
             total += applied
+
+    def _record_stall(self, exc: BaseException) -> None:
+        """Persist "the apply step could not advance past ``applied_log_id``" on the
+        cursor row, in its own transaction, so EVERY reader of this index -- not just
+        this instance -- stops treating it as merely behind (TK111/TK112).
+
+        Recorded on ANY failure, transient ones included, on purpose: a false stall
+        costs a set-engine fallback until the next successful batch clears it, while a
+        missed stall is the unbounded stale ALLOW. A classifier that tried to tell
+        poison rows from transient errors would re-open the fail-open the first time
+        it guessed wrong. If recording itself fails, the original exception still
+        propagates (the caller's ``raise``); the failure to record is attached to it
+        as a note rather than replacing it."""
+        try:
+            self.session.refresh(self.cursor)
+            self.cursor.stalled_after = self.cursor.applied_log_id
+            self.cursor.stall_error = f'{type(exc).__name__}: {exc}'[:2000]
+            self.session.add(self.cursor)
+            self.session.commit()
+        except Exception as rec:
+            self.session.rollback()
+            exc.add_note(f'ConnectedStore: recording the index stall ALSO failed '
+                         f'({type(rec).__name__}: {rec}); untokened reads may still '
+                         f'be served from the stalled index until it is recorded')
+
+    @property
+    def index_stalled(self) -> bool:
+        """True while the last recorded apply failure is still at the cursor, i.e. the
+        index is not merely behind but has failed to advance (TK111/TK112). As fresh
+        as this session's view of the cursor row -- a replica reader sees a stall
+        recorded by another instance after its next ``refresh()``, the same window it
+        already accepts for every other write."""
+        c = self.cursor
+        return c.stalled_after is not None and c.stalled_after == c.applied_log_id
+
+    @property
+    def stall_error(self) -> str | None:
+        """The recorded failure behind a live stall, for operators; None otherwise."""
+        return self.cursor.stall_error if self.index_stalled else None
 
     def refresh(self) -> None:
         """Replica-reader poll: drop the current read snapshot and every read-path
@@ -333,7 +393,15 @@ class ConnectedStore:
         # read-your-writes passes the token the write returned; there is nothing to
         # fall back to when it did not, and defaulting to "stale is unacceptable"
         # would make every ordinary read pay for a demand nobody made.
-        return at_least is None or self.cursor.applied_log_id >= at_least
+        #
+        # TK111/TK112: the BOUND is what makes that sound, and a stalled apply step
+        # removes it -- every later row, revocations included, waits behind the one the
+        # index cannot apply, forever. So an untokened read is fresh enough only while
+        # the index is not stalled. A TOKENED read is unaffected: a token at or below
+        # the cursor is genuinely reflected, stalled or not.
+        if at_least is None:
+            return not self.index_stalled
+        return self.cursor.applied_log_id >= at_least
 
     def _require_index_freshness(self, at_least: int | None, surface: str) -> None:
         """Enforce an ``at_least`` demand on an index-only read surface (ZT-P1-8b).
@@ -348,6 +416,16 @@ class ConnectedStore:
         self.session.refresh(self.cursor)
         if self._fresh_enough(at_least):
             return
+        if at_least is None:
+            raise IndexStalled(
+                f'{surface}() cannot be served: the index for store {self.store_id!r} '
+                f'is STALLED at log id {self.cursor.applied_log_id} (lag {self.lag()}): '
+                f'the last catch_up() failed to advance past it -- '
+                f'{self.cursor.stall_error} -- so its staleness is unbounded and a '
+                f'revoked principal could stay listed indefinitely (TK111). check() '
+                f'still answers, from the set engine. Clear the stall (a successful '
+                f'catch_up(); for a poison row raise the fan-out cap or rebuild the '
+                f'index) and retry.')
         raise LookupNotFresh(
             f'{surface}(at_least={at_least}) cannot be served: the index for store '
             f'{self.store_id!r} has applied through {self.cursor.applied_log_id} '
@@ -378,6 +456,13 @@ class ConnectedStore:
         # STILL not visible, this session's read snapshot predates the write --
         # refuse loudly rather than serve a stale answer under an explicit
         # freshness demand.
+        if at_least is None:
+            # Untokened read on a STALLED index (TK111/TK112): there is no token to
+            # satisfy, so serve the set engine as fresh as this snapshot allows. The
+            # stall is what made the index answer unbounded-stale; this one is not.
+            self.source.catch_up_evaluator()
+            return self.source.check(subject_predicate, s_type, s_name,
+                                     relation, o_type, o_name)
         if self.source.evaluator_watermark < at_least:
             self.source.catch_up_evaluator()
             if self.source.evaluator_watermark < at_least:

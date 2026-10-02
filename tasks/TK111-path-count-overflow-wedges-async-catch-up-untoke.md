@@ -1,8 +1,8 @@
 ---
 id: TK111
 title: path-count overflow wedges async catch_up; untokened ConnectedStore.check serves a stale ALLOW
-brief: LIVE fail-open: a poison row stalls async catch_up; untokened check keeps a revoked ALLOW (verified first-hand)
-pri: NEXT
+brief: read fail-open FIXED 2026-10-02b (stall marker); owed: clean sync overflow refusal, async overflow = permanent stall
+pri: NOW
 size: M
 deps: []
 related: [TK112]
@@ -11,8 +11,8 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-02b
+updated: 2026-10-02b
 closed:
 ---
 
@@ -72,3 +72,7 @@ lifetime log and node ids at `2^31-1` on PostgreSQL (fails closed).
 2026-09-27d, ORCHESTRATOR FIRST-HAND REPRODUCTION (the rule for anything that moves the live-bug count). Ran the P10 verifier's probe `.scratch/wf-0927/probes/pg-leg-outside-gate/verify/vprobe.py` with VK=63 VBATCH=1, SQLite, async. Literal: `K=63 sync=False writes=255 refused=0`; `catch_up attempt 0/1/2: OverflowError: Python int too large to convert to SQLite INTEGER | lag=2`; `check(user:mallory viewer doc:secret): ConnectedStore.check(untokened)=True set_engine=False oracle=False`; `tokened check(at_least=255) mallory=False`; `tokened lookup(u): LookupNotFresh`. So the untokened read serves a REVOKED grant, without bound, while tokened reads correctly refuse to be fresh. The body calls this H4 and its sibling H2; those ids are local to docs/p10-scope-audit-2026-09-27.md -- H2 is TK112, and the stall-aware freshness fix is shared with it. The probe lives in gitignored .scratch; the vprobe source is short (81 lines) and its schema+write list are in the body above, so the witness survives a sweep.
 
 NOW -> NEXT by user instruction (2026-09-28): both TK111 and TK112 sit at NEXT for now; NOW is left empty. The user has not asked for the fix to start.
+
+### 2026-10-02b
+
+2026-10-02b: THE SHARED STALL-AWARE FRESHNESS FIX LANDED, which closes the READ-side fail-open for both poison sources (this row and TK112). Map: docs/tk111-stall-aware-freshness-2026-10-02.md (ACTIVE-PLAN; sec 2 = decisions D1-D5, sec 5 = sweep evidence). LANDED: connectedstore/models.py::IndexCursorV1.stalled_after + stall_error (persisted stall marker, live only while equal to applied_log_id); connectedstore/store.py::ConnectedStore._record_stall (catch_up records on ANY failure, own transaction, then re-raises), ::index_stalled, ::stall_error, ::IndexStalled (LookupNotFresh subclass); _fresh_enough(None) is False while stalled, so the untokened check falls back to the set engine after catch_up_evaluator, and the untokened lookup/lookup_reverse refuse; connectedstore/apply.py::advance_index clears the marker. PINNED: tests/test_tk111_stall_aware_freshness.py (5 tests: this row K=63 witness with the revoke behind the poison row, TK112 C2 capped row + cap-raise recovery, transient stall clears, replica after refresh(), replica polling by bare rollback()). Mutation sweep with an M0 control: 9 of 9 mutants red after two inert ones (M5, M8) were fixed by new pins. STILL OPEN on this row: (S5) the SYNC overflow is still a raw OverflowError/DataError, not a clean admission refusal; an async overflow row is still a PERMANENT stall (reads are now correct, the index is unavailable for that store; recovery = rebuild). NEXT ACTION: S5, refuse the overflow cleanly on the sync path, and decide whether the async path can refuse it at admission at all (it cannot see the closure).

@@ -2,7 +2,7 @@
 id: TK113
 title: WildcardIndex.remove_node on a boolean routing source or leaf family leaves derived edges stale
 brief: graph != oracle via the admin remove_node API on a boolean schema; invariants blind to it
-pri: LATER
+pri: NEXT
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-02b
+updated: 2026-10-02b
 closed:
 ---
 
@@ -58,3 +58,7 @@ control that still removes cleanly, and run a sweep with an M0 control. The expo
 public admin API only.
 
 ## Log
+
+### 2026-10-02b
+
+2026-10-02b scouting (no code yet), detail in docs/tk111-stall-aware-freshness-2026-10-02.md sec 4: the witness routing source doc#editor fans to viewer.0 via a compiled Rule (Computed arm, zanzibar_utils_v1.py::_emit_leaf_expr), NOT a RewriteFilter, so a fence keyed only on RewriteFilter sources would miss the witness. The fence set must be every compiled Rule/RewriteFilter source whose target is in schema_info.leaf_families. UNVERIFIED and to probe FIRST: whether a pure-union Computed (viewer: editor, no boolean) has the same remove_node hole, which would widen the row beyond boolean schemas. NEXT ACTION: that probe.

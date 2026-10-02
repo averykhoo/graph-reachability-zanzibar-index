@@ -32,6 +32,103 @@ from here.
 
 ---
 
+## 2026-10-02b — TK111/TK112 read fail-open FIXED: a stalled async index is no longer served; ASK-2 closed
+
+rows: TK111 (NOW, comment + brief), TK112 (NEXT, comment + brief), TK113 (NEXT, scouting comment), P4 (NOW -> NEXT), ASK-2 (CLOSED)
+
+`task lint: clean (13 checks, 237 task file(s) parsed), 41 warning(s)`
+
+`read: board only`
+
+The user closed `ASK-2`: KEEP all three wildcard extensions, because the OpenFGA registry
+idiom is a worse substitute. They then ranked the three known live bugs first: `TK111` to
+`NOW`, `TK112` and `TK113` to `NEXT`, and `P4` from `NOW` to `NEXT`. Their instruction was
+"get as far as economically reasonable"; the rest is for next session.
+
+LANDED, the shared stall-aware freshness fix. Map and decisions D1-D5 are in
+[`docs/tk111-stall-aware-freshness-2026-10-02.md`](../tk111-stall-aware-freshness-2026-10-02.md)
+(ACTIVE-PLAN).
+- **The stall is persisted.** `ConnectedStore.catch_up` now records any failure on the
+  cursor row (`IndexCursorV1.stalled_after`, live only while it equals `applied_log_id`),
+  in its own transaction.
+- **A stalled index is not served.** While the stall is live, an untokened `check` falls
+  back to the set engine after `catch_up_evaluator`, and an untokened
+  `lookup`/`lookup_reverse` refuses with the new `IndexStalled`. Tokened reads are
+  unchanged.
+- **The fix is pinned** by `tests/test_tk111_stall_aware_freshness.py`, 5 tests.
+- **Mutation sweep, with an M0 control:** the first pass found two INERT mutants, M5 and M8
+  (why each was inert is in doc sec 5). Two pins were added, and on the second pass all 9
+  of 9 mutants went red.
+
+Floor: the 2026-10-02b collect-only count for `tests/` is 1512. 1507 without the new module
+is DRIFT left by the 2026-09-27d commits: `FINAL_REVIEW.md`'s block had been regenerated,
+but `MIN_TESTS_ALL` had not been ratcheted past 1421. Both are now at 1512, with provenance
+in `formal/verify.sh`.
+
+NOT done (on the rows, with next actions):
+- `TK111`: the sync overflow still raises a raw `OverflowError`/`DataError`, and an async
+  overflow is a permanent stall. Reads are correct; the index is unavailable for that
+  store.
+- `TK112`: the cap exemption under `but not` must key on the leaf's net POLARITY (doc
+  sec 4).
+- `TK113`: probe whether a pure-union `Computed` has the same `remove_node` hole.
+
+This session's gate + commit also discharges the 2026-10-02 Still-owed item (`TK120`'s
+uncommitted write-back).
+
+Still owed: none.
+
+---
+
+## 2026-10-02 — TK120 filed (LATER): drop the version suffixes and re-lay-out the repo; the plan needs user approval
+
+rows: TK120 (new, LATER)
+
+`task lint: clean (13 checks, 237 task file(s) parsed), 42 warning(s)`
+
+`read: board only`
+
+Discussion session (started 2026-10-01). The user asked, "just help me think", whether a
+non-boolean subset of the repo (v1-v3-style graph index, simpler set engine and oracle)
+would make the Lean easy to complete. Answered in chat; NOT filed as a task. The facts
+worth keeping, by provenance:
+
+* READ: the Lean has nothing left to complete. The non-boolean graph theorems already
+  exist (`GraphIndex/DirectCorrect.lean::graph_correct_direct`, the bareStar / objStar /
+  usStar variants, `GraphIndex/RulesComplete.lean::graph_correct_rules`), and proof debt
+  is 0 per the 2026-09-22c banner line. What a subset could buy is a smaller, more legible
+  CLAIM, not a finished proof.
+* READ: `legacy/index_v1.py`, `index_v2.py` and `index_v3.py` have no schema, rule or
+  filter code at all (grep, 0 hits each). They are raw edge reachability.
+* READ, side by side: `legacy/index_v3.py::_add_direct_edge_unsafe` is the same closure
+  algorithm as `index_v4/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl`.
+  v4's core differs only by fixes and plumbing: cycle and self-edge guards are `raise`,
+  not `assert`; the blind-audit C1 neighbour refcount debit in `remove_node`; per-store
+  scoping and the store lock; the fan-out cap; batched indirect writes; the outbox.
+* READ: node removal and GC are an unmodeled region (`formal/CORRESPONDENCE.md`, the
+  `remove_node` / `_evict_node` paragraph), so "proven for what v3 does" excludes
+  `remove_node`.
+* REASONED, approximate: bucketing `formal/lean/ZanzibarProofs/**/*.lean` by filename
+  (Cascade|Reconcile|Leaf|Strata|Stabilize|Settle vs Star|Wild) puts roughly 59% of the
+  Lean lines on boolean machinery and 15% on wildcards, measured 2026-10-01. Mixed files
+  (`FullScope.lean`, `Exec.lean`) make it rough.
+* READ: `zanzibar_utils_v1.py` is the LIVE schema layer, imported across the product,
+  tests, conformance and benchmarks; it dates from `10a00c0` (2024-04-14) and "v1" means
+  nothing current. No task or doc recorded a decision to keep it at the root.
+
+The user then asked to file a repo-wide refactor that removes the version suffixes and
+restructures the layout, details to be figured out and APPROVED by the user later: `TK120`
+(`LATER`, `L`, `infra`). Its body carries the name census, the explicit-`__tablename__`
+fact (a class rename need not touch the DB; a table rename is a migration), the anchor
+and frozen-history costs, and the next action (an ACTIVE-PLAN doc for approval).
+
+Not committed, by user choice: the user asked for the write-back now and the gate + commit
+in the next session.
+
+Still owed: the full gate and the commit (verbatim in `HANDOFF.md` `## Still owed`).
+
+---
+
 ## 2026-09-29 — docs: `*` is the supported way to say "every X"; the OpenFGA registry idiom is not (`ASK-2`)
 
 rows: ASK-2 (comment; stays LATER)

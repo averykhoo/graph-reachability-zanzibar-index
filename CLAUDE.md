@@ -440,7 +440,11 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   an over-large region must stay shrinkable. ⚠ **That exemption does not hold in two
   admitted cases (`TK112`, reproduced 2026-09-27d):** under `but not` a revocation is an
   ADD on the subtrahend leaf and is capped, and on the async schedule a capped row stalls
-  every later row, removals included. `ZANZIBAR_PARANOIA=residue` also does not catch an
+  every later row, removals included. **Since 2026-10-02b (`TK111`) a stalled index is no
+  longer SERVED**: `ConnectedStore.catch_up` records the stall on the cursor row
+  (`IndexCursorV1.stalled_after`), and untokened reads then fall back to the set engine
+  (`check`) or refuse with `IndexStalled` (lookups). So the async case is an availability
+  loss, not a stale ALLOW. `ZANZIBAR_PARANOIA=residue` also does not catch an
   I14 regression; only `full`/`fixpoint` do (`TK118`). `index_v4.outbox.prune_outbox` — manual
   retention, never auto-called, and it keeps the head row so SQLite cannot recycle
   outbox ids under a held cursor. `SetEngine.log_governed` — set by `TupleSource`, makes

@@ -10,7 +10,9 @@ stays the current-state snapshot; this is the history.
 
 ``IndexCursorV1`` -- "this graph index reflects that tuple store through log row N"
 (spec §4). Applied rows and the cursor advance commit in one transaction: that
-transactionality IS the exactly-once guarantee (spec §2.6).
+transactionality IS the exactly-once guarantee (spec §2.6). It also carries the
+apply step's STALL marker (``stalled_after``), which the read path consults so an
+index that cannot advance is never served as if it were merely behind (TK111).
 """
 
 import time
@@ -65,3 +67,11 @@ class IndexCursorV1(SQLModel, table=True):
     index_store_id: str
     source_store_id: str = Field(index=True)
     applied_log_id: int = Field(default=0)
+    # TK111/TK112 stall marker: the ``applied_log_id`` the apply step last FAILED to
+    # advance past. A stall is live only while it equals ``applied_log_id`` -- any
+    # successful advance invalidates it even if nothing clears it. Persisted (not held
+    # in memory) because the reader that must stop trusting the index is usually a
+    # different instance from the worker that hit the failure. See
+    # ``ConnectedStore.index_stalled``.
+    stalled_after: int | None = Field(default=None)
+    stall_error: str | None = Field(default=None)

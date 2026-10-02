@@ -242,10 +242,11 @@ Spec/Semantics.lean::ttuLeaf	lean:def	7ea91b6de7633854
 Spec/Stratify.lean::exprRefs	lean:def	d844965482ee5e5c
 Spec/WellDef.lean::sem_fuel_stable	lean:theorem-statement	d6429c8ef34d016d
 connectedstore/apply.py::_apply_row	py:function	99f6a0a80349f8c9
-connectedstore/apply.py::advance_index	py:function	280a0b15a156406c
+connectedstore/apply.py::advance_index	py:function	7edd006d49d2bd81
 connectedstore/source.py::TupleSource._lock_source	py:function	694caa6852a61ecc
 connectedstore/source.py::TupleSource.catch_up_evaluator	py:function	aed382a7b7fa190c
-connectedstore/store.py::ConnectedStore.catch_up	py:function	b1005d4a1968295e
+connectedstore/store.py::ConnectedStore._record_stall	py:function	277eb0cc792442ea
+connectedstore/store.py::ConnectedStore.catch_up	py:function	c018b06088d7a6ae
 formal/conformance/backends.py::GraphDriver.apply	py:function	6abe8b05498317f1
 formal/conformance/backends.py::graphindex_drive	py:function	4d0f4f541ed14e41
 formal/conformance/encode.py::_fold_binary	py:function	fa485bfc03bf6f90

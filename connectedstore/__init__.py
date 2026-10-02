@@ -13,13 +13,14 @@ from .source import (StaleRead, TupleSource, UnsafeIsolationLevel, WatermarkGap,
                      assert_read_isolation, log_gap, log_rows, log_watermark)
 from .apply import advance_index, ensure_cursor
 from .build import build_index
-from .store import ConnectedStore, LookupNotFresh, PARANOIA_ENV_VAR
+from .store import ConnectedStore, IndexStalled, LookupNotFresh, PARANOIA_ENV_VAR
 
 __all__ = [
     "ConnectedStore",
     "PARANOIA_ENV_VAR",
     "StaleRead",
     "LookupNotFresh",
+    "IndexStalled",
     "WatermarkGap",
     "UnsafeIsolationLevel",
     "assert_read_isolation",

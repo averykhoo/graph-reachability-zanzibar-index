@@ -2,7 +2,7 @@
 id: P4
 title: leg 7 4b -- leaf-probe <-> directLeaf bridge
 brief: sec 7.3 correspondence item, NOT the milestone: 4b premise is FALSE; 6 witness pins landed, general theorem owed
-pri: NOW
+pri: NEXT
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 015e6dd88c0d
 created: 2026-08-16
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-02b
+updated: 2026-10-02b
 closed:
 ---
 
@@ -179,3 +179,7 @@ on the leaf/bridged write path (Leaf.lean:836, LeafRules.lean:435, UsStarWrite.l
 ### 2026-09-27d
 
 LATER -> NOW by user choice (2026-09-28): the NOW slot needed exactly one row once TK111 and TK112 were both put at NEXT; the user picked P4, the first step of the 2026-09-22 formal milestone (P4 -> P5 + P14).
+
+### 2026-10-02b
+
+NOW -> NEXT by user instruction 2026-10-02b: the three known live correctness bugs (TK111, TK112, TK113) are handled first. Resume P4 after they close.

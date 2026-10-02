@@ -609,7 +609,14 @@ MIN_CONF_ALL=1081
 #   tests/test_refused_shape_comments.py (collect-only: 7 and 9). The two moved genswarm
 #   witnesses and the blind-audit test changed expectation, not count. 1405 + 16 = 1421.
 #   No drift.
-MIN_TESTS_ALL=1421
+# Re-measured 2026-10-02b (TK111) with the same command: 1512. +5 are the new
+#   tests/test_tk111_stall_aware_freshness.py (collect-only: 5). The other +86 are
+#   DRIFT: with that file --ignore'd the count is 1507, which is exactly what
+#   FINAL_REVIEW.md's generated block already said, so the block was regenerated after
+#   1421 and this floor was not. The tests/ commits since are the 2026-09-27d session's
+#   (5eff958 P12, aae414e + 57a05b7 P13, 5863a8e + 0d79995 TK96); NOT broken down per
+#   file. TK99 (ratchet mechanically) is the row that would make this unnecessary.
+MIN_TESTS_ALL=1512
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
