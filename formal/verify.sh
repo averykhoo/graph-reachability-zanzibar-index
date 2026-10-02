@@ -620,7 +620,9 @@ MIN_CONF_ALL=1081
 #   tests/test_tk111_path_count_bound.py and +8 the new tests/test_tk112_cap_policy.py
 #   (collect-only: 10 and 8). test_tk111_stall_aware_freshness.py's fan-out stall pin was
 #   REWRITTEN in place as the no-stall pin (still 5). 1512 + 18 = 1530. No drift.
-MIN_TESTS_ALL=1530
+# Re-measured 2026-10-03b (TK113) with the same command: 1575. +45 are the new
+#   tests/test_tk113_remove_node_fence.py (collect-only: 45). 1530 + 45 = 1575. No drift.
+MIN_TESTS_ALL=1575
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -1323,7 +1325,19 @@ run_conf_tile() {
          exit 1; }
   [ "$tilen" -gt 0 ] || { echo "FAIL: tile $i/$k is empty (K larger than the test count?)"; exit 1; }
   # Every selected node must PASS: the tile's own floor is its exact size.
-  run_conf "$tilen" "${SUITE_KIND:-conf}-tile:$i/$k ($tilen of $total node ids)" "${NODES[@]}"
+  # The tile's node ids go to pytest through an ARGUMENT FILE (`@path`, argparse
+  # fromfile_prefix_chars, honoured by pytest >= 8.2), not argv. 2026-10-03b: with
+  # 1575 tests/ ids each K=4 tile's argv reached ~34k chars and Windows refused to
+  # launch the interpreter ("Argument list too long", the 32767-char CreateProcess
+  # limit) -- the suite had been within ~1k chars of that for a while. The file lives
+  # under the gitignored .gate-runs/ (NOT /tmp: Git Bash's /tmp is not the Windows
+  # interpreter's), one fixed name per phase; concurrent runs are refused by the lock.
+  local ARGREL=".gate-runs/tile-args-${SUITE_KIND:-conf}-${i}of${k}.txt"
+  mkdir -p "$REPO_ROOT/.gate-runs"
+  printf '%s\n' "${NODES[@]}" > "$REPO_ROOT/$ARGREL"
+  [ "$(grep -c '::' "$REPO_ROOT/$ARGREL")" = "$tilen" ] \
+    || { echo "FAIL: tile argument file $ARGREL does not hold the $tilen selected ids"; exit 1; }
+  run_conf "$tilen" "${SUITE_KIND:-conf}-tile:$i/$k ($tilen of $total node ids)" "@$ARGREL"
 }
 
 preflight_py

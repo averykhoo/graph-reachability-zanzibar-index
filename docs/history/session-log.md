@@ -87,6 +87,47 @@ action is a census of the `remove_node` callers. Note on keys: doc sec 6 is labe
 "2026-10-03". That was the tail of the 2026-10-02b session, run past midnight; it wrote no
 ledger entry of its own, which is why this one is `b`.
 
+**Addendum, same session, after commit `7634d1f` (appended, not a retro-edit).** `TK113`
+was then CLOSED as well, and `P4` was promoted `NEXT -> NOW` (the user's 2026-10-02b ranking
+put it after the three bug rows). Rows in this half: `TK113` (CLOSED) and `P4`
+(NEXT -> NOW).
+- A census agent mapped every `remove_node` caller (1 in product code, 16 test calls through
+  the façade). It found a fourth unsafe shape (the bare TTU tupleset subject) and a WEDGE
+  mode, where a later legitimate remove is refused.
+- **Decision: REFUSE, not cascade.** The index holds edges, not tuples, so a routed copy
+  cannot be traced back to its raw tuple.
+- **Landed:** `zanzibar_utils_v1.py::SchemaInfo.unremovable_node_shapes`, filled by
+  `::_node_removal_fence` on both compile paths and refused in
+  `WildcardIndex.remove_node` after the TK80 guard.
+- **Pinned:** `tests/test_tk113_remove_node_fence.py` (45). The core pin is a property:
+  every node of four schemas is exact (A/C/B) or refused.
+- **Sweep with an M0 control:** 12 of 12 red. One INERT branch was deleted by reading, and
+  one INERT path got its own pin.
+- Floor `MIN_TESTS_ALL` 1530 -> 1575 (collect-only, 2026-10-03b). Also updated:
+  `CORRESPONDENCE.md` sec 7.3 (the TK80 row extended), and spec-deviations entry 2026-10-03b.
+- Map: [`docs/tk113-remove-node-fence-2026-10-03.md`](../tk113-remove-node-fence-2026-10-03.md).
+  It is FROZEN, and so is the tk111 plan doc.
+
+**Gate-infrastructure fix, found by this half's gate run.** `tests-tile:1/4` died with
+`python.exe: Argument list too long` before running anything. Measured 2026-10-03b at 1575
+ids: each K=4 tile passed about 34k characters of node ids as argv, over Windows'
+32767-character CreateProcess limit. The suite had been within about 1k of it. The 45 new
+ids tipped it over; they did not cause it.
+`formal/verify.sh::run_conf_tile` now writes the tile's ids to
+`.gate-runs/tile-args-<kind>-<i>of<k>.txt` and passes `@<file>` (pytest's argparse
+argument file, pytest 9.1.1 here). It also checks that the file holds exactly the selected
+count. Evidence: the re-run tile reported `394 passed ... floor 394`, i.e. exactly the tile,
+not the whole directory.
+
+**One existing assertion changed deliberately.** `tests/test_schema_ast.py::test_compile_pure_union_succeeds`
+asserted `ruleset.schema_info is info`: a pure-union compile passes `SchemaInfo` through.
+The fence now fills a field on every compile, so the identity went red (`tests-tile:3/4`,
+`1 failed, 393 passed`). Its intent, that a pure-union compile adds nothing boolean, is kept:
+every other field must equal the input, the derived and leaf families must be empty, and the
+fence must be non-empty.
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 39 warning(s)`
+
 Still owed: none.
 
 ## 2026-10-02b — TK111/TK112 read fail-open FIXED: a stalled async index is no longer served; ASK-2 closed

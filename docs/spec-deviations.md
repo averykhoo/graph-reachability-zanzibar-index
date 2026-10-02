@@ -29,6 +29,24 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-10-03b — `TK113`: `WildcardIndex.remove_node` refuses any node a write-time rewrite straddles
+
+**What the spec says.** `remove_node` removes a node and all its edges (wildcard spec,
+`remove_tuple` section). **What the code does since 2026-10-03b:** it REFUSES, with
+`AdmissionRejected`, any node whose `(type, predicate)` is in
+`SchemaInfo.unremovable_node_shapes`. That set holds every rewrite source and target, every
+TTU tupleset subject and TTU-produced subject, and every derived/leaf family. It is filled
+by `zanzibar_utils_v1.py::_node_removal_fence`, on every schema, boolean or not.
+
+**Why.** `RuleSet.apply` stores a COPY of a tuple on another node for every Computed/TTU
+rewrite. Deleting one end left the graph diverged from the oracle and the set engine, and the
+invariants could not see it. PROBED on the PURE schema `viewer: editor`: removing
+`doc:x#editor` left three users as viewers. Removing a rewrite target made later
+legitimate removes refuse. A cascading `remove_node` would need the tuple store, which the
+index layer does not import. **Instead:** remove the node's incident tuples through the write
+path. Map, census and sweep: [`docs/tk113-remove-node-fence-2026-10-03.md`](tk113-remove-node-fence-2026-10-03.md).
+Pinned by `tests/test_tk113_remove_node_fence.py`.
+
 ## 2026-09-27b — `P12`: the 2026-08-09 sibling's severity sign, MEASURED — fail-OPEN under a negated consumer
 
 **Closes the prediction the `## 2026-08-10` entry fenced off** (§"Severity: FAIL-OPEN,

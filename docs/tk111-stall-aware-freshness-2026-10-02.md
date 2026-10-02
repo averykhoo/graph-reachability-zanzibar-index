@@ -1,5 +1,10 @@
 # TK111 / TK112 / TK113 -- stall-aware freshness and the live-bug fixes (2026-10-02b)
 
+**FROZEN 2026-10-03b, at the close of `TK111`, `TK112` and `TK113` -- provenance, not a living document.** Status lines
+below are as-of-then and may now be false; live state: `HANDOFF.md` + the session
+ledger (`python scripts/task.py board`). Corrections are appended dated at the top, never
+edited into the body.
+
 ACTIVE-PLAN (`docs/README.md` sec 3). Corrections are appended dated at the top. FROZEN when
 `TK111`, `TK112` and `TK113` are all closed. The task rows are the index; this file is the body.
 

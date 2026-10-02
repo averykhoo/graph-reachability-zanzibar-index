@@ -387,6 +387,11 @@ class SchemaInfo:
     # The façade enforces derived-family write exclusivity from these (boolean spec I5).
     derived_families: frozenset[tuple[str, str]] = frozenset()          # (object_type, relation)
     leaf_families: frozenset[tuple[str, str]] = frozenset()             # (object_type, leaf_predicate)
+    # TK113 (2026-10-03b): node shapes `WildcardIndex.remove_node` must refuse, because
+    # a write-time rewrite stores COPIES of a tuple on other nodes and deleting one end
+    # leaves the copies inconsistent. Populated by `compile_ruleset` from the compiled
+    # Rules/RewriteFilters (`_node_removal_fence`); empty for hand-built SchemaInfo.
+    unremovable_node_shapes: frozenset[tuple[str, str]] = frozenset()   # (type, predicate); '...' for bare
 
     @property
     def bridged_in_shapes(self) -> frozenset[tuple[str, str]]:
@@ -1594,6 +1599,7 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
             _emit_expr(expr, object_type, relation_name, rules_and_filters)
         schema_info = _expand_object_wildcard_shapes(rules_and_filters, schema_info)
         _reject_doubly_bridged_shapes(ast, schema_info)
+        schema_info = _node_removal_fence(rules_and_filters, schema_info)
         return RuleSet(rules_and_filters, schema_info=schema_info)
 
     tainted = compute_taint(ast)
@@ -1616,7 +1622,58 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
     _reject_object_wildcard_scope(ast, tainted, schema_info.object_wildcard_shapes,
                                   declared_shapes)
     _reject_doubly_bridged_shapes(ast, schema_info)
+    schema_info = _node_removal_fence(rules_and_filters, schema_info)
     return RuleSet(rules_and_filters, schema_info=schema_info, compiled=compiled)
+
+
+def _node_removal_fence(rules_and_filters: list, schema_info: SchemaInfo) -> SchemaInfo:
+    """Fill ``SchemaInfo.unremovable_node_shapes`` (``TK113``, 2026-10-03b).
+
+    ``RuleSet.apply`` stores a write-time COPY of a tuple for every Computed/TTU rewrite
+    (``_rewrite_rule``) and every boolean routing leaf (``RewriteFilter``). The copy sits
+    on a different node from the original, so ``WildcardIndex.remove_node`` -- which
+    deletes one node's edges and runs no rewrite -- can only be exact on a node no copy
+    pair straddles. Unsafe shapes (all PROBED to diverge from the oracle, or to refuse a
+    later legitimate remove, in ``docs/tk113-remove-node-fence-2026-10-03.md``):
+
+      * a rewrite SOURCE ``(T, rel)`` -- its copies survive on the target node;
+      * a rewrite TARGET ``(T, rel')`` -- its copies go, the originals stay;
+      * a TTU's tupleset SUBJECT ``(P, pred)`` for every subject the tupleset admits --
+        the stored ``P:p parent T:t`` goes, the copy ``P:p#target -> T:t#rel`` stays;
+      * a TTU-PRODUCED subject ``(P, target)`` -- the copies go, the parent tuple stays;
+      * every derived-public and leaf family. This also covers every ``RewriteFilter``,
+        which only ever routes a derived-public relation onto one of its leaves.
+
+    Any pattern field this derivation needs that is ``None`` ("match any") fails LOUD:
+    a fence that silently skipped a shape would be a fence with a hole."""
+    unsafe: set[tuple[str, str]] = set()
+
+    def need(value, what):
+        if value is None:
+            raise ValueError(f'_node_removal_fence: {what} is a match-any pattern; the '
+                             f'TK113 fence cannot name the shape it would have to refuse')
+        return value
+
+    admitted: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    for rf in rules_and_filters:
+        if isinstance(rf, Filter):          # RewriteFilter included
+            p = rf.if_pattern
+            key = (need(p.object_type, 'filter object_type'), need(p.relation, 'filter relation'))
+            admitted.setdefault(key, set()).add(
+                (need(p.subject_type, 'filter subject_type'), norm_pred(p.subject_predicate)))
+    for rf in rules_and_filters:
+        if isinstance(rf, Rule):
+            i, th = rf.if_pattern, rf.then_pattern
+            src = (need(i.object_type, 'rule object_type'), need(i.relation, 'rule relation'))
+            unsafe.add(src)
+            unsafe.add((need(th.object_type, 'rule target object_type'),
+                        need(th.relation, 'rule target relation')))
+            if th.subject_predicate is not None:        # TTU: the subject is re-addressed
+                for (s_type, s_pred) in admitted.get(src, ()):
+                    unsafe.add((s_type, s_pred))
+                    unsafe.add((s_type, norm_pred(th.subject_predicate)))
+    unsafe |= schema_info.derived_families | schema_info.leaf_families
+    return replace(schema_info, unremovable_node_shapes=frozenset(unsafe))
 
 
 def _expand_object_wildcard_shapes(rules_and_filters: list,

@@ -2,7 +2,7 @@
 id: P4
 title: leg 7 4b -- leaf-probe <-> directLeaf bridge
 brief: sec 7.3 correspondence item, NOT the milestone: 4b premise is FALSE; 6 witness pins landed, general theorem owed
-pri: NEXT
+pri: NOW
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 015e6dd88c0d
 created: 2026-08-16
-moved: 2026-10-02b
-updated: 2026-10-02b
+moved: 2026-10-03b
+updated: 2026-10-03b
 closed:
 ---
 

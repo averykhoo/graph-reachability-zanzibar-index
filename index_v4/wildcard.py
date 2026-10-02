@@ -705,6 +705,26 @@ class WildcardIndex:
                 "removed directly (remove the tuples that record it -- the cascade "
                 "prunes the recording -- then remove the node)")
 
+        # REFUSED SHAPE (TK113, 2026-10-03b): a node whose (type, predicate) a write-time
+        # rewrite straddles -- a Computed/TTU source or target, a TTU tupleset subject or
+        # TTU-produced subject, a boolean routing relation or leaf -- on ANY schema.
+        # WHY: `RuleSet.apply` stored a COPY of each such tuple on another node, and this
+        # method deletes one node's edges and runs no rewrite, so the copies outlive (or
+        # are outlived by) their originals. PROBED: on `viewer: editor`, removing
+        # `doc:x#editor` left alice/bob/carol viewers (oracle: not), and removing a target
+        # made later legitimate removes refuse ("Non-existent edge"). The invariants were
+        # blind to both. docs/tk113-remove-node-fence-2026-10-03.md.
+        # INSTEAD: remove the node's incident TUPLES through the write path
+        # (`RuleSet.apply` + `remove_tuple`, then `run_cascade` on a boolean schema).
+        # Placed AFTER the TK80 guard, so a residue-recorded node keeps its own message,
+        # and BEFORE `_strip_bridges` (no write has happened yet; I12 cleanliness).
+        if (entity_type, pred) in self.schema_info.unremovable_node_shapes:
+            raise AdmissionRejected(
+                f'{entity_type}:{name}#{pred} cannot be removed directly: the schema '
+                f'rewrites tuples on {entity_type}#{pred} into copies on other nodes, which '
+                f'remove_node cannot reach (remove its tuples through the write path '
+                f'instead -- RuleSet.apply + remove_tuple, then run_cascade)')
+
         neighbour_entities: set[tuple[str, str]] = set()
         if node.wildcard == '':
             node_id = node.id

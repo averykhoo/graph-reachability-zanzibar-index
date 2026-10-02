@@ -1233,6 +1233,13 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   The refusal is an admission check in the façade, before any write and before
   `_strip_bridges`; `index_v4/core.py::ReachabilityIndex.remove_node` is unchanged, so
   nothing modeled moved and this stays inside the unmodeled region.
+  **2026-10-03b (TK113):** the same method now also REFUSES any node whose
+  `(type, predicate)` is in `zanzibar_utils_v1.py::SchemaInfo.unremovable_node_shapes`
+  (rewrite sources and targets, TTU tupleset and TTU-produced subjects, derived and leaf
+  families; filled by `zanzibar_utils_v1.py::_node_removal_fence` at the end of
+  `::compile_ruleset`, whose taint loop the rows above cite and which is unchanged). It is
+  placed after the TK80 guard and is still a façade admission check, so this too stays
+  unmodeled. Pinned by `tests/test_tk113_remove_node_fence.py`.
 * **The `Interner` / int32 id-recycling layer.** `setengine/engine.py::Interner`
   (`::Interner.acquire`, `::Interner.release`, `::Interner.get`, `::Interner.key`) with `::NodeSets`. Ids are
   recycled int32; the stable surrogate is the `(type, name, predicate)` key. The

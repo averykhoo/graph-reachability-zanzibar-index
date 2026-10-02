@@ -271,7 +271,14 @@ def test_compile_pure_union_succeeds(load_fga_schema):
     info = derive_schema_info(ast)
     ruleset = compile_ruleset(ast, info)
     assert len(ruleset.rules_and_filters) > 0
-    assert ruleset.schema_info is info
+    # Was `ruleset.schema_info is info` (2026-07-06): a pure-union compile adds no boolean
+    # facts. Since TK113 (2026-10-03b) every compile also fills the remove_node fence
+    # (`SchemaInfo.unremovable_node_shapes`), so the object is new. The original claim is
+    # kept: every OTHER field passes through unchanged, and nothing boolean is added.
+    from dataclasses import replace
+    assert replace(ruleset.schema_info, unremovable_node_shapes=frozenset()) == info
+    assert not ruleset.schema_info.derived_families and not ruleset.schema_info.leaf_families
+    assert ruleset.schema_info.unremovable_node_shapes      # this schema has rewrites
 
 
 # ---------------------------------------------------------------------------
