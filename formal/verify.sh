@@ -616,7 +616,11 @@ MIN_CONF_ALL=1081
 #   1421 and this floor was not. The tests/ commits since are the 2026-09-27d session's
 #   (5eff958 P12, aae414e + 57a05b7 P13, 5863a8e + 0d79995 TK96); NOT broken down per
 #   file. TK99 (ratchet mechanically) is the row that would make this unnecessary.
-MIN_TESTS_ALL=1512
+# Re-measured 2026-10-03b (TK111 S5 + TK112) with the same command: 1530. +10 are the new
+#   tests/test_tk111_path_count_bound.py and +8 the new tests/test_tk112_cap_policy.py
+#   (collect-only: 10 and 8). test_tk111_stall_aware_freshness.py's fan-out stall pin was
+#   REWRITTEN in place as the no-stall pin (still 5). 1512 + 18 = 1530. No drift.
+MIN_TESTS_ALL=1530
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

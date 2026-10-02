@@ -1,8 +1,8 @@
 ---
 id: TK113
-title: WildcardIndex.remove_node on a boolean routing source or leaf family leaves derived edges stale
-brief: graph != oracle via the admin remove_node API on a boolean schema; invariants blind to it
-pri: NEXT
+title: WildcardIndex.remove_node on a rewrite source/target (any schema) leaves routed copies stale
+brief: NOT boolean-only: pure Computed/union diverge too (probed 2026-10-03b); fence or cascade undecided
+pri: NOW
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-10-02b
-updated: 2026-10-02b
+moved: 2026-10-03b
+updated: 2026-10-03b
 closed:
 ---
 
@@ -62,3 +62,7 @@ public admin API only.
 ### 2026-10-02b
 
 2026-10-02b scouting (no code yet), detail in docs/tk111-stall-aware-freshness-2026-10-02.md sec 4: the witness routing source doc#editor fans to viewer.0 via a compiled Rule (Computed arm, zanzibar_utils_v1.py::_emit_leaf_expr), NOT a RewriteFilter, so a fence keyed only on RewriteFilter sources would miss the witness. The fence set must be every compiled Rule/RewriteFilter source whose target is in schema_info.leaf_families. UNVERIFIED and to probe FIRST: whether a pure-union Computed (viewer: editor, no boolean) has the same remove_node hole, which would widen the row beyond boolean schemas. NEXT ACTION: that probe.
+
+### 2026-10-03b
+
+2026-10-03b: THE OWED PROBE RAN, and it WIDENS the row: the remove_node hole is NOT boolean-specific. PROBED first-hand (.scratch/tk113/probe.py, the P10 vprobe with the schema as a parameter; literal output in docs/tk113-remove-node-fence-2026-10-03.md sec 1). Under viewer: editor (pure Computed) and viewer: [user] or editor (pure union), remove_node(editor, doc, x) leaves alice, bob AND carol as viewers, against oracle, set engine and the sanctioned graph path (3 divergences per arm, at paranoia off/full, with or without a cascade after). check_invariants PASSED every time. Cause (READ): a Computed/TTU arm is a write-time rewrite Rule (zanzibar_utils_v1.py::_rewrite_rule), so RuleSet.apply stores a SECOND edge doc:x#viewer@user:bob; removing the doc:x#editor node leaves that copy behind. The blocked arm diverges only on the boolean schema, because only there does blocked route anywhere. So the fence must cover every rewrite source relation, every rewrite target relation and every TTU-produced subject predicate, on ANY schema; or remove_node must cascade through rewrites. That design call is NOT made yet. NEXT ACTION: census the remove_node callers in tests/ and formal/conformance/ that hit such nodes (a wider refusal may break existing pins), then decide refusal vs cascade.

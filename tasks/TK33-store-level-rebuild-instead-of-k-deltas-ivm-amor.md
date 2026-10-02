@@ -11,8 +11,8 @@ labels: [perf]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-03b
+updated: 2026-10-03b
 closed:
 ---
 
@@ -49,3 +49,7 @@ No prose was written. The row stays open as work (the amortisation question is u
 ### 2026-09-27d
 
 P10 re-run (2026-09-27d): this row's premise that removals are exempt from the fan-out cap is FALSE under but-not (a revocation is an ADD on the subtrahend leaf) and on the async schedule (a capped row stalls every later removal). Verified first-hand; see TK112.
+
+### 2026-10-03b
+
+2026-10-03b (TK112 decision): the premise is corrected in a different direction than the 2026-09-27d note implied. The cap is now a SYNC-ADMISSION bound: edge REMOVALS are never capped; a revocation-shaped ADD under but-not IS capped on the sync path, loudly and atomically (both backends agree, the write lands nowhere); the async apply step (ConnectedStore.catch_up) and the non-bulk build_index are never capped (ReachabilityIndex.fanout_cap_suspended), so a capped row can no longer stall later removals. Decision and reasoning: docs/tk111-stall-aware-freshness-2026-10-02.md sec 7. Consequence for this row: an async rebuild-instead-of-K-deltas design no longer has to route around a cap on the apply path.

@@ -32,6 +32,63 @@ from here.
 
 ---
 
+## 2026-10-03b — TK111/TK112 CLOSED (cap = sync-admission bound; clean path-count refusal); TK113 widened
+
+rows: TK111 (CLOSED), TK112 (CLOSED), TK113 (NEXT -> NOW, comment + title + brief), TK121 (NEW, LATER), TK33 (comment)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 40 warning(s)`
+
+`read: board + note`
+
+The user asked for the `TK112` cap-policy decision ("if unclear ask fable", the principle
+being that the result "shouldn't be broken or too surprising"; their guess was "make the cap
+less strict"), and then for the next task done as far as possible.
+
+**`TK112`, decided and closed.** A `fable` subagent was consulted, and its recommendation was
+adopted: the closure fan-out cap is a **SYNC-ADMISSION bound only**.
+- **Sync:** every edge ADD is capped, including revocation-shaped adds under `but not` and
+  the un-ban REMOVE that restores a grant. The refusal is loud and atomic, and the backends
+  agree.
+- **Async and non-bulk builds:** `ConnectedStore.catch_up` and the non-bulk `build_index` run
+  inside `ReachabilityIndex.fanout_cap_suspended`, so an over-cap row is applied with a
+  warning instead of stalling the index.
+- **Rejected:** the polarity exemptions (options i and iii). A sound one needs a global sign
+  fixpoint, and it would switch the cap off for most of a boolean schema.
+
+Reasoning: [`docs/tk111-stall-aware-freshness-2026-10-02.md`](../tk111-stall-aware-freshness-2026-10-02.md)
+sec 7. Sec 8 holds the scout's salvage; `.scratch/tk112-scout/` is now deletable.
+
+**`TK111`, closed.** A path-count overflow is now a clean `PathCountExceeded` (under a new
+`IndexResourceLimit` base) at `index_v4/core.py::MAX_PATH_COUNT`, the int4 ceiling on both
+dialects.
+- It is checked before the first mutation and covers the direct edge's own row.
+- `bulk_build` applies the same bound.
+- PROBED: K=30 admits everything; K=31 refuses exactly the last diamond row.
+- Residual, by design: an async poison row still stalls permanently. Reads stay correct,
+  but no recovery is tested, so it is filed as `TK121` (LATER).
+
+**Pins and evidence.**
+- New: `tests/test_tk111_path_count_bound.py` (10) and `tests/test_tk112_cap_policy.py` (8).
+- The old fan-out stall pin was rewritten as the no-stall pin.
+- Mutation sweep with an M0 control: 16 of 16 red, 0 INERT. The bulk bound's separate
+  sabotage was red too. Table in doc sec 7.
+- Floor: `MIN_TESTS_ALL` 1512 -> 1530 (collect-only, 2026-10-03b), with provenance in
+  `formal/verify.sh`. The `FINAL_REVIEW.md` counts block was regenerated.
+- Docs corrected: the CLAUDE.md "Operational knobs" bullet, the `core.py` cap comment, the
+  reg17 docstring, spec-deviations 2026-07-29c (dated correction), and `TK33`.
+
+**`TK113` is wider than filed (PROBED).** The `remove_node` hole is NOT boolean-only. Under a
+pure `viewer: editor` or `viewer: [user] or editor`, removing `doc:x#editor` leaves the
+write-time rewrite copies (`doc:x#viewer@user:bob`), with 3 divergences per arm, and the
+invariants PASS. It is a live correctness bug on the public admin API for any schema with a
+rewrite. Map: [`docs/tk113-remove-node-fence-2026-10-03.md`](../tk113-remove-node-fence-2026-10-03.md).
+The design call (a wider refusal vs. cascading through the rewrites) is not made; the next
+action is a census of the `remove_node` callers. Note on keys: doc sec 6 is labelled
+"2026-10-03". That was the tail of the 2026-10-02b session, run past midnight; it wrote no
+ledger entry of its own, which is why this one is `b`.
+
+Still owed: none.
+
 ## 2026-10-02b — TK111/TK112 read fail-open FIXED: a stalled async index is no longer served; ASK-2 closed
 
 rows: TK111 (NOW, comment + brief), TK112 (NEXT, comment + brief), TK113 (NEXT, scouting comment), P4 (NOW -> NEXT), ASK-2 (CLOSED)

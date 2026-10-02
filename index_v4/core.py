@@ -1,3 +1,4 @@
+import logging
 import os
 import threading
 import time
@@ -9,10 +10,13 @@ from sqlmodel import Session, select
 
 from legacy.index_v1 import MultiSet
 from zanzibar_utils_v1 import (AdmissionRejected, ClosureFanoutExceeded,
+                               PathCountExceeded,
                                validate_write_identifiers,
                                validate_node_identifiers)
 from .invariants import InvariantViolation
 from .models import DeltaOutboxV1, EdgeV4, NodeV4, Edge, Node, StoreV4
+
+_log = logging.getLogger(__name__)
 
 # ``AdmissionRejected`` is DEFINED in ``zanzibar_utils_v1`` (the shared schema layer,
 # which imports no backend) so that both backends can raise one rejection type; it is
@@ -75,6 +79,12 @@ DEFAULT_MAX_CLOSURE_FANOUT = 100_000
 #: the bound without touching every ``ReachabilityIndex`` construction site (the
 #: constructor argument still wins, and is what a per-store policy should use).
 MAX_CLOSURE_FANOUT_ENV = 'ZANZIBAR_MAX_CLOSURE_FANOUT'
+
+#: Largest path count a closure row may hold (``TK111``): the int4 ceiling, because
+#: ``EdgeV4.indirect_edge_count`` is ``INTEGER`` and that is int4 on PostgreSQL, the
+#: only supported server. Applied on SQLite too (int64 there) so both dialects refuse
+#: the same write. Not a knob: it is a storage-width fact, not a policy.
+MAX_PATH_COUNT = 2**31 - 1
 
 
 def resolve_max_closure_fanout(value: int | None) -> int:
@@ -294,6 +304,12 @@ class ReachabilityIndex:
         # below and that attribute's comment for why the window must belong to the
         # thread that opened it.
         self._writing_derived_flag = _ThreadFlag()
+        # TK112 (2026-10-03b): the fan-out cap is a SYNC-ADMISSION bound. The async apply
+        # step and the non-bulk ``build_index`` replay rows that are already committed
+        # truth, so they open this window and an over-cap edge is materialised with a
+        # warning instead of refused. THREAD-SCOPED for the same reason as
+        # ``_writing_derived_flag``. See ``fanout_cap_suspended``.
+        self._fanout_cap_suspended = _ThreadFlag()
         # Identity of the SessionTransaction under which this store's FOR UPDATE lock
         # is already held (perf P12a). ``None`` = no lock taken in the current
         # transaction. See ``_lock_store``.
@@ -339,6 +355,26 @@ class ReachabilityIndex:
     @_writing_derived.setter
     def _writing_derived(self, value: bool) -> None:
         self._writing_derived_flag.on = bool(value)
+
+    @contextmanager
+    def fanout_cap_suspended(self):
+        """Do not REFUSE over-cap additions in this thread for the duration; log them.
+
+        For callers that replay rows already committed to the tuple log
+        (``ConnectedStore.catch_up``, ``connectedstore.build.build_index``). There the
+        cap cannot refuse the write, only stall the index behind it until an operator
+        raises the cap, and the data never shrinks to let it through. On those paths it
+        also bounds nothing it was built for: the stall it guards against is one write
+        holding the SOURCE lock, and the async apply holds only the graph store lock.
+        Decision and reasoning: ``docs/tk111-stall-aware-freshness-2026-10-02.md`` sec 7.
+        The path-count bound (``MAX_PATH_COUNT``) is a storage-width fact and is NOT
+        suspended. Re-entrant: restores whatever was in force before."""
+        prior = self._fanout_cap_suspended.on
+        self._fanout_cap_suspended.on = True
+        try:
+            yield
+        finally:
+            self._fanout_cap_suspended.on = prior
 
     @contextmanager
     def _node_cache_scope(self):
@@ -601,7 +637,8 @@ class ReachabilityIndex:
 
     def _add_indirect_edges_batch_unsafe(
             self, deltas: list[tuple[int, int, int]],
-            node_map: dict[int, NodeV4] | None = None
+            node_map: dict[int, NodeV4] | None = None,
+            direct_pair: tuple[int, int] | None = None
     ) -> None:
         """Batched, indirect-only form of ``_add_db_edges_unsafe`` for the
         O(ancestors x descendants) closure region emitted by the expansion loops.
@@ -623,7 +660,7 @@ class ReachabilityIndex:
         ref-count math below is a faithful copy of ``_add_db_edges_unsafe``
         specialised to ``direct_count == 0`` concrete endpoints.
         """
-        if not deltas:
+        if not deltas and direct_pair is None:
             return
 
         # One region read, chunked so the row-value IN never exceeds the driver's
@@ -633,14 +670,34 @@ class ReachabilityIndex:
         # distinct pairs, but keeps the batch read a pure snapshot).
         existing: dict[tuple[int, int], EdgeV4] = {}
         _CHUNK = 400
-        for start in range(0, len(deltas), _CHUNK):
-            pairs = [(f, t) for (f, t, _d) in deltas[start:start + _CHUNK]]
+        # TK111: on an ADDITION the direct edge's own row rides the same region read
+        # (it is never one of `deltas`), so the path-count check below covers it too.
+        checks = deltas if direct_pair is None else [*deltas, (*direct_pair, 1)]
+        for start in range(0, len(checks), _CHUNK):
+            pairs = [(f, t) for (f, t, _d) in checks[start:start + _CHUNK]]
             rows = self.session.exec(
                 select(EdgeV4).where(EdgeV4.store_id == self.store_id)
                 .where(tuple_(EdgeV4.subject_id, EdgeV4.object_id).in_(pairs))
             ).all()
             for r in rows:
                 existing[(r.subject_id, r.object_id)] = r
+
+        # PATH-COUNT BOUND (TK111): refuse, BEFORE the first mutation, an addition that
+        # would push any closure row past MAX_PATH_COUNT. Same no-partial-state position
+        # as the fan-out cap: everything above is a read. Only positive deltas can grow
+        # a count, and removals only shrink, so a removal is never refused here.
+        for from_id, to_id, delta in checks:
+            if delta > 0:
+                row = existing.get((from_id, to_id))
+                new = (row.indirect_edge_count if row is not None else 0) + delta
+                if new > MAX_PATH_COUNT:
+                    raise PathCountExceeded(
+                        f'path count bound exceeded: this edge would give closure row '
+                        f'({from_id} -> {to_id}) {new} distinct derivation paths, over '
+                        f'the storage limit of {MAX_PATH_COUNT} for store '
+                        f'{self.store_id!r}. The count is exact (removals decrement '
+                        f'it), so it cannot saturate; restructure the grant graph so '
+                        f'fewer parallel paths reach the same pair')
 
         for from_id, to_id, indirect_delta in deltas:
             triple = existing.get((from_id, to_id))
@@ -790,11 +847,21 @@ class ReachabilityIndex:
         # above, and the caller's rollback (this layer never commits) discards the
         # node rows an `add_edge` may have created during resolution.
         #
-        # REMOVALS ARE DELIBERATELY EXEMPT. A cap that refused removes would make an
-        # over-large region permanently unshrinkable -- a strictly worse denial of
-        # service than the one this guard exists to bound, and the only way back would
-        # be raising the cap. It would also fire AFTER the direct-edge decrement above,
-        # i.e. on partial state. The bound is on GROWTH.
+        # The bound is on GROWTH: an edge REMOVAL is never capped. A cap that refused
+        # removes would make an over-large region permanently unshrinkable -- a strictly
+        # worse denial of service than the one this guard exists to bound, and the only
+        # way back would be raising the cap. It would also fire AFTER the direct-edge
+        # decrement above, i.e. on partial state.
+        #
+        # NOT "revocations are exempt" (TK112, 2026-10-03b). Under `but not` a
+        # revocation is an ADD -- a ban, a member added to a banned group, a grant
+        # restored by an un-ban -- and those ARE capped on the sync path, like any add.
+        # That is not a fail-open: the refusal is loud and atomic (the write is absent
+        # from the log, the set engine and the index alike, and both backends agree).
+        # The cap is a SYNC-ADMISSION bound: inside `fanout_cap_suspended` (the async
+        # apply step and the non-bulk `build_index`, which replay already-committed
+        # rows) it logs instead of refusing. Decision:
+        # docs/tk111-stall-aware-freshness-2026-10-02.md sec 7.
         #
         # NOT capped either: `bulk_build.py`, which constructs the closure in memory and
         # never reaches this method. That is an offline, single-writer bootstrap holding
@@ -802,7 +869,14 @@ class ReachabilityIndex:
         n_anc = len(reachable_before_subject)
         n_desc = len(reachable_after_object)
         fanout = n_anc * n_desc + n_anc + n_desc
-        if count > 0 and self.max_closure_fanout and fanout > self.max_closure_fanout:
+        if (count > 0 and self.max_closure_fanout and fanout > self.max_closure_fanout
+                and self._fanout_cap_suspended.on):
+            _log.warning(
+                'closure fan-out cap exceeded on a replayed row (async apply or '
+                'build_index), materialised anyway: %d closure rows (%d ancestors x %d '
+                'descendants + fringes) over the limit of %d for store %r',
+                fanout, n_anc, n_desc, self.max_closure_fanout, self.store_id)
+        elif count > 0 and self.max_closure_fanout and fanout > self.max_closure_fanout:
             # ClosureFanoutExceeded (an AdmissionRejected subclass), like the cycle
             # refusals: a correct refusal of THIS write, classifiable by every harness
             # that already handles rejection -- not an InvariantViolation, because
@@ -848,7 +922,9 @@ class ReachabilityIndex:
         region_ids.update(k for k, _ in reachable_after_object.items())
         node_map = self._load_nodes(region_ids)
 
-        self._add_indirect_edges_batch_unsafe(indirect_deltas, node_map)
+        self._add_indirect_edges_batch_unsafe(
+            indirect_deltas, node_map,
+            direct_pair=(subject_id, object_id) if count > 0 and subject_id != object_id else None)
 
         # Add the direct edge last to preserve invariants on addition
         if subject_id != object_id and count > 0:

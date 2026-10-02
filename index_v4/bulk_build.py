@@ -46,7 +46,8 @@ from sqlalchemy import insert
 from sqlmodel import Session, select
 
 from setengine.models import TupleV1
-from zanzibar_utils_v1 import Entity, RelationalTriple, RuleSet, norm_pred
+from zanzibar_utils_v1 import (Entity, PathCountExceeded, RelationalTriple, RuleSet,
+                               norm_pred)
 
 from .bulk_backfill import _BulkBackfill
 from .invariants import InvariantViolation
@@ -301,6 +302,18 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
     # section 5 -- and the identity gate compares content as a multiset).
     edge_pairs = sorted(
         (a, b) for a in order for b in pvec[a] if pvec[a][b] > 0)
+
+    # TK111 (2026-10-03b): the incremental path refuses a closure row past
+    # ``core.MAX_PATH_COUNT`` with ``PathCountExceeded``; the bulk constructor must refuse
+    # the same snapshot the same way, not die in the driver at INSERT (a raw DataError on
+    # PostgreSQL). Read at call time so the two constructors cannot disagree on the bound.
+    from . import core as _core
+    for (a, b) in edge_pairs:
+        if pvec[a][b] > _core.MAX_PATH_COUNT:
+            raise PathCountExceeded(
+                f'path count bound exceeded: the bulk build would give closure row '
+                f'{a!r} -> {b!r} {pvec[a][b]} distinct derivation paths, over the storage '
+                f'limit of {_core.MAX_PATH_COUNT} for store {store_id!r}')
 
     # (2) edges: executemany INSERT, chunked (N18). direct=m (0 for pure-indirect pairs),
     #     indirect=P. derived=True exactly on pairs holding a processor-written direct edge

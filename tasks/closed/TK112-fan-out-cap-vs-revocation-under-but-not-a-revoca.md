@@ -11,9 +11,9 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-10-02b
-updated: 2026-10-02b
-closed:
+moved: 2026-10-03b
+updated: 2026-10-03b
+closed: 2026-10-03b
 ---
 
 Filed from the P10 re-run (2026-09-27d). Full witness, provenance and reconciliation: [`docs/p10-scope-audit-2026-09-27.md`](../docs/p10-scope-audit-2026-09-27.md) §5 H2. The section is copied below as it stood when filed; the doc is the body of record.
@@ -72,3 +72,7 @@ a group of more than 100k members).
 ### 2026-10-02b
 
 2026-10-02b: case (c) is CLOSED FOR READS by the shared fix on TK111 (see that row and docs/tk111-stall-aware-freshness-2026-10-02.md). A capped async row still stalls catch_up, but the untokened check now falls back to the set engine and the untokened lookup refuses with IndexStalled; raising the cap and re-running catch_up clears the stall (pinned: tests/test_tk111_stall_aware_freshness.py::test_fanout_capped_row_stalls_and_untokened_check_stops_serving_revoked_allow). STILL OPEN: (1) the sync refusal of a revocation-shaped ADD under but-not; the plan doc sec 4 shows the exemption must key on the leaf NET POLARITY (a subtrahend of a subtrahend is a grant), not on subtrahend-ness, and proposes the compiler emit negative leaf families from _build_plan_tree (UNVERIFIED); (2) whether the async apply should cap at all (undecided); (b) the un-ban REMOVE capped via DeltaProcessor._write_derived fails CLOSED, an availability defect, rank below (1); plus the doc corrections listed in the body. NEXT ACTION: probe the polarity of every leaf in the compiled plans for a nested but-not schema, then implement (1).
+
+### 2026-10-03b
+
+2026-10-03b CLOSED. DECISION (option iv, a fable consult adopted by the session; the user steered toward "not broken or too surprising" and guessed "make the cap less strict"): the closure fan-out cap is a SYNC-ADMISSION bound only. Sync: every edge ADD is capped, including revocation-shaped adds under but-not (case a, the ban; case K, joining a banned group) and the un-ban REMOVE that restores a grant via the processor (case b, fails closed). The refusal is loud (ClosureFanoutExceeded) and atomic (log, set engine and index all unchanged, so the backends agree). Async: ConnectedStore.catch_up and the non-bulk build_index run inside ReachabilityIndex.fanout_cap_suspended, so an over-cap row is applied with a warning and case (c) cannot stall any more. Options (i)/(iii), polarity exemptions, were rejected: a sound exemption needs a global sign fixpoint, and cases K and G show it would switch the cap off for most of a boolean schema. Map and reasoning: docs/tk111-stall-aware-freshness-2026-10-02.md sec 7 (and sec 8 for the scout salvage). LANDED: index_v4/core.py::ReachabilityIndex.fanout_cap_suspended + _fanout_cap_suspended (thread-scoped, re-entrant), the cap site's suspended branch (_log.warning), connectedstore/store.py::ConnectedStore.catch_up, connectedstore/build.py::build_index. PINNED: tests/test_tk112_cap_policy.py (8 tests: sync refusal is atomic for ban/join/unban, async never capped for all three, non-bulk build_index never capped, window re-entrant and thread-scoped); tests/test_tk111_stall_aware_freshness.py::test_fanout_over_cap_row_no_longer_stalls_the_async_apply replaces the old stall pin. Mutation sweep with an M0 control, PROBED first-hand: 16 of 16 mutants red, 0 INERT (table in doc sec 7). DOCS CORRECTED: CLAUDE.md Operational-knobs bullet, the core.py cap comment, the reg17 module docstring, spec-deviations 2026-07-29c (dated correction), TK33 (comment).

@@ -137,16 +137,22 @@ def build_index(session: Session, source_store_id: str,
                 select(TupleV1).where(TupleV1.store_id == source_store_id)
                 .order_by(TupleV1.id)  # type: ignore[arg-type]
             ).all()
-            for r in rows:
-                sp = Ellipsis if r.subject_predicate == '...' else r.subject_predicate
-                triple = RelationalTriple(Entity(r.subject_type, r.subject_name), r.relation,
-                                          Entity(r.object_type, r.object_name), sp)
-                for d in ruleset.apply(triple):
-                    widx.add_tuple(_norm(d.subject_predicate), d.subject.type, d.subject.name,
-                                   d.relation, d.object.type, d.object.name)
+            # The fan-out cap is suspended for the whole replay (TK112, 2026-10-03b):
+            # these rows are committed truth, and the bulk path above was never capped,
+            # so the two constructors must not disagree on what they admit.
+            with widx.idx.fanout_cap_suspended():
+                for r in rows:
+                    sp = Ellipsis if r.subject_predicate == '...' else r.subject_predicate
+                    triple = RelationalTriple(Entity(r.subject_type, r.subject_name),
+                                              r.relation,
+                                              Entity(r.object_type, r.object_name), sp)
+                    for d in ruleset.apply(triple):
+                        widx.add_tuple(_norm(d.subject_predicate), d.subject.type,
+                                       d.subject.name, d.relation, d.object.type,
+                                       d.object.name)
 
-            if ruleset.compiled is not None and ruleset.compiled.plans:
-                DeltaProcessor(widx, ruleset.compiled).backfill()
+                if ruleset.compiled is not None and ruleset.compiled.plans:
+                    DeltaProcessor(widx, ruleset.compiled).backfill()
             constructor = 'incremental'
 
         # Blind-audit X1: watermark and snapshot were two unserialized reads -- a

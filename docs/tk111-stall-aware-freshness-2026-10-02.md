@@ -79,10 +79,10 @@ The shared fix lands first because it closes the fail-open for both poison sourc
 | S1 | D1-D5 implemented (`connectedstore/models.py::IndexCursorV1.stalled_after`, `connectedstore/store.py::ConnectedStore._record_stall` / `index_stalled` / `IndexStalled`, `connectedstore/apply.py::advance_index` clears) | LANDED 2026-10-02b |
 | S2 | permanent tests, `tests/test_tk111_stall_aware_freshness.py` (5 tests) | LANDED 2026-10-02b |
 | S3 | module mutation sweep with an M0 control (table below) | DONE 2026-10-02b, every mutant red |
-| S4 | TK112: scouted 2026-10-03 (sec 6); the cap-policy DECISION is owed before any code | owed |
-| S5 | TK111 sync clean refusal | owed |
-| S6 | TK113 refusals | owed |
-| S7 | correct the CLAUDE.md "removals are exempt" bullet, the `core.py` comment, the TK33 premise, spec-deviations 2026-07-29c | owed |
+| S4 | TK112: scouted 2026-10-03 (sec 6), DECIDED and landed 2026-10-03b (sec 7) | DONE 2026-10-03b, TK112 closed |
+| S5 | TK111 clean path-count refusal (sync, async apply, both build constructors) | DONE 2026-10-03b, TK111 closed; residual async recovery is TK121 |
+| S6 | TK113 refusals | moved to `docs/tk113-remove-node-fence-2026-10-03.md` |
+| S7 | correct the CLAUDE.md "removals are exempt" bullet, the `core.py` comment, the TK33 premise, spec-deviations 2026-07-29c | DONE 2026-10-03b |
 
 ## 4. Scouting for the next session (READ 2026-10-02b unless labelled)
 
@@ -234,3 +234,211 @@ The equivalence goal (`CLAUDE.md` "Who decides") is not at stake in any of the t
 every case the backends agree. This is a policy call on the cap. Because it is not a
 user-goal question, it is the model's call, and a `fable` consult is warranted.
 Separately, the async half (whether `catch_up` should cap at all) is still undecided.
+
+## 7. `TK112` cap-policy DECISION, 2026-10-03b (REASONED; `fable` consult, adopted by the session)
+
+The user's steer (chat, 2026-10-03b): the result "shouldn't be broken or too surprising", and
+they guessed "make the cap less strict". The session asked a `fable` subagent to decide
+against that and the equivalence goal. It read sec 4 and sec 6, the cap site, `_apply_row`,
+`ConnectedStore._write` / `catch_up` / `_record_stall`, and the `reg17` docstring. Its report
+was `.scratch/tk112-decision/fable.md`, which is transcribed here. The session agreed with it
+and adopted it.
+
+**DECISION: option (iv). The cap is a SYNC-ADMISSION bound only.** None of (i)-(iii) from
+sec 6 was taken.
+- **Sync** (`ConnectedStore(sync=True)`, and direct `WildcardIndex` / `ReachabilityIndex`
+  writes): unchanged, which is option (ii). Every edge ADD is capped, whatever its sign.
+  That covers the `but not` ban (A2), a member-add into a banned group (K), the sibling case,
+  and the un-ban REMOVE that restores a grant through `DeltaProcessor._write_derived` (D3).
+  The refusal is atomic across the log, the set engine and the index:
+  `ConnectedStore._write` rolls back and calls `refresh_evaluator()`. It is also loud:
+  `ClosureFanoutExceeded` names the fix. There is no polarity classifier and no second cap.
+- **Async** (`ConnectedStore.catch_up`) **and the non-bulk `build_index`**: the cap is NOT
+  consulted. `ReachabilityIndex` gets a thread-local suspend window (the `_ThreadFlag`
+  precedent of `_writing_derived`). Both callers enter it, and an over-cap apply inside it
+  logs one warning instead of refusing. The TK111 stall marker and the read fallback stay
+  exactly as landed. They still cover the path-count bound (`PathCountExceeded`, which no
+  window suspends) and transient failures.
+
+**Why** (the agent's reasoning, condensed; the session concurs):
+- On async the row is already committed truth. The cap cannot refuse it; it can only turn
+  "apply slowly" into "never apply until an operator raises the cap". The data will not
+  shrink, so that stall is never transient, and the cap buys only unavailability.
+- The cap's stated purpose does not hold on async: that one write holds the SOURCE lock and
+  stalls every writer. `catch_up` holds only the graph store lock, and writers take the
+  source lock. Absorbing a long apply is what async exists for.
+- Async was the only path where the writer never sees the refusal, so this removes the only
+  SILENT case. Sync was always loud, and a loud, atomic refusal on which both backends agree
+  is not a fail-open: the ban is absent from all three, and the caller is told.
+- Options (i) and (iii) both need the global-sign fixpoint (sec 6). That is a prototype
+  checked on 7 hand-written schemas with no generated differential, and cases K and G show
+  it would classify nearly every add on a boolean schema as revocation-capable. So (i)
+  amounts to "cap off on boolean schemas" behind a hidden classifier. An operator who wants
+  that can set the cap to `0` and get it honestly. (iii) adds a knob nobody can derive, with
+  the same classifier risk.
+- So "less strict" lands where it is free and principled (async), and the one place where
+  the bound still means something keeps it.
+- Caveat: on SQLite (dev/test only) a long async apply still blocks the file's single
+  writer. PostgreSQL is unaffected.
+
+**Consequences for the row's prose.** "Removals are exempt because a cap that can refuse a
+revocation is a fail-open" is retired. The contract is now: the cap bounds closure GROWTH at
+sync admission; it is atomic and loud; a revocation-shaped ADD is capped like any other add;
+the REMOVE op itself is never capped; async apply and `build_index` are never capped. The
+"async capped row stalls" half of `TK112` stops existing. A stall can now come only from
+`PathCountExceeded` or a transient failure.
+
+**TK111 S5 landed in the same session (2026-10-03b, PROBED first-hand).** The path-count
+bound is `index_v4/core.py::MAX_PATH_COUNT`, the int4 ceiling on both dialects. It is
+checked in `ReachabilityIndex._add_indirect_edges_batch_unsafe` before the first mutation,
+and it covers the direct edge's own row through `direct_pair`. The refusal is
+`zanzibar_utils_v1.py::PathCountExceeded`, under a new base `IndexResourceLimit` that also
+parents `ClosureFanoutExceeded`; `connectedstore/apply.py::_apply_row` catches the base. The
+probe used `.scratch/tk111-s5/probe.py`, sync, SQLite, with the sec 1 diamond:
+
+```
+K=30: 122 of 122 writes admitted
+K=31: 124 of 125 admitted; refused ('member','group','B30','member','group','L31')
+      PathCountExceeded: path count bound exceeded: this edge would give closure row
+      (3 -> 96) 2147483648 distinct ...
+      after the refusal: graph check(u member L31) == oracle == True; next write admitted
+```
+
+**Mutation sweep (PROBED first-hand 2026-10-03b; runner `.scratch/tk112-sweep/sweep.py`,
+gitignored, so this table IS the record).** Each mutant was applied in place by an anchor that
+had to match exactly once, then four modules were run (`tests/test_tk112_cap_policy.py`,
+`tests/test_tk111_path_count_bound.py`, `tests/test_tk111_stall_aware_freshness.py`,
+`tests/test_reg17_closure_fanout_cap.py`), and the file was restored in `finally`.
+`git status` afterwards showed only the intended edits. Every mutant went red, and M0 (the
+control) was attributed to the test it flipped. Literal lines, truncated at 200 chars:
+
+```
+BASELINE rc=0 | 29 passed in 24.73s
+M0 control: flip a claim in the sync test: rc=1 red | 3 failed, 26 passed in 26.93s | ['test_sync_over_cap_write_is_refused_loudly_and_atomically[ban]', 'test_sync_over_cap_write_is_refused_loudly_...
+M1 catch_up opens no window: rc=1 red | 4 failed, 25 passed in 23.45s | ['test_fanout_over_cap_row_no_longer_stalls_the_async_apply', 'test_async_apply_is_never_capped[ban]', 'test_async_apply_is_n...
+M2 build_index opens no window: rc=1 red | 1 failed, 28 passed in 23.88s | ['test_non_bulk_build_index_is_never_capped']
+M3 suspended branch never taken: rc=1 red | 5 failed, 24 passed in 23.16s | ['test_fanout_over_cap_row_no_longer_stalls_the_async_apply', 'test_async_apply_is_never_capped[ban]', 'test_async_apply_...
+M4 cap suspended everywhere (sync too): rc=1 red | 8 failed, 21 passed in 24.34s | ['test_cap_boundary_is_the_exact_region_size', 'test_cap_through_connectedstore_is_a_refusal_not_a_corruption_repo...
+M5 no warning on a suspended over-cap row: rc=1 red | 4 failed, 25 passed in 24.00s | ['test_fanout_over_cap_row_no_longer_stalls_the_async_apply', 'test_async_apply_is_never_capped[ban]', 'test_as...
+M6 window not restored on exit: rc=1 red | 5 failed, 24 passed in 25.64s | ['test_fanout_over_cap_row_no_longer_stalls_the_async_apply', 'test_async_apply_is_never_capped[ban]', 'test_async_apply_i...
+M7 window not thread-scoped: rc=1 red | 1 failed, 28 passed in 23.72s | ['test_suspend_window_is_reentrant_and_thread_scoped']
+M8 _write apply-failure arm skips evaluator rebuild: rc=1 red | 3 failed, 26 passed in 26.58s | ['test_sync_over_cap_write_is_refused_loudly_and_atomically[ban]', 'test_sync_over_cap_write_is_refus...
+P1 direct_pair never passed: rc=1 red | 1 failed, 28 passed in 26.60s | ['test_direct_edge_row_alone_is_checked']
+P2 bound is exclusive (>=): rc=1 red | 1 failed, 28 passed in 26.48s | ['test_bound_is_inclusive_and_exact[8-False]']
+P3 removals checked too: rc=1 red | 1 failed, 28 passed in 27.69s | ['test_refusal_leaves_no_partial_state_and_removals_are_never_refused']
+P4 _apply_row escapes only ClosureFanoutExceeded: rc=1 red | 5 failed, 24 passed in 30.60s | ['test_bound_is_inclusive_and_exact[7-True]', 'test_sync_overflow_is_a_clean_refusal_at_the_int4_ceiling...
+P5 PathCountExceeded not a refusal type: rc=1 red | 5 failed, 24 passed in 33.30s | ['test_bound_is_inclusive_and_exact[7-True]', 'test_sync_overflow_is_a_clean_refusal_at_the_int4_ceiling', 'test_...
+P6 bound one too high (2**31): rc=1 red | 4 failed, 25 passed in 26.68s | ['test_sync_overflow_is_a_clean_refusal_at_the_int4_ceiling', 'test_overflow_poison_row_stalls_and_untokened_check_stops_se...
+P7 direct pair not in the checked set: rc=1 red | 1 failed, 28 passed in 26.30s | ['test_direct_edge_row_alone_is_checked']
+DONE
+```
+
+**The bulk constructor's bound, sabotaged separately (PROBED 2026-10-03b).** Added after the sweep:
+`index_v4/bulk_build.py::bulk_build` applies `MAX_PATH_COUNT` too. Replacing its test with
+`if False:` turned `tests/test_tk111_path_count_bound.py` red: `1 failed, 9 passed`,
+`FAILED ...::test_both_build_index_constructors_apply_the_same_bound[7-True-True]`. The
+original bytes were restored from a copy.
+
+## 8. Salvage from `.scratch/tk112-scout/` (transcribed 2026-10-03b, before that directory was deleted)
+
+Sec 6 pointed at this directory, and option (i) would have needed the prototype. Option (i)
+was NOT taken (sec 7). The two artifacts a future revisit would need are copied here
+verbatim, so the directory could be deleted.
+
+**The scout's polarity probe** (`p1_polarity.py`, agent-PROBED 2026-10-03; literal excerpt
+from its `report.md` sec Q2):
+```
+a  viewer: grant but not banned        -> leaf viewer.0 positive=True ; viewer.1 positive=False
+   write doc:d#banned@group:big#member routes to: ['banned', 'viewer.1']
+b  viewer: a but not (b but not c)     -> viewer.0 True ; viewer.1 False ; viewer.2 True   (c is a GRANT: flip is correct)
+c  viewer: (a and b) but not c         -> viewer.0 True ; viewer.1 True ; viewer.2 False
+d  viewer: a and b                     -> NEGATIVE leaf families: []
+e  viewer: grant but not [user, group#member] -> viewer.1 positive=False storage=True ; write doc:d#viewer@... routes to ['viewer.1']
+f  viewer: (grant or banned) but not banned -> write doc:d#banned@... routes to ['banned', 'viewer.0', 'viewer.1']
+g  viewer: grant but not banned ; restricted: everyone but not viewer
+   -> plan restricted: leaf 'viewer' kind=derived-computed positive=False ; NEGATIVE leaf families: [('doc','viewer.1')] only
+   write doc:d#grant@... routes to ['grant', 'viewer.0']   (both "positive" per-plan, yet it REVOKES restricted)
+h  viewer: grant (pure) ; restricted: everyone but not viewer
+   write doc:d#grant@group:big#member routes to: ['grant', 'restricted.1', 'viewer']
+```
+
+**The runtime probe at cap 20** (`p2_out_cap20.txt`, literal, lines truncated by the probe
+itself):
+```
+CAP=20
+== A2: grant but not banned; ban a 30-member group ==
+  ban group:big: REFUSED closure fan-out cap exceeded: this edge would materialise 30 closure rows (30 ancestors x 
+     +edge group:big#member -> doc:d#banned  anc=30 desc=0 fanout=30 derivedctx=False <-- over cap
+           object+desc families: [('doc', 'banned')]
+  edge rows before/after ban: 33 33
+  viewer u0: True | set engine: True
+  leaf nodes / edges whose SUBJECT is a leaf node: (31, 33)
+
+== K: revocation by a PURE add (group membership) -- no leaf routed ==
+  viewer victim d0 before: True
+  add victim to group:big (bans victim on d0..d29): REFUSED closure fan-out cap exceeded: this edge would materialise 60 closure rows (0 ancestors x 6
+     +edge user:victim#... -> group:big#member  anc=0 desc=60 fanout=60 derivedctx=False <-- over cap
+           object+desc families: [('doc', 'banned'), ('doc', 'viewer.1'), ('group', 'member')]
+  viewer victim d0 after: True | set engine: True
+
+== G: grant (per-plan POSITIVE leaf) that revokes restricted = everyone but not viewer ==
+  restricted u0 before: True
+  grant group:big on doc:d (revokes restricted for u0): REFUSED closure fan-out cap exceeded: this edge would materialise 30 closure rows (30 ancestors x 
+     +edge group:big#member -> doc:d#grant  anc=30 desc=0 fanout=30 derivedctx=False <-- over cap
+           object+desc families: [('doc', 'grant')]
+  restricted u0 after: True | set engine: True
+
+== D3: un-ban REMOVE whose processor consequence is a capped derived ADD ==
+  un-ban REMOVE: REFUSED closure fan-out cap exceeded: this edge would materialise 30 closure rows (0 ancestors x 3
+     +edge user:u0#... -> doc:d#viewer  anc=0 desc=30 fanout=30 derivedctx=True <-- over cap
+           object+desc families: [('doc', 'viewer'), ('folder', 'reader.0')]
+  leaf nodes / edges whose SUBJECT is a leaf node: (33, 4)
+```
+
+**The global-sign fixpoint prototype** (`p3_global_sign.py`, agent-written, PROBED on 7
+hand-written schemas only, no generated differential). It imports `PDerivedComputed`,
+`PDerivedUserset`, `PDerivedTTU`, `PDerivedTuplesetTTU`, `LeafFamily` and `DerivedFamily` from
+`zanzibar_utils_v1`, and takes a `CompiledBooleans`:
+```python
+def global_signs(comp):
+    """sign[R] for every derived relation R: the set of signs (+1/-1) with which a
+    GROWTH of R propagates to SOME public relation (R itself counts as +1)."""
+    sign = {k: {1} for k in comp.plans}
+    changed = True
+    while changed:
+        changed = False
+        for qkey, plan in comp.plans.items():
+            for spec, node in zip(plan.leaves, plan.leaf_nodes):
+                local = 1 if spec.positive else -1
+                if isinstance(node, PDerivedComputed):
+                    refs = [(qkey[0], node.relation)]
+                elif isinstance(node, PDerivedUserset):
+                    refs = [(node.subject_type, node.subject_predicate)]
+                elif isinstance(node, (PDerivedTTU, PDerivedTuplesetTTU)):
+                    refs = [(t, node.target_rel) for t in node.parent_types]
+                else:
+                    continue
+                for r in refs:
+                    if r not in sign:
+                        continue
+                    add = {local * s for s in sign[qkey]}
+                    if not add <= sign[r]:
+                        sign[r] |= add
+                        changed = True
+    return sign
+
+
+def revocation_families(comp):
+    sign = global_signs(comp)
+    out = set()
+    for k, v in comp.namespace.items():
+        if isinstance(v, LeafFamily):
+            owner = (v.object_type, v.owner_relation)
+            local = 1 if v.positive else -1
+            if -1 in {local * s for s in sign[owner]}:
+                out.add(k)
+        elif isinstance(v, DerivedFamily):
+            if -1 in sign[k]:
+                out.add(k)
+    return sign, out
+```

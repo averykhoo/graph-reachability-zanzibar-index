@@ -13,8 +13,11 @@ write stalls every other writer on the store for its whole duration.
     future refactor of the expansion loops cannot drift the accounting;
   * a rejection is an ``AdmissionRejected`` that leaves NO partial state, and rollback
     restores the store byte-for-byte;
-  * REMOVALS are never capped (a cap on shrinking would make an over-large region
-    permanently unshrinkable -- a worse DoS than the one being bounded);
+  * edge REMOVALS are never capped (a cap on shrinking would make an over-large region
+    permanently unshrinkable -- a worse DoS than the one being bounded). That is NOT
+    "revocations are never capped": under `but not` a revocation can be an ADD, and a
+    REMOVE can restore a grant through the delta processor; both are capped on the sync
+    path, loudly and atomically (TK112, ``tests/test_tk112_cap_policy.py``);
   * configuration: constructor argument > env var > module default, malformed input
     fails loud, ``0`` disables;
   * the DEFAULT cannot refuse anything this repo writes -- pinned against the measured

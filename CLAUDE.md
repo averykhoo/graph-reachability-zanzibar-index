@@ -435,16 +435,25 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
 - **Operational knobs added 2026-07-27** (all default to today's behaviour):
   `ZANZIBAR_PARANOIA=residue` — recommended in production, the runtime detector for the
   `ZT-P0-1` escalation class, ~+5% on writes. `ZANZIBAR_MAX_CLOSURE_FANOUT` (default
-  100,000, `0` disables) — per-write closure fan-out cap; **adds and node-adds only,
-  removals are exempt** because a cap that can refuse a revocation is a fail-open, and
-  an over-large region must stay shrinkable. ⚠ **That exemption does not hold in two
-  admitted cases (`TK112`, reproduced 2026-09-27d):** under `but not` a revocation is an
-  ADD on the subtrahend leaf and is capped, and on the async schedule a capped row stalls
-  every later row, removals included. **Since 2026-10-02b (`TK111`) a stalled index is no
-  longer SERVED**: `ConnectedStore.catch_up` records the stall on the cursor row
-  (`IndexCursorV1.stalled_after`), and untokened reads then fall back to the set engine
-  (`check`) or refuse with `IndexStalled` (lookups). So the async case is an availability
-  loss, not a stale ALLOW. `ZANZIBAR_PARANOIA=residue` also does not catch an
+  100,000, `0` disables) — per-write closure fan-out cap, and **a SYNC-ADMISSION bound
+  only (`TK112`, decided 2026-10-03b)**. On the sync path every edge ADD is capped,
+  whatever it does to access. That includes a revocation-shaped add under `but not` (a
+  ban, or a member added to a banned group) and a grant restored by an un-ban. The
+  refusal is loud (`ClosureFanoutExceeded`) and atomic: the write reaches neither the log,
+  nor the set engine, nor the index, so the backends agree. Do NOT reintroduce "revocations
+  are exempt": a sound exemption needs a global sign analysis and switches the cap off for
+  most of a boolean schema. Set `0` if that is what you want. Edge REMOVALS are never
+  capped (a region must stay shrinkable). `ConnectedStore.catch_up` and the non-bulk
+  `build_index` run inside `ReachabilityIndex.fanout_cap_suspended`: those rows are
+  already committed, so an over-cap row is applied with a warning instead of stalling the
+  index. Why: `docs/tk111-stall-aware-freshness-2026-10-02.md` sec 7. **Path counts are
+  bounded too (`TK111`, 2026-10-03b)**: an add that would push `EdgeV4.indirect_edge_count`
+  past `index_v4/core.py::MAX_PATH_COUNT` (the int4 ceiling, both dialects) is refused
+  with `PathCountExceeded`. That bound is never suspended. On async the logged row
+  therefore still stalls the index, and since 2026-10-02b a stalled index is not SERVED:
+  `catch_up` records the stall (`IndexCursorV1.stalled_after`), and untokened reads fall
+  back to the set engine (`check`) or refuse with `IndexStalled` (lookups). It is an
+  availability loss, not a stale ALLOW. `ZANZIBAR_PARANOIA=residue` also does not catch an
   I14 regression; only `full`/`fixpoint` do (`TK118`). `index_v4.outbox.prune_outbox` — manual
   retention, never auto-called, and it keeps the head row so SQLite cannot recycle
   outbox ids under a held cursor. `SetEngine.log_governed` — set by `TupleSource`, makes

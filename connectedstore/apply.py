@@ -10,9 +10,10 @@ and a retry re-reads the same rows.
 
 Validity was enforced at admission (spec §2.4), so the log contains only appliable
 ops -- a rejection here is a HARD failure (corruption signal), mirroring the delta
-processor's cycle guard. **One documented exception:** ``ClosureFanoutExceeded`` is a
-resource limit the index applies and admission cannot predict, so it escapes that
-promotion and propagates as itself (see ``_apply_row``).
+processor's cycle guard. **One documented exception:** ``IndexResourceLimit``
+(``ClosureFanoutExceeded``, ``PathCountExceeded``) is a resource limit the index applies
+and admission cannot predict, so it escapes that promotion and propagates as itself
+(see ``_apply_row``).
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from index_v4 import WildcardIndex
 from index_v4.invariants import InvariantViolation
 from index_v4.outbox import outbox_watermark
 from index_v4.processor import DeltaProcessor
-from zanzibar_utils_v1 import (ClosureFanoutExceeded, Entity, RelationalTriple,
+from zanzibar_utils_v1 import (Entity, IndexResourceLimit, RelationalTriple,
                                RuleSet, norm_pred as _norm)
 
 from .models import IndexCursorV1, TupleLogV1
@@ -64,8 +65,9 @@ def _apply_row(row: TupleLogV1, widx: WildcardIndex, ruleset: RuleSet) -> None:
         for d in ruleset.apply(triple):
             fn(_norm(d.subject_predicate), d.subject.type, d.subject.name,
                d.relation, d.object.type, d.object.name)
-    except ClosureFanoutExceeded:
-        # NOT corruption, and the one refusal that must escape the promotion below.
+    except IndexResourceLimit:
+        # NOT corruption, and the one refusal FAMILY that must escape the promotion
+        # below: `ClosureFanoutExceeded` (ZT-P1-6a) and `PathCountExceeded` (TK111).
         # `TupleSource` admission has no knowledge of `max_closure_fanout`, so it
         # provably could NOT have refused this row at write time -- the row is validly
         # logged and the INDEX is declining to materialise it. Promoting it would

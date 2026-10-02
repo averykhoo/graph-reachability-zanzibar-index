@@ -299,7 +299,17 @@ class ConnectedStore:
         per batch (exactly-once: applied rows + cursor commit together, so a failed
         batch moves nothing and a retry re-reads the same rows). Returns the number
         of log rows applied. This IS the async worker's body -- a daemon would just
-        call it on a schedule."""
+        call it on a schedule.
+
+        The closure fan-out cap is SUSPENDED here (TK112, 2026-10-03b): every row is
+        already committed truth, so the cap could only stall the index behind it, never
+        refuse the write. An over-cap row is applied with a warning instead. The cap
+        stays in force on the sync path, where its refusal reaches the writer.
+        ``docs/tk111-stall-aware-freshness-2026-10-02.md`` sec 7."""
+        with self.widx.idx.fanout_cap_suspended():
+            return self._catch_up(batch)
+
+    def _catch_up(self, batch: int | None) -> int:
         total = 0
         while True:
             try:

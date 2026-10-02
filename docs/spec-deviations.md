@@ -1298,6 +1298,15 @@ now stated rather than disguised: **the cursor cannot advance past such a row un
 cap is raised.** Does not bite at the 100,000 default; bites the moment anyone follows
 the cap's own error message and tunes it down.
 
+**Corrected 2026-10-03b (`TK112`).** "Does not bite at the default" was false: granting
+or banning a group of more than 100,000 members bites at the default. "The cursor cannot
+advance past such a row" no longer holds either. Since 2026-10-03b the cap is a
+SYNC-ADMISSION bound, and `ConnectedStore.catch_up` and the non-bulk `build_index` run
+inside `ReachabilityIndex.fanout_cap_suspended`, which applies an over-cap row with a
+warning. Its escape from `_apply_row` now goes through the common base `IndexResourceLimit`,
+which also covers `PathCountExceeded` (`TK111`); that bound is never suspended. Decision:
+`docs/tk111-stall-aware-freshness-2026-10-02.md` sec 7.
+
 Sabotage (remove the escape, re-run `test_cap_through_connectedstore_is_a_refusal_not_a_corruption_report`):
 ```
 E  index_v4.invariants.InvariantViolation: log row 13 (ADD) was rejected by the index --

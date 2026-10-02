@@ -27,7 +27,7 @@ from sqlmodel import Session, SQLModel, create_engine
 import connectedstore.store as store_mod
 from connectedstore import ConnectedStore, IndexStalled
 from tests import oracle as O
-from zanzibar_utils_v1 import ClosureFanoutExceeded
+from zanzibar_utils_v1 import PathCountExceeded
 
 DIAMOND = '''
 type user
@@ -44,7 +44,9 @@ MALLORY = ('...', 'user', 'mallory', 'viewer', 'doc', 'secret')
 
 def _diamond_writes(k):
     """``u`` in L0, then K diamond layers L_i -> {A_i, B_i} -> L_{i+1}: the path count
-    from ``u`` to ``L_k`` is 2**k, which overflows a 64-bit counter at k=63."""
+    from ``u`` to ``L_k`` is 2**k. That overflowed a 64-bit counter at k=63 (the raw
+    SQLite error), and since TK111 S5 (2026-10-03b) it is refused at k=31, the int4
+    ceiling ``index_v4.core.MAX_PATH_COUNT``, on the LAST write of the chain."""
     w = [('+', MALLORY), ('+', ('...', 'user', 'u', 'member', 'group', 'L0'))]
     for i in range(k):
         for mid in ('A', 'B'):
@@ -71,19 +73,23 @@ def _write_all(cs, writes):
 
 def test_overflow_poison_row_stalls_and_untokened_check_stops_serving_revoked_allow(
         session):
-    """TK111 witness: the revocation of mallory is logged BEHIND the poison row."""
-    writes = _diamond_writes(63) + [('-', MALLORY)]
+    """TK111 witness: the revocation of mallory is logged BEHIND the poison row.
+
+    Was K=63 and a raw ``OverflowError`` until TK111 S5 (2026-10-03b); the poison row is
+    now refused cleanly at K=31, and on the async schedule that is STILL a stall (the
+    row is already logged), which is what this test pins."""
+    writes = _diamond_writes(31) + [('-', MALLORY)]
     cs = ConnectedStore(session, 'st', schema=DIAMOND, sync=False)
     last = _write_all(cs, writes)
 
-    with pytest.raises(OverflowError):
+    with pytest.raises(PathCountExceeded):
         cs.catch_up(batch=1)
     # the poison row and the revocation behind it are the only rows left
     assert cs.lag() == 2
     assert cs.index_stalled
-    assert 'OverflowError' in cs.stall_error
+    assert 'PathCountExceeded' in cs.stall_error
     # a retry fails the same way and the stall stays live
-    with pytest.raises(OverflowError):
+    with pytest.raises(PathCountExceeded):
         cs.catch_up(batch=1)
     assert cs.index_stalled
 
@@ -93,7 +99,7 @@ def test_overflow_poison_row_stalls_and_untokened_check_stops_serving_revoked_al
     # THE fail-open: was True (the stalled index still holds the revoked grant)
     assert cs.check(*MALLORY) is False
     # the fallback is the set engine, and it is right on a grant the index never saw
-    deep = ('...', 'user', 'u', 'member', 'group', 'L63')
+    deep = ('...', 'user', 'u', 'member', 'group', 'L31')
     assert orc.check(*deep) is True
     assert cs.check(*deep) is True
     # tokened reads were already correct and stay so
@@ -101,15 +107,20 @@ def test_overflow_poison_row_stalls_and_untokened_check_stops_serving_revoked_al
     # the enumeration surface has no fallback: an untokened lookup now refuses
     with pytest.raises(IndexStalled) as ei:
         cs.lookup('...', 'user', 'mallory')
-    assert 'STALLED' in str(ei.value) and 'OverflowError' in str(ei.value)
+    assert 'STALLED' in str(ei.value) and 'PathCountExceeded' in str(ei.value)
     with pytest.raises(IndexStalled):
         cs.lookup_reverse('viewer', 'doc', 'secret')
 
 
-def test_fanout_capped_row_stalls_and_untokened_check_stops_serving_revoked_allow(
-        session):
-    """TK112 C2 witness: a capped async grant stalls the worker; the REMOVE logged
-    behind it must not leave the untokened check serving the revoked grant."""
+def test_fanout_over_cap_row_no_longer_stalls_the_async_apply(session, caplog):
+    """TK112 C2, after the cap-policy decision (2026-10-03b): the cap is a SYNC-ADMISSION
+    bound, so ``catch_up`` applies an over-cap row with a warning instead of stalling.
+
+    Until then this test pinned the stall: the capped grant raised
+    ``ClosureFanoutExceeded`` from ``catch_up`` with ``lag == 2``, and the stall marker
+    kept the untokened check off the index. Now the REMOVE behind that row reaches the
+    index, and the index itself answers correctly. Decision:
+    ``docs/tk111-stall-aware-freshness-2026-10-02.md`` sec 7."""
     schema = DIAMOND
     cs = ConnectedStore(session, 'cs', schema=schema, sync=False)
     for i in range(30):
@@ -121,25 +132,23 @@ def test_fanout_capped_row_stalls_and_untokened_check_stops_serving_revoked_allo
     assert cs.check(*old) is True
 
     cs.widx.idx.max_closure_fanout = 20       # an operator tightening the cap
-    cs.add_tuple('member', 'group', 'big', 'viewer', 'doc', 'new')   # 30 rows: capped
-    revoke = cs.remove_tuple(*old)
-    with pytest.raises(ClosureFanoutExceeded):
-        cs.catch_up()
-    assert cs.lag() == 2 and cs.index_stalled
-
-    # THE fail-open: was True
-    assert cs.check(*old) is False
-    assert cs.check(*old, at_least=revoke) is False
-    with pytest.raises(IndexStalled):
-        cs.lookup('...', 'user', 'u0')
-
-    # raising the cap is the operator's recovery: the next batch clears the stall
-    cs.widx.idx.max_closure_fanout = 0
-    assert cs.catch_up() == 2
-    assert not cs.index_stalled and cs.stall_error is None
-    assert cs.cursor.stalled_after is None
-    assert cs.check(*old) is False
+    new = ('member', 'group', 'big', 'viewer', 'doc', 'new')
+    cs.add_tuple(*new)                         # 30 closure rows: over the cap
+    cs.remove_tuple(*old)
+    with caplog.at_level('WARNING', logger='index_v4.core'):
+        assert cs.catch_up() == 2
+    assert cs.lag() == 0 and not cs.index_stalled and cs.stall_error is None
+    assert any('materialised anyway' in r.getMessage() and 'limit of 20' in r.getMessage()
+               for r in caplog.records)
+    # answered BY THE INDEX (not stalled, so no fallback), and right
+    assert cs.widx.check(*old) is False and cs.check(*old) is False
+    assert cs.widx.check('...', 'user', 'u7', 'viewer', 'doc', 'new') is True
     assert cs.lookup('...', 'user', 'u0') is not None
+    # the cap is still in force on this index outside catch_up: a direct write refuses
+    from zanzibar_utils_v1 import ClosureFanoutExceeded
+    with pytest.raises(ClosureFanoutExceeded):
+        cs.widx.add_tuple('member', 'group', 'big', 'viewer', 'doc', 'newer')
+    session.rollback()
 
 
 def test_transient_failure_stalls_until_the_next_good_batch(session, monkeypatch):
@@ -185,13 +194,13 @@ def test_replica_reader_sees_a_stall_recorded_by_another_instance(tmp_path):
     SQLModel.metadata.create_all(engine)
     with Session(engine) as ws, Session(engine) as rs:
         worker = ConnectedStore(ws, 'st', schema=DIAMOND, sync=False)
-        _write_all(worker, _diamond_writes(63)[:2])
+        _write_all(worker, _diamond_writes(31)[:2])
         worker.catch_up()
         reader = ConnectedStore(rs, 'st', schema=DIAMOND, sync=False)
         assert reader.check(*MALLORY) is True
 
-        _write_all(worker, _diamond_writes(63)[2:] + [('-', MALLORY)])
-        with pytest.raises(OverflowError):
+        _write_all(worker, _diamond_writes(31)[2:] + [('-', MALLORY)])
+        with pytest.raises(PathCountExceeded):
             worker.catch_up(batch=1)
 
         reader.refresh()
@@ -215,13 +224,13 @@ def test_replica_polling_by_rollback_gets_a_caught_up_set_engine_answer(tmp_path
     SQLModel.metadata.create_all(engine)
     with Session(engine) as ws, Session(engine) as rs:
         worker = ConnectedStore(ws, 'st', schema=DIAMOND, sync=False)
-        _write_all(worker, _diamond_writes(63)[:2])
+        _write_all(worker, _diamond_writes(31)[:2])
         worker.catch_up()
         reader = ConnectedStore(rs, 'st', schema=DIAMOND, sync=False)
         assert reader.check(*MALLORY) is True
 
-        _write_all(worker, _diamond_writes(63)[2:] + [('-', MALLORY)])
-        with pytest.raises(OverflowError):
+        _write_all(worker, _diamond_writes(31)[2:] + [('-', MALLORY)])
+        with pytest.raises(PathCountExceeded):
             worker.catch_up(batch=1)
 
         rs.rollback()                       # new snapshot; the evaluator is NOT rebuilt

@@ -1023,6 +1023,29 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   Python-to-Python by `tests/test_tk111_stall_aware_freshness.py`, whose mutation sweep
   is in `docs/tk111-stall-aware-freshness-2026-10-02.md` sec 5.
 
+* **Two resource REFUSALS on the add path that the model does not have (added 2026-10-03b,
+  `TK111` + `TK112`).** Both raise an `zanzibar_utils_v1.py::IndexResourceLimit` before the
+  first mutation, so an admitted write leaves no partial state. The T4 model
+  (`GraphIndex/Closure.lean::pathCount_addEdge`) counts paths in an unbounded `Nat` and
+  has no cap. The code refuses where the model would admit:
+  - `index_v4/core.py::ReachabilityIndex._add_indirect_edges_batch_unsafe` raises
+    `PathCountExceeded` when a closure row would exceed `MAX_PATH_COUNT`, the int4 storage
+    ceiling, applied on both dialects. `index_v4/bulk_build.py::bulk_build` applies the
+    same bound.
+  - `index_v4/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl` raises
+    `ClosureFanoutExceeded` (`ZT-P1-6a`, never mapped until now). Since 2026-10-03b it
+    does so only outside `ReachabilityIndex.fanout_cap_suspended`; inside, it logs and
+    proceeds. `connectedstore/store.py::ConnectedStore.catch_up` and the non-bulk
+  `connectedstore/build.py::build_index` enter that window.
+  The arithmetic of every ADMITTED write is unchanged: the bound is a read-only pre-check
+  over the region `_add_indirect_edges_batch_unsafe` already loads. The rows cited at sec
+  3 (T4), sec 4 (`_apply_row`, `_add_indirect_edges_batch_unsafe`, `__init__`), sec 5's
+  schedule bullets (`catch_up`), sec 7.4 P2 and P13 (`bulk_build`) were all re-read on
+  2026-10-03b when the anchor CONTENT pin flagged their bodies, and all still hold. The
+  refusals are pinned Python-to-Python by `tests/test_tk111_path_count_bound.py` and
+  `tests/test_tk112_cap_policy.py`. The mutation sweep is in
+  `docs/tk111-stall-aware-freshness-2026-10-02.md` sec 7.
+
 * **★ The CROSSABLE-SHAPE class, and the Lean wildcard leg could not have caught the
   2026-08-09 bug (added 2026-08-09).** Python's bridged-in set is WIDER than Lean's.
   `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes` folds in **star-tupleset

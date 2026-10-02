@@ -81,7 +81,33 @@ class AdmissionRejected(ValueError):
     """
 
 
-class ClosureFanoutExceeded(AdmissionRejected):
+class IndexResourceLimit(AdmissionRejected):
+    """The graph index declined to MATERIALISE an admitted write: a resource limit
+    over the closure, not a property of the tuple and the schema.
+
+    The common base of the refusals ``connectedstore.apply._apply_row`` must NOT promote
+    to ``InvariantViolation`` (see ``ClosureFanoutExceeded`` for why that promotion is
+    wrong for this family). Two members: ``ClosureFanoutExceeded`` (``ZT-P1-6a``) and
+    ``PathCountExceeded`` (``TK111``). ``_apply_row`` catches THIS class, so a new member
+    is exempt from the promotion by construction.
+    """
+
+
+class PathCountExceeded(IndexResourceLimit):
+    """A write would push a closure row's path count past ``MAX_PATH_COUNT`` (``TK111``).
+
+    ``EdgeV4.indirect_edge_count`` counts derivations (paths), not reachability, so a
+    K-layer diamond chain makes it ``2**K``. The column is ``INTEGER``: int4 on
+    PostgreSQL, int64 on SQLite. Before ``TK111`` the write failed at FLUSH with a raw
+    ``DataError`` (PostgreSQL, K=31) or ``OverflowError`` (SQLite, K=63) -- a refusal
+    nobody could classify, which ``ConnectedStore._write`` treated as an unknown bug.
+    The bound is the int4 ceiling on BOTH dialects, so the same write is refused the
+    same way on dev SQLite as on the PostgreSQL server. Saturating the count instead
+    was rejected: it breaks the exact decrement a later removal relies on.
+    """
+
+
+class ClosureFanoutExceeded(IndexResourceLimit):
     """The per-write closure fan-out cap refused a write (``ZT-P1-6a``).
 
     A subclass, and the ONE refusal family that must not be promoted to

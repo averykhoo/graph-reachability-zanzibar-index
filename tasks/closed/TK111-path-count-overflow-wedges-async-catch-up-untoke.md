@@ -11,9 +11,9 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-10-02b
-updated: 2026-10-02b
-closed:
+moved: 2026-10-03b
+updated: 2026-10-03b
+closed: 2026-10-03b
 ---
 
 Filed from the P10 re-run (2026-09-27d). Full witness, provenance and reconciliation: [`docs/p10-scope-audit-2026-09-27.md`](../docs/p10-scope-audit-2026-09-27.md) §5 H4. The section is copied below as it stood when filed; the doc is the body of record.
@@ -76,3 +76,7 @@ NOW -> NEXT by user instruction (2026-09-28): both TK111 and TK112 sit at NEXT f
 ### 2026-10-02b
 
 2026-10-02b: THE SHARED STALL-AWARE FRESHNESS FIX LANDED, which closes the READ-side fail-open for both poison sources (this row and TK112). Map: docs/tk111-stall-aware-freshness-2026-10-02.md (ACTIVE-PLAN; sec 2 = decisions D1-D5, sec 5 = sweep evidence). LANDED: connectedstore/models.py::IndexCursorV1.stalled_after + stall_error (persisted stall marker, live only while equal to applied_log_id); connectedstore/store.py::ConnectedStore._record_stall (catch_up records on ANY failure, own transaction, then re-raises), ::index_stalled, ::stall_error, ::IndexStalled (LookupNotFresh subclass); _fresh_enough(None) is False while stalled, so the untokened check falls back to the set engine after catch_up_evaluator, and the untokened lookup/lookup_reverse refuse; connectedstore/apply.py::advance_index clears the marker. PINNED: tests/test_tk111_stall_aware_freshness.py (5 tests: this row K=63 witness with the revoke behind the poison row, TK112 C2 capped row + cap-raise recovery, transient stall clears, replica after refresh(), replica polling by bare rollback()). Mutation sweep with an M0 control: 9 of 9 mutants red after two inert ones (M5, M8) were fixed by new pins. STILL OPEN on this row: (S5) the SYNC overflow is still a raw OverflowError/DataError, not a clean admission refusal; an async overflow row is still a PERMANENT stall (reads are now correct, the index is unavailable for that store; recovery = rebuild). NEXT ACTION: S5, refuse the overflow cleanly on the sync path, and decide whether the async path can refuse it at admission at all (it cannot see the closure).
+
+### 2026-10-03b
+
+2026-10-03b CLOSED. S5 LANDED: a path-count overflow is now a CLEAN refusal on every path, not a raw driver error. The bound is index_v4/core.py::MAX_PATH_COUNT = 2**31-1, the int4 ceiling, enforced on BOTH dialects so SQLite refuses what PostgreSQL would. It is checked in ReachabilityIndex._add_indirect_edges_batch_unsafe BEFORE the first mutation, covering the direct edge's own row via the new direct_pair argument; removals are never checked. The refusal is zanzibar_utils_v1.py::PathCountExceeded, under a new base IndexResourceLimit (which now also parents ClosureFanoutExceeded); connectedstore/apply.py::_apply_row escapes the base from its corruption promotion. index_v4/bulk_build.py::bulk_build applies the same bound, so the two build_index constructors refuse the same snapshot. Saturation was rejected because it breaks exact decrement. Map: docs/tk111-stall-aware-freshness-2026-10-02.md sec 7. PROBED first-hand (sync, SQLite, diamond): K=30 admits 122/122; K=31 admits 124/125, refusing only ('member','group','B30','member','group','L31') with PathCountExceeded (row 3 -> 96, 2147483648 paths), and graph == oracle afterwards. PINNED: tests/test_tk111_path_count_bound.py (10 tests: the K=31 refusal + atomicity + writability, the K=30 ceiling control, inclusive bound at 8/7, the direct-pair-only row, no partial state + removals never refused, and both constructors at 8/7). tests/test_tk111_stall_aware_freshness.py now runs the async poison at K=31 with PathCountExceeded. Mutation sweep (shared with TK112): 16 of 16 red, 0 INERT; the bulk check's separate sabotage was red too ('1 failed, 9 passed'). RESIDUAL, by design: on async the logged poison row still stalls permanently. Reads stay correct (2026-10-02b stall marker), but there is no tested recovery. Filed as TK121 (LATER).
