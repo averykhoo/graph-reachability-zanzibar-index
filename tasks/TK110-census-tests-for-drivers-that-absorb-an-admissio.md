@@ -11,8 +11,8 @@ labels: []
 source: hand
 source_hash:
 created: 2026-09-27b
-moved: 2026-09-27b
-updated: 2026-09-27b
+moved: 2026-10-03c
+updated: 2026-10-03c
 closed:
 ---
 
@@ -47,3 +47,7 @@ does.
   probe): a pin whose pre-fix module also goes red was not the gap.
 
 ## Log
+
+### 2026-10-03c
+
+Triage 2026-10-03c: skeptic verdict WEAKENED, near-refuted (AGENT-REPORTED). The `TK71` premise does not carry over: the `tests/` parity drivers require all backends to accept or reject alike, and three sabotages (`TK71`'s S1, a shared wildcard-userset over-reject, a shared same-type-userset over-reject) all went RED. Keep at LATER as hygiene: narrowing bare `except ValueError` to `AdmissionRejected` in the absorbers still stops them swallowing non-refusal engine bugs. Site list and reasoning: `docs/promote-next-triage-2026-10-03.md` sec 4.

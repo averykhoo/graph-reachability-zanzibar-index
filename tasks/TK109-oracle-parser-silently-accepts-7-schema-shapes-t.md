@@ -5,14 +5,14 @@ brief: PROBED 7 of 8: oracle accepts [] / dup type / dup relation / '.' in name 
 pri: LATER
 size: S
 deps: []
-related: [TK105, TK108]
-parent:
+related: [TK105, TK108, P23]
+parent: P23
 labels: []
 source: hand
 source_hash:
 created: 2026-09-27
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-03c
+updated: 2026-10-03c
 closed:
 ---
 
@@ -42,3 +42,7 @@ Fix shape: independent twins in `tests/oracle.py` (NOT shared code -- independen
 ### 2026-09-27d
 
 P10 re-run (2026-09-27d): this row's REASONED JSON line (parse_openfga_json has no empty-relation-name check) is subsumed by TK115. The P10 audit probed that empty names fail loudly downstream; the live JSON holes are newline/colon names, duplicate keys and wildcard: false (docs/p10-scope-audit-2026-09-27.md sec 5 H5).
+
+### 2026-10-03c
+
+Now a CHILD of `P23` (user decision 2026-10-03c): done together with `P23` and `TK105` as one task; `P23` carries the NEXT slot and the plan. Triage 2026-10-03c (AGENT-REPORTED, PROBED) re-reproduced all 7 shapes as prod=REFUSE oracle=accept in the live tree. Map: `docs/promote-next-triage-2026-10-03.md`.

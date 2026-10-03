@@ -2,17 +2,17 @@
 id: TK115
 title: JSON front-end fidelity: openfga_json_to_dsl can render a different schema than the JSON declared
 brief: openfga_json_to_dsl pastes names unescaped; refuse on round-trip mismatch, dup keys, bad wildcard
-pri: LATER
+pri: NEXT
 size: M
 deps: []
-related: []
+related: [P23]
 parent:
 labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-03c
+updated: 2026-10-03c
 closed:
 ---
 
@@ -57,3 +57,7 @@ read the rendered DSL. Operator nesting is fine: *audit* measured `checked 32 qu
 mismatches 0` (2026-09-27).
 
 ## Log
+
+### 2026-10-03c
+
+PROMOTED LATER -> NEXT (user decision 2026-10-03c: "is 115 a real bug? if so add that, otherwise add 117"). VERDICT: real bug. Reproduced FIRST-HAND 2026-10-03c: `openfga_json_to_dsl` on a `directly_related_user_types` entry `{"type": "user", "wildcard": false}` returns `define viewer: [user:*]` -- a public grant from a value meaning "not a wildcard". Cause, read first-hand: `zanzibar_utils_v1.py::_json_restrictions` sets `wildcard = 'wildcard' in e and e['wildcard'] is not None`. Honest bounds: canonical OpenFGA emits `"wildcard": {}`, never `false`, so the trigger is malformed input; no product module calls the JSON front end (only tests); and it is upstream of all three evaluators, so it is a fail-open, not a backend divergence. Skeptic (AGENT-REPORTED 2026-10-03c, WEAKENED) also found this row's own fix (1), refuse-unless-round-trip-equal, MISSES the `wildcard: false` and duplicate-key cases (both round-trip equal), so the fix is several refusals: dict-only `wildcard`, `object_pairs_hook` duplicate-key refusal, declared-name contract shared with `P23`, then the round-trip check. Map: `docs/promote-next-triage-2026-10-03.md` sec 4.

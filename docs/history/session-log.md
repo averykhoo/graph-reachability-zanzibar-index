@@ -32,6 +32,41 @@ from here.
 
 ---
 
+## 2026-10-03c — LATER triaged for Python-correctness value; P23 (+TK109, TK105), TK114, TK115 to NEXT
+
+rows: P23 (LATER -> NEXT, now PARENT of TK109 + TK105, retitled, size S -> M), TK109 (child of P23), TK105 (child of P23), TK114 (LATER -> NEXT), TK115 (LATER -> NEXT), TK117 (comment), TK110 (comment)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 39 warning(s)`
+
+`read: board only`
+
+The user asked which `LATER` row would most raise confidence that the Python is correct,
+to choose what to promote to `NEXT`. One `Workflow` run (`wf_f60df09d-6c7`) triaged every
+`LATER` row against the live tree with six agents, then sent a refuting skeptic at each of
+the top four. The probes ran in `.scratch/`; their results and every verdict are transcribed in
+[`docs/promote-next-triage-2026-10-03.md`](../promote-next-triage-2026-10-03.md)
+(ACTIVE-PLAN), and the scratch directory went to the Recycle Bin.
+
+**Headline (AGENT-REPORTED 2026-10-03c).** No `LATER` row is a known live wrong-answer
+bug. All four verified rows came back WEAKENED, and none was refuted on whether its gap
+exists. `TK110` came closest to refuted: three sabotages all went red through the parity
+drivers.
+
+**User decisions, 2026-10-03c.**
+- **`P23`, `TK109` and `TK105` are ONE task, with parent `P23`.** They share one fix
+  shape: a `_validate_*` refusal plus its oracle twin, pinned both-refuse. `P23` is
+  the parent because it is the only one that changes the product parser and has a shipped
+  consequence.
+- **`TK114` goes to `NEXT`.** On this schema shape the oracle is not an independent
+  referee.
+- **`TK115` goes to `NEXT`, not `TK117`.** The user asked "is 115 a real bug?" Answer:
+  yes, reproduced FIRST-HAND. `"wildcard": false` renders `define viewer: [user:*]`,
+  via `zanzibar_utils_v1.py::_json_restrictions`. Bounds: the trigger is malformed input,
+  no product module calls the JSON front end, and it is a fail-open, not a backend
+  divergence. `TK117`'s part (c) stays the best next candidate after these.
+
+Still owed: nothing.
+
 ## 2026-10-03b — TK111/TK112 CLOSED (cap = sync-admission bound; clean path-count refusal); TK113 widened
 
 rows: TK111 (CLOSED), TK112 (CLOSED), TK113 (NEXT -> NOW, comment + title + brief), TK121 (NEW, LATER), TK33 (comment)

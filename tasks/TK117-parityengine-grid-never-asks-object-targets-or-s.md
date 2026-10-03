@@ -11,8 +11,8 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-03c
+updated: 2026-10-03c
 closed:
 ---
 
@@ -83,3 +83,7 @@ must go GREEN → RED after the fix, with an M0 control. Leave
 Lean `hqs` / `hqo` scope, and `TK101` revisits the second.
 
 ## Log
+
+### 2026-10-03c
+
+Triage 2026-10-03c ranked this top by first score, then the skeptic WEAKENED it (AGENT-REPORTED): sub-gaps (a) object-* and (b) from-chain star subjects are covered elsewhere (`tests/test_matrix.py` union_wildcard, the star-bridge hypothesis machines, `tests/test_lookup_oracle.py::_subject_candidates`); only (c), the cap sample, is a real escape route -- about 12% of grid builds exceed the cap and keep about two thirds of the pool (probe, 2026-10-03c). If picked up, do (c) alone first: an rng-free write-local floor in `tests/parity.py::ParityEngine._grid`, planted-lie witness with an M0 control. Not promoted: the user took `TK115` instead (2026-10-03c). Map: `docs/promote-next-triage-2026-10-03.md` sec 4.

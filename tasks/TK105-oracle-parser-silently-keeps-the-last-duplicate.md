@@ -5,14 +5,14 @@ brief: oracle keeps the last duplicate define; production refuses it. Pinned as 
 pri: LATER
 size: S
 deps: []
-related: [TK104]
-parent:
+related: [TK104, TK109, P23]
+parent: P23
 labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-25
-moved: 2026-09-25
-updated: 2026-09-25
+moved: 2026-10-03c
+updated: 2026-10-03c
 closed:
 ---
 
@@ -49,3 +49,7 @@ the `tests/test_reg_empty_relation_name.py` shape. Then move `nodup/duplicate-de
 - `formal/conformance/test_conformance_fragment.py::_ORACLE_COLLAPSES` -- the pin to flip
 
 ## Log
+
+### 2026-10-03c
+
+Now a CHILD of `P23` (user decision 2026-10-03c), done with `P23` and `TK109` as one task. This row's duplicate-define shape is one of `TK109`'s 7; fixing `TK109` fixes it. Map: `docs/promote-next-triage-2026-10-03.md`.

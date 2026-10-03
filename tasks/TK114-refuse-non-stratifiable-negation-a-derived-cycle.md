@@ -2,7 +2,7 @@
 id: TK114
 title: refuse non-stratifiable negation: a derived cycle through a TTU target with a but-not subtrahend
 brief: schema-refusal decision (model may take it): negation around a TTU-target cycle has no/many fixpoints
-pri: LATER
+pri: NEXT
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [formal]
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-03c
+updated: 2026-10-03c
 closed:
 ---
 
@@ -63,3 +63,7 @@ refused shape has no defined semantics. Until it lands: a positive characterizat
 the answers, never an xfail.
 
 ## Log
+
+### 2026-10-03c
+
+PROMOTED LATER -> NEXT (user decision 2026-10-03c). Why: on this shape the set engine and the oracle agree on answers that are NOT models of the schema, because both use the in-progress=>False convention -- the oracle is not an independent referee here, which is a confidence leak in the equivalence gate itself. Triage (AGENT-REPORTED 2026-10-03c, PROBED) reproduced the row's witness: `viewer: [user] but not viewer from parent` parses in both parsers; graph compile raises `CyclicDerivedDependency`; a standalone `SetEngine` accepts the cycle-closing parent write; self-parent gives set = oracle = {a: True} (not a model), 2-cycle gives {a: False, b: False} (not a fixpoint). NOT adversarially verified -- re-probe first-hand before designing. The schema-refusal decision is the model's to take (`CLAUDE.md` "Who decides"). Map: `docs/promote-next-triage-2026-10-03.md`.
