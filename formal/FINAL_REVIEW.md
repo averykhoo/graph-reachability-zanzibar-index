@@ -28,14 +28,14 @@ number INTO it over restating it.
 | quantity | value |
 |---|---|
 | `formal/conformance/` collected | **1081** |
-| `tests/` collected | **1636** |
-| whole-repo suite | **2717** |
+| `tests/` collected | **1665** |
+| whole-repo suite | **2746** |
 | differential conformance tests | **1000** across **16** files |
 | gate-tooling conformance tests | **81** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **715** |
 | audit identity pin (`audited_theorems.txt`) | **715** |
 | headline definition pin | **280** rows (**270** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **740** (**417** Python + **323** Lean) |
+| `CORRESPONDENCE.md` anchors | **741** (**418** Python + **323** Lean) |
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 27 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
@@ -660,8 +660,9 @@ Everything §7 lists, plus the fragment carries:
    `CORRESPONDENCE.md` §7/§8.1 — this document and `ARCHITECTURE.md` are simply
    the two honesty ledgers that stopped being updated; that omission was found by
    the 2026-07-26 zero-trust review, not by any gate.
-7. **Non-stratifiable schemas** (rejected upstream; the model assumes
-   stratifiability). The `expand` / `lookup` / `lookup_reverse` (list-objects /
+7. **Non-stratifiable schemas** (the model assumes stratifiability; recursion
+   through `but not` is rejected upstream at parse since `TK114`, 2026-10-04,
+   positive derived recursion by the graph compile only — `SEMANTICS.md` §4.4). The `expand` / `lookup` / `lookup_reverse` (list-objects /
    list-users) read surfaces are **not yet modeled in Lean** — a deferred
    low-priority TODO (§4, last item), NOT a permanent exclusion; both backends'
    surfaces are pinned empirically by `tests/test_lookup_oracle.py` and, since

@@ -11,9 +11,9 @@ labels: [formal]
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-10-03e
-updated: 2026-10-03e
-closed:
+moved: 2026-10-04
+updated: 2026-10-04
+closed: 2026-10-04
 ---
 
 Filed from the P10 re-run (2026-09-27d). Full witness, provenance and reconciliation: [`docs/p10-scope-audit-2026-09-27.md`](../docs/p10-scope-audit-2026-09-27.md) §5 H1. The section is copied below as it stood when filed; the doc is the body of record.
@@ -71,3 +71,9 @@ PROMOTED LATER -> NEXT (user decision 2026-10-03c). Why: on this shape the set e
 ### 2026-10-03e
 
 NEXT -> NOW at the 2026-10-03e write-back: P23 closed and lint needs exactly one NOW. TK114 is the second of the user 2026-10-03c NEXT picks (banner order P23, TK114, TK115). No new ranking decision is implied.
+
+### 2026-10-04
+
+DECIDED + LANDED (session decision under CLAUDE.md "Who decides"). Re-probed first-hand: the witness reproduces, and the class is WIDER than this row: a negative cycle through a USERSET RESTRICTION (member: [user] but not blocked + blocked: [group#member]) gives the same non-model answer. Rule: classical stratified negation. Both checked parsers refuse a cycle in the relation dependency graph (computed ref, TTU tupleset, TTU target per admitted parent type, [T#p] / [T:*#p]) through a step anywhere inside a but-not subtrahend, at any depth (so x but not (y but not x-ish) is refused too; rewrite (x but not y) or (x and z)). Positive recursion stays legal. Landed: zanzibar_utils_v1.py::_validate_stratified_negation (DSL + JSON front ends), independent twin tests/oracle.py::_validate_stratified_negation (path-closure algorithm). Pin: tests/test_tk114_stratified_negation.py (10 refused shapes x 2 parsers, 5 accept controls incl. the INSTEAD rewrites, SetEngine + JSON end-to-end, a 4-way ParityEngine run of the INSTEAD rewrite). Sweep of 11 mutations all RED with an M0 control; a first run found S9 INERT (all cycles were <=2 steps) and J/three-step-cycle was added. NOT added to genswarm REJECTION_WITNESSES: no generator reaches the shape, and an unexercised family is red there. Map (to FREEZE at close): docs/tk114-stratified-negation-2026-10-04.md. Side finding (sec 1b, not acted on): a standalone SetEngine whose graph compile fails runs no membership-cycle admission check, so positive derived recursion admits parent-cycle data.
+
+Closed: recursion through a but-not subtrahend is a parse refusal in both checked parsers (and the JSON front end), pinned by tests/test_tk114_stratified_negation.py with an 11-mutation sweep. Map (FROZEN): docs/tk114-stratified-negation-2026-10-04.md.

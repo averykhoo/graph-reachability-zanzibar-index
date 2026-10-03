@@ -59,7 +59,10 @@ genuinely independent corners and one parser bug cannot corrupt two of them.
   a stratified Datalog-with-negation program; `sem` is its perfect model.
 - **Well-formedness** `WF S` (`Core/Schema.lean`, §4.2) and **stratifiability**
   `Stratifiable S` (`Spec/Stratify.lean`, §4.4): the verified envelope. Non-stratifiable
-  schemas are rejected upstream and out of scope.
+  schemas are out of scope. Since `TK114` (2026-10-04) recursion through a `but not` is
+  rejected upstream, at parse, by both parsers; POSITIVE derived recursion is still
+  rejected by the graph compile only (the set engine evaluates it as a least fixpoint,
+  which no theorem covers).
 - **The evaluator** (`Spec/Semantics.lean`): `directLeaf` (star + userset branches),
   `ttuLeaf` (stored-parent TTU — TTU parents are STORED tupleset tuples, never computed
   membership), boolean composition, and `evalE`/`sem` — a **fuel-bounded primitive
@@ -674,7 +677,9 @@ per-field argument or a Lean witness makes it so.
    `FINAL_REVIEW.md` §3.1 item 6. Documented in `CORRESPONDENCE.md`
    §7/§8.1 — this list and `FINAL_REVIEW.md` §3 are simply the two honesty ledgers that
    stopped being updated, which is why the 2026-07-26 zero-trust review had to find it.
-7. **Non-stratifiable schemas** (rejected upstream; the model assumes stratifiability). The
+7. **Non-stratifiable schemas** (the model assumes stratifiability; recursion through
+   `but not` is rejected upstream at parse since `TK114`, 2026-10-04, positive derived
+   recursion by the graph compile only — `SEMANTICS.md` §4.4). The
    `expand` / `lookup` / `lookup_reverse` (list-objects / list-users) read surfaces are
    **not yet modeled in Lean** — a deferred low-priority TODO (`FINAL_REVIEW.md` §4, last
    item), not a permanent exclusion; both backends' surfaces are pinned empirically by

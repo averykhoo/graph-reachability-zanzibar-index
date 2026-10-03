@@ -251,6 +251,17 @@ provisional-False recursion guard (`tests/oracle.py::Oracle.check.sat`,
 perfect model, **all theorems carry `stratify S = some strata` as a hypothesis**
 and make no claim otherwise. (Audit recommendation: reject upstream.)
 
+**2026-10-04 (`TK114`): the recommendation is taken for NEGATION.** Both checked parsers
+(`zanzibar_utils_v1.py::_validate_stratified_negation`, independent twin
+`tests/oracle.py::_validate_stratified_negation`) refuse a schema whose relation dependency
+graph (computed refs, TTU tuplesets, TTU targets, `[T#p]` restrictions) has a cycle through
+a step inside a `but not` subtrahend, at any depth. Those schemas had no fixpoint or several,
+and the provisional-False guard above answered them anyway, identically in both evaluators.
+POSITIVE derived recursion is still legal at parse: the graph refuses it here, and the set
+engine and oracle evaluate it as a least fixpoint (provisional-False is the least-fixpoint
+seed). It stays outside `Stratifiable S`, so no theorem covers it. Map:
+`docs/tk114-stratified-negation-2026-10-04.md`.
+
 ---
 
 ## 5. The specification `sem` — pointwise stratified evaluation

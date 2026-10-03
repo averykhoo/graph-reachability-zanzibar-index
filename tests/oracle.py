@@ -270,6 +270,7 @@ def parse_schema_ast(text: str) -> dict[tuple[str, str], object]:
     ast = parse_schema_ast_unchecked(text)
     _validate_consistency(ast)
     _validate_tuplesets_direct(ast)
+    _validate_stratified_negation(ast)
     return ast
 
 
@@ -472,6 +473,58 @@ def _validate_tuplesets_direct(ast) -> None:
                             raise ValueError(
                                 f'{typ}#{rel}: tupleset may not restrict to a userset, '
                                 f'but {typ}#{node.tupleset_rel} allows {r_type}#{r_pred}')
+
+def _validate_stratified_negation(ast) -> None:
+    """Independent twin of ``zanzibar_utils_v1.py::_validate_stratified_negation`` (TK114,
+    2026-10-04), NOT shared with it (independence contract above). Refuses any relation
+    that reaches itself along a path with at least one step taken inside a ``but not``
+    subtrahend. A step is a computed ref, a tupleset, a TTU target on a type the tupleset
+    admits, or a ``[T#p]`` restriction. Computed here as a closure over (from, to, negated)
+    triples, not as the product's per-edge search."""
+    steps = set()
+
+    def collect(key, expr, negated):
+        typ = key[0]
+        if isinstance(expr, ODirect):
+            for (r_type, r_pred, _wild) in expr.restrictions:
+                if r_pred != '...':
+                    steps.add((key, (r_type, r_pred), negated))
+        elif isinstance(expr, OComputed):
+            steps.add((key, (typ, expr.relation), negated))
+        elif isinstance(expr, OTTU):
+            steps.add((key, (typ, expr.tupleset_rel), negated))
+            ts = ast.get((typ, expr.tupleset_rel))
+            for node in (_oracle_nodes(ts) if ts is not None else ()):
+                if isinstance(node, ODirect):
+                    for (r_type, _r_pred, _wild) in node.restrictions:
+                        if (r_type, expr.target_rel) in ast:
+                            steps.add((key, (r_type, expr.target_rel), negated))
+        elif isinstance(expr, (OUnion, OIntersection)):
+            for c in expr.children:
+                collect(key, c, negated)
+        elif isinstance(expr, OExclusion):
+            collect(key, expr.base, negated)
+            collect(key, expr.subtract, True)
+
+    for key, expr in ast.items():
+        collect(key, expr, False)
+    paths = set(steps)
+    while True:
+        joined = {(a, d, n1 or n2) for (a, b, n1) in paths for (c, d, n2) in steps if b == c}
+        if joined <= paths:
+            break
+        paths |= joined
+    for (a, b, negated) in sorted(paths):
+        # REFUSED SHAPE (TK114): a relation reaching itself through a `but not` subtrahend,
+        # e.g. `define viewer: [user] but not viewer from parent`. WHY: with `doc:a parent
+        # doc:a` that reads `viewer = not viewer`, which has no answer; this evaluator's
+        # provisional-False recursion guard (`Oracle.check`) used to return one anyway.
+        # INSTEAD: subtract a relation that does not depend on the one being defined --
+        # `define blocked: [user] or blocked from parent` + `define viewer: [user] but not
+        # blocked`.
+        if a == b and negated:
+            raise ValueError(f'{a[0]}#{a[1]} is defined in terms of its own negation '
+                             f'(non-stratifiable "but not")')
 
 
 # ---------------------------------------------------------------------------

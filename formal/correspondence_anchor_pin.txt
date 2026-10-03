@@ -443,7 +443,8 @@ tests/oracle.py::Oracle.check.ttu_leaf	py:function	2a2fc3f21840b1a6
 tests/oracle.py::Oracle.check.universe	py:function	af119131d1341d6b
 tests/oracle.py::OracleTuple	py:class-shell	4b09b15c1f3a6fec
 tests/oracle.py::_validate_declared_name	py:function	61cdc001297d3535
-tests/oracle.py::parse_schema_ast	py:function	01206ce38fb6394b
+tests/oracle.py::parse_schema_ast	py:function	4a10e961af585de1
+tests/oracle.py::parse_schema_ast_unchecked	py:function	886eb033bae29107
 tests/parity.py::ParityEngine	py:class-shell	54541d2d5a0174b3
 tests/test_bulk_build.py::_residues_proj	py:function	7038503301696965
 tests/test_hypothesis.py::test_add_then_remove_restores_row_multiset	py:function	3d68eb3cf07533f6
@@ -497,7 +498,7 @@ zanzibar_utils_v1.py::compute_taint	py:function	c01980829eb94c8d
 zanzibar_utils_v1.py::derive_schema_info	py:function	dc5639e082a4c0cc
 zanzibar_utils_v1.py::graph_admission_report	py:function	3173aa0431ef46ea
 zanzibar_utils_v1.py::is_valid_identifier	py:function	d5b05d5a22e3f9ec
-zanzibar_utils_v1.py::parse_schema_ast	py:function	a2adba9e9b249d57
+zanzibar_utils_v1.py::parse_schema_ast	py:function	fbdaf6bb125cf23c
 zanzibar_utils_v1.py::replace_relation	py:function	9ad08468cd5e5c8a
 zanzibar_utils_v1.py::w4_fragment_report	py:function	f62270ba6df64e22
 zanzibar_utils_v1.py::wildcard_userset_restriction_shapes	py:function	6e05d44c7ea9d53e

@@ -920,6 +920,7 @@ def parse_schema_ast(schema: str) -> SchemaAST:
     ast = _parse_schema_ast_unchecked(schema)
     _validate_ast_consistency(ast)
     _validate_tuplesets_direct(ast)
+    _validate_stratified_negation(ast)
     return ast
 
 
@@ -1079,7 +1080,9 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
     * No cycle of computed / TTU-tupleset references, through any operator. Recursion
       through stored tuples (nested groups ``[group#member]``, folders ``x from parent``,
       OpenFGA's self-referential boolean flag) makes no such edge and stays legal. A
-      DERIVED cycle through a TTU target is not caught here; `_stratify` refuses it
+      DERIVED cycle through a TTU target or a userset restriction is not caught here: if a
+      step on it is inside a ``but not`` subtrahend, `_validate_stratified_negation`
+      refuses it at parse (TK114); otherwise `_stratify` refuses it on the graph only
       (`CyclicDerivedDependency`).
 
     Every dangling-reference message contains ``undeclared relation`` and every cycle
@@ -1235,6 +1238,94 @@ def _validate_tuplesets_direct(ast: SchemaAST) -> None:
                                 f'the #{r.predicate}. Use [{r.type}{star}] for the link '
                                 f'and "{r.predicate} from {ttu.tupleset_rel}" where the '
                                 f'userset itself is meant (OpenFGA rule)')
+
+
+def _validate_stratified_negation(ast: SchemaAST) -> None:
+    """No relation may depend on itself through a ``but not`` subtrahend (TK114, decided
+    2026-10-04): classical stratified negation. Map:
+    `docs/tk114-stratified-negation-2026-10-04.md`.
+
+    The dependency graph runs ``(type, relation) -> (type, relation)`` along a computed
+    ref, a TTU's tupleset, a TTU's target on every type the tupleset admits, and a userset
+    restriction ``[T#p]`` / ``[T:*#p]``. An edge is NEGATIVE when its node sits anywhere
+    inside the subtract of a ``but not``, at any depth. A schema with a cycle through a
+    negative edge is refused. Positive recursion (``viewer: [user] or viewer from parent``,
+    ``member: [user, group#member] but not banned``) stays legal; the graph still refuses
+    a DERIVED one at compile (`_stratify`).
+
+    Runs after `_validate_ast_consistency` and `_validate_tuplesets_direct`, so every
+    reference is declared. Every message contains ``recursion through negation``. The
+    oracle carries an independent twin (`tests/oracle.py::_validate_stratified_negation`)."""
+    edges: dict[tuple[str, str], list[tuple[tuple[str, str], bool]]] = {k: [] for k in ast}
+    for (object_type, relation), expr in ast.items():
+        out = edges[(object_type, relation)]
+
+        def walk(e: Expr, neg: bool) -> None:
+            if isinstance(e, Direct):
+                for r in e.restrictions:
+                    if r.predicate != '...':
+                        out.append(((r.type, r.predicate), neg))
+            elif isinstance(e, Computed):
+                out.append(((object_type, e.relation), neg))
+            elif isinstance(e, TTU):
+                ts_key = (object_type, e.tupleset_rel)
+                out.append((ts_key, neg))
+                for d in _iter_directs(ast.get(ts_key, Direct(()))):
+                    for r in d.restrictions:
+                        if (r.type, e.target_rel) in ast:
+                            out.append(((r.type, e.target_rel), neg))
+            elif isinstance(e, (Union, Intersection)):
+                for c in e.children:
+                    walk(c, neg)
+            elif isinstance(e, Exclusion):
+                walk(e.base, neg)
+                walk(e.subtract, True)
+
+        walk(expr, False)
+
+    for src in sorted(edges):
+        for dst, neg in edges[src]:
+            if not neg:
+                continue
+            # Breadth-first from the negative edge's head back to its tail.
+            parent: dict[tuple[str, str], tuple[str, str] | None] = {dst: None}
+            frontier = [dst]
+            while frontier and src not in parent:
+                nxt = []
+                for k in frontier:
+                    for k2, _neg in edges.get(k, ()):
+                        if k2 not in parent:
+                            parent[k2] = k
+                            nxt.append(k2)
+                frontier = nxt
+            if src in parent:
+                # REFUSED SHAPE (TK114): a relation that depends on itself through a
+                # ``but not`` subtrahend -- ``define viewer: [user] but not viewer from
+                # parent``, or ``member: [user] but not blocked`` with
+                # ``blocked: [group#member]``.
+                # WHY: such a schema has no fixpoint on some data (``doc:a parent doc:a``
+                # makes ``viewer = not viewer``) and several on other data, so there is no
+                # answer for the backends to agree on. The set engine and the oracle used to
+                # answer anyway, identically, because both seed in-progress recursion with
+                # False; their answers were not models of the schema. The graph refused it
+                # at compile (`CyclicDerivedDependency`).
+                # INSTEAD: subtract a relation that does not depend on the one being
+                # defined, and put the recursion in it:
+                #     define blocked: [user] or blocked from parent
+                #     define viewer: [user] but not blocked
+                # A nested ``x but not (y but not z)`` is ``(x but not y) or (x and z)``,
+                # which is positive in ``z``.
+                path = [src]
+                k = src
+                while k != dst:
+                    k = parent[k]
+                    path.append(k)
+                cycle = [src] + path[::-1]
+                raise ValueError(
+                    'recursion through negation: relations depend on themselves through a '
+                    '"but not" subtrahend, which has no single meaning: '
+                    + ' -> '.join(f'{t}#{r}' for t, r in cycle)
+                    + f' (the step out of {src[0]}#{src[1]} is negative)')
 
 
 def _iter_directs(expr: Expr):
@@ -2559,9 +2650,12 @@ def _stratify(plans: dict) -> list[list[tuple[str, str]]]:
         # ``define member: [user, group#member] but not banned``. The ASK-1 cycle check
         # misses it: a userset restriction or TTU target makes no reference edge.
         # WHY: a derived relation that depends on itself gets no stratum, so the per-stratum
-        # cascade cannot order it; through ``but not`` it is also recursion through
-        # negation, which has no single stratified meaning. GRAPH-only: the set engine
-        # degrades past it. INSTEAD: recurse on a plain relation, apply the boolean on top:
+        # cascade cannot order it. GRAPH-only: the set engine evaluates it as a least
+        # fixpoint. From a checked parse the recursion here is POSITIVE (the example's
+        # ``group#member`` is in the base): recursion through a ``but not`` subtrahend is
+        # refused at parse since TK114 (`_validate_stratified_negation`), so only a
+        # hand-built AST reaches this with one. INSTEAD: recurse on a plain relation, apply
+        # the boolean on top:
         #     define member_base: [user, group#member_base]
         #     define member: member_base but not banned
         # NOT equivalent: ``banned`` is subtracted once, at the queried group, not at every
@@ -2741,6 +2835,7 @@ def parse_openfga_json(model) -> SchemaAST:
     _validate_ast_references(ast)
     _validate_ast_consistency(ast)
     _validate_tuplesets_direct(ast)
+    _validate_stratified_negation(ast)
     return ast
 
 

@@ -2,7 +2,7 @@
 id: TK115
 title: JSON front-end fidelity: openfga_json_to_dsl can render a different schema than the JSON declared
 brief: openfga_json_to_dsl pastes names unescaped; refuse on round-trip mismatch, dup keys, bad wildcard
-pri: NEXT
+pri: NOW
 size: M
 deps: []
 related: [P23]
@@ -11,8 +11,8 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-10-03e
-updated: 2026-10-03e
+moved: 2026-10-04
+updated: 2026-10-04
 closed:
 ---
 

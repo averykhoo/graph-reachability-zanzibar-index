@@ -32,6 +32,61 @@ from here.
 
 ---
 
+## 2026-10-04 — TK114 CLOSED: recursion through `but not` is a parse refusal in both parsers; TK115 to NOW
+
+rows: TK114 (NOW -> CLOSED), TK115 (NEXT -> NOW)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 36 warning(s)`
+
+`read: board + note`
+
+The user said "do the next task". The board's `NOW` row was `TK114`, the second of the
+user's 2026-10-03c `NEXT` picks.
+
+**Re-probed first, and the class is WIDER than the row.** The row's witness reproduces:
+`viewer: [user] but not viewer from parent` parses in both parsers, the graph refuses it at
+compile, and the set engine and oracle both answer `True` on `doc:a parent doc:a`, which is not
+a model. A negative cycle through a USERSET RESTRICTION does the same
+(`member: [user] but not blocked` + `blocked: [group#member]`, answer `[True, True]` for
+`member = not member`). So do a computed ref plus a TTU, and a cross-type cycle. Probe table:
+[`docs/tk114-stratified-negation-2026-10-04.md`](../tk114-stratified-negation-2026-10-04.md)
+sec 1 (now FROZEN).
+
+**Decision (the session's; CLAUDE.md "Who decides").** Classical stratified negation. Both
+checked parsers refuse a cycle in the relation dependency graph through a step anywhere inside
+a `but not` subtrahend. The steps are a computed ref, a TTU tupleset, a TTU target per admitted
+parent type, and `[T#p]` / `[T:*#p]`. Refusing at any depth (not only odd counts) also
+refuses the double negation, which has a least fixpoint. Nothing pins which fixpoint an
+evaluator picks, and `(x but not y) or (x and z)` rewrites it at no cost. Positive recursion
+stays legal: the graph still refuses a derived one at compile.
+
+**Landed:** `zanzibar_utils_v1.py::_validate_stratified_negation`, called from the DSL and
+JSON front ends. Its independent twin is `tests/oracle.py::_validate_stratified_negation`,
+which uses a path-closure algorithm, not the product's search. The pin is
+`tests/test_tk114_stratified_negation.py`. It has ten refused shapes in each parser and five
+accept controls, which include the INSTEAD rewrites. It checks that `SetEngine` construction
+and the JSON front end refuse, and runs the INSTEAD rewrite 4-way through `ParityEngine`.
+Sabotage: 11 mutations, all RED, with an M0 control. The first run found S9 (an oracle
+closure that joins only once) INERT, because every case closed in two steps or fewer, so a
+three-step case was added (map sec 4). `MIN_HEADERS` 34/16. Corrected "rejected upstream" in
+`formal/ARCHITECTURE.md` (twice) and `formal/FINAL_REVIEW.md`, and added a dated note to
+`formal/SEMANTICS.md` sec 4.4. Updated the `_stratify` and `_validate_ast_consistency`
+comments. Regenerated the `FINAL_REVIEW.md` counts block. The anchor content pin went red
+on both `parse_schema_ast` bodies, as it should. Re-reading the citing rows found
+`CORRESPONDENCE.md`'s `encode.py` row already stale: it named the checked oracle parse, but
+the encoder calls `parse_schema_ast_unchecked` and so bypasses every checked-parse refusal.
+It got a dated correction, then `claim_rot.py --generate` was run.
+
+**Side finding, not acted on (map sec 1b).** On a schema the graph compiles, the set engine
+refuses a parent cycle at write admission. A standalone `SetEngine` whose graph compile
+FAILED has no ruleset and runs no such check, which is how the paradox data got written. For
+positive derived recursion, which stays legal, data cycles are still admitted there and
+answered with the least fixpoint. That is not a wrong answer, but it is the only place a
+parent cycle is writable.
+
+Not added to `tests/genswarm.py::REJECTION_WITNESSES`: no generator reaches the shape, and an
+unexercised family is red there.
+
 ## 2026-10-03e — P23 CLOSED (+TK109, TK105): declared names must be writable; both parsers refuse the same schemas
 
 rows: P23 (NOW -> CLOSED), TK109 (CLOSED), TK105 (CLOSED), TK114 (NEXT -> NOW, comment), TK115 (comment)

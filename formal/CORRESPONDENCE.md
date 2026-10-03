@@ -209,7 +209,7 @@ per layer instead:
 |---|---|---|
 | **evaluation** — Lean `sem` / `tests/oracle.py` / `SetEngine` / `WildcardIndex` | **YES** | four separately written evaluators sharing no code; this is the property the differentials actually rest on |
 | **query grid** — which queries get asked | **YES, since 2026-07-27** | `formal/conformance/grid.py` now derives declared targets from `zanzibar_utils_v1.py::parse_schema_ast` (the PRODUCTION parser), not the oracle's. Pinned by `formal/conformance/test_grid_independence.py` (incl. a sabotage test: patching the oracle's parser must not move a grid) |
-| **schema reading into Lean** — `formal/conformance/encode.py` | **NO** | `formal/conformance/encode.py::schema_to_json` still parses via `tests/oracle.py::parse_schema_ast`, so the Lean corner is fed by the ORACLE's parse. `encode.py`'s own docstring is honest about it; this is the residual |
+| **schema reading into Lean** — `formal/conformance/encode.py` | **NO** | `formal/conformance/encode.py::schema_to_json` still parses via `tests/oracle.py::parse_schema_ast`, so the Lean corner is fed by the ORACLE's parse. `encode.py`'s own docstring is honest about it; this is the residual. ⚠ Corrected 2026-10-04 (`TK114`): the call is `tests/oracle.py::parse_schema_ast_unchecked`, NOT the checked parse, so the encoder deliberately bypasses every checked-parse refusal (ASK-1, `TK106`, `TK108`, and `TK114`'s recursion through `but not`); Lean decides admission for itself |
 
 Why the grid half mattered more than it looks: with a shared parse, a misparse
 propagated into the Lean corner **and simultaneously deleted the query that
