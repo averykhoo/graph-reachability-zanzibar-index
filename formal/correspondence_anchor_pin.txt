@@ -113,6 +113,7 @@ GraphIndex/Exec.lean::graphRunOps_store	lean:theorem-statement	7446169a1d092259
 GraphIndex/Exec.lean::graphRun_check_eq_sem	lean:theorem-statement	76f3f7da0099e7f1
 GraphIndex/Exec.lean::graphRun_reached	lean:theorem-statement	724e9837f9c5dc9c
 GraphIndex/Exec.lean::removeGateB	lean:def	dbb2653fe4fb6d17
+GraphIndex/Exec.lean::storageLeaves	lean:def	f94fa9ffae4c6db4
 GraphIndex/Fence.lean::GraphModel.checkPublic	lean:def	ad5618b6b93a5f37
 GraphIndex/FragmentDecide.lean::w4FragmentB	lean:def	05f9907afc2f5473
 GraphIndex/Leaf.lean::GraphState.writeDirectRaw	lean:def	fbfa1ed2e69d5d53
@@ -136,6 +137,10 @@ GraphIndex/Leaf.lean::rawWriteTuples	lean:def	a5094c466e11995d
 GraphIndex/Leaf.lean::splitPure	lean:def	7a03983da074ce1f
 GraphIndex/Leaf.lean::unionAll	lean:def	6fb0f0013bbbd55d
 GraphIndex/Leaf.lean::unionSpineLeaves	lean:def	c8a74b16633264d4
+GraphIndex/LeafBridge.lean::LeafBridgeWitness.leafBridge_corpus	lean:theorem-statement	6c53a465b524ab62
+GraphIndex/LeafBridge.lean::leaf_probe_bridge	lean:theorem-statement	edd3e9c35503a08c
+GraphIndex/LeafBridge.lean::mem_edges_storageLeaf_iff	lean:theorem-statement	25274019af1d5c83
+GraphIndex/LeafBridge.lean::no_userset_leaf_in_fragment	lean:theorem-statement	e6f5a1304b5807d3
 GraphIndex/LeafRules.lean::GraphState.writeRulesRaw	lean:def	ac5f5105cfd231d4
 GraphIndex/LeafRules.lean::LeafScope	lean:structure	719def31a1abf93d
 GraphIndex/LeafRules.lean::NoLeafSubjects	lean:def	7895aa0b6d325296

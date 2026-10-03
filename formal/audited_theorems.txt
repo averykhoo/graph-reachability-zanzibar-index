@@ -68,6 +68,14 @@ GraphModel.probeDerived_uposOnly
 GraphModel.probeNonDerived_iff
 GraphState.writeDirectRaw
 GraphState.writeRulesRaw
+LeafBridge.leafPred_inj
+LeafBridge.mem_edges_storageLeaf_iff
+LeafBridge.no_rule_targets_storageLeaf
+LeafBridge.storageLeaf_member
+LeafBridgeWitness.leafBridge_applies4
+LeafBridgeWitness.leafBridge_corpus
+LeafBridgeWitness.leafBridge_corpus_spec
+LeafBridgeWitness.sd_storageLeaves
 LeafRuleWitness.lrA_rules
 LeafRuleWitness.lrN_rules
 LeafRuleWitness.lrStP_rules
@@ -372,6 +380,7 @@ leafPred_ne_relName
 leafPublic_leafPred
 leafRewrites
 leafRewrites_eq_nil
+leaf_probe_bridge
 lookD_rkL
 lookupAll_iff
 lookup_of_mem
@@ -400,6 +409,7 @@ no_ghost_grant_w3c
 no_ghost_grant_w3d
 no_ghost_grant_w3d2
 no_rewrite_outputs_tupleset
+no_userset_leaf_in_fragment
 nodeEnc_wAllNode
 nodeEnc_wAnyNode
 not_isLeafPred_outRel_of_mem_schemaRewrites
@@ -622,6 +632,7 @@ shadow_reach_agree
 splitPure
 stepN_rank_ge
 step_congr
+storageLeaf_restr_bare
 storeDeclared_of_storeValid
 storeDeclared_of_validRules
 storeDeclared_of_validRulesD

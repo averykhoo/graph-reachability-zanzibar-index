@@ -323,6 +323,17 @@ HEADLINE = [
     "Zanzibar.W4WitnessDirect.public_grant_survives_fence",
     "Zanzibar.W4WitnessDirect.correct_applies_nonfence",
     "Zanzibar.W4WitnessDirect.w3d2E_correct_applies_nonfence",
+    # `P4` (2026-10-03) -- the leaf-probe <-> `directLeaf` bridge, general form
+    # (`GraphIndex/LeafBridge.lean`).  Pinned because the plausible weakening -- probing the
+    # PUBLIC name `R` instead of `leafPred R i` -- reddened only inside the proof under
+    # sabotage S-M2, and Lean error-recovers a failed declaration at its stated type, so no
+    # downstream use could see it.  `leafBridge_corpus` is the content witness decided off the
+    # primitives; `leafBridge_applies4` says the premises are inhabited at the corpus store;
+    # `no_userset_leaf_in_fragment` is the scope fact behind ranging over `.storage` only.
+    "Zanzibar.leaf_probe_bridge",
+    "Zanzibar.no_userset_leaf_in_fragment",
+    "Zanzibar.LeafBridgeWitness.leafBridge_applies4",
+    "Zanzibar.LeafBridgeWitness.leafBridge_corpus",
 ]
 
 DECL_RE = re.compile(

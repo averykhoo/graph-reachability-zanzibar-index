@@ -32,6 +32,7 @@ ambient:formal/lean/ZanzibarProofs/GraphIndex/CascadeStrata.lean	open scoped Lis
 ambient:formal/lean/ZanzibarProofs/GraphIndex/CascadeStrataAssemble.lean	open GraphModel
 ambient:formal/lean/ZanzibarProofs/GraphIndex/CascadeStrataEnum.lean	open GraphModel
 ambient:formal/lean/ZanzibarProofs/GraphIndex/Closure.lean	variable {V : Type} [DecidableEq V] [Fintype V]
+ambient:formal/lean/ZanzibarProofs/GraphIndex/LeafBridge.lean	open LeafBridge ; open W4WitnessDirect
 ambient:formal/lean/ZanzibarProofs/GraphIndex/LeafRules.lean	variable {S : Schema}
 ambient:formal/lean/ZanzibarProofs/SetEngine/Correct.lean	open MemberSet SetEngineModel ; variable {s : SubjectRef}
 ambient:formal/lean/ZanzibarProofs/SetEngine/Eval.lean	open MemberSet
@@ -104,6 +105,10 @@ def:Zanzibar.GraphState.writeLoggedRules	[def] def GraphState.writeLoggedRules (
 def:Zanzibar.HasDerivedCycle	[def] def HasDerivedCycle (S : Schema) : Prop := ∃ k, Reaches (depEdges S) k k
 def:Zanzibar.Inv	[structure] fields=(schemaEq nodeEnc edgesClosed acyclic negStarCovered negEdgeFree uposEdgeFree uposNegDisjoint) structure Inv (S : Schema) (σ : GraphState) : Prop where schemaEq : σ.schema = S nodeEnc : ∀ k ∈ σ.nodes, (k.name = STAR ↔ k.variant ≠ Variant.plain) edgesClosed : ∀ e ∈ σ.edges, e.1 ∈ σ.nodes ∧ e.2 ∈ σ.nodes acyclic : ∀ v, ¬ NReaches σ.edges v v negStarCovered : ∀ k r res, σ.residue k r = some res → ∀ n ∈ res.neg, res.stars.contains n.shape = true negEdgeFree : ∀ k r res, σ.residue k r = some res → ∀ n ∈ res.neg, ¬ NReaches σ.edges (subjNode n) k uposEdgeFree : ∀ k r res, σ.residue k r = some res → ∀ n ∈ res.upos, ¬ NReaches σ.edges (subjNode n) k uposNegDisjoint : ∀ k r res, σ.residue k r = some res → ∀ n ∈ res.upos, res.neg.contains n = false
 def:Zanzibar.Key	[abbrev] abbrev Key := String × String
+def:Zanzibar.LeafBridgeWitness.alice	[def] def alice : SubjectRef := ⟨"user", "alice", BARE⟩
+def:Zanzibar.LeafBridgeWitness.bob	[def] def bob : SubjectRef := ⟨"user", "bob", BARE⟩
+def:Zanzibar.LeafBridgeWitness.carol	[def] def carol : SubjectRef := ⟨"user", "carol", BARE⟩
+def:Zanzibar.LeafBridgeWitness.d1	[def] def d1 : ObjectRef := ⟨"doc", "d1"⟩
 def:Zanzibar.MemberSet	[structure] fields=(pos stars neg) structure MemberSet (Id : Type) where pos : Finset Id stars : Finset Shape neg : Finset Id deriving DecidableEq
 def:Zanzibar.MemberSet.empty	[def] def empty : MemberSet Id := { pos := ∅, stars := ∅, neg := ∅ }
 def:Zanzibar.MemberSet.ext	[def] def ext (pop : Shape → Finset Id) (m : MemberSet Id) : Finset Id := m.pos ∪ (starpop pop m.stars \ m.neg)
@@ -281,6 +286,7 @@ def:Zanzibar.semAux	[def] def semAux (S : Schema) (subject : SubjectRef) (T : St
 def:Zanzibar.splitPure	[def] def splitPure : Expr → List Restriction × List Expr | .direct rs => (rs, []) | .union a b => let l := splitPure a let r := splitPure b (l.1 ++ r.1, l.2 ++ r.2) | e => ([], [e])
 def:Zanzibar.starSubj	[def] def starSubj (sh : Shape) : SubjectRef := ⟨sh.1, STAR, sh.2⟩
 def:Zanzibar.step	[def] def step (S : Schema) (subject : SubjectRef) (T : Store) (q : Query) (rec : Rec) (otype oname rel : String) : Bool := match S.lookup (otype, rel) with | none => false | some e => evalE rec subject T q otype oname rel e
+def:Zanzibar.storageLeaves	[def] def storageLeaves (S : Schema) (ty R : String) : List (Nat × List Restriction) := match S.lookup (ty, R) with | none => [] | some e => (persistedLeaves S ty e).zipIdx.filterMap fun pi => match pi.1 with | .storage rs => some (pi.2, rs) | _ => none
 def:Zanzibar.storeValidRulesB	[def] def storeValidRulesB (S : Schema) (T : Store) : Bool := T.all fun t => match S.lookup (t.object.type, t.relation) with | some e => (exprDirects e).any (fun rs => restrictionMatches rs t) | none => false
 def:Zanzibar.storedDirectSubjects	[def] def storedDirectSubjects (T : Store) (dt on R : String) (e : Expr) : List SubjectRef := ((exprDirectsAll e).flatMap (fun rs => (grantsOf T rs dt on R).map (·.subject))).filter (fun s => s.name != STAR)
 def:Zanzibar.stratify	[def] def stratify (S : Schema) : Option (List (List Key)) := kahn (depEdges S) (taintedKeys S).length (taintedKeys S) []

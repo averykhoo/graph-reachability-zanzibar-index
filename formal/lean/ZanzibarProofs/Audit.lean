@@ -2,6 +2,7 @@ import ZanzibarProofs.Equiv
 import ZanzibarProofs.FullScope
 import ZanzibarProofs.GraphIndex.CascadeStrataInv
 import ZanzibarProofs.GraphIndex.Exec
+import ZanzibarProofs.GraphIndex.LeafBridge
 import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.Spec.FuelStable
@@ -2177,6 +2178,26 @@ namespace Zanzibar
 #print axioms P4Bridge.bridge_needs_the_leaf_name_Sw
 #print axioms P4Bridge.bridge_needs_the_leaf_name_SwU
 #print axioms P4Bridge.bridge_is_per_leaf_SwF
+
+-- ★ `P4` (2026-10-03) — THE LEAF-PROBE BRIDGE AS A THEOREM (`GraphIndex/LeafBridge.lean`).
+-- `leaf_probe_bridge`: at every `ReachedBy` state under the two headline bundles, the probe at a
+-- storage leaf's minted node equals `directLeaf` over the leaf's merged restrictions at the
+-- public relation (every subject, every `rec`/`q`, no drain). Its six `P4Bridge` instances above
+-- stay. `no_userset_leaf_in_fragment` is the scope fact: no `.userset` leaf exists in-fragment.
+-- Witnesses at `Sd`/`Td4`: `leafBridge_applies4` (premises inhabited) and `leafBridge_corpus`
+-- (decided off the primitives; its public-name row refutes the "probe at `R`" mis-statement).
+-- Standard axioms only:
+#print axioms leaf_probe_bridge
+#print axioms LeafBridge.mem_edges_storageLeaf_iff
+#print axioms storageLeaf_restr_bare
+#print axioms no_userset_leaf_in_fragment
+#print axioms LeafBridge.no_rule_targets_storageLeaf
+#print axioms LeafBridge.storageLeaf_member
+#print axioms LeafBridge.leafPred_inj
+#print axioms LeafBridgeWitness.sd_storageLeaves
+#print axioms LeafBridgeWitness.leafBridge_applies4
+#print axioms LeafBridgeWitness.leafBridge_corpus
+#print axioms LeafBridgeWitness.leafBridge_corpus_spec
 
 -- ★ `DW-1` (2026-09-23d) — `W4Fragment` IS DECIDABLE (`GraphIndex/FragmentDecide.lean`).
 -- `w4FragmentB_iff` is EXACT in both directions: soundness ("accepted ⇒ the headline

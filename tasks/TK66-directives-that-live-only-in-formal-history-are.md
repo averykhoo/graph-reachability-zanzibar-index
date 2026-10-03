@@ -80,7 +80,7 @@ were dropped as generic house rules already in `CLAUDE.md` or as past-tense reco
 ## Read first
 
 - [`docs/README.md`](../docs/README.md) — the one-home rule, before choosing any form
-- `tasks/P4-leg-7-4b-leaf-probe-directleaf-bridge.md` — the worked instance
+- `tasks/closed/P4-leg-7-4b-leaf-probe-directleaf-bridge.md` (closed 2026-10-03d) — the worked instance
 - [`docs/history/tasktool-scratch-archive-2026-09-07.md`](../docs/history/tasktool-scratch-archive-2026-09-07.md) section 5 item 9 — where `TK63` came from
 
 ## Log

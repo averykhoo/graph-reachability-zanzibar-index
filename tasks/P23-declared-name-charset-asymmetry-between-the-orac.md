@@ -2,7 +2,7 @@
 id: P23
 title: parser refusal parity: both parsers refuse the same schemas (children TK109, TK105)
 brief: ONE task with TK109+TK105: refuse bad declared names in both parsers; oracle twins of 7 product refusals
-pri: NEXT
+pri: NOW
 size: M
 deps: []
 related: [TK55, TK109, TK105, TK115]
@@ -11,8 +11,8 @@ labels: [infra]
 source: board
 source_hash: c7f66db90464
 created: 2026-09-06b
-moved: 2026-10-03c
-updated: 2026-10-03c
+moved: 2026-10-03d
+updated: 2026-10-03d
 closed:
 ---
 
@@ -45,3 +45,7 @@ P10 re-run (2026-09-27d): TK115 (JSON front-end fidelity) needs a declared-name 
 PROMOTED LATER -> NEXT and made the PARENT of `TK109` and `TK105` (user decision 2026-10-03c: "link them all together ... we'll handle all 3 together as one task"). Size S -> M for the bundle. Why bundled: all three are the same fix shape -- a `_validate_*` refusal in `zanzibar_utils_v1.py` and its twin in `tests/oracle.py`, each with a REFUSED SHAPE / WHY / INSTEAD block, pinned both-refuse like `tests/test_reg_empty_relation_name.py` (`TK55`). Why P23 is the parent: it is the only one of the three that changes the PRODUCT parser and has a shipped consequence; `TK109`/`TK105` are oracle-only twins of refusals production already has. Also give `parse_openfga_json` the same declared-name contract (`TK115` asks for it).
 Evidence (AGENT-REPORTED 2026-10-03c, skeptic verdict WEAKENED, gap still exists): both parsers accept declared names `*`, `a#b`, non-ASCII, a 257-char name, a tab; with `define *: viewer but not blocked`, `ConnectedStore(sync=True)` refuses a VALID write (`AdmissionRejected "invalid relation '*'"`), and async logs it and stalls the index. No wrong answer reachable (stall is not served since `TK111`). Map: `docs/promote-next-triage-2026-10-03.md` secs 2 and 4. Close the children first (lint: no closed parent with open children).
 NEXT ACTION: re-probe the `*` witness first-hand, then add the charset refusal to both parsers plus the oracle twins listed on `TK109`.
+
+### 2026-10-03d
+
+NEXT -> NOW at the 2026-10-03d write-back: P4 closed and left the board with no NOW (task lint requires exactly one). P23 is the first of the three NEXT rows the user chose on 2026-10-03c (banner order: P23, TK114, TK115). No new ranking decision is implied; the user can redirect.

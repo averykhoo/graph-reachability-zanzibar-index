@@ -508,6 +508,8 @@ in `docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`.
 false — `checkFn` never reads a leaf node and `GraphAdmission.computedRefsNotLeaf` refuses
 the schemas that would make it — so 4b became a `CORRESPONDENCE.md` §7.3 item, landed as six
 `Exec.lean::P4Bridge` witness pins. Map: `docs/p4-leaf-probe-bridge-2026-09-23.md`.
+**2026-10-03d: `P4` CLOSED** — the general statement is `GraphIndex/LeafBridge.lean::leaf_probe_bridge`
+(off the probe, not `evalE`; statement-pinned); detail in `history/PROOF_STATUS.md` 2026-10-03d.
 
 **Optional assurance-widening** is inventoried and ranked in `FINAL_REVIEW.md` §4, and every
 item still open there now carries a task (`P15`–`P19`, plus `P9` and `SD-1`). That

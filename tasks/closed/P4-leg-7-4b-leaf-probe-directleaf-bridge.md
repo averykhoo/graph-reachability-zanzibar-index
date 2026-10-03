@@ -11,9 +11,9 @@ labels: [formal]
 source: board
 source_hash: 015e6dd88c0d
 created: 2026-08-16
-moved: 2026-10-03b
-updated: 2026-10-03b
-closed:
+moved: 2026-10-03d
+updated: 2026-10-03d
+closed: 2026-10-03d
 ---
 
 leg 7 **4b** — leaf-probe ↔ `directLeaf` bridge. Unblocked 2026-09-05b (`P3` closed; deps
@@ -183,3 +183,21 @@ LATER -> NOW by user choice (2026-09-28): the NOW slot needed exactly one row on
 ### 2026-10-02b
 
 NOW -> NEXT by user instruction 2026-10-02b: the three known live correctness bugs (TK111, TK112, TK113) are handled first. Resume P4 after they close.
+
+### 2026-10-03d
+
+2026-10-03d -- CLOSED. The general theorem LANDED: formal/lean/ZanzibarProofs/GraphIndex/LeafBridge.lean::leaf_probe_bridge.
+
+STATEMENT. Under GraphAdmission S T + W4Fragment S T (the headline bundles), ReachedBy sigma S T, isDerived S (o.type, R), (i, rs) in Exec.lean::storageLeaves S o.type R, o.name != STAR:
+  GraphModel.probeNonDerived sigma <s, leafPred R i, o> = directLeaf rec s T q rs o.type o.name R
+for EVERY subject s, rec and q, with NO Drained premise. Phrased off the probe directly (never evalE), the cheap route the 2026-09-23 note named, so computedRefsNotLeaf is not in the way.
+
+PROOF SHAPE. R3 (RemoveOccCount.lean::reachedByW3d2E_untOccCount) already pinned edge counts at leaf targets. New: LeafBridge.no_rule_targets_storageLeaf (leaf rules feed .closure indices only; one index = one leaf; needs LeafBridge.leafPred_inj, i.e. Nat toString injectivity via Nat.ofDigitChars_ten_toDigits) -> mem_edges_storageLeaf_iff (edge into a storage-leaf node <-> a stored tuple on (O, R) admitted by the leaf's merged restrictions). With CascadeStrataSettle.lean::reachedByW3d2_bareNode_no_inedge_d, every path into a storage leaf is one edge. Owed item (2), the .userset kind: OUT OF FRAGMENT, proved: no_userset_leaf_in_fragment.
+
+WITNESSES (Sd/Td4, the headline corpus store). LeafBridgeWitness.leafBridge_applies4 (premises inhabited). LeafBridgeWitness.leafBridge_corpus (driver-built, decided off primitives): leaf probe alice/bob/carol = true/true/false; bob public probe = false; bob checkPublic = false. With leafBridge_corpus_spec (directLeaf bob = true), that refutes the "probe at the public name" mis-statement at a reached state.
+
+SABOTAGE (literal, scratch copy). M0 (flip bob's leaf answer): decide-false at leafBridge_corpus only. M1 (applies4 at index 1): unsolved goals False at the storageLeaves premise only. M2 (statement at public name R): red ONLY inside the proof. A red proof is not a pin, so the statement is byte-pinned (statement_pin.py HEADLINE +4) and the public-name row was added to the corpus witness.
+
+PINS. Audit +11, headline statements +4, definitions +6, anchor pin +5, all additions. CORRESPONDENCE.md sec 7.3, FINAL_REVIEW.md sec 2, formal/HANDOFF.md, formal/history/PROOF_STATUS.md (session 2026-10-03d) updated. Map FROZEN with a dated top correction: docs/p4-leaf-probe-bridge-2026-09-23.md.
+
+Do-not-cancel warning (Traps): honoured by completion, not cancellation. The sigma/sigma0 agreement at leaf-node targets that scope doc :1099 worried about is now supplied directly at storage leaves by this theorem.

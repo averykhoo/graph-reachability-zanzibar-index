@@ -32,10 +32,10 @@ number INTO it over restating it.
 | whole-repo suite | **2656** |
 | differential conformance tests | **1000** across **16** files |
 | gate-tooling conformance tests | **81** across **4** files |
-| audited theorems (`#print axioms` in `Audit.lean`) | **704** |
-| audit identity pin (`audited_theorems.txt`) | **704** |
-| headline definition pin | **274** rows (**265** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **731** (**414** Python + **317** Lean) |
+| audited theorems (`#print axioms` in `Audit.lean`) | **715** |
+| audit identity pin (`audited_theorems.txt`) | **715** |
+| headline definition pin | **280** rows (**270** declarations + ambient) |
+| `CORRESPONDENCE.md` anchors | **736** (**414** Python + **322** Lean) |
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 27 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
@@ -173,6 +173,13 @@ All in `formal/lean/ZanzibarProofs/`, all sorry-free, all axiom-audited.
   drained reached state, W4 scope as above.
 * **T3/T6a/T6b** (`FullScope.lean`): backend equivalence; exclusion
   effectiveness; no ghost grants.
+* **Leaf-probe bridge** (`GraphIndex/LeafBridge.lean::leaf_probe_bridge`, `P4`,
+  2026-10-03): at every reached state, same two bundles, the probe at a storage leaf's
+  minted node `<R>.<i>` equals the spec's `directLeaf` over that leaf's merged
+  restrictions at the public relation `R`. It needs no drain and holds for every subject.
+  This is the read Python's compiled `check_fn` performs for a `PClosureLeaf`
+  (`CORRESPONDENCE.md` §7.3). Scope: `.storage` leaves; no `.userset` leaf exists
+  in-fragment (`no_userset_leaf_in_fragment`).
 * **T4** (`GraphIndex/Closure.lean`): path-count maintenance under edge
   add/remove.
 * **T5** (`Cascade.lean`, `CascadeStrata.lean`): the cascade converges; the

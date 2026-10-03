@@ -78,6 +78,9 @@ import ZanzibarProofs.GraphIndex.RemoveConfluence
 -- Phase 6: the executable graph-model driver + honesty theorems (zcli graph mode)
 import ZanzibarProofs.GraphIndex.Exec
 
+-- P4 (2026-10-03): the leaf-probe <-> directLeaf bridge as a general theorem
+import ZanzibarProofs.GraphIndex.LeafBridge
+
 -- ttuStarFree lift, part (iv) groundwork: the WIDENED predicate + its decision procedure
 import ZanzibarProofs.GraphIndex.TtuStarWide
 

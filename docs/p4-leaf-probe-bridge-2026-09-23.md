@@ -1,14 +1,44 @@
 # `P4` — leg 7 step 4b, the leaf-probe ↔ `directLeaf` bridge: the measured map
 
-**ACTIVE-PLAN, opened 2026-09-23 — the body is provenance, not a living status.** This is
-the execution map for `P4`, goal step 2 (`docs/goal-census-2026-09-22.md`). Every figure is
-as-of `2026-09-23`. Live state is `python scripts/task.py show P4` and
-`python scripts/gate_status.py` — never this file. Corrections append **dated at the top**,
-never edited into the body. Freeze it when `P4` closes.
+**FROZEN 2026-10-03d, at `P4`'s close — provenance, not a living document.** Status lines
+below are as-of-then and several may now be false; live state: `HANDOFF.md` + the session
+ledger. Corrections are appended dated at the top, never edited into the body. (Opened
+2026-09-23 as the ACTIVE-PLAN execution map for `P4`, goal step 2,
+`docs/goal-census-2026-09-22.md`.)
 
 Provenance labels on every claim: **READ** (verified first-hand this session with
 `file::symbol` / `file:line`), **REASONED** (inferred from READ facts), **AGENT** (a
 subagent's report, reconciled but not re-derived), **UNVERIFIED**.
+
+## Correction 2026-10-03d — the general theorem LANDED; "§ What `P4` still owes" is discharged
+
+All READ first-hand this session (Lean `rc=0` on the file, then the gate). No agent was used.
+
+* **Owed item 1, the general theorem:** `formal/lean/ZanzibarProofs/GraphIndex/LeafBridge.lean::leaf_probe_bridge`.
+  It took the "cheap" route below: phrased off the probe and `directLeaf`, never through
+  `evalE`, so `computedRefsNotLeaf` is not in the way. Premises are the two headline
+  bundles, `ReachedBy`, a derived `(o.type, R)`, `(i, rs) ∈ storageLeaves`, and
+  `o.name ≠ STAR`. The conclusion holds for every subject, `rec` and `q`, with no
+  `Drained`. That is stronger than the sketch below, which fixed `rec := graphRec σ s`.
+* **The payload was smaller than "~one file" predicted**, because the declaredness half
+  the sketch expected to restate was not needed. R3
+  (`RemoveOccCount.lean::reachedByW3d2E_untOccCount`) already pins the edge count at
+  leaf targets. What was missing was the content of that count at a STORAGE leaf, and the
+  only non-trivial step there is `LeafBridge.lean::LeafBridge.no_rule_targets_storageLeaf`:
+  leaf rules (`LeafRules.lean::keyLeafRewrites`) target `.closure` indices only, and an
+  index holds one leaf. That needs `leafPred` injectivity, which needs `toString`
+  injectivity on `Nat` (`LeafBridge.leafPred_inj`). The path collapse is P14's
+  `CascadeStrataSettle.lean::reachedByW3d2_bareNode_no_inedge_d`.
+* **Owed item 2, the `.userset` kind:** it does not exist in-fragment,
+  `LeafBridge.lean::no_userset_leaf_in_fragment` (`directArmsBare` forbids the tainted
+  userset restriction that allocates one). The theorem is silent there by SCOPE. A
+  `.userset` bridge needs a fragment admitting userset arms on derived defs. No row is
+  filed for it: `CORRESPONDENCE.md` §7.3 already lists `PDerivedUserset` as netted only.
+* **Sabotage and pins:** `formal/history/PROOF_STATUS.md`, session 2026-10-03d (literal
+  outputs). The plausible mis-statement, probing the PUBLIC name, reddened only inside
+  the proof, so the statement is byte-pinned in `formal/headline_statements.txt`, and
+  `LeafBridgeWitness.leafBridge_corpus` refutes that form at a reached state (bob: leaf
+  probe `true`, public probe `false`, `directLeaf` `true`).
 
 ---
 

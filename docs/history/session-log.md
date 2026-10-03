@@ -32,6 +32,46 @@ from here.
 
 ---
 
+## 2026-10-03d — P4 CLOSED: the leaf-probe ↔ directLeaf bridge is a theorem (LeafBridge.lean); P23 to NOW
+
+rows: P4 (NOW -> CLOSED), P23 (NEXT -> NOW, comment), TK66 (read-first pointer re-pointed to tasks/closed/)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 39 warning(s)`
+
+`read: board + note`
+
+The user said "get the next task done". The board's `NOW` row was `P4`: owed item 1, the
+general theorem behind the six `Exec.lean::P4Bridge` witness pins.
+
+**Landed:** `formal/lean/ZanzibarProofs/GraphIndex/LeafBridge.lean::leaf_probe_bridge`. At
+every `ReachedBy` state, under `GraphAdmission` + `W4Fragment`, the probe at a storage
+leaf's minted node equals `directLeaf` over that leaf's merged restrictions at the public
+relation. It holds for every subject, `rec` and `q`, with no drain. It is phrased off the
+probe and never through `evalE`, so the 2026-09-23 blocker (`computedRefsNotLeaf`) does
+not apply. The proof stands on R3 (`RemoveOccCount.lean::reachedByW3d2E_untOccCount`)
+plus one new fact, `LeafBridge.no_rule_targets_storageLeaf`. That fact needs `leafPred`
+injectivity, hence `Nat` `toString` injectivity. Owed item 2, the `.userset` leaf kind,
+is out of fragment by `no_userset_leaf_in_fragment`. The map is
+[`docs/p4-leaf-probe-bridge-2026-09-23.md`](../p4-leaf-probe-bridge-2026-09-23.md): FROZEN
+with a dated top correction. The formal detail and the literal sabotage outputs are in
+[`formal/history/PROOF_STATUS.md`](../../formal/history/PROOF_STATUS.md), session
+2026-10-03d.
+
+**Sabotage.** Three mutations: M0 on the witness, M1 on the applies index, M2 restating
+the bridge at the public name. Each went red where expected. M2 went red only inside the
+proof, so the statement is now byte-pinned (statement-pin `HEADLINE` +4). The corpus
+witness also gained a row that refutes M2's form at a reached state: at bob, the leaf
+probe is `true` and the public probe is `false`.
+
+**Pins (all additions):** audit names, headline statements, headline definitions,
+`CORRESPONDENCE.md` anchor pin, plus the regenerated `FINAL_REVIEW.md` counts block.
+Docs: `CORRESPONDENCE.md` §7.3, `FINAL_REVIEW.md` §2, `formal/HANDOFF.md`.
+
+**Re-rank:** `P23` NEXT -> NOW, because lint needs exactly one `NOW`. It is the first of
+the user's 2026-10-03c `NEXT` picks, and no new ranking decision is implied.
+
+Still owed: none.
+
 ## 2026-10-03c — LATER triaged for Python-correctness value; P23 (+TK109, TK105), TK114, TK115 to NEXT
 
 rows: P23 (LATER -> NEXT, now PARENT of TK109 + TK105, retitled, size S -> M), TK109 (child of P23), TK105 (child of P23), TK114 (LATER -> NEXT), TK115 (LATER -> NEXT), TK117 (comment), TK110 (comment)

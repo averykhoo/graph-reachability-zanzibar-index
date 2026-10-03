@@ -1268,11 +1268,26 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   `::P4Bridge.bridge_holds_SwF` (two storage leaves, a fan-out) — each pinning the number
   of rows where BOTH sides answered `true`, with `::P4Bridge.bridge_needs_the_leaf_name_Sw`
   and `::P4Bridge.bridge_is_per_leaf_SwF` as the discriminating controls.
-  ⚠ **These are WITNESS pins and the general statement is still owed** — an arm at a
-  concrete witness is defeq-blind to a mutation preserving the witness's value (`TK68`).
+  **★ 2026-10-03 (`P4` closed) — the general statement LANDED.**
+  `GraphIndex/LeafBridge.lean::leaf_probe_bridge` proves the agreement at every
+  `ReachedBy` state under the two headline bundles (`GraphAdmission` + `W4Fragment`). It
+  covers every `(i, rs)` in `GraphIndex/Exec.lean::storageLeaves` and every subject, for
+  all `rec`/`q` and with no drain premise. It is phrased off the probe and `directLeaf`
+  directly, never through `evalE`, which is what `ComputedRefsNotLeaf` would have blocked.
+  The content step is `GraphIndex/LeafBridge.lean::mem_edges_storageLeaf_iff`: R3's edge
+  count at a storage-leaf target is exactly the stored tuples the leaf's merged
+  restrictions admit. The witness pins above stay as instances.
+  `GraphIndex/LeafBridge.lean::LeafBridgeWitness.leafBridge_corpus` is the instance at the
+  headline's own corpus store (`Sd`/`Td4`), decided off the primitives. At bob, who is
+  granted on the arm and banned on the relation, the leaf probe says `true` and the public
+  node says `false`. **Scope:** `.storage` leaves only. The `.userset` leaf kind (Python
+  `LeafFamily.kind = 'userset-storage'`, the `PDerivedUserset` storage half) does not exist
+  inside `W4Fragment`, by
+  `GraphIndex/LeafBridge.lean::no_userset_leaf_in_fragment` (`directArmsBare` forbids the
+  tainted userset restriction that would allocate one). So that kind stays netted only,
+  with the other plan-leaf kinds below.
   The other four plan-leaf kinds (`PDerivedComputed`, `PDerivedUserset`, `PDerivedTTU`,
-  `PDerivedTuplesetTTU`) are untouched by this and remain netted only. `task.py show P4`
-  carries the shape and the residual cost. (Since `TK106`, 2026-09-26,
+  `PDerivedTuplesetTTU`) are untouched by this and remain netted only. (Since `TK106`, 2026-09-26,
   `PDerivedTuplesetTTU` is UNREACHABLE from any checked parse: a tupleset must be
   direct-only, so it is never tainted. It is netted by the refusal and the conformance
   leaf-kind exclusion, not by a differential; removing it is a dead-code follow-up.)

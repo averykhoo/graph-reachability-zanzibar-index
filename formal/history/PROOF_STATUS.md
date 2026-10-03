@@ -15,6 +15,39 @@ HANDOFF.md's "The next task".
 
 ---
 
+## Session 2026-10-03d (**`P4` CLOSED — the leaf-probe ↔ `directLeaf` bridge is a THEOREM, `GraphIndex/LeafBridge.lean::leaf_probe_bridge`**)
+
+**Task:** board `P4` (leg 7 step 4b), the row's owed item (1), the general theorem. Map:
+[`docs/p4-leaf-probe-bridge-2026-09-23.md`](../../docs/p4-leaf-probe-bridge-2026-09-23.md),
+top correction dated 2026-10-03d.
+
+* **Statement.** `ReachedBy σ S T`, `GraphAdmission S T`, `W4Fragment S T`, a derived
+  `(o.type, R)`, `(i, rs) ∈ storageLeaves S o.type R`, and `o.name ≠ STAR` together give
+  `GraphModel.probeNonDerived σ ⟨s, leafPred R i, o⟩ = directLeaf rec s T q rs o.type o.name R`
+  for every `s`, `rec`, `q`. No `Drained`. It is phrased off the probe directly, which is
+  the cheap route the 2026-09-23 map named, so `computedRefsNotLeaf` never enters.
+* **Why it was short.** R3 (`RemoveOccCount.lean::reachedByW3d2E_untOccCount`) already pins
+  the edge count at leaf targets. New content: `LeafBridge.no_rule_targets_storageLeaf`
+  (leaf rules feed `.closure` indices only, and one index holds one leaf, via
+  `LeafBridge.leafPred_inj`, `toString` injectivity through `Nat.ofDigitChars_ten_toDigits`)
+  → `mem_edges_storageLeaf_iff`. With `reachedByW3d2_bareNode_no_inedge_d` (P14's collapse
+  family) every path into a storage leaf is one edge.
+* **Owed item (2), the `.userset` kind:** out of fragment, proved —
+  `no_userset_leaf_in_fragment`. Not a pin owed inside `W4Fragment`.
+* **Sabotage, literal (scratch copy, `lake env lean`, 2026-10-03d).** M0 (flip bob's
+  leaf answer in `leafBridge_corpus`): `Tactic 'decide' proved that the proposition … is
+  false` at that declaration only. M1 alone (`leafBridge_applies4` at index 1):
+  `unsolved goals … ⊢ False` at the `storageLeaves` premise only. M2 (statement probes the
+  PUBLIC name `R`): red ONLY inside `leaf_probe_bridge`'s proof (six errors, lines
+  712–740 of the copy), with `leafBridge_applies4` confounded under it. A red proof is not
+  a pin, so the statement is now in `headline_statements.txt`, and `leafBridge_corpus` carries
+  a fifth component (bob's public-name probe `= false`). With `leafBridge_corpus_spec`
+  (bob `= true`) that is a decided refutation of M2's form at a reached state.
+* **Pins:** audit +11 names, headline statements +4, definitions +6, anchor pin +5.
+  All additions.
+
+---
+
 ## Session 2026-09-23c (**`P14` CLOSED AS ABSORBED — the reach-collapse half was re-proved during 4c-ii/the flip and never recorded; the headlines' dependency closure contains only the `_d` W3d2 collapse family, measured**)
 
 **Task:** board `P14` (leg 7 step 5, reach-collapse half). Map, literal output and controls:
