@@ -29,6 +29,28 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-10-03e — `P23`: a declared name must be writable, and the two parsers refuse the same schemas
+
+**What the spec says.** Identifiers are validated on WRITES (`[A-Za-z0-9_./@+=-]`, 1-256
+chars). Nothing is said about declared names beyond the `.` leaf lock (boolean spec sec 3.2).
+**What the code does since 2026-10-03e:** `parse_schema_ast` and `parse_openfga_json` refuse a
+declared TYPE or RELATION name outside that charset (`zanzibar_utils_v1.py::_validate_declared_name`).
+The oracle's parser refuses the same thing independently
+(`tests/oracle.py::_validate_declared_name`). It also gained twins of six refusals production
+already had: an unrecognised line, a malformed `type` line, a duplicate type, a duplicate
+relation (`TK105`), `.` in a declared name, and an empty restriction entry or list (`TK109`).
+It now picks the line head by whitespace, so `define<TAB>viewer` counts as a define.
+
+**Why.** This closes the 2026-09-06 entry's "deliberately EMPTY-only" remainder. A name like
+`*` could be declared but never written. Through `define *: viewer but not blocked`,
+`ConnectedStore` accepted the schema and then refused a VALID write on `viewer`
+(`AdmissionRejected invalid relation '*'`; PROBED 2026-10-03e). The oracle accepting shapes
+production refuses meant it could not referee them. **Instead:** name it inside the charset.
+`[group#...]` stays legal in both parsers and means `[group]`. Map and census:
+[`docs/p23-parser-refusal-parity-2026-10-03.md`](p23-parser-refusal-parity-2026-10-03.md).
+Pinned by `tests/test_p23_parser_refusal_parity.py`, which includes a seeded differential fuzz
+asserting both parsers give the same verdict and keys.
+
 ## 2026-10-03b — `TK113`: `WildcardIndex.remove_node` refuses any node a write-time rewrite straddles
 
 **What the spec says.** `remove_node` removes a node and all its edges (wildcard spec,

@@ -42,6 +42,7 @@ Performance is irrelevant here; clarity is everything.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from types import EllipsisType
 from typing import NamedTuple
@@ -152,10 +153,10 @@ def _parse_restrictions(bracket: str) -> tuple[tuple[str, str, bool], ...]:
     """Parse ``[user, group#member, user:*, group:*#member]`` into (type, pred, wildcard)."""
     inner = bracket[bracket.index('[') + 1:bracket.rindex(']')]
     out: list[tuple[str, str, bool]] = []
-    for part in inner.split(','):
-        part = part.strip()
-        if not part:
-            continue
+    # An empty entry is NOT skipped (TK109, 2026-10-03e). It used to be, so `[]` parsed as a
+    # Direct nobody can write and `[user,,group#member]` as if the gap were not there, where
+    # production refuses both. Now its type is '' and the charset check below refuses it.
+    for part in (p.strip() for p in inner.split(',')):
         if '#' in part:
             left, pred = part.split('#', 1)
             pred = pred.strip()
@@ -164,15 +165,21 @@ def _parse_restrictions(bracket: str) -> tuple[tuple[str, str, bool], ...]:
             # REFUSED SHAPE (blind-audit S-5), the `.` case only (the rest is syntax): a `.`
             # in a userset predicate, `[doc#viewer.0]`. WHY: `.`-names are the compiler's
             # leaf predicates, a write handle into compiled state. INSTEAD: `[doc#viewer]`.
-            if not pred or '#' in pred or '.' in pred:
+            # The bare sentinel `...` is exempt, as in production's
+            # `_validate_ast_references`: `[group#...]` IS `[group]` (P23, 2026-10-03e).
+            if not pred or '#' in pred or ('.' in pred and pred != '...'):
                 raise ValueError(f'malformed userset restriction {part!r}')
         else:
             left, pred = part, '...'
         left = left.strip()
-        if left.endswith(':*'):
-            out.append((left[:-2].strip(), pred, True))
-        else:
-            out.append((left, pred, False))
+        typ, wild = (left[:-2].strip(), True) if left.endswith(':*') else (left, False)
+        # A restriction's type must be an identifier (P23 twin of the production S-4 check):
+        # `[use r]`, `[user: *]` and `[folder:)]` used to parse as restrictions to a type no
+        # tuple can carry. No twin is needed for the USERSET relation: `[group#mem*er]` names
+        # `group#mem*er`, which no declared name can be, so `_validate_consistency` refuses it.
+        if _NAME_RE.fullmatch(typ) is None:
+            raise ValueError(f'invalid subject type in restriction {part!r}')
+        out.append((typ, pred, wild))
     return tuple(out)
 
 
@@ -273,16 +280,34 @@ def parse_schema_ast_unchecked(text: str) -> dict[tuple[str, str], object]:
     parser would refuse."""
     ast: dict[tuple[str, str], object] = {}
     current_type: str | None = None
+    seen_types: set[str] = set()
     for raw in text.strip().splitlines():
         line = raw.strip()
         if not line or line.startswith('#'):
             continue
-        if line.startswith('type '):
-            current_type = line.split(' ', 1)[1].strip()
-        elif line.startswith('define '):
+        # The line head is the first WHITESPACE-delimited word, as in production: testing
+        # `startswith('type ')` skipped `type<TAB>folder` and `define<TAB>viewer: ...` (P23).
+        words = line.split()
+        head = words[0]
+        if head in ('model', 'schema', 'relations'):
+            continue
+        if head == 'type':
+            if len(words) != 2:
+                raise ValueError(f'malformed type declaration: {line!r}')
+            current_type = words[1]
+            _validate_declared_name('type', current_type)
+            # REFUSED SHAPE (blind-audit S-6, oracle twin added by P23): a second `type X`
+            # block. WHY: merging it silently rewrote the first block's relations.
+            # INSTEAD: put every relation of the type under ONE `type doc` block.
+            if current_type in seen_types:
+                raise ValueError(f'duplicate type declaration: {current_type!r}')
+            seen_types.add(current_type)
+        elif head == 'define':
             if current_type is None:
                 raise ValueError('relation defined outside of a type')
-            name, _, body = line[len('define '):].partition(':')
+            # No colon: the name is then the whole rest of the line (`viewer [user]`, refused
+            # by the charset below) or the body is empty (refused by `_Parser.parse`).
+            name, _, body = line[len('define'):].strip().partition(':')
             name = name.strip()
             # Independent empty-name refusal (TK55, 2026-09-06). The production parser
             # has the same check; this one is NOT shared with it (independence
@@ -295,8 +320,45 @@ def parse_schema_ast_unchecked(text: str) -> dict[tuple[str, str], object]:
                 raise ValueError(
                     f"type {current_type!r}: a declared relation name may not be empty "
                     f"({line!r})")
+            # REFUSED SHAPE (boolean spec sec 3.2, oracle twin added by P23): `.` in a
+            # declared relation name. WHY: `.` names the compiler's leaf predicates
+            # (`<relation>.<index>`), so production refuses it, and an oracle that accepted
+            # it refereed a schema the system never runs. INSTEAD: `define can_view: [user]`.
+            if '.' in name:
+                raise ValueError(
+                    f"relation {name!r}: '.' is reserved for compiled leaf predicates and "
+                    f"cannot appear in a declared relation name")
+            _validate_declared_name('relation', name)
+            # REFUSED SHAPE (TK105, oracle twin added by P23): a second `define viewer` in the
+            # same type. WHY: this parser used to keep the LAST one, so the oracle (and the
+            # conformance encoder, which reads it) tested a different schema than production,
+            # which refuses it. INSTEAD: ONE `define` joining the arms,
+            # `define viewer: [user] or editor`.
+            if (current_type, name) in ast:
+                raise ValueError(f'duplicate relation definition: {current_type}#{name}')
             ast[(current_type, name)] = _Parser(_tokenize(body.strip()), name).parse()
+        else:
+            # silently skipping an unrecognised line lost whole definitions (production's
+            # blind-audit S-3; oracle twin added by P23)
+            raise ValueError(f'unrecognized schema line: {line!r}')
     return ast
+
+
+#: Independent copy of the write identifier charset (`zanzibar_utils_v1.py::IDENTIFIER_CHARSET`),
+#: NOT imported, by the independence contract above. Anchored with `\Z`, never `$`
+#: (`$` also matches before a trailing newline; ZT-P1-1 in production).
+_NAME_RE = re.compile(r'[A-Za-z0-9_./@+=-]{1,256}\Z')
+
+
+def _validate_declared_name(kind: str, name: str) -> None:
+    """Independent twin of `zanzibar_utils_v1.py::_validate_declared_name` (P23, 2026-10-03e)."""
+    # REFUSED SHAPE (P23): a declared type or relation name outside the write identifier
+    # charset (`define *: ...`, `define can view: ...`, `type d#oc`). WHY: no write can land
+    # on it, yet a computed or TTU arm can reach it, and there the backends split (a valid
+    # write was refused through `define *: viewer but not blocked`). INSTEAD: name it inside
+    # `[A-Za-z0-9_/@+=-]` (`.` also allowed in a TYPE name), e.g. `define can_view: [user]`.
+    if _NAME_RE.fullmatch(name) is None:
+        raise ValueError(f'declared {kind} name {name!r}: outside the write identifier charset')
 
 
 def _oracle_nodes(expr):

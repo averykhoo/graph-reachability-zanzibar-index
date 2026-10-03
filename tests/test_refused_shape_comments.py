@@ -63,7 +63,9 @@ HEADER = 'REFUSED SHAPE'
 
 #: Measured 2026-09-27 (`grep -c "REFUSED SHAPE"` per file, after TK108's sweep). Equal to
 #: the live count on purpose: adding a block is free, removing one must be a reviewed edit.
-MIN_HEADERS = {'zanzibar_utils_v1.py': 32, 'tests/oracle.py': 11, 'setengine/engine.py': 1}
+#: Re-measured 2026-10-03e after P23 (+1 product `_validate_declared_name`; +4 oracle: that
+#: twin, duplicate type, duplicate relation, `.` in a declared name): 33 / 15 / 1.
+MIN_HEADERS = {'zanzibar_utils_v1.py': 33, 'tests/oracle.py': 15, 'setengine/engine.py': 1}
 
 
 def _source(rel: str) -> tuple[str, list[str]]:

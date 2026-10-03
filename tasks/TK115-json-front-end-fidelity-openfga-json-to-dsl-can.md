@@ -11,8 +11,8 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-10-03c
-updated: 2026-10-03c
+moved: 2026-10-03e
+updated: 2026-10-03e
 closed:
 ---
 
@@ -61,3 +61,7 @@ mismatches 0` (2026-09-27).
 ### 2026-10-03c
 
 PROMOTED LATER -> NEXT (user decision 2026-10-03c: "is 115 a real bug? if so add that, otherwise add 117"). VERDICT: real bug. Reproduced FIRST-HAND 2026-10-03c: `openfga_json_to_dsl` on a `directly_related_user_types` entry `{"type": "user", "wildcard": false}` returns `define viewer: [user:*]` -- a public grant from a value meaning "not a wildcard". Cause, read first-hand: `zanzibar_utils_v1.py::_json_restrictions` sets `wildcard = 'wildcard' in e and e['wildcard'] is not None`. Honest bounds: canonical OpenFGA emits `"wildcard": {}`, never `false`, so the trigger is malformed input; no product module calls the JSON front end (only tests); and it is upstream of all three evaluators, so it is a fail-open, not a backend divergence. Skeptic (AGENT-REPORTED 2026-10-03c, WEAKENED) also found this row's own fix (1), refuse-unless-round-trip-equal, MISSES the `wildcard: false` and duplicate-key cases (both round-trip equal), so the fix is several refusals: dict-only `wildcard`, `object_pairs_hook` duplicate-key refusal, declared-name contract shared with `P23`, then the round-trip check. Map: `docs/promote-next-triage-2026-10-03.md` sec 4.
+
+### 2026-10-03e
+
+P23 (closed 2026-10-03e) gave parse_openfga_json the declared-name contract: zanzibar_utils_v1.py::_validate_declared_name runs on every JSON type and relation name, so V8 (empty name) and V6 (can view) are now refused, pinned by tests/test_p23_parser_refusal_parity.py::test_json_front_end_refuses_the_same_declared_names. Still open here: duplicate keys (last wins), wildcard false widening, and the round-trip check. A newline-or-colon name (H5) is now refused too, since neither is in the charset; it is not separately pinned.

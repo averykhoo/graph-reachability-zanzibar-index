@@ -32,6 +32,67 @@ from here.
 
 ---
 
+## 2026-10-03e — P23 CLOSED (+TK109, TK105): declared names must be writable; both parsers refuse the same schemas
+
+rows: P23 (NOW -> CLOSED), TK109 (CLOSED), TK105 (CLOSED), TK114 (NEXT -> NOW, comment), TK115 (comment)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 37 warning(s)`
+
+`read: board only`
+
+The user said "get the next task done". The board's `NOW` row was `P23`, bundled with
+`TK109` and `TK105` as one task by the user on 2026-10-03c.
+
+**Re-probed first.** Both checked parsers accepted the declared names `*`, `a#b`, `can view`,
+a tab, a non-ASCII name and a 257-character name. The oracle also accepted `a.b`. With
+`define *: viewer but not blocked`, `ConnectedStore` constructed and then refused a VALID
+`viewer` write (`AdmissionRejected invalid relation '*'`).
+
+**Census before the fix.** A differential fuzz of the two checked parsers, run on mutated
+`tests/fga_schemas/*.fga`, found more than `TK109`'s seven shapes. It also found the
+restriction-type charset, and `type<TAB>x` / `define<TAB>x` heads. On those heads the oracle
+was STRICTER by accident: it skipped the line and then refused the dangling reference. It
+found duplicate types too. All of it was recorded before any edit, in
+[`docs/p23-parser-refusal-parity-2026-10-03.md`](../p23-parser-refusal-parity-2026-10-03.md)
+(now FROZEN).
+
+**Decision (the session's; CLAUDE.md "Who decides").** A declared type name must be inside
+the write charset. A declared relation name must be inside it and contain no `.`. The two
+CHECKED parsers must accept exactly the same schema texts. The unchecked oracle parse stays
+permissive on purpose, because the conformance encoder needs it.
+
+**Landed:** `zanzibar_utils_v1.py::_validate_declared_name`, run in the DSL and JSON front
+ends, and its independent twin `tests/oracle.py::_validate_declared_name`. The oracle also got
+twins of production's refusals, and now picks the line head by whitespace. `[group#...]`
+stays legal in both parsers and means `[group]`. The pin is
+`tests/test_p23_parser_refusal_parity.py`: named both-refuse cases, accept controls, a seeded
+differential fuzz over verdict and keys, the `ConnectedStore` end-to-end case, and the JSON
+cases. In the conformance file, `nodup/duplicate-define` and `wf/dotted-relation-name`
+joined `_ORACLE_REFUSES`, and `_ORACLE_COLLAPSES` is now empty. `MIN_HEADERS` was bumped
+(33/15). The anchor pin and the `FINAL_REVIEW.md` counts block were regenerated. Docs updated:
+`spec-deviations.md` 2026-10-03e, the `CORRESPONDENCE.md` `GraphAdmission` cell (dated
+correction), and the `CLAUDE.md` Identifiers bullet.
+
+**Sabotage.** Sixteen mutations, each removing one new check from one parser. All sixteen
+went RED. An M0 control reddened exactly the accept controls, so the harness attributes
+correctly. A first sweep found four oracle twins INERT. Each was subsumed by another check,
+so they were deleted rather than kept as untestable code. The fuzz cannot see duplicates or
+`#...`; for those, the named cases are the only pin. Map, sec 4.
+
+**Found by the gate.** `conf-tile:2/5` went red on
+`test_grid_independence.py::test_the_two_parsers_are_really_different_code`. It cited the
+duplicate-define disagreement as its proof that the parsers are separate code, and `TK105`
+removed that disagreement. It now uses two other witnesses: AST classes from different
+modules, and different refusal messages for the same input. A sabotage that made the
+messages identical turned it red. Recorded as a dated correction at the top of the map.
+The claim-rot gate then flagged the changed test body. The `CORRESPONDENCE.md` sentence citing
+it still described the old disagreement, so it got a dated correction before the anchor pin
+was regenerated.
+
+**Re-rank:** `TK114` NEXT -> NOW, the next of the user's 2026-10-03c picks.
+
+Still owed: none.
+
 ## 2026-10-03d — P4 CLOSED: the leaf-probe ↔ directLeaf bridge is a theorem (LeafBridge.lean); P23 to NOW
 
 rows: P4 (NOW -> CLOSED), P23 (NEXT -> NOW, comment), TK66 (read-first pointer re-pointed to tasks/closed/)

@@ -63,26 +63,29 @@ _MIN_CORPORA = 28
 
 
 def test_the_two_parsers_are_really_different_code():
-    """A live input the two parsers DISAGREE about, so this file is not pinning
-    an alias. `zanzibar_utils_v1` REJECTS a duplicate `define`; `tests/oracle.py`
-    silently keeps the last one. (`encode.py`'s docstring is honest about the
-    shared-parser coupling; this is the demonstration.)"""
-    dup = (
-        "type user\n"
-        "type doc\n"
-        "  define viewer: [user]\n"
-        "  define viewer: [user, user:*]\n"
-    )
-    # oracle: last-wins, no error
-    oast = oracle_parse(dup)
-    assert ("doc", "viewer") in oast, "oracle stopped accepting a duplicate define"
+    """The two parsers are separate code, so this file is not pinning an alias. (`encode.py`'s
+    docstring is honest about the shared-parser coupling; this is the demonstration.)
 
-    # production: loud rejection
-    with pytest.raises(Exception) as exc:
-        prod_parse(dup)
-    assert "viewer" in str(exc.value) or "duplicate" in str(exc.value).lower(), (
-        f"production parser rejected the duplicate define, but not with a "
-        f"message naming it: {exc.value!r}")
+    Until 2026-10-03e the demonstration was a live DISAGREEMENT: `zanzibar_utils_v1` refused a
+    duplicate `define` and `tests/oracle.py` kept the last one. `P23`/`TK105` removed it on
+    purpose. The checked parsers must now accept exactly the same schemas
+    (`tests/test_p23_parser_refusal_parity.py`), so the difference has to be shown some other
+    way: (1) the same input parses to AST classes defined in different modules, and (2) the
+    same refusal is raised by different code, with differently worded messages."""
+    schema = "type user\ntype doc\n  relations\n    define viewer: [user]\n"
+    oast, past = oracle_parse(schema), prod_parse(schema)
+    assert set(oast) == set(past) == {("doc", "viewer")}
+    assert type(oast[("doc", "viewer")]).__module__ == "tests.oracle"
+    assert type(past[("doc", "viewer")]).__module__ == "zanzibar_utils_v1"
+
+    bad = "type user\ntype doc\n  relations\n    define *: [user]\n"
+    with pytest.raises(ValueError) as o_exc:
+        oracle_parse(bad)
+    with pytest.raises(ValueError) as p_exc:
+        prod_parse(bad)
+    assert str(o_exc.value) != str(p_exc.value), (
+        "both parsers refused the out-of-charset name with the SAME message -- check that "
+        "tests/oracle.py::_validate_declared_name has not become an import of production's")
 
 
 def test_grid_uses_the_production_parser_not_the_oracle():

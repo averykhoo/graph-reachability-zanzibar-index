@@ -463,18 +463,24 @@ def _ga_probe_request(label: str) -> str:
 #: _parse_restrictions`), the second the oracle's own empty-name lock (`TK55`). Both
 #: fields keep a Lean control in `AdmissionDecide.lean` (`refutes_directRestrNotLeaf`,
 #: `refutes_keysNonempty`).
+#: 2026-10-03e (`P23`/`TK105`/`TK109`): the oracle now twins production's duplicate-define
+#: refusal and its `.`-lock on declared names, so the other two join: `nodup/duplicate-define`
+#: (was `_ORACLE_COLLAPSES`, below) and `wf/dotted-relation-name`. Lean controls:
+#: `AdmissionDecide.lean::refutes_nodup`, and `wf` via `Core/Schema.lean::relNameOK`.
 _ORACLE_REFUSES: frozenset[str] = frozenset({
     "directRestrNotLeaf/dotted-restriction-predicate",
     "keysNonempty/empty-relation-name",
+    "nodup/duplicate-define",
+    "wf/dotted-relation-name",
 })
 
 #: Probes the oracle-side parser ACCEPTS but cannot represent, so the request zcli gets is
-#: not the probe. MEASURED 2026-09-25: `tests/oracle.py::parse_schema_ast` keeps the LAST
-#: of two `define viewer` lines without complaint, where the production parser raises
-#: `duplicate relation definition`. The encoded schema therefore has one key and Lean
-#: rightly admits it. Pinned so that fixing the oracle (task row `TK105`) flips this loudly.
-#: The Lean side of `nodup` is `AdmissionDecide.lean::refutes_nodup`.
-_ORACLE_COLLAPSES: frozenset[str] = frozenset({"nodup/duplicate-define"})
+#: not the probe. EMPTY since 2026-10-03e. Its one entry, `nodup/duplicate-define`, was
+#: there because `tests/oracle.py::parse_schema_ast` kept the LAST of two `define viewer`
+#: lines where production raises `duplicate relation definition` (MEASURED 2026-09-25).
+#: `TK105` fixed the oracle and the probe moved to `_ORACLE_REFUSES`. The branch stays so
+#: that a collapse found later has somewhere to be pinned.
+_ORACLE_COLLAPSES: frozenset[str] = frozenset()
 
 
 @pytest.mark.parametrize("label", sorted({**GA_SCHEMA_PROBES, **GA_STORE_PROBES}))

@@ -890,6 +890,26 @@ class _RelationParser:
         raise ValueError(f"relation {self.relation!r}: unexpected end of expression")
 
 
+def _validate_declared_name(kind: str, name: str) -> None:
+    """A declared type or relation name must be writable: inside the write identifier
+    charset (`IDENTIFIER_CHARSET`, 1-256 chars). Shared by the DSL and JSON front ends; its
+    independent twin is `tests/oracle.py::_validate_declared_name`. Map:
+    `docs/p23-parser-refusal-parity-2026-10-03.md`."""
+    # REFUSED SHAPE (P23): a declared type or relation name outside the write identifier
+    # charset -- ``define *: ...``, ``define can view: ...``, ``type d#oc``, a non-ASCII or a
+    # 257-character name. WHY: no write can ever land on such a name (the charset is
+    # enforced at write admission, `validate_write_identifiers`), yet a computed or TTU arm
+    # can still reach it. Through ``define *: viewer but not blocked`` a VALID write on
+    # ``viewer`` was refused (`AdmissionRejected invalid relation '*'`) and the async index
+    # stalled; `TK55`'s empty name, the same class, gave a wrong answer.
+    # INSTEAD: name it inside ``[A-Za-z0-9_/@+=-]`` (``.`` is also allowed in a TYPE name),
+    # e.g. ``define can_view: [user]``.
+    if not is_valid_identifier(name):
+        raise ValueError(
+            f"declared {kind} name {name!r}: must match [{IDENTIFIER_CHARSET}] (1-256 chars), "
+            f"the write identifier charset, or no write could ever reach it")
+
+
 def parse_schema_ast(schema: str) -> SchemaAST:
     """Parse an OpenFGA DSL string into ``{(object_type, relation): Expr}`` (spec §2.2).
 
@@ -923,6 +943,7 @@ def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
             if len(words) != 2:
                 raise ValueError(f'malformed type declaration: {line!r}')
             current_type = words[1]
+            _validate_declared_name('type', current_type)
             # duplicate type blocks silently merged before -- a pasted schema with a
             # duplicate silently rewrote relations (blind-audit S-6)
             # REFUSED SHAPE (blind-audit S-6): a second ``type X`` block. WHY: the comment
@@ -946,8 +967,9 @@ def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
             # on '' while the graph answered False (untainted) or refused the write
             # in `DeltaProcessor._write_derived` (boolean). Refusing at parse time
             # is what makes `FullScope.lean::GraphAdmission.keysNonempty` a Python
-            # scope claim rather than an assumption. Kept to EMPTY only -- the full
-            # identifier charset is deliberately NOT imposed on declared names here.
+            # scope claim rather than an assumption. The rest of the identifier charset
+            # is `_validate_declared_name` below (P23, 2026-10-03e); this check stays
+            # separate so its message keeps naming the enclosing type.
             # REFUSED SHAPE (TK55): an empty declared relation name, ``define : [user]``.
             # WHY: the comment above. INSTEAD: name it -- ``define viewer: [user]``.
             if not relation_name:
@@ -964,6 +986,7 @@ def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
                 raise ValueError(
                     f"relation {relation_name!r}: '.' is reserved for compiled leaf "
                     f"predicates and cannot appear in a declared relation name")
+            _validate_declared_name('relation', relation_name)
             # REFUSED SHAPE: a second ``define viewer`` in the same type.
             # WHY: the assignment below would silently replace the first definition, so the
             # store would run a schema other than the one written.
@@ -2685,6 +2708,7 @@ def parse_openfga_json(model) -> SchemaAST:
     seen_types: set[str] = set()
     for type_def in model.get('type_definitions', []):
         object_type = type_def['type']
+        _validate_declared_name('type', object_type)
         # Same S-6 rule as the DSL front-end: a duplicate type_definitions entry
         # silently replaced the earlier one's relations -- the store then ran a
         # different schema than the operator wrote, with no error anywhere.
@@ -2704,6 +2728,7 @@ def parse_openfga_json(model) -> SchemaAST:
                 raise ValueError(
                     f"relation {relation_name!r}: '.' is reserved for compiled leaf "
                     f"predicates and cannot appear in a declared relation name")
+            _validate_declared_name('relation', relation_name)
             restrictions = _json_restrictions(
                 object_type, relation_name,
                 (metadata.get(relation_name) or {}).get('directly_related_user_types', []))

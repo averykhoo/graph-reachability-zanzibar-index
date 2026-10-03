@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-25
-moved: 2026-10-03c
-updated: 2026-10-03c
-closed:
+moved: 2026-10-03e
+updated: 2026-10-03e
+closed: 2026-10-03e
 ---
 
 `tests/oracle.py::parse_schema_ast` keeps the LAST of two definitions of the same
@@ -53,3 +53,7 @@ the `tests/test_reg_empty_relation_name.py` shape. Then move `nodup/duplicate-de
 ### 2026-10-03c
 
 Now a CHILD of `P23` (user decision 2026-10-03c), done with `P23` and `TK109` as one task. This row's duplicate-define shape is one of `TK109`'s 7; fixing `TK109` fixes it. Map: `docs/promote-next-triage-2026-10-03.md`.
+
+### 2026-10-03e
+
+CLOSED with P23 (one task, user decision 2026-10-03c). tests/oracle.py::parse_schema_ast_unchecked now refuses a duplicate define (REFUSED SHAPE (TK105) block), pinned by tests/test_p23_parser_refusal_parity.py::test_oracle_parser_refuses_independently[TK109/duplicate-relation (TK105)]; sweep row O4 reddened exactly that case. nodup/duplicate-define moved from _ORACLE_COLLAPSES (now empty) to _ORACLE_REFUSES in formal/conformance/test_conformance_fragment.py. Map: docs/p23-parser-refusal-parity-2026-10-03.md.

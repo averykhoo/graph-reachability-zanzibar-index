@@ -280,7 +280,7 @@ formal/conformance/test_conformance_state.py::test_residue_rich_corpus_is_really
 formal/conformance/test_graphadmission_scope_pin.py::GRAPHADMISSION_SCOPE	py:assign	23a8d56d0e236b65
 formal/conformance/test_grid_independence.py::test_declared_keys_agree_on_every_corpus	py:function	d1e0e90d848ec737
 formal/conformance/test_grid_independence.py::test_declared_keys_agree_on_every_generated_schema	py:function	086f8e7eff3d58e2
-formal/conformance/test_grid_independence.py::test_the_two_parsers_are_really_different_code	py:function	b559cec30dbfe3d2
+formal/conformance/test_grid_independence.py::test_the_two_parsers_are_really_different_code	py:function	ceb4d1c3b95a4b85
 formal/conformance/w4_scope_probes.py::SCOPE_PROBES	py:assign	104516d12a182a45
 index_v4/bulk_backfill.py::_BulkBackfill._stored_tupleset_subjects	py:function	6a7221ad0173cf7d
 index_v4/bulk_build.py::bulk_build	py:function	c23c5a650938aa65
@@ -442,6 +442,7 @@ tests/oracle.py::Oracle.check.sat_expr	py:function	5bcf179d89e9dfb3
 tests/oracle.py::Oracle.check.ttu_leaf	py:function	2a2fc3f21840b1a6
 tests/oracle.py::Oracle.check.universe	py:function	af119131d1341d6b
 tests/oracle.py::OracleTuple	py:class-shell	4b09b15c1f3a6fec
+tests/oracle.py::_validate_declared_name	py:function	61cdc001297d3535
 tests/oracle.py::parse_schema_ast	py:function	01206ce38fb6394b
 tests/parity.py::ParityEngine	py:class-shell	54541d2d5a0174b3
 tests/test_bulk_build.py::_residues_proj	py:function	7038503301696965
@@ -488,6 +489,7 @@ zanzibar_utils_v1.py::_stratify	py:function	24d003353bfd4e3e
 zanzibar_utils_v1.py::_validate_ast_consistency	py:function	0196cb2bfb16c048
 zanzibar_utils_v1.py::_validate_ast_references	py:function	b318732c3b04ba2b
 zanzibar_utils_v1.py::_validate_ast_references.check_name	py:function	43c3f3ea90878fea
+zanzibar_utils_v1.py::_validate_declared_name	py:function	e4b557f536702bda
 zanzibar_utils_v1.py::_validate_ttu_tuplesets	py:function	14a749793dcbd839
 zanzibar_utils_v1.py::compile_boolean_schema	py:function	bc179af37dde79b2
 zanzibar_utils_v1.py::compile_ruleset	py:function	5ff36805c0d1b1f9

@@ -11,9 +11,9 @@ labels: []
 source: hand
 source_hash:
 created: 2026-09-27
-moved: 2026-10-03c
-updated: 2026-10-03c
-closed:
+moved: 2026-10-03e
+updated: 2026-10-03e
+closed: 2026-10-03e
 ---
 
 ## Log -- empty
@@ -46,3 +46,7 @@ P10 re-run (2026-09-27d): this row's REASONED JSON line (parse_openfga_json has 
 ### 2026-10-03c
 
 Now a CHILD of `P23` (user decision 2026-10-03c): done together with `P23` and `TK105` as one task; `P23` carries the NEXT slot and the plan. Triage 2026-10-03c (AGENT-REPORTED, PROBED) re-reproduced all 7 shapes as prod=REFUSE oracle=accept in the live tree. Map: `docs/promote-next-triage-2026-10-03.md`.
+
+### 2026-10-03e
+
+CLOSED with P23. All seven shapes are now oracle-refused, each pinned by a named both-refuse case in tests/test_p23_parser_refusal_parity.py (the TK109/* labels). A differential fuzz over the 15 fga_schemas fixtures found three more classes the census missed (a restriction-type charset, tab-separated type/define heads making the oracle STRICTER by accident, and duplicate type), now twinned too. Four planned twins were INERT (subsumed by the charset / ASK-1 consistency) and were deleted rather than kept untestable. Map with census and 16-row sweep: docs/p23-parser-refusal-parity-2026-10-03.md sec 1b and sec 4. The REASONED JSON empty-name line is fixed under P23 (parse_openfga_json now runs _validate_declared_name).

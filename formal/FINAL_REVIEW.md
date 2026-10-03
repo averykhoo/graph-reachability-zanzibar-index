@@ -28,14 +28,14 @@ number INTO it over restating it.
 | quantity | value |
 |---|---|
 | `formal/conformance/` collected | **1081** |
-| `tests/` collected | **1575** |
-| whole-repo suite | **2656** |
+| `tests/` collected | **1636** |
+| whole-repo suite | **2717** |
 | differential conformance tests | **1000** across **16** files |
 | gate-tooling conformance tests | **81** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **715** |
 | audit identity pin (`audited_theorems.txt`) | **715** |
 | headline definition pin | **280** rows (**270** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **736** (**414** Python + **322** Lean) |
+| `CORRESPONDENCE.md` anchors | **740** (**417** Python + **323** Lean) |
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 27 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |

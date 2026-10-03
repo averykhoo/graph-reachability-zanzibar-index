@@ -418,7 +418,12 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   caught by review, so put a new refusal in such a function.
 - **Identifiers** are validated on writes to `[A-Za-z0-9_./@+=-]` (1–256 chars). Reserved:
   a name may be `*` (wildcard sentinel), a subject predicate may be `...` (bare). Reads are
-  lenient (an out-of-charset name just never matches).
+  lenient (an out-of-charset name just never matches). **Declared names are held to the same
+  charset at PARSE time (`P23`, 2026-10-03e)**, in both parsers and the JSON front end
+  (`zanzibar_utils_v1.py::_validate_declared_name`, oracle twin of the same name). A relation
+  name additionally may not contain `.`. The two checked parsers must accept exactly the same
+  schema texts; `tests/test_p23_parser_refusal_parity.py` fuzzes that, so a new refusal in
+  one parser without its twin in the other is red.
 - **Object wildcards** (`folder:*`) have no DSL syntax — pass `object_wildcard_shapes` to
   `parse_openfga_schema` / `SetEngine`.
 - **Wildcard extensions beyond OpenFGA warn** (`ASK-2`, user decision 2026-09-26: kept, but

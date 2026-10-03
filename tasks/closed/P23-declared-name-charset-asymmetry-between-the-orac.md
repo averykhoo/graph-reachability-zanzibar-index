@@ -11,9 +11,9 @@ labels: [infra]
 source: board
 source_hash: c7f66db90464
 created: 2026-09-06b
-moved: 2026-10-03d
-updated: 2026-10-03d
-closed:
+moved: 2026-10-03e
+updated: 2026-10-03e
+closed: 2026-10-03e
 ---
 
 `TK55` (closed 2026-09-06b) made BOTH parsers -- `zanzibar_utils_v1.py::parse_schema_ast`
@@ -49,3 +49,7 @@ NEXT ACTION: re-probe the `*` witness first-hand, then add the charset refusal t
 ### 2026-10-03d
 
 NEXT -> NOW at the 2026-10-03d write-back: P4 closed and left the board with no NOW (task lint requires exactly one). P23 is the first of the three NEXT rows the user chose on 2026-10-03c (banner order: P23, TK114, TK115). No new ranking decision is implied; the user can redirect.
+
+### 2026-10-03e
+
+CLOSED (with children TK109, TK105). DECISION (session, CLAUDE.md Who decides): a declared TYPE name must match the write identifier charset, a declared RELATION name must match it and contain no dot; and the two CHECKED parsers must accept exactly the same schema texts with the same keys. Why: an out-of-charset declared name is reachable by a computed/TTU arm but never writable; re-probed first-hand, ConnectedStore accepted define *: viewer but not blocked and then refused a VALID viewer write (AdmissionRejected invalid relation *). LANDED: zanzibar_utils_v1.py::_validate_declared_name (DSL type + define branches and parse_openfga_json), independent twin tests/oracle.py::_validate_declared_name, plus oracle twins of production refusals (TK109). [group#...] stays legal in both and means [group]. Pinned by tests/test_p23_parser_refusal_parity.py: named both-refuse cases, accept controls, a seeded differential fuzz (18000 trials, verdict + keys), the ConnectedStore end-to-end, JSON cases. 16-mutation sweep all RED with an M0 control. NOT covered: the JSON front end has no oracle twin so the fuzz never sees it; reserved keywords as declared names (or, from) are not refused (no split observed); TK115 keeps its other holes. The unchecked oracle parse stays permissive on purpose (the conformance encoder), so wf/dotted-relation-name and nodup/duplicate-define joined _ORACLE_REFUSES. Map (ACTIVE-PLAN, now FROZEN): docs/p23-parser-refusal-parity-2026-10-03.md.
