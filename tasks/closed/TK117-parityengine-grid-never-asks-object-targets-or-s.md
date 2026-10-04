@@ -13,7 +13,7 @@ source_hash:
 created: 2026-09-27d
 moved: 2026-10-04c
 updated: 2026-10-04c
-closed:
+closed: 2026-10-04c
 ---
 
 Filed from the P10 re-run (2026-09-27d). Full witness, provenance and reconciliation: [`docs/p10-scope-audit-2026-09-27.md`](../docs/p10-scope-audit-2026-09-27.md) §5 H7. The section is copied below as it stood when filed; the doc is the body of record.
@@ -105,3 +105,5 @@ PINS: `tests/test_tk117_write_local_floor.py`, 10 tests. Four claims (own check;
 STILL OPEN (READ first-hand this session): (a) object-* targets for every object-wildcard SHAPE; the floor covers only a written `T:*`. (b) star from-chain userset subjects, untouched. `tests/genswarm.py::grid_for` (cap 400): `Diff.sweep` runs once per driven SUBSET, so its analogue is a floor over the objects the subset wrote, a different design. CORRECTION to the brief: `tests/test_hypothesis.py::_grid` has NO cap, so there is nothing to fix there. The 2026-10-03c skeptic (AGENT-REPORTED) says (a) and (b) are covered elsewhere; weigh that before spending an M on them.
 
 NEXT ACTION: decide whether (a)/(b)/genswarm are worth doing. If not, close TK117 with that reasoning.
+
+CLOSED 2026-10-04c: user accepted the session's recommendation to close rather than spend another M. Part (c), the real escape route, LANDED in 40ae5e3: `tests/parity.py::ParityEngine._write_local_floor`, map docs/tk117-write-local-floor-2026-10-04.md. Not done, with reasons: (a) object-* targets per object-wildcard shape, and (b) star from-chain userset subjects, are covered elsewhere per the 2026-10-03c skeptic (AGENT-REPORTED): `tests/test_matrix.py` union_wildcard, the star-bridge hypothesis machines, and `tests/test_lookup_oracle.py::_subject_candidates`. The floor now asks object-* at any written `T:*`. The `tests/genswarm.py::grid_for` floor needs a per-subset design for a small gain. `tests/test_hypothesis.py::_grid` has no cap, so nothing was needed there. Reopen if a divergence is found that only (a) or (b) would have caught.

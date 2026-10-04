@@ -2,7 +2,7 @@
 id: TK101
 title: object-wildcard WRITES are unenumerable: _tuple_space emits '*' only as a subject
 brief: censused 2026-09-22c as hole H4; found in TK71's traps 2026-09-16b and never owned
-pri: LATER
+pri: NEXT
 size: M
 deps: []
 related: [TK71, TK94, P25]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-22c
-moved: 2026-09-22c
-updated: 2026-09-22c
+moved: 2026-10-04c
+updated: 2026-10-04c
 closed:
 ---
 

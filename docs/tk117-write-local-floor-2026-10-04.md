@@ -1,8 +1,10 @@
 # TK117 (c) -- the ParityEngine grid gets a write-local floor: decision, pins, sweep (2026-10-04)
 
-**ACTIVE-PLAN 2026-10-04c -- `TK117` is still OPEN (parts (a), (b) and the `genswarm` grid
-remain; sec 5).** Corrections are appended dated at the top, never edited into the body. FROZEN
-when `TK117` closes. Live state: `python scripts/task.py show TK117`.
+**FROZEN 2026-10-04c, at `TK117`'s close -- provenance, not a living document.** Status lines
+below are as-of-then. In particular, sec 5's "still open" items were NOT done: the row closed
+with the user's agreement, because (a) and (b) are covered elsewhere (see the close message,
+`python scripts/task.py show TK117`). Corrections are appended dated at the top, never edited
+into the body.
 
 Row: `python scripts/task.py show TK117`. Filed from `docs/p10-scope-audit-2026-09-27.md`
 sec 5 H7. The 2026-10-03c triage scoped the first step to part (c) alone

@@ -2,7 +2,7 @@
 id: TK116
 title: oracle-only SetEngine mode: set-vs-oracle differential with removes for every decision-15 family
 brief: coverage: decision-15 families are differential-tested set-vs-oracle without removes
-pri: LATER
+pri: NOW
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-04c
+updated: 2026-10-04c
 closed:
 ---
 
@@ -61,3 +61,7 @@ measured 0 of 10 cells refused (2026-09-27). If H1 lands first, its negative cyc
 row's cyclic-derived witness set.
 
 ## Log
+
+### 2026-10-04c
+
+PROMOTED LATER -> NOW 2026-10-04c with user go ("okay", in chat). Highest remaining 2026-10-03c triage score (2) with TK101, and the most direct hit on equivalence. Order the user set: correctness fixes first (this row, then TK101 and TK121), then the TK120 restructure, then docs work.

@@ -32,9 +32,9 @@ from here.
 
 ---
 
-## 2026-10-04c — TK117 (c) LANDED: the ParityEngine grid always asks the queries at the written object; row stays NOW
+## 2026-10-04c — TK117 CLOSED: the ParityEngine grid always asks the queries at the written object; TK116 to NOW
 
-rows: TK117 (NOW, progressed; still open)
+rows: TK117 (NOW -> CLOSED), TK116 (LATER -> NOW), TK101 / TK121 / TK120 (LATER -> NEXT)
 
 `task lint: clean (13 checks, 238 task file(s) parsed), 35 warning(s)`
 
@@ -72,8 +72,15 @@ no cap and so no sampling gap. `tests/genswarm.py::grid_for` does sample, but pe
 SUBSET, not per op, so it needs a different floor design. That is still open on the row,
 with (a) and (b).
 
-**No re-rank:** `TK117` stays `NOW`. Its next action is to decide whether (a), (b) and the
-genswarm floor are worth an M, or to close the row with that reasoning.
+**Re-rank, with the user (in chat, after the commit above).** The session recommended closing
+`TK117` instead of spending another M on it, because the 2026-10-03c skeptic found (a) and
+(b) covered elsewhere. The user said "okay", and set an order: **correctness fixes first, then
+the `TK120` restructure, then docs**. `TK117` is CLOSED. `TK116` is `NOW`. `TK101` and `TK121`
+are `NEXT`. `TK120` is `NEXT` too, but last of the three, and the order is recorded on its row.
+Docs and process work is ON HOLD until `TK120` lands. The user's words were "hold off on docs
+til after the restructure", and a re-layout rewrites every `file::symbol` cite, so docs edits
+made before it are paid for twice. Note that `TK120`'s own brief says its plan needs the
+user's approval before any file moves.
 
 Still owed: none.
 

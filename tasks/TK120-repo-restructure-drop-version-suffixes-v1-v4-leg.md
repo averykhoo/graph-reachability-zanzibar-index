@@ -2,7 +2,7 @@
 id: TK120
 title: Repo restructure: drop version suffixes (v1/v4/legacy) and re-lay-out the code
 brief: remove version names + sensible layout; plan needs USER APPROVAL before any move
-pri: LATER
+pri: NEXT
 size: L
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-10-02
-moved: 2026-10-02
-updated: 2026-10-02
+moved: 2026-10-04c
+updated: 2026-10-04c
 closed:
 ---
 
@@ -73,3 +73,7 @@ to the user for approval. No moves before approval.
 - `formal/CORRESPONDENCE.md` -- the anchors the lean phase of `formal/verify.sh` resolves; a move reds them
 
 ## Log
+
+### 2026-10-04c
+
+PROMOTED LATER -> NEXT 2026-10-04c by user instruction, with an ORDER. (1) Run this AFTER the correctness fixes at NOW/NEXT, which are TK116, TK101 and TK121; it is NEXT, but last of them. (2) Docs work is ON HOLD until this restructure lands (user, 2026-10-04c: "hold off on docs til after the restructure"). The reason is that a re-layout rewrites every file:symbol cite, so docs edits made before it are paid twice. When this row closes, the parked docs and process rows become pickable again.

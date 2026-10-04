@@ -2,7 +2,7 @@
 id: TK121
 title: async poison row (path-count bound) has no documented recovery; pin rebuild-from-snapshot
 brief: async PathCountExceeded row stalls forever; reads correct; recovery = fresh index from snapshot, untested
-pri: LATER
+pri: NEXT
 size: S
 deps: []
 related: [TK111, TK112]
@@ -11,8 +11,8 @@ labels: []
 source: docs/tk111-stall-aware-freshness-2026-10-02.md
 source_hash:
 created: 2026-10-03b
-moved: 2026-10-03b
-updated: 2026-10-03b
+moved: 2026-10-04c
+updated: 2026-10-04c
 closed:
 ---
 
