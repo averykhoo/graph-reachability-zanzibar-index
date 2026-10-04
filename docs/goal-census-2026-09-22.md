@@ -3,6 +3,15 @@
 **ACTIVE-PLAN** (`docs/README.md` §3). Corrections append **dated at the top**. Freeze when a
 direction is chosen and its first item closes.
 
+## Correction, 2026-10-04e (appended; the body below is as-written)
+
+**Hole H4 is closed by `TK101`.** Stores holding an object-wildcard WRITE are now
+enumerated exhaustively up to a pinned K by `formal/conformance/test_conformance_enum_objstar.py`,
+a separate module so the parent enumeration's bounds are untouched. The Lean side is
+unchanged: `W4Fragment.bareStar` is still MIXED, and the graph leg there is
+Python-vs-agreed, not theorem-backed. Map:
+[`docs/tk101-object-star-enumeration-2026-10-04.md`](tk101-object-star-enumeration-2026-10-04.md).
+
 ## Correction, 2026-09-23e (appended; the body below is as-written)
 
 **Step 3's `W4Fragment` half is DONE. `DW-1` closed.** The premise half that scopes every

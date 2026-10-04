@@ -87,6 +87,7 @@ files marked ✚ below were entirely undeclared here before 2026-07-29, and one 
 | `test_grid_independence.py` | the shared grid is read off the PRODUCTION parser, not the encoder's oracle parse (incl. a sabotage test) | every curated corpus + every generated schema |
 | `test_conformance_enum.py` | **exhaustive small-scope enumeration**: spec vs oracle vs set engine vs real graph index on ALL stores ≤ K tuples | **6** fragment shapes, **1021** stores, per-shape **K = 3 or 4** (counts + tuple-space sizes asserted) |
 | ✚ `test_conformance_enum_state.py` | STATE-level analog of the enumeration, on a deterministic sample, same P1–P7 projections | same 6 shapes |
+| `test_conformance_enum_objstar.py` | **exhaustive** enumeration of the stores the enum module cannot emit: every store up to K holding a `T:*` OBJECT write (`TK101`, 2026-10-04). spec vs oracle vs set engine, plus the real graph index where it admits the schema (Python-vs-agreed, NOT theorem-backed: object-star stores are outside `GRAPH_FRAGMENT`) | four object-wildcard shapes, one graph-refused; spaces, K, store counts, graph admission and `*`-moved answer counts pinned in `_SHAPES` |
 | `test_cli_mode.py` | zcli mode dispatch fails closed | minimal |
 | `test_runner_retry.py` (gate tooling) | `runner.invoke_zcli`'s pre-`main` retry never masks a real fault | — |
 | `test_sorry_scan.py` (gate tooling) | `sorry_scan.py` catches `sorry`/`admit`/`sorryAx`/`native_decide`/`axiom` (post-`ZT-P2-3`) | — |

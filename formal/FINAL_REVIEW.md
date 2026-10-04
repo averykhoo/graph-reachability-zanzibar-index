@@ -27,10 +27,10 @@ number INTO it over restating it.
 
 | quantity | value |
 |---|---|
-| `formal/conformance/` collected | **1081** |
+| `formal/conformance/` collected | **1085** |
 | `tests/` collected | **1735** |
-| whole-repo suite | **2816** |
-| differential conformance tests | **1000** across **16** files |
+| whole-repo suite | **2820** |
+| differential conformance tests | **1004** across **17** files |
 | gate-tooling conformance tests | **81** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **715** |
 | audit identity pin (`audited_theorems.txt`) | **715** |
@@ -39,7 +39,7 @@ number INTO it over restating it.
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 27 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1081 (=135+946), `MIN_TESTS_ALL`=1575, `EXPECTED_MIN_AUDITS`=460 |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1085 (=135+950), `MIN_TESTS_ALL`=1575, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
 Driven fresh over all **25** `GRAPH_FRAGMENT` corpora through the real graph
@@ -80,6 +80,7 @@ Per conformance file:
 | `test_cli_mode.py` | 5 | differential |
 | `test_leaf_namespace_correspondence.py` | 5 | tooling |
 | `test_conformance_direct_arm.py` | 4 | differential |
+| `test_conformance_enum_objstar.py` | 4 | differential |
 | `test_grid_independence.py` | 4 | differential |
 
 <!-- END GENERATED COUNTS -->

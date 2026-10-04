@@ -75,9 +75,12 @@ with the exact `len(space)` / `n_stores` pins below, a store cannot leave this
 module without turning it red. The modules where a refusal IS absorbed (so an
 over-reject would shrink them quietly) are `test_conformance_remove.py`
 (`_EXPECTED_POISONED`, exact) and `test_conformance_generated.py` (0 refusals,
-exact). What this module still cannot see is a write outside `_tuple_space`'s
-range: it has no object-wildcard object name (`TK101`, hole H4). Sabotage and
-map: docs/tk71-admission-survival-2026-09-27.md.
+exact). Sabotage and map: docs/tk71-admission-survival-2026-09-27.md.
+
+`_tuple_space` puts `"*"` only in the SUBJECT slot, and no shape here declares an
+object-wildcard shape, so no store in this module holds a `T:*` object. Those stores
+are enumerated by `test_conformance_enum_objstar.py` instead (`TK101`, hole H4), which
+reuses `_tuple_space` for its concrete half.
 
 Stores are SETS of tuples (Zanzibar raw tuples are a set; multiplicity is a
 write-path concern outside `sem`), enumerated as sorted-space combinations, so

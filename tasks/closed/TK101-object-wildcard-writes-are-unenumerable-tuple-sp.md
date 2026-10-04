@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-22c
-moved: 2026-10-04d
-updated: 2026-10-04d
-closed:
+moved: 2026-10-04e
+updated: 2026-10-04e
+closed: 2026-10-04e
 ---
 
 ## What it is
@@ -80,3 +80,7 @@ Then say, per arm, WHICH branch newly runs. A new arm that passes is not evidenc
 ### 2026-10-04d
 
 PROMOTED NEXT -> NOW 2026-10-04d, following the user's 2026-10-04c order (TK116, then TK101 and TK121). A precedent from TK116: tests/test_tk116_oracle_only_setengine.py::_pool emits a '*' OBJECT on every declared relation in the CLOSED object-wildcard shapes (SetEngine.schema_info.object_wildcard_shapes), which is the shape this row says _tuple_space never produces. It found a real set-engine lookup fail-open on its first run, so object-star writes are worth enumerating.
+
+### 2026-10-04e
+
+CLOSED 2026-10-04e. Option 2 taken: a separate enumeration, formal/conformance/test_conformance_enum_objstar.py. It covers every store up to K=3 holding at least one `*`-OBJECT write, on four shapes with declared object-wildcard shapes: ttu (star TTU target + star tupleset), wildcard_group_member (star object on a userset relation + the relation it feeds), union_computed (star under a Computed arm + the union root), boolean_exclusion (graph-REFUSED, 3-way: star grant + star ban). Option 1 was rejected because declaring object wildcards on the parent module's four boolean shapes makes the graph refuse them, which would have silently demoted their 4-way runs to 3-way (this row's third trap). RESULT: zero disagreements, spec x oracle x set engine (x graph on the 3 admitted shapes, Python-vs-agreed, NOT theorem-backed), on every store. Pinned exactly per shape: space, K, stores, grid size, graph admission, graph-compared store count, and the concrete answers the `*` writes moved (grants/revokes, measured against the oracle on the same store minus its `*` tuples). That last pin is the evidence the branch RAN: every shape has grants > 0, and boolean_exclusion has 40 star-ban revocations. 12-mutation sweep, 12/12 RED, each on the claim it targeted (M0 control; M1 set engine, M2/M3 graph, M4 oracle; M5-M11 the test itself). M2 was caught by the paranoia I3 checker, not the answer differential; M3 is its answer-level twin. MIN_CONF_ALL 1081 -> 1085, REST 946 -> 950. Map (FROZEN): docs/tk101-object-star-enumeration-2026-10-04.md. Lean side unchanged: W4Fragment.bareStar is still MIXED.

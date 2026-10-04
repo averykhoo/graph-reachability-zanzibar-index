@@ -32,6 +32,50 @@ from here.
 
 ---
 
+## 2026-10-04e — TK101 CLOSED: object-wildcard WRITES are enumerated exhaustively; TK121 to NOW
+
+rows: TK101 (NOW -> CLOSED), TK121 (NEXT -> NOW)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 33 warning(s)`
+
+`read: board only`
+
+The user said "do the next task". The board's `NOW` row was `TK101`: no enumerated store in
+`formal/conformance/test_conformance_enum.py` ever holds a `T:*` OBJECT write, because
+`_tuple_space` puts `*` only in the subject slot (hole H4).
+
+**Decision (the session's): a separate module, not a wider `_tuple_space`.** Four of the
+parent module's six shapes are boolean. Declaring object wildcards on them makes the graph
+refuse them, so their 4-way runs would have dropped to 3-way without any test going red.
+That is the row's own third trap. The new module is
+`formal/conformance/test_conformance_enum_objstar.py`. It enumerates only stores holding at
+least one `*`-object tuple, so its cost adds to the parent's rather than multiplying it. It
+reuses the parent's `_tuple_space` for the concrete half.
+
+**Result: zero disagreements.** Four shapes at K=3: star TTU target plus star tupleset, star
+userset relation, star under a Computed arm, and a graph-refused `but not` with a star ban.
+Spec, oracle and set engine agree on every store, and so does the graph on the three shapes
+it admits (Python-vs-agreed, not theorem-backed). The new evidence is a pin that the `*`
+branch RAN: each shape's concrete answers moved by the `*` writes are pinned exactly, and
+`boolean_exclusion` carries 40 star-ban revocations. Graph admission and the graph-compared
+store count are pinned too, so a shape cannot quietly go 3-way.
+
+**12-mutation sweep, 12/12 RED**, with an M0 control, each red on the claim it targeted.
+M2 (graph out-bridge removed) was caught by the paranoia I3 checker, not the differential;
+M3 is its answer-level twin. Map (FROZEN):
+[`docs/tk101-object-star-enumeration-2026-10-04.md`](../tk101-object-star-enumeration-2026-10-04.md).
+
+**Also:** `MIN_CONF_ALL` and `MIN_CONF_REST` ratcheted by +4 (no drift), the counts block was
+regenerated, a `CORRESPONDENCE.md` table row was added, and a dated correction was appended to
+`docs/goal-census-2026-09-22.md` closing H4.
+
+**Re-rank:** `TK121` to `NOW`, following the user's order (correctness, then `TK121`, then
+the `TK120` restructure, then docs).
+
+Still owed: none.
+
+---
+
 ## 2026-10-04d — TK116 CLOSED: set engine vs oracle with removes on every graph-refused family; a lookup fail-open fixed
 
 rows: TK116 (NOW -> CLOSED), TK101 (NEXT -> NOW)
