@@ -248,7 +248,7 @@ class ParityEngine:
         self._note_names(raw)
         for b in self.stateful:
             b.post_op()
-        self._assert_grid_parity(context=f'{op} {raw}')
+        self._assert_grid_parity(context=f'{op} {raw}', last=raw)
         return True
 
     def _note_names(self, raw: RawTuple) -> None:
@@ -261,7 +261,7 @@ class ParityEngine:
     def _oracle(self) -> Oracle:
         return Oracle(self.schema, [OracleTuple(*r) for r in self.present])
 
-    def _grid(self) -> list[tuple]:
+    def _grid(self, last: RawTuple | None = None) -> list[tuple]:
         """Universe ∪ ghosts ∪ '*' (spec §8.4), derived from the schema's own shapes:
         subjects from Direct restrictions, targets from declared (object_type, relation)
         UNION the compiled leaf families (BL-2). Deterministically sampled down to
@@ -278,7 +278,10 @@ class ParityEngine:
         the ordinary edge probe). 1,728 target-position leaf-name comparisons over 9
         tainted fixtures: 201 divergences, ALL oracle=False graph=True. Leaf names are
         never hand-written here -- they come from the facade's SchemaInfo.leaf_families
-        (empty => this grid is byte-identical to the pre-BL-2 grid)."""
+        (empty => this grid is byte-identical to the pre-BL-2 grid).
+
+        `last` is the op just applied; when given, the WRITE-LOCAL floor
+        (`_write_local_floor`) is appended after the cap too -- TK117 (c)."""
         subject_shapes: set[tuple[str, str]] = set()
         for expr in self.ast.values():
             for direct in _iter_directs(expr):
@@ -314,8 +317,11 @@ class ParityEngine:
                 for (sp, st, sn) in subjects:
                     queries.append((sp, st, sn, rel, o_type, on))
 
+        targets = sorted(set(self.ast) | self.leaf_families)
         if len(queries) > self.grid_cap:
             queries = self._rng.sample(queries, self.grid_cap)
+        if last is not None:
+            queries += self._write_local_floor(last, subjects, targets, set(queries))
 
         # Layer B (the GUARANTEE): per leaf family, a known subject and a '*'
         # subject × a known object name and a ghost; plus one junk dotted target
@@ -334,9 +340,46 @@ class ParityEngine:
                 queries.append((sp, st, sn, f'{rel}.zz-junk', o_type, GHOST_NAME))
         return queries
 
-    def _assert_grid_parity(self, context: str) -> None:
+    @staticmethod
+    def _write_local_floor(last: RawTuple, subjects: list[tuple[str, str, str]],
+                           targets: list[tuple[str, str]],
+                           have: set[tuple]) -> list[tuple]:
+        """TK117 (c): the queries AT THE OBJECT THE LAST OP WROTE -- the op's own tuple,
+        plus every grid subject x every target relation on that object's type -- minus
+        those the sample already holds. Rng-free and appended AFTER the cap, so the
+        sample can never skip the op's own effect.
+
+        Why (P10 re-run, `docs/p10-scope-audit-2026-09-27.md` sec 5 H7, witness 9):
+        above `grid_cap` Layer A was a bare `rng.sample` with no floor, so a backend
+        lie confined to the last write's own check escaped with probability about
+        `(N - cap) / N` -- 8 of 20 seeds on `tests/fga_schemas/github.fga` after 14
+        writes. Pinned by `tests/test_tk117_write_local_floor.py`.
+
+        Below the cap this adds nothing -- the pool already holds every one of these
+        queries, because the written object's name is noted before the grid is built --
+        with ONE exception: an OBJECT-WILDCARD write. Its object is `*`, which the pool
+        never lists (TK117 (a), still open), so the floor is the only place an object-`*`
+        query is asked, and only at the object a write actually named.
+
+        LIMIT, deliberately: effects that land on OTHER objects (a TTU child of the
+        written object, an object that names the written userset) stay sampled."""
+        _, _, _, _, o_type, o_name = last
+        floor = [last]
+        for (t_type, rel) in targets:
+            if t_type != o_type:
+                continue
+            for (sp, st, sn) in subjects:
+                floor.append((sp, st, sn, rel, o_type, o_name))
+        out: list[tuple] = []
+        for q in floor:
+            if q not in have:
+                have.add(q)
+                out.append(q)
+        return out
+
+    def _assert_grid_parity(self, context: str, last: RawTuple | None = None) -> None:
         oracle = self._oracle()
-        grid = self._grid()
+        grid = self._grid(last)
         # A zero-length grid makes every assertion below unreachable and this
         # method a no-op that reports success -- see the anti-vacuity note in
         # `_grid`. Fail instead of passing silently.

@@ -1,7 +1,7 @@
 ---
 id: TK117
 title: ParityEngine._grid never asks object-* targets or star from-chain subjects; cap sample gaps
-brief: coverage: object-* targets and star from-chain subjects never gridded; cap sample can skip own op
+brief: (c) LANDED 2026-10-04c (write-local floor); open: (a) object-* per shape, (b) star from-chain subjects, genswarm grid
 pri: NOW
 size: M
 deps: []
@@ -11,8 +11,8 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-10-04b
-updated: 2026-10-04b
+moved: 2026-10-04c
+updated: 2026-10-04c
 closed:
 ---
 
@@ -93,3 +93,15 @@ Triage 2026-10-03c ranked this top by first score, then the skeptic WEAKENED it 
 PROMOTED LATER -> NEXT at 2026-10-04b write-back (session's ranking; the user may veto). All three of the user's 2026-10-03c NEXT picks (P23, TK114, TK115) are now closed and NOW/NEXT were otherwise empty. The 2026-10-03c triage named this row's part (c) as the next candidate (docs/promote-next-triage-2026-10-03.md sec 4), and the user had named TK117 as the alternative to TK115 that day. Scope stays as the 2026-10-03c note says: do (c) alone first -- an rng-free write-local floor in tests/parity.py::ParityEngine._grid, planted-lie witness with an M0 control.
 
 NEXT -> NOW the same write-back: lint check requires exactly one open NOW row, and this is the only candidate. Same reasoning as the note above.
+
+### 2026-10-04c
+
+PART (c) LANDED 2026-10-04c; row stays OPEN at NOW for the remainder. Map (ACTIVE-PLAN): docs/tk117-write-local-floor-2026-10-04.md.
+
+LANDED: `tests/parity.py::ParityEngine._write_local_floor`, appended after the cap by `ParityEngine._grid(last)` on every add and remove. It holds the own tuple plus every grid subject x every target relation at the written object, rng-free and deduplicated. Below the cap it adds nothing except at an object-wildcard write (pinned byte-identical). Decision (session, CLAUDE.md Who decides): floor the written OBJECT, not only the own tuple, because a userset write changes answers for subjects absent from the tuple. The exact delta set was rejected: it needs the oracle over the whole pool twice per op.
+
+PINS: `tests/test_tk117_write_local_floor.py`, 10 tests. Four claims (own check; userset members at the written object; remove; object-* at a written `T:*`), each with a `no_floor` control that must show the lie ESCAPING. Mutation sweep, 11 mutations with an M0 control that attributed correctly: 9 RED, each on its intended pin. M6 (dedup) and M10 (own tuple dropped) are INERT by construction, REASONED in map sec 3. spec-deviations entry 2026-10-04c reconciles the 2026-07-07 item 2 wording, full-grid vs sampled.
+
+STILL OPEN (READ first-hand this session): (a) object-* targets for every object-wildcard SHAPE; the floor covers only a written `T:*`. (b) star from-chain userset subjects, untouched. `tests/genswarm.py::grid_for` (cap 400): `Diff.sweep` runs once per driven SUBSET, so its analogue is a floor over the objects the subset wrote, a different design. CORRECTION to the brief: `tests/test_hypothesis.py::_grid` has NO cap, so there is nothing to fix there. The 2026-10-03c skeptic (AGENT-REPORTED) says (a) and (b) are covered elsewhere; weigh that before spending an M on them.
+
+NEXT ACTION: decide whether (a)/(b)/genswarm are worth doing. If not, close TK117 with that reasoning.

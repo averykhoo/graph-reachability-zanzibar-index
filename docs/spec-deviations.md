@@ -29,6 +29,28 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-10-04c — `TK117` (c): the ParityEngine grid always asks the queries at the written object
+
+**What the spec says.** Boolean spec sec 8.4: per op, *"assert check-parity over the
+delta-affected pairs UNION a sampled grid"*. The 2026-07-07 entry, item 2, described the
+implementation as *"full-grid check vs the oracle"* and, in the same entry, *"deterministically
+sampled above a cap"*. Both were true, of grids of different sizes. Above `grid_cap` the
+sample had no floor, so the delta-affected half was missing.
+**What the code does since 2026-10-04c:** `tests/parity.py::ParityEngine._grid` appends
+`ParityEngine._write_local_floor` after the cap. The floor holds the op's own tuple, plus
+every grid subject x every target relation at the written object, minus what the sample
+already holds. It is rng-free and applies to adds and removes alike. Below the cap it adds
+nothing, except at an object-wildcard write. It approximates "delta-affected pairs" by the
+written object. Effects on OTHER objects (a TTU child, an object naming the written userset)
+stay sampled.
+
+**Why.** P10 re-run witness 9 (2026-09-28): a lie on the last write's own check escaped at
+cap 600 on 8 of 20 seeds. The exact delta set needs the oracle over the whole pool twice per
+op, which is the cost the cap exists to avoid. Map, sweep and the stated limit:
+[`docs/tk117-write-local-floor-2026-10-04.md`](tk117-write-local-floor-2026-10-04.md).
+Pinned by `tests/test_tk117_write_local_floor.py`. Each claim has a control that stubs the
+floor out and must show the same lie escaping.
+
 ## 2026-10-03e — `P23`: a declared name must be writable, and the two parsers refuse the same schemas
 
 **What the spec says.** Identifiers are validated on WRITES (`[A-Za-z0-9_./@+=-]`, 1-256

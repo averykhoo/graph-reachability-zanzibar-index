@@ -32,6 +32,51 @@ from here.
 
 ---
 
+## 2026-10-04c — TK117 (c) LANDED: the ParityEngine grid always asks the queries at the written object; row stays NOW
+
+rows: TK117 (NOW, progressed; still open)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 35 warning(s)`
+
+`read: board only`
+
+The user said "do the next task". The board's `NOW` row was `TK117`, and its 2026-10-04b note
+scoped the work to part (c) alone: a write-local floor in `ParityEngine._grid` that does not
+depend on the rng.
+
+**The gap.** Above `grid_cap`, Layer A was a bare `rng.sample` with no floor. A lie on the
+last write's own check escaped at cap 600 on 8 of 20 seeds (P10 witness 9, 2026-09-28).
+Re-witnessed this session: every `no_floor` control in the new module finds an escaping
+seed.
+
+**Decision (the session's; CLAUDE.md "Who decides").** `ParityEngine._write_local_floor` is
+appended after the cap on every add and remove. It holds the own tuple plus every grid
+subject x every target relation AT THE WRITTEN OBJECT. The floor covers the object, not just
+the tuple, because a userset write changes answers for subjects absent from the tuple. It is
+also applied below the cap, where it adds nothing except at an object-wildcard write: that is
+the only place an object-`*` query is ever asked. The exact delta set was rejected, because
+it costs the oracle over the whole pool twice per op. Effects on OTHER objects stay sampled,
+a limit stated in the map.
+
+**Landed:** `tests/parity.py` (the floor, plus `_grid(last)` / `_assert_grid_parity(last=)`).
+`tests/test_tk117_write_local_floor.py` has 10 tests: four claims, each with a control that
+must ESCAPE, plus a byte-identity pin and a precondition. The mutation sweep ran 11
+mutations with an M0 control that attributed correctly. 9 went RED, each on its intended
+pin; M6 and M10 are INERT, REASONED. A `docs/spec-deviations.md` `## 2026-10-04c` entry
+reconciles the old wording, "full-grid" vs "sampled". The `FINAL_REVIEW.md` counts block was
+regenerated. Map (ACTIVE-PLAN):
+[`docs/tk117-write-local-floor-2026-10-04.md`](../tk117-write-local-floor-2026-10-04.md).
+
+**Corrected en route:** the row's fix list named `tests/test_hypothesis.py::_grid`, which has
+no cap and so no sampling gap. `tests/genswarm.py::grid_for` does sample, but per driven
+SUBSET, not per op, so it needs a different floor design. That is still open on the row,
+with (a) and (b).
+
+**No re-rank:** `TK117` stays `NOW`. Its next action is to decide whether (a), (b) and the
+genswarm floor are worth an M, or to close the row with that reasoning.
+
+Still owed: none.
+
 ## 2026-10-04b — TK115 CLOSED: the OpenFGA JSON front end renders the schema it was given, or refuses; TK117 to NOW
 
 rows: TK115 (NOW -> CLOSED), TK117 (LATER -> NOW)
