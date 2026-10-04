@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-07b
-moved: 2026-09-19f
-updated: 2026-09-19f
+moved: 2026-10-04g
+updated: 2026-10-04g
 closed:
 ---
 
@@ -83,3 +83,7 @@ own trap says so).
 That narrowing answers most of what the body calls "the actual work here" for ONE of the
 three sites (the `step` constructor exists, at a different line than recorded). The two
 `RestrictBase.lean` sites are still line-cited and still unresolved by symbol.
+
+### 2026-10-04g
+
+Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): PARTLY DONE. Qualifier now on the P6 task file and the RulesComplete.lean stay-site exists; the two RestrictBase.lean stay-sites are still cited by line only (FoldAdmits now at several later lines). P6 is the only consumer: fold this into P6 as a trap and close as merged.

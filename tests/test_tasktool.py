@@ -2910,7 +2910,14 @@ def test_board_stays_under_its_size_ceiling():
                         for n in range(TM.BANNER_MAX_LINES - 1)]) + '\n'
     assert len(banner.rstrip('\n').split('\n')) == TM.BANNER_MAX_LINES
 
-    root = fresh('ceiling', banner=banner)
+    # The NEXT budget is the SHIPPED one, not the fixture's: the ceiling is a claim about
+    # the board a real session reads, and that board is budgeted by tasks/config.json
+    # (NEXT raised 3 -> 5 on 2026-10-04g; this test then re-measured the ceiling).
+    with io.open(os.path.join(REPO_ROOT, 'tasks', 'config.json'), encoding='utf-8') as fh:
+        n_next = json.load(fh)['budgets']['NEXT']
+    assert n_next >= 1, n_next
+    root = fresh('ceiling', banner=banner,
+                 config={'budgets': {'NOW': 1, 'NEXT': n_next}})
     os.makedirs(os.path.join(root, 'tasks', 'closed'))
     max_brief = 'b' * TM.BRIEF_MAX
     summary = ('A summary paragraph long enough to wrap to several lines at the width '
@@ -2920,12 +2927,14 @@ def test_board_stays_under_its_size_ceiling():
     place(root, 'T1', 'the-now-row', title='the NOW row, with a title of realistic length',
           brief=max_brief, pri='NOW', size='L', labels=['infra'],
           body='%s\n\n## Traps\n\n## Log\n' % summary)
-    for n, tid in enumerate(('T2', 'T3', 'T4')):
+    next_ids = ['T%d' % (2 + n) for n in range(n_next)]
+    rest = iter('T%d' % (2 + n_next + n) for n in range(3))
+    for n, tid in enumerate(next_ids):
         place(root, tid, 'next-%d' % n, title='a NEXT row with a realistic title %d' % n,
               brief=max_brief, pri='NEXT', size='M')
-    place(root, 'T5', 'held', title='held', pri='HOLD', size='M', brief=max_brief)
-    place(root, 'T6', 'later', title='later', pri='LATER', size='L', brief=max_brief)
-    place(root, 'T7', 'someday', title='someday', pri='SOMEDAY', size='S',
+    place(root, next(rest), 'held', title='held', pri='HOLD', size='M', brief=max_brief)
+    place(root, next(rest), 'later', title='later', pri='LATER', size='L', brief=max_brief)
+    place(root, next(rest), 'someday', title='someday', pri='SOMEDAY', size='S',
           brief=max_brief)
 
     rc, out, err = run(root, 'lint')
@@ -2941,9 +2950,9 @@ def test_board_stays_under_its_size_ceiling():
     assert lines[0].startswith(KEY), lines[:2]
     assert lines[TM.BANNER_MAX_LINES - 1] == 'banner line %d' % (TM.BANNER_MAX_LINES - 2), \
         lines[:TM.BANNER_MAX_LINES]
-    assert sum(1 for l in lines if max_brief in l) == 4, (
-        'the full-budget board should carry 4 briefs (1 NOW + 3 NEXT):\n%s'
-        % out_text(out))
+    assert sum(1 for l in lines if max_brief in l) == 1 + n_next, (
+        'the full-budget board should carry %d briefs (1 NOW + %d NEXT):\n%s'
+        % (1 + n_next, n_next, out_text(out)))
     assert len(lines) >= 30, ('this corpus cannot produce a board this short -- the '
                               'ceiling is being met by an empty view:\n%s' % out_text(out))
     # The `asks ...` line (TK96, 2026-09-27d) is printed at zero too, so it is part of

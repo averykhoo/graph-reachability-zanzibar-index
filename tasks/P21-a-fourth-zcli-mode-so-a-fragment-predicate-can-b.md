@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: ea8db643136e
 created: 2026-08-31b
-moved: 2026-09-23d
-updated: 2026-09-23d
+moved: 2026-10-04g
+updated: 2026-10-04g
 closed:
 ---
 
@@ -61,3 +61,7 @@ First reconciliation against the board row filed 2026-08-31b: cell and task body
 ### 2026-09-23d
 
 Half-absorbed by DW-1 (2026-09-23d). A fourth zcli mode now EXISTS: mode=fragment (Cli.lean::fragmentJson, runner.run_fragment). It decides W4Fragment per field, and the differential pattern is proved out in formal/conformance/test_conformance_fragment.py. What remains for this row is NoLeafSubjects: add a key to fragmentJson (the Decidable instance exists, LeafRules.lean) and turn test_leaf_namespace_correspondence.py mirror into a differential against it. Likely S now, not M. The exit-code set gained no new code; fragment mode reuses rc 5 for an ops stream.
+
+### 2026-10-04g
+
+Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): NEARLY CLOSABLE, size now S. The channel exists: Cli.lean::fragmentJson emits an admission object incl. noLeafSubjects (AdmissionDecide.lean admNoLeafSubjectsB, from TK104), and formal/conformance/test_conformance_fragment.py::test_lean_admission_verdict_matches_the_prediction compares it to Python. Residual: tests/test_leaf_namespace_correspondence.py still says zcli exposes exactly three modes and is still a hand mirror. Re-point that test at the Lean verdict, then close.

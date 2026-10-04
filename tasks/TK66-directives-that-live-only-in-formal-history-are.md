@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-07b
-moved: 2026-09-22d
-updated: 2026-09-22d
+moved: 2026-10-04g
+updated: 2026-10-04g
 closed:
 ---
 
@@ -115,3 +115,7 @@ DEMOTED OUT OF THE HANDOFF BANNER 2026-09-22d (budget overflow, the defined move
 
 Nothing about the item changed; it lost a banner line, not a status. The demotion was forced
 by the 2026-09-22d entry (TK94 close + the gate-floor drift repair), which needed a line.
+
+### 2026-10-04g
+
+Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): PARTLY MOOT. PROBED by agent: branch p3-flip-red-2026-09-05 is gone, d6d2dfc not in master, P3/P4 landed, so those bindings are dead. The general problem (directives living only in formal/history/) remains open.

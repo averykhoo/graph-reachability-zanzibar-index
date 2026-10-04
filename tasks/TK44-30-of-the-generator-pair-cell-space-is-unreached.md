@@ -2,7 +2,7 @@
 id: TK44
 title: ~30% of the generator pair-cell space is unreached even at deep budget, with UNKNOWN residue
 brief:
-pri: LATER
+pri: NEXT
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-09-17c
-updated: 2026-09-17c
+moved: 2026-10-04g
+updated: 2026-10-04g
 closed:
 ---
 
@@ -47,3 +47,7 @@ The first pass called this ALREADY_CARRIED and the adversarial pass OVERTURNED i
 The real half is a live ZT-P3-5 recurrence, and I verified all four figures first-hand rather than trusting the report: `tests/test_generator_coverage.py:68` says ~19% and `:428` says ~28% -- the SAME claim, identical wording ("unreached even at `deep`"), contradicting each other inside ONE module -- while `:1152` says ~30% and `docs/sabotage-procedure.md:643` says "roughly a quarter".
 
 Nothing mechanical catches it, and this is worth carrying: `check_restated_counts` (TK58, landed 2026-09-08) is scoped to top-level `docs/` and `tasks/` markdown and to check/open-task/test counts, so a PERCENTAGE in a `.py` docstring is out of scope twice over. The landed text points at `tests/test_generator_coverage.py::test_report_cell_coverage` (:1149, run with -s) as the single live source.
+
+### 2026-10-04g
+
+PROMOTED LATER -> NEXT 2026-10-04g (user pick: NEXT raised to 5). Why: ~30% of the generator pair-cell space unreached even at deep budget, with unexplained residue -- each unreached cell is an input class no property test has ever seen, so explaining (or reaching) them can surface real bugs. Open-ended: time-box the census first and record it in an ACTIVE-PLAN doc. Do NOT close the gap by adding cells to an exemption list.

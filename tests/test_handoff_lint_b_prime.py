@@ -143,10 +143,30 @@ def test_capacities_fall_back_to_the_tree_when_the_table_is_gone(tmp_path, monke
     assert "tasks/ (the board has no row table" in out[0], out
     assert "P3-x.md" in out[0] and "P6-x.md" in out[0], out
 
-    _write_tasks(tmp_path, {"P3": "NOW", "A": "NEXT", "B": "NEXT", "C": "NEXT",
-                            "D": "NEXT"})
+    # The NEXT boundary is DERIVED from the cap, so raising the cap (3 -> 5 on
+    # 2026-10-04g) moves both sides of it: exactly NEXT_MAX is green, one more is red.
+    at_cap = {"N%d" % n: "NEXT" for n in range(handoff_lint.NEXT_MAX)}
+    _write_tasks(tmp_path, dict(at_cap, P3="NOW"))
+    assert _run(handoff_lint.check_priority_capacities) == []
+
+    over = dict(at_cap, P3="NOW", **{"N%d" % handoff_lint.NEXT_MAX: "NEXT"})
+    _write_tasks(tmp_path, over)
     out = _run(handoff_lint.check_priority_capacities)
-    assert len(out) == 1 and "found 4 NEXT open task files" in out[0], out
+    assert len(out) == 1, out
+    assert "found %d NEXT open task files" % (handoff_lint.NEXT_MAX + 1) in out[0], out
+
+
+def test_next_cap_matches_the_shipped_tree_budget():
+    """Two independent checkers enforce the NEXT cap: `task.py lint` reads
+    `tasks/config.json` budgets.NEXT, and `handoff_lint.py` carries its own NEXT_MAX
+    (it imports nothing from the tool it cross-checks). Independence is the point, but
+    two copies of one number drift -- so the VALUES are pinned equal here. Raised to 5
+    together on 2026-10-04g (user instruction).
+    """
+    import json
+    cfg = json.loads((REPO_ROOT / "tasks" / "config.json").read_text(encoding="utf-8"))
+    assert handoff_lint.NEXT_MAX == cfg["budgets"]["NEXT"], (
+        handoff_lint.NEXT_MAX, cfg["budgets"])
 
 
 def test_capacities_do_not_coast_on_an_empty_tree(tmp_path, monkeypatch):

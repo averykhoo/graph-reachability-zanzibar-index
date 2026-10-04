@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-09-10
-updated: 2026-09-10
-closed:
+moved: 2026-10-04g
+updated: 2026-10-04g
+closed: 2026-10-04g
 ---
 
 Open question §8.2 item 2 of the leaf-family-split scope doc: whether the `storage=True` / `storage=False` leaf distinction needs to be modelled at all, or whether one undifferentiated leaf node per index suffices for `Inv`'s purposes. The doc's own answer is *"this probably **does** need modeling, but it was not verified in this pass"* — Python's reason for the split is TTU stored-parent enumeration, and TTU parents are stored tupleset tuples, a pinned semantic.
@@ -51,3 +51,7 @@ The adjudication routed this to a `P4` board-row scope pointer at `HANDOFF.md:51
 The first pass called this ALREADY_CARRIED via the tree's own derived incoming-`related` edges; the adversarial pass overturned that to SUPERSEDED on the stronger ground that the named destination no longer exists in any form. Both agree no prose should be written, which is the operative conclusion.
 
 If the underlying leaf-family-split question still needs a live pointer, it needs a NEW destination decided by a human -- do not re-point it at `HANDOFF.md`. The row stays open.
+
+### 2026-10-04g
+
+CLOSED 2026-10-04g: ANSWERED by the P3/P4 leaf-family work (both closed). The question was whether storage=True / storage=False leaves can be modelled as one leaf. They are modelled DISTINCTLY: formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean allocates Directs merged into ONE storage leaf FIRST (index 0), then closure leaves (READ 2026-10-04g, its header and PLeaf allocation notes), and GraphIndex/LeafBridge.lean::mem_edges_storageLeaf_iff is the edge-content lemma for the storage leaf. formal/CORRESPONDENCE.md records that the <rel>.<i> rows are now MODELLED rather than projected away. The trap (answering "no" is the expensive direction) is moot: the answer shipped as "yes, model it".

@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-12b
-moved: 2026-09-13
-updated: 2026-09-13
-closed:
+moved: 2026-10-04g
+updated: 2026-10-04g
+closed: 2026-10-04g
 ---
 
 A star tupleset whose TTU through-relation is DERIVED (e.g. `doc#control := approver from
@@ -75,3 +75,7 @@ one: the 2026-08-20 census found `bridged_in_shapes` empty on all corpus schemas
 ### 2026-09-13
 
 Pointer only, nothing changed. `formal/CORRESPONDENCE.md` §7.3 now carries the derived-TTU-through-shape boundary entry and cites this row BY ID as the place the Python-only coverage is tracked (anchored to `DeltaProcessor._write_derived` -> `WildcardIndex.add_tuple` -> `_ensure_bridges`, retraction `_gc_public_node` -> `_maybe_remove_bridges`). Two facts measured 2026-09-13 that sharpen this row before anyone starts it: (1) the fragment excludes the shape because `schemaRewrites` DROPS DERIVED DEFS, not because of `W4Fragment.term` -- at such a store `schemaRewrites = []` and every TTU-star predicate is VACUOUS, pinned by `GraphIndex/TtuStarWide.lean::Zanzibar.RoutingArmWitness`; (2) so a corpus for this row must assert its own non-vacuity, or it will pass by measuring nothing. See `P6` Log `2026-09-13`.
+
+### 2026-10-04g
+
+CLOSED 2026-10-04g: PREMISE FALSE -- the graph index does not handle this shape, it REFUSES it. PROBED first-hand 2026-10-04g: the row own example (folder#approver := [user] but not blocked; doc#control := approver from parent; parent: [folder, folder:*]) raises UnsupportedByGraphIndex "star tupleset [folder:*] on parent derives the wildcard userset shape (folder, approver) over the derived relation folder#approver, which needs symbolic composition through residues" (zanzibar_utils_v1.py, the v1 scope hook; refusal text present since 7646406, 2026-07-08, i.e. before this row was filed 2026-09-12b). Same schema with parent: [folder] (no star) compiles, and is ordinary in-scope TTU. So there is no graph-side bridge behaviour to pin; the refused family is already driven set-engine-vs-oracle WITH REMOVES by tests/test_tk116_oracle_only_setengine.py (family star-tupleset-over-derived-target). The CORRESPONDENCE.md sec 7.3 pointer to this id is now a pointer to a closed row; re-pointing it waits for the TK120 restructure (docs on hold).

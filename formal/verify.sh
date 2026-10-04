@@ -631,7 +631,10 @@ MIN_CONF_ALL=1085
 #   FINAL_REVIEW.md's generated block already said, so the 2026-10-04 sessions (TK114-
 #   TK117, TK101) regenerated the block and did not ratchet this floor. NOT broken down
 #   per file. 1735 + 9 = 1744.
-MIN_TESTS_ALL=1744
+# Re-measured 2026-10-04g (NEXT cap 3 -> 5) with the same command: 1745. +1 is the new
+#   tests/test_handoff_lint_b_prime.py::test_next_cap_matches_the_shipped_tree_budget.
+#   1744 + 1 = 1745. No drift.
+MIN_TESTS_ALL=1745
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

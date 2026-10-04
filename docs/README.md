@@ -146,7 +146,7 @@ ranking argument happens once at write time instead of being re-derived every se
 | word | meaning | capacity |
 |---|---|---|
 | `NOW` | the single item an unassigned session should pick up | **exactly 1** |
-| `NEXT` | the items most likely to be picked next or run in parallel with `NOW` | **at most 3** |
+| `NEXT` | the items most likely to be picked next or run in parallel with `NOW` | **at most 5** (raised from 3 on 2026-10-04g, user instruction) |
 | `LATER` | real, not queued; re-ranked when `NOW`/`NEXT` drain | unbounded |
 | `HOLD` | deferred by an explicit recorded decision (→ pointer) | unbounded |
 | `SOMEDAY` | revisit only on a concrete need | unbounded |
@@ -156,7 +156,7 @@ ranking argument happens once at write time instead of being re-derived every se
 requirement to gather, a priority call — as opposed to an engineering decision the model
 should simply take (`CLAUDE.md` § "Who decides"). It sits at `LATER` by default; promoting
 one to `NEXT` means **the session must raise it with the user, in chat, at least once that
-session**. `NEXT`'s cap of 3 therefore bounds the standing nags at three, and an `ASK-*`
+session**. `NEXT`'s cap of 5 therefore bounds the standing nags at five, and an `ASK-*`
 competes for those slots on the same terms as any other row. The nag is enforced, not
 remembered: while an ask sits at `NEXT` (or `NOW`, which never silences it), the ledger
 entry names it on an `asked:` line (§7 step 1). Filing rules and the `asks` view:
@@ -168,7 +168,7 @@ entry names it on an `asked:` line (§7 step 1). Filing rules and the `asks` vie
 |---|---|---|
 | 🟢 / 🔴 | gate state — banner only | 1 |
 | ⚠ | a trap: acting without reading this line produces WRONG work | at most 10 in `HANDOFF.md` (`handoff_lint.py::WARN_BUDGET`) |
-| 🧭 | points at an open `ASK-*` row — the ROW carries the question, the line carries the id | at most 3 (one per `NEXT` ASK) |
+| 🧭 | points at an open `ASK-*` row — the ROW carries the question, the line carries the id | at most 5 (one per `NEXT` ASK) |
 
 ⚠ **The compass badge DRIFTED, and the cause is this section's own heading.** It read
 "waiting on a user decision (the line must name the decision)" with a budget of "as

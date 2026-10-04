@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-18c
-moved: 2026-09-18c
-updated: 2026-09-18c
-closed:
+moved: 2026-10-04g
+updated: 2026-10-04g
+closed: 2026-10-04g
 ---
 
 TODO: one paragraph -- what this item is and why it matters.
@@ -41,3 +41,7 @@ THE ITEM. Either fix the generator in both probes and re-run anything cited from
 THE DURABLE RULE, worth promoting if it recurs: a harness that writes DIRECTLY to a backend must reproduce that backend admission semantics, or its oracle comparison means nothing. Prefer driving TupleSource/ConnectedStore, which dedupes for you.
 
 TRAP: do not cite SETTLE_RAN = 0 from habitat_census.py or habitat_fuzz.py again.
+
+### 2026-10-04g
+
+CLOSED 2026-10-04g via the row own OPTION 2 (delete the probes): .scratch/tk74c-habitat/ and .scratch/tk74c-gcroute/ no longer exist and no habitat_* file exists anywhere outside .lake (PROBED 2026-10-04g; the only tracked hit for "habitat" is the closed row TK16 "inhabitation"). The numbers that matter are carried by docs/tk74-staleness-net-2026-09-18.md sec 10.8 and the 10.9 table (SETTLE_RAN 0 -> 1 -> 5 deduped; "must not be cited again"). CAVEAT for readers of that doc: two body sites in its earlier sections still quote the contaminated census figures inline (2385-cascade census, 16,497) and only its dated header and sec 10.8 correct them -- the doc is a FROZEN closed-row doc, so the correction stays where it is. The durable rule (a harness writing DIRECTLY to a backend must reproduce its admission semantics; prefer driving TupleSource/ConnectedStore) stays recorded on this row.

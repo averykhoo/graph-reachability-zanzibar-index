@@ -94,7 +94,7 @@ schema feature — it is the `--id` escape above used deliberately, exactly as `
 
 * **`LATER` by default; `NEXT` means "remind me every session."** A session that sees an
   `ASK-*` at `NEXT` must raise it with the user, in chat, at least once that session.
-  `NEXT` is capped at 3, so there are at most three standing nags.
+  `NEXT` is capped at 5 (since 2026-10-04g), so there are at most five standing nags.
 * **The nag is mechanical (`TK96`, 2026-09-27).** While any open `ASK-*` sits at `NEXT`
   (or `NOW` -- a promotion never silences it, decided 2026-09-28), the newest session-log
   entry must carry `asked: ASK-<n>[, ASK-<m>]` naming EVERY one of them, or

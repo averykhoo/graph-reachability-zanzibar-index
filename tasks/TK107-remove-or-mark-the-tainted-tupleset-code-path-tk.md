@@ -2,7 +2,7 @@
 id: TK107
 title: remove (or mark) the tainted-tupleset code path TK106 made unreachable
 brief: dead code since TK106: PDerivedTuplesetTTU + processor/bulk derived_stored_* are unreachable
-pri: LATER
+pri: NEXT
 size: M
 deps: []
 related: [TK106]
@@ -11,8 +11,8 @@ labels: []
 source: hand
 source_hash:
 created: 2026-09-26b
-moved: 2026-09-26b
-updated: 2026-09-26b
+moved: 2026-10-04g
+updated: 2026-10-04g
 closed:
 ---
 
@@ -37,3 +37,7 @@ Cautions:
 First step: a census of call sites (file::symbol), and a mutation that deletes each branch while the gate stays green. That proves each branch is dead rather than assuming it.
 
 ## Log
+
+### 2026-10-04g
+
+PROMOTED LATER -> NEXT 2026-10-04g (user: NEXT raised to 5). Why: TK106 made the tainted-tupleset path unreachable (zanzibar_utils_v1.py::_validate_tuplesets_direct and its oracle twin), yet PDerivedTuplesetTTU and the processor derived_stored_* helpers remain. Dead code cannot answer wrong, so this is surface reduction, not new certainty -- but do it BEFORE TK120 (fewer symbols and CORRESPONDENCE.md anchors to move). Check whether P25-adjacent bridge code is part of the same dead set.

@@ -32,6 +32,62 @@ from here.
 
 ---
 
+## 2026-10-04g — NEXT cap 3 -> 5; five correctness rows to NEXT; five stale rows closed
+
+rows: TK102, TK79, TK107, TK44, TK118 (LATER -> NEXT); P25, TK81, TK6, ZT-P5, TK84 (CLOSED); P21, P8, B2, TK62, TK67, TK3, TK85, TK66, TK4 (comment only)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 30 warning(s)`
+
+`read: board only`
+
+The user asked what was at NOW/NEXT, then which LATER rows should be NEXT, ranked by how much
+they would raise certainty that the code is correct. NEXT was empty again, so the user raised
+its cap to 5 ("we keep running out of next tasks") and picked five rows.
+
+**The cap.** It is enforced in two places by design: `task.py lint` reads
+`tasks/config.json` budgets.NEXT, and `scripts/handoff_lint.py::NEXT_MAX` is an independent
+copy (that script imports nothing from the tool it cross-checks). Both are now 5. The new
+`tests/test_handoff_lint_b_prime.py::test_next_cap_matches_the_shipped_tree_budget` pins the
+two values equal. Sabotage: `NEXT_MAX = 4` gave `assert 4 == 5`, 1 failed. The capacity test's
+NEXT boundary is now derived from `NEXT_MAX`: exactly at the cap is green, one over is red.
+`tests/test_tasktool.py::test_board_stays_under_its_size_ceiling` now renders the board at the
+SHIPPED NEXT budget, not the fixture's 3, and it still fits `BOARD_MAX_LINES` at 5.
+`docs/README.md` §4 and `tasks/README.md` were updated to say 5.
+
+**The ranking** came from a triage agent and was spot-checked first-hand (`run_graph = name in
+GRAPH_FRAGMENT` in the enum arm; `drain_deltas` callers). The reasons are on each row's log:
+- `TK102`: the exhaustive enum arm skips the graph outside the fragment.
+- `TK79`: no replica consumer of the drained outbox.
+- `TK107`: dead tainted-tupleset code; do it BEFORE `TK120`.
+- `TK44`: unreached generator cells.
+- `TK118`: residue paranoia misses I14.
+
+**Closed, each verified first-hand before closing** (the evidence is in each close message):
+- `P25`'s premise is false. The graph REFUSES its own example schema
+  (`UnsupportedByGraphIndex`, PROBED), and `TK116` already drives that family set engine vs
+  oracle.
+- `TK81` was an empty stub whose finding is carried by `TK85` and the `TK74` doc.
+- `TK6` was answered by `P3`/`P4`: storage leaves are modelled distinctly in
+  `GraphIndex/Leaf.lean`.
+- `ZT-P5`: all 8 bullets are closed or carried by `LT-1`.
+- `TK84`: its option 2 (delete the probes) has happened.
+
+A second agent swept every other open row for closability; the five closes above are all it
+or the triage found. Its partly-done findings (`P21` nearly closable, `P8`'s premise
+superseded, merge candidates `TK3`/`TK85` and `TK67` into `P6`, `TK4` decidable by the model)
+were written onto those rows as UNVERIFIED agent reports. The `.scratch/` report directories
+were deleted after transcription.
+
+**Ranking unchanged otherwise:** `TK120` stays `NOW`, and its plan still needs user approval
+before any file moves. `TK107` is the one NEXT row that should land before it.
+
+Gate: all ten `verify.sh` phases ran green on 2026-10-05 (scheduled follow-up the user asked for;
+`gate_status.py`: COVERED on this tree), then `lean` was re-run after this line was written.
+
+Still owed: none.
+
+---
+
 ## 2026-10-04f — TK121 CLOSED: a stalled async index is recovered by `rebuild_index`, in place; TK120 to NOW
 
 rows: TK121 (NOW -> CLOSED), TK120 (NEXT -> NOW)

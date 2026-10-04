@@ -11,8 +11,8 @@ labels: [docs, infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-09-10
-updated: 2026-09-10
+moved: 2026-10-04g
+updated: 2026-10-04g
 closed:
 ---
 
@@ -45,3 +45,7 @@ LANDED 2026-09-10 (TK53 append), as a dated entry at the TOP of `docs/spec-devia
 The prior sweep called this ALREADY_CARRIED and an adversarial pass OVERTURNED it, correctly. `docs/architecture/theory.md:82-83` describes the lenient EDGE, not the per-shape FLAG that sec 3.4 actually mandates, and it predates the finding; `decision-log.md`'s "Non-goals (documented hooks only)" list is inherited verbatim from `docs/specs/graph-boolean-ivm-spec.md:259` (the BOOLEAN spec), so it cannot adjudicate wildcard sec 3.4; and `decision-log.md:224` declines the question on purpose. None of the three carried it.
 
 Verified first-hand: sec 3.4 at `wildcard-materialization-spec.md:141` names "a per-shape config flag"; sec 10 at :324 lists the mode under Non-goals with NO condition attached; and a sweep of the backends for a per-shape/lenient/vacuous config surface returns only unrelated prose. The entry deliberately does NOT pick outcome (a) or (b) -- the row's trap reserves that for a human.
+
+### 2026-10-04g
+
+Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): DECIDABLE NOW. Its trap reserves the call for a human, but CLAUDE.md 'Who decides' (2026-09-12b) delegates such calls to the model: decide it and record the reasoning here.

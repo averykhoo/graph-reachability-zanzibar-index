@@ -178,8 +178,11 @@ TASKS_DIR = 'tasks'
 # that trade, and the disagreement it could cause is a spurious extra id, not a missed one.
 TASKS_NON_TASK_MD = ('BANNER.md', 'README.md')
 
-NEXT_MAX = 3          # redesign section 4: NEXT is capped so the ranking argument happens
+NEXT_MAX = 5          # redesign section 4: NEXT is capped so the ranking argument happens
                       # once, at write time, instead of every session re-deriving it.
+                      # Raised 3 -> 5 on 2026-10-04g (user instruction: NEXT kept running
+                      # dry). Must equal tasks/config.json budgets.NEXT; pinned by
+                      # tests/test_handoff_lint_b_prime.py::test_next_cap_matches_the_shipped_tree_budget.
 WARN_BUDGET = 10      # redesign section 4: traps rank only while they are scarce.
 HEADLINE_MAX = 120    # a ledger headline is copied verbatim into the board banner.
 

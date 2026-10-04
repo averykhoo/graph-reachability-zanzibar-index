@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-19b
-moved: 2026-09-19b
-updated: 2026-09-19b
+moved: 2026-10-04g
+updated: 2026-10-04g
 closed:
 ---
 
@@ -88,3 +88,7 @@ which is accurate and should stay accurate if this ships).
   false green.
 
 ## Log
+
+### 2026-10-04g
+
+Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): overlaps TK3 almost entirely (see TK3 log 2026-10-04g): merge or narrow one of them.

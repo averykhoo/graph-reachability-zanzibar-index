@@ -11,8 +11,8 @@ labels: [infra]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-09-07b
-updated: 2026-09-07b
+moved: 2026-10-04g
+updated: 2026-10-04g
 closed:
 ---
 
@@ -77,3 +77,7 @@ task bodies, so there is one home and nothing to diff. That is a larger, separat
 Evidence this matters is unchanged and stays on the record: R6-11 inflated "8x" was wrong in
 four places for a week (a cProfile generator-resume artifact; the halving is now pinned at
 benchmarks/profile_r6.py::_ctxmgr_entries, which refuses an odd ncalls).
+
+### 2026-10-04g
+
+Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): PARTLY STALE. TK48 banner fix landed and the figure check was declined on the row. Its claim that check 14 resolves the ### R6-N heading is FALSE: scripts/task.py::check_read_first docstring says THE PATH ONLY, NEVER THE LINE. Serves only R6, deprioritized by the 2026-09-22c goal decision: demote candidate.

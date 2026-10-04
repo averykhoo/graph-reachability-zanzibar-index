@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-09-18
-updated: 2026-09-18
+moved: 2026-10-04g
+updated: 2026-10-04g
 closed:
 ---
 
@@ -49,3 +49,7 @@ LANDED 2026-09-10 (TK53 append). The statement now lives in `formal/README.md`, 
 Verified first-hand before writing, not taken from the agent report: `index_v4/processor.py::DeltaProcessor.audit_fixpoint` is defined at :1658 and EVERY call site is under `tests/` (parity.py:98, test_connectedstore*.py, test_connectedstore_concurrency.py:145) -- no production caller. `invariants.py:184` states the exclusion by design. `SEMANTICS.md` sec 11 is at :902 and A1 at :907 (the row's own `## Read first` cites :891-899, which is 16 lines stale -- lint check 14 resolves pointers, not line numbers, so it stays green).
 
 Not closed: the row is still the open question of whether a per-write check is wanted. What changed is that the STATEMENT is no longer sole-homed in `tasks/`.
+
+### 2026-10-04g
+
+Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): PARTLY SUPERSEDED. TK82 shipped the per-cascade fixpoint tier (index_v4/invariants.py PARANOIA_FIXPOINT), so 'I9 is test-only' no longer holds for the execution-side class. Remaining: 'writes always cascade' is still a convention (connectedstore/apply.py always cascades on the composed path); the never-scheduled class is TK85. Merge with TK85 or narrow this row to the convention half.

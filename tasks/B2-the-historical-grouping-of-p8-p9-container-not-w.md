@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: acked-no-row
 created: 2026-08-16
-moved: 2026-08-16
-updated: 2026-08-21
+moved: 2026-10-04g
+updated: 2026-10-04g
 closed:
 ---
 
@@ -34,3 +34,7 @@ The historical grouping of `P8` (write `W4WitnessSelfRef`) and `P9` (lift the re
 Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`created` is an approximation**: the board never recorded one, so it is set to this row’s `moved` value (`2026-08-16`), which is an upper bound on the real creation date, not a measurement. `B2` had no board row of its own — it is reconstructed from `HANDOFF.md`’s "`B2` survives as the historical grouping of `P8` + `P9`" line, and `moved` is borrowed from its children. **`pri` and `size` are NOT a ranking**: nobody ever ranked or sized `B2`. It is OPEN, and lint requires both fields on an open row (a row an unassigned session could pick up has to sort), so this carries the two least-asserting values the enums have — `LATER` (`task.py new`’s own default) and `?`, which is the size enum’s literal "unsized". The previous `size: M` was invented and has been removed.
 
 No row on HANDOFF.md, and that is correct: B2 is prose-only there -- the board names it once, in the retired line's trailing clause "B2 survives as the historical grouping of P8 + P9", which is a note about what the id MEANS, not a ranked row. It is also not retired: handoff_lint.py's line-by-line harvest truncates that span, so the id the clause names is deliberately excluded from the retired set (verified: the harvest yields B1, BL-1, BL-2, GS-1, GS-2, HS-1..HS-4, P1, P2, ZT-* and no B2). So there is nothing to close and nothing to file; the absence of a row is the expected steady state.
+
+### 2026-10-04g
+
+Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): pure container ('carries no work of its own'); closable once P8 resolves -- see P8 log 2026-10-04g.
