@@ -2,7 +2,7 @@
 id: TK101
 title: object-wildcard WRITES are unenumerable: _tuple_space emits '*' only as a subject
 brief: censused 2026-09-22c as hole H4; found in TK71's traps 2026-09-16b and never owned
-pri: NEXT
+pri: NOW
 size: M
 deps: []
 related: [TK71, TK94, P25]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-22c
-moved: 2026-10-04c
-updated: 2026-10-04c
+moved: 2026-10-04d
+updated: 2026-10-04d
 closed:
 ---
 
@@ -76,3 +76,7 @@ Then say, per arm, WHICH branch newly runs. A new arm that passes is not evidenc
   the Lean-side narrowness on the same shape, and the note naming its LOUD sub-case.
 
 ## Log
+
+### 2026-10-04d
+
+PROMOTED NEXT -> NOW 2026-10-04d, following the user's 2026-10-04c order (TK116, then TK101 and TK121). A precedent from TK116: tests/test_tk116_oracle_only_setengine.py::_pool emits a '*' OBJECT on every declared relation in the CLOSED object-wildcard shapes (SetEngine.schema_info.object_wildcard_shapes), which is the shape this row says _tuple_space never produces. It found a real set-engine lookup fail-open on its first run, so object-star writes are worth enumerating.

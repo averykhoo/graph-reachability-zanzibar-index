@@ -598,11 +598,10 @@ def test_every_tupleset_kind_is_driven_against_the_oracle():
         for negated in (False, True):
             schema = _ts_probe_schema(kind, negated)
             ast = parse_schema_ast(schema)
-            try:
-                parse_openfga_schema(schema)
-            except UnsupportedByGraphIndex as e:   # decision-15 scope: nothing to compare
-                _assert_recorded_scope_rejection(str(e), f'{kind} probe schema')
-                continue
+            # Every probe cell joins the graph (10 of 10 since TK106, measured 2026-09-27);
+            # the skip-on-refusal `continue` that stood here was dead, and would have hidden
+            # a cell that stopped joining. A refusal now raises out of the test (TK116).
+            parse_openfga_schema(schema)
             ttu_grid = [q for q in _grid(ast) if q[3] == 'r1']
             assert ttu_grid, f'{kind}: the grid never queries the TTU relation'
             # One stored-parent candidate per DISTINCT subject shape: driving `folder:f1`

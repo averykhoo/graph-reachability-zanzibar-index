@@ -60,7 +60,8 @@ it drops information:
       (markers against the intensional '*'-object query); exact two-sided over
       ALL candidates -- tuple-anchored object keys are write-time interned
       (§6.4 reverse-dependency interning, the X1 fix), and star-object truth is
-      carried exactly by the intensional markers.
+      carried exactly by the intensional markers MINUS ``excluded_node_ids``
+      (TK116, 2026-10-04: every excluded id is concrete, marker-covered and O-false).
 
 Genuine-divergence inventory (each was a wrong/undefined read answer when
 found; FIXED entries are pinned as plain regression tests below, open ones as
@@ -123,7 +124,7 @@ from setengine.memberset import MemberSet
 from zanzibar_utils_v1 import (Direct, TTU, Union, Intersection, Exclusion,
                                parse_openfga_schema, parse_schema_ast,
                                derive_schema_info, unparse_schema_ast,
-                               UnsupportedByGraphIndex,
+                               UnsupportedByGraphIndex, CyclicDerivedDependency,
                                DoublyBridgedShapeError,
                                wildcard_userset_restriction_shapes)
 from tests.oracle import Oracle, OracleTuple
@@ -345,6 +346,11 @@ def _check_set_forward(se, oc, subject, objects, res):
         assert oc(sp, st, sn, p, t, '*'), (
             f'set.lookup{subject} [{se.ops.name}]: marker ({t},{p}) is oracle-false '
             f'for the intensional star-object query')
+    for nid in res.excluded_node_ids:                           # S4 exclusion soundness
+        t, n, p = se.interner.key(nid)
+        assert n != '*' and (t, p) in res.markers and not oc(sp, st, sn, p, t, n), (
+            f'set.lookup{subject} [{se.ops.name}] excluded {t}:{n}#{p}, which is '
+            f'star-only, marker-uncovered, or oracle-true')
     for (rel, ot, on) in objects:
         expected = oc(sp, st, sn, rel, ot, on)
         if on == '*':
@@ -354,7 +360,10 @@ def _check_set_forward(se, oc, subject, objects, res):
                 f'marker={got} oracle={expected}')
             continue
         nid = se.interner.get(ot, on, rel)
-        covered = (nid is not None and nid in res.node_ids) or (ot, rel) in res.markers
+        # TK116: a marker covers every object EXCEPT its excluded ids (a `but not` under
+        # an object wildcard, graph-refused schemas only).
+        covered = (nid is not None and nid in res.node_ids) or (
+            (ot, rel) in res.markers and nid not in res.excluded_node_ids)
         # Exact over ALL candidates since the X1 fix: every tuple-anchored object
         # key is write-time interned (TTU/Computed reverse deps included), and the
         # only remaining truth source for an uninterned key is star-object
@@ -373,22 +382,35 @@ class _Gate:
     """Graph + both set engines in lockstep, with the full lookup-surface-vs-oracle
     assertion battery runnable at any state."""
 
-    def __init__(self, schema, object_wc, pool):
+    def __init__(self, schema, object_wc, pool, *, allow_graph_absent=False):
         self.schema = schema
-        ruleset = parse_openfga_schema(schema, object_wildcard_shapes=object_wc)
-        self.graph = _GraphSide(ruleset, paranoia=True)
+        try:
+            ruleset = parse_openfga_schema(schema, object_wildcard_shapes=object_wc)
+            self.graph = _GraphSide(ruleset, paranoia=True)
+        except (UnsupportedByGraphIndex, CyclicDerivedDependency):
+            # TK116: a graph-refused schema still runs on the set engine, with the oracle
+            # as its only cross-check -- so check the SET surfaces rather than skip it.
+            # Opt-in: a caller that expects the graph must still see the refusal.
+            if not allow_graph_absent:
+                raise
+            self.graph = None
         self.sets = [_SetSide(schema, object_wc, ops) for ops in ALL_SETOPS]
         self.ast = parse_schema_ast(schema)
         names = _names_by_type(pool)
         self.subjects = _subject_candidates(self.ast, names)
         self.objects = _object_candidates(self.ast, names)
-        self.derived = self.graph.widx.schema_info.derived_families
+        self.derived = (self.graph.widx.schema_info.derived_families if self.graph
+                        else frozenset())
         self.present: set[tuple] = set()
         self.history: list[tuple] = []
+        self.set_checks = 0         # non-vacuity: set-side surface batteries actually run
 
     def apply(self, op, raw):
-        ok = self.graph.apply(raw, op)
+        first = self.graph or self.sets[0]
+        ok = first.apply(raw, op)
         for side in self.sets:
+            if side is first:
+                continue
             ok_s = side.apply(raw, op)
             assert ok_s == ok, (
                 f'accept/reject divergence on {op} {raw}: graph={ok} {side.name}={ok_s}')
@@ -407,14 +429,15 @@ class _Gate:
             return memo[q]
 
         try:
-            for subject in self.subjects:
+            for subject in self.subjects if self.graph else ():
                 _check_graph_forward(self.graph.widx, self.ast, oc, subject, self.objects,
                                      self.graph.widx.lookup(*subject))
-            for obj in self.objects:
+            for obj in self.objects if self.graph else ():
                 _check_graph_reverse(self.graph.widx, oc, self.subjects, obj,
                                      self.graph.widx.lookup_reverse(*obj))
             for side in self.sets:
                 se = side.se
+                self.set_checks += 1
                 for subject in self.subjects:
                     _check_set_forward(se, oc, subject, self.objects, se.lookup(*subject))
                 for obj in self.objects:
@@ -426,18 +449,23 @@ class _Gate:
                         + '\n'.join(f'  {op} {raw}' for op, raw in self.history))
 
     def close(self):
-        self.graph.close()
+        if self.graph:
+            self.graph.close()
         for side in self.sets:
             side.close()
 
 
-def _run_gate(schema, object_wc, pool, seed, walk_steps):
-    gate = _Gate(schema, object_wc, pool)
+def _run_gate(schema, object_wc, pool, seed, walk_steps, *, allow_graph_absent=False,
+              on_apply=None):
+    gate = _Gate(schema, object_wc, pool, allow_graph_absent=allow_graph_absent)
     rng = random.Random(seed)
     present = gate.present
 
     def apply_all(op, raw):
-        return gate.apply(op, raw)
+        ok = gate.apply(op, raw)
+        if on_apply is not None:
+            on_apply(op, raw, ok)
+        return ok
 
     def assert_state():
         gate.assert_surfaces(context=f'seed={seed}')
@@ -534,7 +562,9 @@ def test_lookup_oracle_gate_generated_schemas(ast, data):
             f'UNRECORDED graph scope rejection on a generated schema -- this is either a '
             f'new rejection family that belongs in genswarm.REJECTION_WITNESSES, or a '
             f'genuine compile bug. Do not silence it.\nschema:\n{schema}\nexc: {exc}')
-        return
+        # TK116 (2026-10-04): the set engine still runs a graph-refused schema, with the
+        # oracle as its only cross-check, so drive its surfaces instead of returning.
+        gate = _Gate(schema, frozenset(), pool, allow_graph_absent=True)
     try:
         gate.assert_surfaces(context='generated: initial')
         for raw in ops:

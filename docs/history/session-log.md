@@ -32,6 +32,52 @@ from here.
 
 ---
 
+## 2026-10-04d — TK116 CLOSED: set engine vs oracle with removes on every graph-refused family; a lookup fail-open fixed
+
+rows: TK116 (NOW -> CLOSED), TK101 (NEXT -> NOW)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 33 warning(s)`
+
+`read: board only`
+
+The user said "do the next task". The board's `NOW` row was `TK116`: schemas the graph index
+refuses still run on the set engine, with the oracle as the only cross-check, and nothing drove
+them with removes.
+
+**Re-scoped first (READ).** Since the row was filed, `TK106`/`TK108`/`ASK-1`/`TK114` turned
+seven of the eleven genswarm rejection witnesses into PARSE refusals, which both backends
+refuse. What is left is the 12 `UnsupportedByGraphIndex` / `CyclicDerivedDependency` raise
+sites in `zanzibar_utils_v1.py`. Nine are reachable from a checked parse and three are not.
+Each reachable one has a witness in `tests/test_tk116_oracle_only_setengine.py`, and a census
+pins the count with zero headroom.
+
+**FOUND AND FIXED: a set-engine `lookup` fail-open.** The new set-only lookup gate went red on
+its first run. On `viewer: ([user] or public) but not blocked` with an object wildcard on
+`viewer`, `lookup(user:n1)` returned the marker `(doc, viewer)` -- "every doc" -- while `check`
+correctly said n1 cannot view `doc:n2`. `LookupResult` had no way to carry the exception. It
+now has `excluded_node_ids`, with the same name and meaning as the graph's field. It reaches
+graph-refused schemas only, so only standalone `SetEngine` users were exposed. Forward
+`lookup` is not modelled in Lean.
+
+**Decision (the session's).** The admission asymmetry is KEPT and pinned: the same data cycle
+is refused when the schema joins the graph and accepted when it does not. Cycle rejection is
+the graph's admission constraint, not a semantic rule, and the accepted cycles are now
+oracle-checked.
+
+**Also landed:** `_Gate(allow_graph_absent=True)`, so the generated lookup gate runs set-only on
+a refusal instead of returning (plus a deterministic floor). The stale `_would_cycle` comment
+is rewritten, and the dead `continue` in the tupleset-kind hypothesis test is removed. The
+11-mutation sweep with an M0 control went 11/11 RED. M3 was predicted INERT and was not; the
+explanation is in the map. Map (FROZEN):
+[`docs/tk116-oracle-only-setengine-2026-10-04.md`](../tk116-oracle-only-setengine-2026-10-04.md).
+
+**Re-rank:** `TK101` to `NOW`, following the user's order. It is the object-wildcard WRITE
+enumeration hole, and this session's pool is a working precedent for it.
+
+Still owed: none.
+
+---
+
 ## 2026-10-04c — TK117 CLOSED: the ParityEngine grid always asks the queries at the written object; TK116 to NOW
 
 rows: TK117 (NOW -> CLOSED), TK116 (LATER -> NOW), TK101 / TK121 / TK120 (LATER -> NEXT)

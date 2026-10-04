@@ -11,9 +11,9 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-10-04c
-updated: 2026-10-04c
-closed:
+moved: 2026-10-04d
+updated: 2026-10-04d
+closed: 2026-10-04d
 ---
 
 Filed from the P10 re-run (2026-09-27d). Full witness, provenance and reconciliation: [`docs/p10-scope-audit-2026-09-27.md`](../docs/p10-scope-audit-2026-09-27.md) §5 H6. The section is copied below as it stood when filed; the doc is the body of record.
@@ -65,3 +65,11 @@ row's cyclic-derived witness set.
 ### 2026-10-04c
 
 PROMOTED LATER -> NOW 2026-10-04c with user go ("okay", in chat). Highest remaining 2026-10-03c triage score (2) with TK101, and the most direct hit on equivalence. Order the user set: correctness fixes first (this row, then TK101 and TK121), then the TK120 restructure, then docs work.
+
+### 2026-10-04d
+
+CLOSED 2026-10-04d. Every graph-refused family reachable from a checked parse (9 of 12 refusal raise sites; the other 3 are parse-refused or enable_boolean=False only) is now driven set-vs-oracle WITH REMOVES: tests/test_tk116_oracle_only_setengine.py (45 tests, collected 2026-10-04d). Scripted family writes (star objects, star tuplesets, wildcard usersets over derived, data cycles), all accepted then all removed, then a seeded walk and a drain; full ParityEngine grid after every op. Census pins raise-site count == witnesses + unreachable, zero headroom.
+
+FOUND AND FIXED A FAIL-OPEN: SetEngine.lookup emitted a (T, rel) "every object" marker on a `but not` relation under an object wildcard with no way to exclude the subtracted objects (owc-on-derived, owc-expands-onto-leaf). check was right; lookup listed doc:n2 for a user blocked on it. Fix: LookupResult.excluded_node_ids (same name and meaning as index_v4's field), filled per marker with interned concretes that check refutes. Graph-refused schemas only; standalone SetEngine users only (save_schema refuses these schemas). Forward lookup is not modelled in Lean (CORRESPONDENCE.md sec 7 P1).
+
+Also: _Gate(allow_graph_absent=True) so the generated lookup gate runs set-only on refusals instead of returning (+ a deterministic floor); stale _would_cycle comment rewritten; dead continue removed from test_every_tupleset_kind_is_driven_against_the_oracle. DECISION: the admission asymmetry (cycle refused iff graph joins) is KEPT and pinned (test_admission_asymmetry_is_deliberate). 11-mutation sweep with M0 control: 11/11 RED; M3 predicted INERT and was not (explained). Map (FROZEN): docs/tk116-oracle-only-setengine-2026-10-04.md.

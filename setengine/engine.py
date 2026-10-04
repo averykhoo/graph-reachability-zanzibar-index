@@ -128,9 +128,15 @@ class LookupResult:
     def __init__(self):
         self.node_ids: set[int] = set()               # concrete result ids
         self.markers: set[tuple[str, str]] = set()    # (type, predicate) star shapes
+        # "every object of a marker's shape EXCEPT these" (the index_v4 field's name and
+        # meaning): interned concrete ids a marker would cover but ``check`` refutes. Only
+        # a ``but not`` / ``and`` under an object wildcard fills it -- graph-refused
+        # schemas only (TK116, docs/tk116-oracle-only-setengine-2026-10-04.md sec 2).
+        self.excluded_node_ids: set[int] = set()
 
     def __repr__(self):
-        return f'LookupResult(node_ids={self.node_ids}, markers={self.markers})'
+        return (f'LookupResult(node_ids={self.node_ids}, markers={self.markers}, '
+                f'excluded_node_ids={self.excluded_node_ids})')
 
 
 def _denorm_pred(pred: str) -> str | EllipsisType:
@@ -977,8 +983,12 @@ class SetEngine:
                 f"cycle in the userset membership topology")
 
     def _would_cycle(self, s_pred, s_type, s_name, relation, o_type, pairs) -> bool:
-        # Boolean schemas have no graph partner and the oracle evaluates cyclic schemas
-        # rather than rejecting -- so we do not reject data cycles for them.
+        # A schema the graph REFUSES (decision-15 scope, cyclic derived dependencies) has
+        # no graph partner, and the oracle evaluates cyclic data rather than rejecting it
+        # -- so data cycles are admitted there. Deliberate (TK116, 2026-10-04): cycle
+        # rejection is the graph's admission constraint, not a semantic rule; pinned by
+        # tests/test_tk116_oracle_only_setengine.py::test_admission_asymmetry_is_deliberate.
+        # (Boolean schemas the graph compiles DO have a partner since P7, and reject.)
         if self._ruleset is None:
             return False
 
@@ -1546,6 +1556,16 @@ class SetEngine:
         for (t, rel) in self.ast:                          # declared (type, relation)
             if self.check(s_pred, s_type, s_name, rel, t, '*'):
                 result.markers.add((t, rel))
+                # TK116: a marker says "every t object", but under `but not` / `and` the
+                # star-object answer can hold while a concrete object is refuted -- a
+                # fail-open unless the marker carries its exceptions. Every tuple-anchored
+                # object key is write-time interned (X1), so the interned shape is the
+                # whole candidate set (stars are never in ``ids_of_shape``); an
+                # uninterned object answers as the star does.
+                for oid in self.interner.ids_of_shape.get((t, rel), ()):
+                    if not self.check(s_pred, s_type, s_name, rel, t,
+                                      self.interner.key(oid)[1]):
+                        result.excluded_node_ids.add(oid)
         # Seed from the subject's memberships, addressed by SHAPE via
         # ``_reverse_neighbors_key`` so an UNINTERNED subject is seeded too (it
         # resolves its own id for H1 when live). A ghost/uninterned subject can still
