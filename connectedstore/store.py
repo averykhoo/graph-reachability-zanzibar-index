@@ -83,9 +83,13 @@ class IndexStalled(LookupNotFresh):
 
     RECOVERABLE once the stall clears: any successful ``catch_up`` batch ends it. A
     stall recorded on a transient failure (a lock timeout, a lost connection) clears on
-    the next good batch. A poison row needs operator action -- raise the fan-out cap,
-    or rebuild the index -- and ``ConnectedStore.stall_error`` says which row failed
-    and why."""
+    the next good batch. A poison row needs operator action, and
+    ``ConnectedStore.stall_error`` says which row failed and why. Since TK112 the
+    fan-out cap is suspended in ``catch_up``, so the poison row left is a path-count
+    overflow (``PathCountExceeded``). It never clears by itself, not even when a later
+    REMOVE undoes it, because that REMOVE waits behind it. Remove the tuple at the
+    source, then ``connectedstore.rebuild_index`` (TK121,
+    ``docs/tk121-stall-recovery-2026-10-04.md``)."""
 
 
 class ConnectedStore:
@@ -434,8 +438,8 @@ class ConnectedStore:
                 f'{self.cursor.stall_error} -- so its staleness is unbounded and a '
                 f'revoked principal could stay listed indefinitely (TK111). check() '
                 f'still answers, from the set engine. Clear the stall (a successful '
-                f'catch_up(); for a poison row raise the fan-out cap or rebuild the '
-                f'index) and retry.')
+                f'catch_up(); for a poison row, remove the tuple at the source and '
+                f'then rebuild_index()) and retry.')
         raise LookupNotFresh(
             f'{surface}(at_least={at_least}) cannot be served: the index for store '
             f'{self.store_id!r} has applied through {self.cursor.applied_log_id} '

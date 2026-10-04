@@ -12,7 +12,7 @@ from .schema_io import (SchemaMismatch, ensure_schema, load_schema,
 from .source import (StaleRead, TupleSource, UnsafeIsolationLevel, WatermarkGap,
                      assert_read_isolation, log_gap, log_rows, log_watermark)
 from .apply import advance_index, ensure_cursor
-from .build import build_index
+from .build import build_index, rebuild_index
 from .store import ConnectedStore, IndexStalled, LookupNotFresh, PARANOIA_ENV_VAR
 
 __all__ = [
@@ -28,6 +28,7 @@ __all__ = [
     "advance_index",
     "ensure_cursor",
     "build_index",
+    "rebuild_index",
     "SchemaV4",
     "TupleLogV1",
     "IndexCursorV1",

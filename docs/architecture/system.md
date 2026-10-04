@@ -111,6 +111,27 @@ streams the tail. Schemas are **static and write-once** (`SchemaV4`; compiled
 artifacts are cache, recompiled on open): a new schema = a new store/index built
 from the tuples, not a migration.
 
+**Recovering a stalled index** (`rebuild_index`, `TK121`). On the async schedule a row
+can be logged that the index can never apply: `PathCountExceeded` is a storage-width
+bound, never suspended, and admission cannot see the closure. `catch_up` then stalls in
+front of it, and every later row waits behind it, including a REMOVE of that same
+tuple. Reads stay correct while stalled (untokened `check` uses the set engine, lookups
+raise `IndexStalled`). The index stays unavailable until an operator acts:
+
+1. `ConnectedStore.stall_error` names the refused write and its closure row.
+2. Remove that tuple at the source (`remove_tuple` works while stalled).
+3. Stop the store's async worker.
+4. `rebuild_index(session, store_id)`, on a clean session.
+5. Other instances call `refresh()`.
+
+`rebuild_index` deletes the index store's nodes, edges, residues and residue refs, and
+runs the same build as `build_index`. It then moves the existing cursor row to the
+watermark and clears the stall, all in one transaction under the store lock. The outbox
+is kept, so its ids stay monotone. If anything fails, nothing changes: a rebuild whose
+snapshot still overflows leaves the old index and its stall marker as they were. The
+rebuild is in place because a `ConnectedStore` always reads the index under its own
+store id. Decision: `../tk121-stall-recovery-2026-10-04.md`.
+
 ## Replicas (simulated; the real thing is a follower DB)
 
 A reader session polling a store another session writes to sees consistent

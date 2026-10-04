@@ -1040,7 +1040,9 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
     `ClosureFanoutExceeded` (`ZT-P1-6a`, never mapped until now). Since 2026-10-03b it
     does so only outside `ReachabilityIndex.fanout_cap_suspended`; inside, it logs and
     proceeds. `connectedstore/store.py::ConnectedStore.catch_up` and the non-bulk
-  `connectedstore/build.py::build_index` enter that window.
+  branch of `connectedstore/build.py::_materialise` enter that window. That function is
+  the build body shared, since 2026-10-04f (`TK121`), by `build_index` and
+  `connectedstore/build.py::rebuild_index`.
   The arithmetic of every ADMITTED write is unchanged: the bound is a read-only pre-check
   over the region `_add_indirect_edges_batch_unsafe` already loads. The rows cited at sec
   3 (T4), sec 4 (`_apply_row`, `_add_indirect_edges_batch_unsafe`, `__init__`), sec 5's

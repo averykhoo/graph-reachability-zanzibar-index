@@ -2,7 +2,7 @@
 id: TK120
 title: Repo restructure: drop version suffixes (v1/v4/legacy) and re-lay-out the code
 brief: remove version names + sensible layout; plan needs USER APPROVAL before any move
-pri: NEXT
+pri: NOW
 size: L
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-10-02
-moved: 2026-10-04c
-updated: 2026-10-04c
+moved: 2026-10-04f
+updated: 2026-10-04f
 closed:
 ---
 

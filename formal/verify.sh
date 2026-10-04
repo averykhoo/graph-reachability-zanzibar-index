@@ -625,7 +625,13 @@ MIN_CONF_ALL=1085
 #   REWRITTEN in place as the no-stall pin (still 5). 1512 + 18 = 1530. No drift.
 # Re-measured 2026-10-03b (TK113) with the same command: 1575. +45 are the new
 #   tests/test_tk113_remove_node_fence.py (collect-only: 45). 1530 + 45 = 1575. No drift.
-MIN_TESTS_ALL=1575
+# Re-measured 2026-10-04f (TK121) with the same command: 1744. +9 are the new
+#   tests/test_tk121_stall_recovery.py (collect-only: 9). The other +160 are DRIFT, not
+#   new loss or gain: with that file --ignore'd the count is 1735, exactly what
+#   FINAL_REVIEW.md's generated block already said, so the 2026-10-04 sessions (TK114-
+#   TK117, TK101) regenerated the block and did not ratchet this floor. NOT broken down
+#   per file. 1735 + 9 = 1744.
+MIN_TESTS_ALL=1744
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

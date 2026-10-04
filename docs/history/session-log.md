@@ -32,6 +32,57 @@ from here.
 
 ---
 
+## 2026-10-04f — TK121 CLOSED: a stalled async index is recovered by `rebuild_index`, in place; TK120 to NOW
+
+rows: TK121 (NOW -> CLOSED), TK120 (NEXT -> NOW)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 32 warning(s)`
+
+`read: board only`
+
+The user said "do the next task". The board's `NOW` row was `TK121`. On the async schedule, a
+row the index refuses for good (`PathCountExceeded`, never suspended) stalls `catch_up` in
+front of every later row, including the REMOVE that would undo it. There was no documented or
+tested way back.
+
+**The row's recovery could not be carried out, so I decided on a different one.** The row
+said: build a fresh index under a NEW store id, then "repoint readers". READ first-hand:
+`ConnectedStore.__init__` always opens the index under its own store id, so there is nothing
+to repoint. The recovery is therefore in place: `connectedstore.rebuild_index`. It runs as one
+transaction under the store lock. It deletes the index store's edge, residue-ref, residue and
+node rows, then runs the same build body as `build_index` (`_materialise`, now shared). It
+reuses the existing cursor row and clears the stall. The outbox is kept, so its ids stay
+monotone. If anything fails, nothing changes: a rebuild whose snapshot still overflows leaves
+the old index and its stall marker exactly as they were.
+
+**Pinned** in `tests/test_tk121_stall_recovery.py` (9 tests) on the real `TK111` K=31 diamond,
+with both constructors:
+- the premise: after the source REMOVE, `catch_up` is still stalled;
+- the recovery: graph == set engine == oracle, read from the index directly;
+- a failed rebuild changes nothing;
+- on `_BOOLEAN` with junk planted in all four tables, the rebuilt state equals a fresh build;
+- a replica reader sees the recovery after `refresh()`.
+
+**Sweep: 16 mutations plus an M0 control. 15 RED, 1 INERT.** `M10` (no `_lock_store`) is
+INERT on SQLite by construction: the rebuild's own DELETEs take the database lock anyway.
+Only a PostgreSQL test could see it, and none is written. `M9` (cursor row recreated) is
+caught by one identity pin only: on SQLite the new row gets the same rowid. Map:
+[`docs/tk121-stall-recovery-2026-10-04.md`](../tk121-stall-recovery-2026-10-04.md).
+
+**Also:** the `IndexStalled` docstring and refusal message said "raise the fan-out cap", which
+stopped being a remedy at `TK112`. Both now name the source REMOVE plus `rebuild_index`, and
+the message is pinned (sabotage: 2 failed). The operator procedure is in
+`docs/architecture/system.md` § "Bootstrap and schema changes". `MIN_TESTS_ALL` ratcheted
+1575 -> 1744: +9 new and +160 drift, because the earlier 2026-10-04 sessions regenerated the
+counts block without ratcheting the floor. The counts block was regenerated.
+
+**Re-rank:** `TK120` to `NOW`, following the user's order (correctness, then `TK121`, then the
+`TK120` restructure, then docs). Its plan needs USER APPROVAL before any file moves.
+
+Still owed: none.
+
+---
+
 ## 2026-10-04e — TK101 CLOSED: object-wildcard WRITES are enumerated exhaustively; TK121 to NOW
 
 rows: TK101 (NOW -> CLOSED), TK121 (NEXT -> NOW)

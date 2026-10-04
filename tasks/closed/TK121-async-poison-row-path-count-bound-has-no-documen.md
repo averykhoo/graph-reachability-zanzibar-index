@@ -11,9 +11,9 @@ labels: []
 source: docs/tk111-stall-aware-freshness-2026-10-02.md
 source_hash:
 created: 2026-10-03b
-moved: 2026-10-04e
-updated: 2026-10-04e
-closed:
+moved: 2026-10-04f
+updated: 2026-10-04f
+closed: 2026-10-04f
 ---
 
 Filed 2026-10-03b when TK111 closed. What TK111 left, by design: a logged row the index can
@@ -38,3 +38,7 @@ index store's rows, then `build_index`) is worth adding. Unreachable without a K
 of parallel paths, hence LATER.
 
 ## Log
+
+### 2026-10-04f
+
+CLOSED: recovery is connectedstore.rebuild_index (in place), pinned in tests/test_tk121_stall_recovery.py (9 tests, the real K=31 diamond, both constructors). The row assumed "fresh index under a new store id, then repoint readers"; READ first-hand, ConnectedStore hard-wires the index to its own store id, so nothing can be repointed. Hence in place: one transaction under the store lock that deletes Edge/ResidueRef/Residue/Node rows, runs the shared build body (_materialise, also used by build_index), reuses the cursor row and clears the stall. The outbox is kept so ids stay monotone. On any failure nothing changes, so the old index and its stall survive. Premise pinned: after the source REMOVE, catch_up is STILL stalled. Rebuilt state == a fresh build of the same snapshot on _BOOLEAN with junk planted in all four tables. Sweep: 16 mutations plus M0, 15 RED, M10 (no _lock_store) INERT on SQLite by construction, PG-only. IndexStalled text no longer says "raise the fan-out cap" (dead since TK112). MIN_TESTS_ALL ratcheted 1575 -> 1744 (+9 new, +160 drift). Map: docs/tk121-stall-recovery-2026-10-04.md. Operator procedure: docs/architecture/system.md, Bootstrap section.

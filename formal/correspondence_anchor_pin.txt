@@ -248,7 +248,8 @@ Spec/Stratify.lean::exprRefs	lean:def	d844965482ee5e5c
 Spec/WellDef.lean::sem_fuel_stable	lean:theorem-statement	d6429c8ef34d016d
 connectedstore/apply.py::_apply_row	py:function	b86e9bb30bc38712
 connectedstore/apply.py::advance_index	py:function	7edd006d49d2bd81
-connectedstore/build.py::build_index	py:function	5833a6992c16be93
+connectedstore/build.py::_materialise	py:function	05859dc97cd75bb1
+connectedstore/build.py::rebuild_index	py:function	160754ed7285efdc
 connectedstore/source.py::TupleSource._lock_source	py:function	694caa6852a61ecc
 connectedstore/source.py::TupleSource.catch_up_evaluator	py:function	aed382a7b7fa190c
 connectedstore/store.py::ConnectedStore._record_stall	py:function	277eb0cc792442ea
