@@ -11,9 +11,9 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-10-04
-updated: 2026-10-04
-closed:
+moved: 2026-10-04b
+updated: 2026-10-04b
+closed: 2026-10-04b
 ---
 
 Filed from the P10 re-run (2026-09-27d). Full witness, provenance and reconciliation: [`docs/p10-scope-audit-2026-09-27.md`](../docs/p10-scope-audit-2026-09-27.md) §5 H5. The section is copied below as it stood when filed; the doc is the body of record.
@@ -65,3 +65,7 @@ PROMOTED LATER -> NEXT (user decision 2026-10-03c: "is 115 a real bug? if so add
 ### 2026-10-03e
 
 P23 (closed 2026-10-03e) gave parse_openfga_json the declared-name contract: zanzibar_utils_v1.py::_validate_declared_name runs on every JSON type and relation name, so V8 (empty name) and V6 (can view) are now refused, pinned by tests/test_p23_parser_refusal_parity.py::test_json_front_end_refuses_the_same_declared_names. Still open here: duplicate keys (last wins), wildcard false widening, and the round-trip check. A newline-or-colon name (H5) is now refused too, since neither is in the charset; it is not separately pinned.
+
+### 2026-10-04b
+
+CLOSED 2026-10-04b. Re-probed first-hand on 8045eef: P23 had closed V1/V4 (newline declared names) but NOT the class. Still accepted: V2/V12/V13 (wildcard false / {"enabled": false} / 0 all rendered [user:*], a public grant), V3/V17 (duplicate JSON keys, last wins; both round-trip EQUAL), and two vectors the row did not list -- V9, a bare restriction type carrying a newline, rendered a second relation (round-trip NOT equal), and V14, a restriction type the DSL parser refuses (us er), was accepted by JSON. LANDED: zanzibar_utils_v1.py::_reject_duplicate_json_keys (object_pairs_hook, any depth, JSON text only), ::_validate_json_wildcard (absent / null / exactly {}), ::_validate_json_round_trip (last step of parse_openfga_json; refuses a rendering that does not parse or parses to a different AST, compared per expression, not per key). Each carries REFUSED SHAPE / WHY / INSTEAD; MIN_HEADERS product 34 -> 37. Pinned in tests/test_openfga_json.py (TK115 block, 15 new test ids). Mutation sweep 11 mutations with an M0 control: M1-M9 RED, M10 (lost ignored) INERT and REASONED unreachable alone. Decision (session's, CLAUDE.md Who decides): the round trip is the class-closer; per-field charset checks on restriction types were rejected as enumerating only the names someone thought of. No oracle change (no JSON front end there). Map (FROZEN): docs/tk115-json-front-end-fidelity-2026-10-04.md.

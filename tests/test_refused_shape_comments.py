@@ -67,7 +67,10 @@ HEADER = 'REFUSED SHAPE'
 #: twin, duplicate type, duplicate relation, `.` in a declared name): 33 / 15 / 1.
 #: Re-measured 2026-10-04 after TK114 (+1 product, +1 oracle: `_validate_stratified_negation`
 #: in each): 34 / 16 / 1.
-MIN_HEADERS = {'zanzibar_utils_v1.py': 34, 'tests/oracle.py': 16, 'setengine/engine.py': 1}
+#: Re-measured 2026-10-04 after TK115 (+3 product, JSON front end only -- the oracle has no
+#: JSON front end: `_reject_duplicate_json_keys`, `_validate_json_wildcard`,
+#: `_validate_json_round_trip`): 37 / 16 / 1.
+MIN_HEADERS = {'zanzibar_utils_v1.py': 37, 'tests/oracle.py': 16, 'setengine/engine.py': 1}
 
 
 def _source(rel: str) -> tuple[str, list[str]]:

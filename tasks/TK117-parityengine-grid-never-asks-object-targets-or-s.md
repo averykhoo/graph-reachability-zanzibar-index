@@ -2,7 +2,7 @@
 id: TK117
 title: ParityEngine._grid never asks object-* targets or star from-chain subjects; cap sample gaps
 brief: coverage: object-* targets and star from-chain subjects never gridded; cap sample can skip own op
-pri: LATER
+pri: NOW
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: []
 source: docs/p10-scope-audit-2026-09-27.md
 source_hash:
 created: 2026-09-27d
-moved: 2026-10-03c
-updated: 2026-10-03c
+moved: 2026-10-04b
+updated: 2026-10-04b
 closed:
 ---
 
@@ -87,3 +87,9 @@ Lean `hqs` / `hqo` scope, and `TK101` revisits the second.
 ### 2026-10-03c
 
 Triage 2026-10-03c ranked this top by first score, then the skeptic WEAKENED it (AGENT-REPORTED): sub-gaps (a) object-* and (b) from-chain star subjects are covered elsewhere (`tests/test_matrix.py` union_wildcard, the star-bridge hypothesis machines, `tests/test_lookup_oracle.py::_subject_candidates`); only (c), the cap sample, is a real escape route -- about 12% of grid builds exceed the cap and keep about two thirds of the pool (probe, 2026-10-03c). If picked up, do (c) alone first: an rng-free write-local floor in `tests/parity.py::ParityEngine._grid`, planted-lie witness with an M0 control. Not promoted: the user took `TK115` instead (2026-10-03c). Map: `docs/promote-next-triage-2026-10-03.md` sec 4.
+
+### 2026-10-04b
+
+PROMOTED LATER -> NEXT at 2026-10-04b write-back (session's ranking; the user may veto). All three of the user's 2026-10-03c NEXT picks (P23, TK114, TK115) are now closed and NOW/NEXT were otherwise empty. The 2026-10-03c triage named this row's part (c) as the next candidate (docs/promote-next-triage-2026-10-03.md sec 4), and the user had named TK117 as the alternative to TK115 that day. Scope stays as the 2026-10-03c note says: do (c) alone first -- an rng-free write-local floor in tests/parity.py::ParityEngine._grid, planted-lie witness with an M0 control.
+
+NEXT -> NOW the same write-back: lint check requires exactly one open NOW row, and this is the only candidate. Same reasoning as the note above.

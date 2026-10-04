@@ -2779,9 +2779,13 @@ def parse_openfga_json(model) -> SchemaAST:
     Supports schema_version 1.1: ``this`` (with ``directly_related_user_types``
     metadata), ``computedUserset``, ``tupleToUserset``, ``union``, ``intersection``,
     ``difference``. Conditions are rejected.
+
+    The result is refused unless the DSL `openfga_json_to_dsl` renders from it parses back
+    to the same AST (`_validate_json_round_trip`, `TK115`). Duplicate JSON keys are refused
+    only for JSON TEXT input: a ``dict`` has already lost them.
     """
     if isinstance(model, str):
-        model = _json.loads(model)
+        model = _json.loads(model, object_pairs_hook=_reject_duplicate_json_keys)
     version = model.get('schema_version')
     # REFUSED SHAPE (connected-store spec §5-S5): a schema_version other than 1.1.
     # WHY: only the 1.1 format is implemented -- its ``directly_related_user_types``
@@ -2836,7 +2840,72 @@ def parse_openfga_json(model) -> SchemaAST:
     _validate_ast_consistency(ast)
     _validate_tuplesets_direct(ast)
     _validate_stratified_negation(ast)
+    _validate_json_round_trip(ast)
     return ast
+
+
+def _reject_duplicate_json_keys(pairs: list) -> dict:
+    """``object_pairs_hook`` for `parse_openfga_json`: a JSON object naming one key twice is
+    refused, at every depth. Plain `json.loads` keeps the LAST value silently (`TK115`)."""
+    out: dict = {}
+    for key, value in pairs:
+        # REFUSED SHAPE (TK115): a JSON object naming the same key twice -- two ``"viewer"``
+        # relations, two ``"schema_version"`` fields. WHY: `json.loads` keeps the last value
+        # without a word, so the store would run a schema nobody wrote as such; the DSL twin
+        # (a second ``define viewer``) is refused. INSTEAD: one entry per key -- merge the two
+        # definitions, e.g. ``"viewer": {"union": {"child": [{"this": {}},
+        # {"computedUserset": {"relation": "owner"}}]}}``.
+        if key in out:
+            raise ValueError(f'OpenFGA JSON: duplicate key {key!r} in one object')
+        out[key] = value
+    return out
+
+
+def _validate_json_wildcard(object_type: str, relation_name: str, entry: dict) -> bool:
+    """Whether a ``directly_related_user_types`` entry is a wildcard (``[T:*]``). OpenFGA's
+    ``Wildcard`` message has no fields, so its JSON is ``{}``; absent or ``null`` means not a
+    wildcard (`TK115`)."""
+    value = entry.get('wildcard')
+    if value is None:
+        return False
+    # REFUSED SHAPE (TK115): ``"wildcard"`` set to anything but ``{}`` or ``null`` --
+    # ``false``, ``0``, ``""``, ``{"enabled": false}``. WHY: the old test was "present and not
+    # null", so ``"wildcard": false`` rendered ``[user:*]`` -- a PUBLIC grant from a value that
+    # reads "not a wildcard". Canonical OpenFGA never emits these; any reading is a guess.
+    # INSTEAD: ``{"type": "user", "wildcard": {}}`` for ``[user:*]``; omit the key for ``[user]``.
+    if not isinstance(value, dict) or value:
+        raise ValueError(
+            f'relation {object_type}#{relation_name}: "wildcard" must be {{}} or absent, '
+            f'got {value!r}')
+    return True
+
+
+def _validate_json_round_trip(ast: SchemaAST) -> None:
+    """The JSON front end's AST must survive `unparse_schema_ast` -> `parse_schema_ast`
+    unchanged, so the DSL `openfga_json_to_dsl` persists IS the schema the JSON declared
+    (`TK115`). The field-level checks cover declared names; this closes the class for every
+    other name, e.g. a restriction type that carries a newline or a comma. Map:
+    `docs/tk115-json-front-end-fidelity-2026-10-04.md`."""
+    try:
+        back = parse_schema_ast(unparse_schema_ast(ast))
+    except (ValueError, TypeError) as e:
+        problem = f'its DSL rendering does not parse ({e})'
+    else:
+        added = sorted(set(back) - set(ast))
+        lost = sorted(set(ast) - set(back))
+        changed = sorted(k for k in set(ast) & set(back) if ast[k] != back[k])
+        problem = (None if not (added or lost or changed) else
+                   f'its DSL rendering parses to a different schema '
+                   f'(added {added}, lost {lost}, changed {changed})')
+    # REFUSED SHAPE (TK115): a JSON model whose DSL rendering is not the same schema -- a
+    # restriction ``{"type": "user]\n    define secret: [user"}`` (renders a second relation),
+    # ``{"type": "user,group"}`` (renders two restrictions), ``{"type": "us er"}`` (renders text
+    # the DSL parser refuses). WHY: `openfga_json_to_dsl` output is the persisted schema
+    # source, so the store would run a schema the JSON never declared, and admit writes on a
+    # relation it never had. INSTEAD: use names inside the write charset in every field, e.g.
+    # ``{"type": "user"}``.
+    if problem is not None:
+        raise ValueError(f'OpenFGA JSON: {problem}')
 
 
 def _json_restrictions(object_type: str, relation_name: str,
@@ -2854,7 +2923,7 @@ def _json_restrictions(object_type: str, relation_name: str,
                 f'relation {object_type}#{relation_name}: conditional type '
                 f'restrictions are not supported')
         predicate = e.get('relation') or '...'
-        wildcard = 'wildcard' in e and e['wildcard'] is not None
+        wildcard = _validate_json_wildcard(object_type, relation_name, e)
         out.append(Restriction(type=e['type'], predicate=predicate, wildcard=wildcard))
     return tuple(out)
 

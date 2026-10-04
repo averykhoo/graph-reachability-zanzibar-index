@@ -32,6 +32,57 @@ from here.
 
 ---
 
+## 2026-10-04b — TK115 CLOSED: the OpenFGA JSON front end renders the schema it was given, or refuses; TK117 to NOW
+
+rows: TK115 (NOW -> CLOSED), TK117 (LATER -> NOW)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 35 warning(s)`
+
+`read: board + note`
+
+The user said "do the next task". The board's `NOW` row was `TK115`, the last of the user's
+2026-10-03c `NEXT` picks.
+
+**Re-probed first.** `P23` had already closed the row's newline-name witnesses (V1, V4), but
+not the class. Still accepted on `8045eef`:
+
+- `"wildcard": false`, `0` and `{"enabled": false}`, each rendered as `[user:*]`, a public
+  grant.
+- Duplicate JSON keys, where the last value wins. That includes a second
+  `"schema_version"` that silently replaced the first.
+- Two vectors the row did not list:
+  - a bare restriction type carrying a newline, which rendered a second relation;
+  - a restriction type the DSL parser refuses (`us er`), which JSON accepted.
+
+Probe table: [`docs/tk115-json-front-end-fidelity-2026-10-04.md`](../tk115-json-front-end-fidelity-2026-10-04.md)
+sec 1 (FROZEN).
+
+**Decision (the session's; CLAUDE.md "Who decides").** Three refusals:
+
+1. A duplicate-key `object_pairs_hook`, at any depth. It only sees JSON text; a `dict`
+   input has already lost its duplicates.
+2. `wildcard` must be absent, `null`, or exactly `{}`.
+3. A round trip as the last step of `parse_openfga_json`. It refuses unless the rendered
+   DSL parses back to the same AST, compared per expression and not per key.
+
+The round trip is what closes the class. Per-field charset checks on restriction types
+were rejected because they only cover the names someone thought to list.
+
+**Landed:** `zanzibar_utils_v1.py::_reject_duplicate_json_keys`, `::_validate_json_wildcard`
+and `::_validate_json_round_trip`. Each has a REFUSED SHAPE / WHY / INSTEAD block, and
+`MIN_HEADERS` rose to 37/16/1. Pins are the `TK115` block in `tests/test_openfga_json.py`.
+The mutation sweep ran 11 mutations with an M0 control. M1–M9 all went RED, each on its
+intended pin. M10 (ignore the `lost` field) is INERT, which is REASONED: a key cannot be
+lost without another key being added or a parse error. `docs/architecture/system.md`
+§ OpenFGA ingestion got a dated sentence. The `FINAL_REVIEW.md` counts block was
+regenerated. There was no oracle change, because the oracle has no JSON front end.
+
+**Re-rank:** `TK117` moved LATER -> NOW. It is the session's call and the user may veto it.
+The 2026-10-03c triage named its part (c) as the next candidate, and lint needs exactly
+one `NOW` row.
+
+Still owed: none.
+
 ## 2026-10-04 — TK114 CLOSED: recursion through `but not` is a parse refusal in both parsers; TK115 to NOW
 
 rows: TK114 (NOW -> CLOSED), TK115 (NEXT -> NOW)

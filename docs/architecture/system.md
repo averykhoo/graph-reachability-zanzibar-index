@@ -125,6 +125,10 @@ the pysqlite caveats).
 `parse_openfga_json` (OpenFGA 1.1 authorization-model JSON) targets the same
 `SchemaAST` as the DSL; `openfga_json_to_dsl` renders the persistable schema source.
 One AST, two front-ends; conditions and unknown operators are rejected loudly.
+Since 2026-10-04 (`TK115`) the JSON front end also refuses duplicate JSON keys, any
+`wildcard` value other than `{}` / `null`, and any model whose rendered DSL does not
+parse back to the same AST (`zanzibar_utils_v1.py::_validate_json_round_trip`), so the
+persisted DSL is the schema the JSON declared.
 
 ## What the matrix pins
 
