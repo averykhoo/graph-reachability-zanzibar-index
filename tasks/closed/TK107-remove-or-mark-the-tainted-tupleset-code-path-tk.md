@@ -11,9 +11,9 @@ labels: []
 source: hand
 source_hash:
 created: 2026-09-26b
-moved: 2026-10-04g
-updated: 2026-10-04g
-closed:
+moved: 2026-10-05
+updated: 2026-10-05
+closed: 2026-10-05
 ---
 
 **Filed 2026-09-26b by TK106.** Once a tupleset must be direct-only (TK106), a tupleset is never boolean-tainted. So the whole tainted-tupleset path is UNREACHABLE from any checked parse. It is still compiled and tested only through the unchecked parse.
@@ -41,3 +41,7 @@ First step: a census of call sites (file::symbol), and a mutation that deletes e
 ### 2026-10-04g
 
 PROMOTED LATER -> NEXT 2026-10-04g (user: NEXT raised to 5). Why: TK106 made the tainted-tupleset path unreachable (zanzibar_utils_v1.py::_validate_tuplesets_direct and its oracle twin), yet PDerivedTuplesetTTU and the processor derived_stored_* helpers remain. Dead code cannot answer wrong, so this is surface reduction, not new certainty -- but do it BEFORE TK120 (fewer symbols and CORRESPONDENCE.md anchors to move). Check whether P25-adjacent bridge code is part of the same dead set.
+
+### 2026-10-05
+
+CLOSED 2026-10-05: REMOVED, not marked. Map (FROZEN on close): docs/tk107-tainted-tupleset-removal-2026-10-05.md. LANDED: zanzibar_utils_v1.py::_validate_ttu_tuplesets drops its tainted exemption, so the graph compiler refuses ANY non-direct tupleset even on an unchecked AST, before plan construction. Then deleted: PDerivedTuplesetTTU and every arm that built, compiled, or fanned out from it (leaf kind derived-tupleset-ttu, via tupleset-ttu); the processor helpers derived_stored_parents / derived_stored_star_types / _derived_stored_split / _split_parents / _split_star_types / _ts_leaf_predicates / _stored_parent_objects_of_entity and every derived-tupleset-ttu branch; the bulk_backfill twins. KEPT: _member_types (compute_taint uses it and is Lean-pinned); the inert RewriteFilter branch of _assert_ttu_parent_types_cover_admission. P25-adjacent bridge code is NOT in the dead set (shared with every derived write). No Lean change: no twin constructor exists. PINS: formal/conformance/test_conformance_nary_strata.py::test_derived_tupleset_ttu_carrier_is_refused_by_every_parser_and_the_graph_compiler and formal/conformance/test_graphadmission_scope_pin.py::test_ttudirect_probe_is_refused_by_the_graph_compiler_on_the_unchecked_ast (one row per half). Mutation sweep M0 green, M1/M2/M3 red; M2 (refuse tainted only) SURVIVED run 1, which is why the second pin exists. Moved, each re-measured: generator alphabet 51 -> 48, cell floor with witnesses 820 -> 720, baseline gain ratio made a named constant 1.4 (baseline replayed in the new universe: 514). CORRESPONDENCE.md rows rewritten, anchor pin regenerated. STILL OWED, after TK120 (docs on hold): docs/architecture/derived-predicates.md and docs/architecture/r4bf-bulk-backfill-design.md still name deleted symbols.

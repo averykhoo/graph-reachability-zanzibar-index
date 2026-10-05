@@ -563,12 +563,15 @@ The bullet is corrected in place below.
   1. LeafFamily **own-key** (modeled), 2. `_fan_out` **`via='computed'`**
   (modeled), 3. the **subject-GC residue scan** (`{r.subject_node_id for r in
   rows}` → `::DeltaProcessor._keys_referencing` → `full(...)`), 4. **tupleset-ttu dependents**
-  of a LeafFamily object (`compiled.dependents` with `edge.via ==
-  'tupleset-ttu'`), 5. **`compiled.tupleset_feeders`**, 6.
-  **`compiled.target_feeders`** (both `'ttu'` and `'tupleset-ttu'` arms, the
-  latter walking `::DeltaProcessor._stored_parent_objects_of_entity`), plus `_fan_out`'s own
-  `'ttu'` / `'userset'` / `'tupleset-ttu'` arms.
-  All four unmodeled channels are **out of `W4Fragment`** (`computedOnly` leaves
+  of a LeafFamily object (REMOVED by `TK107`, 2026-10-05, see below), 5.
+  **`compiled.tupleset_feeders`**, 6. **`compiled.target_feeders`** (its `'ttu'` arm),
+  plus `_fan_out`'s own `'ttu'` / `'userset'` arms.
+  ⚠ 2026-10-05 (`TK107`): every `'tupleset-ttu'` arm is gone, channel 4 with them, and so
+  is the `target_feeders` arm that walked `_stored_parent_objects_of_entity`. They served
+  `PDerivedTuplesetTTU` (a TTU over a TAINTED tupleset), which `TK106` made unreachable from
+  a checked parse and `TK107` deleted; `zanzibar_utils_v1.py::_validate_ttu_tuplesets` now refuses any
+  non-direct tupleset, which is exactly `ttuDirect`. So three unmodeled channels remain.
+  All the unmodeled channels are **out of `W4Fragment`** (`computedOnly` leaves
   admit no TTU/userset/tupleset dependency edges), so this is **scope-honest in
   substance** — no in-fragment run reaches them. The correction is to the
   *wording*, not the disposition.
@@ -1130,8 +1133,8 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   `index_v4/processor.py::DeltaProcessor.tupleset_parents` used to drop a stored `T:*`
   tupleset parent (`n.wildcard == ''`); it now splits the two subject shapes
   (`::DeltaProcessor._stored_tupleset_subjects`) and gives the star one the shape rule
-  (`::DeltaProcessor.tupleset_star_types`, `::DeltaProcessor.derived_stored_star_types`)
-  plus an ∃-expansion over instances, with the bulk twin in
+  (`::DeltaProcessor.tupleset_star_types`; its derived-tupleset twin
+  `derived_stored_star_types` was deleted by `TK107`, 2026-10-05) plus an ∃-expansion over instances, with the bulk twin in
   `index_v4/bulk_backfill.py::_BulkBackfill._stored_tupleset_subjects`. Neither half has a
   graph-side Lean counterpart, and the exclusions are explicit rather than accidental:
 
@@ -1292,11 +1295,12 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   `GraphIndex/LeafBridge.lean::no_userset_leaf_in_fragment` (`directArmsBare` forbids the
   tainted userset restriction that would allocate one). So that kind stays netted only,
   with the other plan-leaf kinds below.
-  The other four plan-leaf kinds (`PDerivedComputed`, `PDerivedUserset`, `PDerivedTTU`,
-  `PDerivedTuplesetTTU`) are untouched by this and remain netted only. (Since `TK106`, 2026-09-26,
+  The other plan-leaf kinds (`PDerivedComputed`, `PDerivedUserset`, `PDerivedTTU`) are
+  untouched by this and remain netted only. (A fourth, `PDerivedTuplesetTTU`, existed until
+  `TK107`. Since `TK106`, 2026-09-26,
   `PDerivedTuplesetTTU` is UNREACHABLE from any checked parse: a tupleset must be
-  direct-only, so it is never tainted. It is netted by the refusal and the conformance
-  leaf-kind exclusion, not by a differential; removing it is a dead-code follow-up.)
+  direct-only, so it is never tainted. `TK107`, 2026-10-05, deleted it, and the graph
+  compiler now refuses a tainted tupleset even on an unchecked AST.)
 
 * **★ The DERIVED TTU THROUGH-SHAPE — Python bridges it from the CASCADE, and no Lean
   fragment reaches it (added 2026-09-13, `P6` step 0).** A schema can declare a

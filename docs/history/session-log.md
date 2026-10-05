@@ -32,6 +32,52 @@ from here.
 
 ---
 
+## 2026-10-05 — TK107 CLOSED: the tainted-tupleset code path is deleted, behind a compiler refusal
+
+rows: TK107 (CLOSED)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 29 warning(s)`
+
+`read: board only`
+
+The user asked what the current task was (`TK120`, unscoped: its plan doc does not exist yet),
+then chose to land `TK107` first, as the 2026-10-04g ranking recommended.
+
+**Decision (the model's, `CLAUDE.md` "Who decides"): REMOVE, not mark.** `TK106` had made a
+tainted tupleset unreachable from a checked parse, but the compiler still built
+`PDerivedTuplesetTTU` for an unchecked or hand-built AST, through code no differential
+exercised. `zanzibar_utils_v1.py::_validate_ttu_tuplesets` lost its tainted exemption, so the
+graph compiler now refuses ANY non-direct tupleset before plan construction. That is the Lean
+`ttuDirect` field exactly. Then the plan node, the leaf kind, the `tupleset-ttu` dependency
+kind, seven processor helpers, every `derived-tupleset-ttu` branch, and the bulk twins were
+deleted (about 350 lines). `_member_types` was KEPT, because `compute_taint` uses it and is
+Lean-pinned. No Lean change: there is no twin constructor.
+
+**The sweep found a hole older than this item.** M2 (refuse a tupleset only when it is
+tainted) left 156 tests green, because the UNTAINTED half of the compile refusal had no pin on
+the unchecked path after `TK106` moved its test to the parse refusal.
+`formal/conformance/test_graphadmission_scope_pin.py::test_ttudirect_probe_is_refused_by_the_graph_compiler_on_the_unchecked_ast`
+now covers both halves; run 2 had M0 green and M1, M2, M3 red. The first sabotage attempt also
+matched its anchor twice (the parse-time validator carries the same condition); the
+`count == 1` assert stopped it, so it was caught as an instrument failure rather than read as
+evidence.
+
+**Pins moved, each re-measured:** generator alphabet 51 -> 48, with-witness cell floor
+820 -> 720 (enumerator cells unchanged), the bare `1.5` baseline-gain bar became
+`_MIN_GAIN_OVER_BASELINE = 1.4` after replaying the 2026-08-10 baseline generators in the new
+universe (still 514). Two `formal/CORRESPONDENCE.md` rows rewritten; anchor pin regenerated.
+Map (FROZEN): [`docs/tk107-tainted-tupleset-removal-2026-10-05.md`](../tk107-tainted-tupleset-removal-2026-10-05.md).
+
+Gate: see the banner and `python scripts/gate_status.py`; all ten phases are run after this
+entry is written.
+
+Still owed: `docs/architecture/derived-predicates.md` and
+`docs/architecture/r4bf-bulk-backfill-design.md` still name deleted symbols. That waits for
+the docs pass after `TK120` (docs on hold, user 2026-10-04c), and is recorded on the closed
+`TK107` row.
+
+---
+
 ## 2026-10-04g — NEXT cap 3 -> 5; five correctness rows to NEXT; five stale rows closed
 
 rows: TK102, TK79, TK107, TK44, TK118 (LATER -> NEXT); P25, TK81, TK6, ZT-P5, TK84 (CLOSED); P21, P8, B2, TK62, TK67, TK3, TK85, TK66, TK4 (comment only)

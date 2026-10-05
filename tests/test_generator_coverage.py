@@ -203,15 +203,18 @@ _UNIVERSE = G.universe_cells(_ALPHABET)
 
 # Provenance: measured 2026-08-10 by
 #   PYTHONPATH=. python docs/design/generator-coverage/prototypes/zz_cells.py
+# Re-measured 2026-10-05 (TK107) by printing `genswarm.DERIVATIONS`: the compiler lost the
+# `derived-tupleset-ttu` leaf kind, the `PDerivedTuplesetTTU` plan class and the
+# `tupleset-ttu` via kind, so those three sites each dropped by one (5/8/4 -> 4/7/3).
 # Each entry is (site name, expected count). These are a floor-with-provenance on the
 # DERIVATION, not a copy of the values: the values themselves are read from the
 # compiler, so a new compiler branch mints a new feature and this test tells you to
 # re-record the count rather than silently absorbing it.
 _SITE_COUNTS = {
     'Expr classes': 6,
-    'leaf kinds': 5,
-    'plan node classes': 8,
-    'via kinds': 4,
+    'leaf kinds': 4,
+    'plan node classes': 7,
+    'via kinds': 3,
     'family kinds': 2,
     'restr modalities': 4,
 }
@@ -249,8 +252,10 @@ def test_every_derivation_is_nonvacuous_and_matches_its_recorded_provenance():
         assert len(values) == _SITE_COUNTS[name], (
             f'derivation {name!r} yields {len(values)} values, '
             f'recorded {_SITE_COUNTS[name]}: {values}')
-    assert len(_ALPHABET) == 51, f'alphabet is {len(_ALPHABET)} features: {_ALPHABET}'
-    assert len(_UNIVERSE) == 1275, f'cell universe is {len(_UNIVERSE)}'
+    # 51 / 1275 until TK107 (2026-10-05) removed three compiled features; re-measured
+    # 48 / 1128 that day.
+    assert len(_ALPHABET) == 48, f'alphabet is {len(_ALPHABET)} features: {_ALPHABET}'
+    assert len(_UNIVERSE) == 1128, f'cell universe is {len(_UNIVERSE)}'
 
 
 def test_alphabet_features_are_all_extractable_in_principle():
@@ -591,10 +596,30 @@ def test_every_alphabet_feature_is_hit_or_rejection_explained():
 # `ttu.ts:{Computed,Exclusion,Intersection,neg-only-type,tainted}`,
 # `plan:PDerivedTuplesetTTU`, `leaf:derived-tupleset-ttu`, `via:tupleset-ttu` -- and
 # 0 are generator gaps. With rejection witnesses: 866. Floors ~5% under, as before.
+#
+# LOWERED 2026-10-05 by TK107, deliberately: the WITH-REJECTION floor only (820 -> 720).
+# MEASURED that day by calling `_enumerate(2)` / `_enumerate(3)` and
+# `genswarm.rejection_explained_cells()`: enumerator 685 (K<=2) / 701 (K<=3), unchanged,
+# and 760 with witnesses, out of a 1128-cell universe (48 features). The 106 lost cells
+# came from compiling TK106 witnesses on the unchecked AST, which produced plan, leaf and
+# via features for a compile path TK107 deleted. The graph compiler now refuses that AST
+# too, so those features describe nothing. A witness now carries its AST features plus
+# `ttu.ts:tainted` (`genswarm._witness_features`).
 _CELL_FLOOR_CI = 650        # measured 685 (enumerator K<=2, compile-only), 2026-09-26
 _CELL_FLOOR_DEEP = 665      # measured 701 (enumerator K<=3), 2026-09-26
-_CELL_FLOOR_WITH_REJ = 820  # measured 866 (K<=2 + rejection witnesses), 2026-09-26
+_CELL_FLOOR_WITH_REJ = 720  # measured 760 (K<=2 + rejection witnesses), 2026-10-05
 _BASELINE_CELLS = 514       # `git show HEAD:tests/test_hypothesis.py`, 400 draws each
+# Re-measured 2026-10-05 (TK107) in the 1128-cell universe: the 2026-08-10 baseline
+# generators (`tests/test_hypothesis.py` at 1cbaad0, the zz_measure.py recipe, derandomized)
+# replayed through today's `genswarm.features` reach 514 still (614 draws accepted, 596
+# refused; instrument control: 158 cells at 1 draw per generator, 514 already at 20).
+#
+# The required GAIN over the baseline. It was a bare `1.5` until TK107, set when the
+# ratio was 871/514 = 1.69 (2026-08-10) and still 866/514 = 1.68 after TK106. TK107 took
+# it to 760/514 = 1.48: the 106 lost cells were rejection-witness cells built from the
+# deleted unchecked compile (see the floors above), and the enumerator's own 685 did not
+# move. ~5% under the measured 1.48, like the floors.
+_MIN_GAIN_OVER_BASELINE = 1.4
 
 
 def test_enumerator_cell_coverage_floor():
@@ -622,7 +647,7 @@ def test_enumerator_cell_coverage_floor():
         f'{floor} (measured 685 at K<=2 / 701 at K<=3 on 2026-09-26)')
     with_rej = cells | G.rejection_explained_cells()
     assert len(with_rej) >= _CELL_FLOOR_WITH_REJ
-    assert len(with_rej) > _BASELINE_CELLS * 1.5, (
+    assert len(with_rej) > _BASELINE_CELLS * _MIN_GAIN_OVER_BASELINE, (
         f'the new machinery reaches {len(with_rej)} cells vs the baseline generators\' '
         f'{_BASELINE_CELLS} -- that is not enough of a gain to justify the runtime')
 

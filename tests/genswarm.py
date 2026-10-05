@@ -294,22 +294,18 @@ def ast_features(schema_text: str, owc=frozenset()) -> set[str]:
     return f
 
 
-def features(schema_text: str, owc=frozenset(), *, checked: bool = True) -> set[str]:
+def features(schema_text: str, owc=frozenset()) -> set[str]:
     """Full feature set of one ``(schema, object_wildcard_shapes)`` config.
 
     Raises whatever the compiler raises — the caller classifies the refusal.
 
-    ``checked=False`` skips the PARSE-time refusals and compiles the unchecked AST with the
-    real compiler. It exists only for `_witness_features`: a witness refused at parse by
-    `TUPLESET_MUST_BE_DIRECT` (TK106) still describes what the compiler WOULD have built,
-    which is how the now-unreachable tainted-tupleset features stay accounted for."""
+    (Until TK107, 2026-10-05, a ``checked=False`` mode compiled the UNCHECKED AST so a
+    TK106 witness could describe the tainted-tupleset plan the compiler would have built.
+    TK107 deleted that plan path and the compiler now refuses the unchecked AST too, so
+    there is nothing compiled to describe; see `_witness_features`.)"""
     f = ast_features(schema_text, owc)
-    if checked:
-        ast = parse_schema_ast(schema_text)
-        rs = parse_openfga_schema(schema_text, object_wildcard_shapes=owc)
-    else:
-        ast = Z._parse_schema_ast_unchecked(schema_text)
-        rs = Z.compile_ruleset(ast, Z.derive_schema_info(ast, frozenset(owc)))
+    ast = parse_schema_ast(schema_text)
+    rs = parse_openfga_schema(schema_text, object_wildcard_shapes=owc)
     compiled = rs.compiled
     tainted = compiled.tainted if compiled else frozenset()
     if rs.schema_info.object_wildcard_shapes:
@@ -737,10 +733,9 @@ REJECTION_WITNESSES: tuple[Rejection, ...] = (
         TUPLESET_MUST_BE_DIRECT),
     Rejection(
         # TK106 (2026-09-26, user decision): a BOOLEAN tupleset is refused at parse.
-        # Carries `ttu.ts:Intersection` and, through `_witness_features`, the compiled
-        # tainted-tupleset features (`ttu.ts:tainted`, `plan:PDerivedTuplesetTTU`,
-        # `leaf:derived-tupleset-ttu`, `via:tupleset-ttu`) that no accepted schema can
-        # reach any more.
+        # Carries `ttu.ts:Intersection` and, through `_witness_features`, `ttu.ts:tainted`,
+        # which no accepted schema can reach any more. (It carried the compiled
+        # tainted-tupleset features too, until TK107 deleted that compiler path.)
         'tupleset-intersection',
         _REJ_HEAD + ('    define r1: [user]\n'
                      'type doc\n  relations\n'
@@ -853,17 +848,30 @@ def rejection_message_families() -> tuple[str, ...]:
 
 
 def _witness_features(w: Rejection) -> set[str]:
-    """What a refused witness would have carried. A TK106 parse refusal is compiled on the
-    unchecked AST by the real compiler (`features(checked=False)`), because the features it
-    exempts are compiled ones; every other witness stays AST-only (`ast_features`)."""
+    """What a refused witness would have carried: its AST-only features (`ast_features`).
+
+    A TK106 parse refusal (`TUPLESET_MUST_BE_DIRECT`) additionally carries the TAINT flags
+    of its TTUs, read from the PRODUCTION `compute_taint` on the unchecked AST (not a second
+    taint implementation, so `ast_features`' reason for omitting them does not apply).
+    That is how `ttu.ts:tainted` stays accounted for: a boolean tupleset is exactly the
+    shape the refusal exists to keep out.
+
+    Until TK107 (2026-10-05) this compiled the unchecked AST and took every compiled
+    feature (`plan:PDerivedTuplesetTTU`, `leaf:derived-tupleset-ttu`, `via:tupleset-ttu`,
+    ...). TK107 deleted that compiler path, and the graph compiler now refuses the shape
+    on the unchecked AST as well."""
+    f = ast_features(w.schema, w.owc)
     if w.message == TUPLESET_MUST_BE_DIRECT:
-        try:
-            return features(w.schema, w.owc, checked=False)
-        except Exception:
-            # An UNTAINTED computed tupleset is also refused by the graph compiler
-            # (`_validate_ttu_tuplesets`), so there is nothing compiled to describe.
-            pass
-    return ast_features(w.schema, w.owc)
+        ast = Z._parse_schema_ast_unchecked(w.schema)
+        tainted = Z.compute_taint(ast)
+        for (otype, _rel), body in ast.items():
+            for node in _walk(body):
+                if isinstance(node, TTU):
+                    if (otype, node.tupleset_rel) in tainted:
+                        f.add('ttu.ts:tainted')
+                    if (otype, node.target_rel) in tainted:
+                        f.add('ttu.target:tainted')
+    return f
 
 
 def rejection_features() -> dict[str, set[str]]:

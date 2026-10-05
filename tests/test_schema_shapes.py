@@ -630,9 +630,9 @@ EXPECTED_UNREACHED = {
     'ttu.ts:TTU',
     'ttu.ts:neg-only-type',
     'ttu.ts:tainted',
-    'plan:PDerivedTuplesetTTU',
-    'leaf:derived-tupleset-ttu',
-    'via:tupleset-ttu',
+    # (`plan:PDerivedTuplesetTTU`, `leaf:derived-tupleset-ttu` and `via:tupleset-ttu` were
+    # listed here until TK107, 2026-10-05, deleted them from the compiler, and so from the
+    # alphabet.)
 }
 
 

@@ -399,9 +399,11 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
   `tests/oracle.py::_validate_tuplesets_direct`). `from` walks STORED tuples, so a boolean or
   computed arm there was silently ignored. The rewrite is `parent_link: [<types>]`, used by
-  the `from`. Consequence: a tupleset is never tainted, so `PDerivedTuplesetTTU` /
-  `derived-tupleset-ttu` and the processor's `derived_stored_*` helpers are unreachable from
-  a checked parse. Map: `docs/tk106-boolean-tuplesets-2026-09-26.md`.
+  the `from`. Consequence: a tupleset is never tainted. `TK107` (2026-10-05) deleted the code
+  that served a tainted one (`PDerivedTuplesetTTU`, leaf kind `derived-tupleset-ttu`, the
+  processor/bulk `derived_stored_*` helpers), and `_validate_ttu_tuplesets` now refuses any
+  non-direct tupleset even on an unchecked AST. Map: `docs/tk106-boolean-tuplesets-2026-09-26.md`,
+  `docs/tk107-tainted-tupleset-removal-2026-10-05.md`.
 - **A tupleset may not restrict to a userset (user decision 2026-09-27, `TK108`).**
   `parent: [folder#member]` / `[folder:*#member]` under `x from parent` is a parse refusal in
   both parsers (same functions as `TK106`): `from` ignores a stored parent's predicate, so

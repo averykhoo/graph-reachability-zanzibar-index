@@ -451,7 +451,11 @@ GATE_LOCK_HELD=1
 # Re-measured 2026-10-04e (TK101) with the same command: 1085 (first-hand). All +4 are
 #   formal/conformance/test_conformance_enum_objstar.py (four shapes, one node each).
 #   1085 - 4 = 1081, so no drift. Heavy unchanged, so REST moves 946 -> 950.
-MIN_CONF_ALL=1085
+# Re-measured 2026-10-05 (TK107) with the same command: 1087 (first-hand). The +2 are
+#   formal/conformance/test_graphadmission_scope_pin.py::test_ttudirect_probe_is_refused_by_
+#   the_graph_compiler_on_the_unchecked_ast (two rows); test_conformance_nary_strata.py is
+#   net 0 (one test renamed). 1087 - 2 = 1085, so no drift.
+MIN_CONF_ALL=1087
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -710,8 +714,10 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 #   --ignore construction; 135 + 903 == 1038 == MIN_CONF_ALL. All +48 are REST.
 # 2026-09-26 (TK106): HEAVY re-measured at 135 (unchanged), REST at 946 by the same
 #   --ignore construction; 135 + 946 == 1081 == MIN_CONF_ALL. All +43 are REST.
+# 2026-10-05 (TK107): HEAVY re-measured at 135 (unchanged), REST at 952 by the same
+#   --ignore construction; 135 + 952 == 1087 == MIN_CONF_ALL. Both new tests are REST.
 MIN_CONF_HEAVY=135
-MIN_CONF_REST=950
+MIN_CONF_REST=952
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

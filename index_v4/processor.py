@@ -100,8 +100,8 @@ class FixpointTier(NamedTuple):
 #     still protect the node, but that is an accident of the current leaf set, not the
 #     stated reason -- so it cannot carry a GC-safety argument.)
 #
-# Every remaining kind (``derived-ttu`` / ``derived-tupleset-ttu`` /
-# ``derived-userset``) records from-chain (X4a) or lifted (X4b) usersets that are
+# Every remaining kind (``derived-ttu`` / ``derived-userset``; ``derived-tupleset-ttu``
+# too, until TK107 deleted it) records from-chain (X4a) or lifted (X4b) usersets that are
 # edge-free by construction. So NO leaf kind satisfies (P): the safe residual whitelist
 # is EMPTY and the mechanism had nothing left to gate. ``_keys_referencing`` now always
 # scans. It was never the saving it looked like anyway -- ``_any_residue_reference``
@@ -224,37 +224,6 @@ class _EvalContext:
         for (pt, pn) in self.proc._expand_tupleset_parents(concretes, star_types):
             out |= self.proc.member_stars(pt, target, pn)
         return out
-
-    # -- derived-tupleset TTU: parents are the STORED tupleset tuples (the pinned
-    #    Zanzibar semantics -- the oracle's ttu_leaf reads raw tuples, never computed
-    #    membership), which for a derived tupleset live on its leaf families --
-
-    def tupleset_ttu_check(self, target: str, ts: str, parent_types: tuple, s: SubjectKey) -> bool:
-        sp, st, sn = s
-        # one pass over the derived tupleset's STORAGE leaves for both halves
-        # (perf R6-10 step A) -- the star arm still short-circuits before the
-        # RC2 instance expansion runs. See ttu_check.
-        split = self.proc._derived_stored_split(self.object_type, self.obj_name,
-                                                ts, parent_types)
-        for pt in self.proc._split_star_types(split):
-            if (st, sp) == (pt, target):
-                return True             # star-parent shape rule (RC2); see ttu_check
-        for (pt, pn) in self.proc._split_parents(split):
-            if (sp, st, sn) == (target, pt, pn):
-                return True         # from-chain identity rule (oracle ttu_leaf; X4a)
-            if self.proc.member_check(pt, target, pn, s):
-                return True
-        return False
-
-    def tupleset_ttu_stars(self, target: str, ts: str, parent_types: tuple) -> frozenset:
-        split = self.proc._derived_stored_split(self.object_type, self.obj_name,
-                                                ts, parent_types)   # R6-10 step A
-        out: frozenset = frozenset(
-            (pt, target) for pt in self.proc._split_star_types(split))   # RC2
-        for (pt, pn) in self.proc._split_parents(split):
-            out |= self.proc.member_stars(pt, target, pn)
-        return out
-
 
 class DeltaProcessor:
     """Maintains derived-relation state from the outbox stream (boolean spec §5)."""
@@ -534,61 +503,6 @@ class DeltaProcessor:
         """Types T with a stored ``T:*`` tupleset tuple on ``(obj, ts)``."""
         return self._stored_tupleset_subjects(object_type, obj_name, ts, parent_types)[1]
 
-    def _ts_leaf_predicates(self, object_type: str, ts: str) -> list[str]:
-        """The STORAGE-leaf predicates of a derived tupleset relation: only
-        RewriteFilter-fed leaves hold raw stored tuples (rule-routed leaves carry
-        computed state, which never counts as a TTU parent)."""
-        plan = self.compiled.plans[(object_type, ts)]
-        return [spec.predicate for spec in plan.leaves if spec.storage]
-
-    def _derived_stored_split(self, object_type: str, obj_name: str, ts: str,
-                              parent_types: tuple) -> list[tuple[list, list]]:
-        """One ``_stored_tupleset_subjects`` result per STORAGE leaf of a derived
-        tupleset -- the shared read behind ``derived_stored_parents`` and
-        ``derived_stored_star_types`` (perf R6-10 step A).
-
-        The pair used to walk the same leaves twice, each walk issuing its own SELECT
-        pair per leaf. Splitting the read from the two projections lets a caller that
-        wants both (``_EvalContext.tupleset_ttu_check`` / ``::tupleset_ttu_stars``)
-        pay for one walk."""
-        return [self._stored_tupleset_subjects(object_type, obj_name, leaf, parent_types)
-                for leaf in self._ts_leaf_predicates(object_type, ts)]
-
-    @staticmethod
-    def _split_star_types(split: list[tuple[list, list]]) -> list[str]:
-        """Star-parent types of a ``_derived_stored_split`` (RC2), leaf order, deduped."""
-        seen: dict[str, None] = {}
-        for _concretes, star_types in split:
-            for pt in star_types:
-                seen[pt] = None
-        return list(seen)
-
-    def _split_parents(self, split: list[tuple[list, list]]) -> list[tuple[str, str]]:
-        """Concrete parents of a ``_derived_stored_split``, star-expanded (RC2), leaf
-        order, deduped. The expansion runs HERE and not in ``_derived_stored_split`` so
-        the star arm of the TTU leaves can still short-circuit before it."""
-        seen: dict[tuple[str, str], None] = {}
-        for concretes, star_types in split:
-            for (pt, pn) in self._expand_tupleset_parents(concretes, star_types):
-                seen[(pt, pn)] = None
-        return list(seen)
-
-    def derived_stored_parents(self, object_type: str, obj_name: str, ts: str,
-                               parent_types: tuple) -> list[tuple[str, str]]:
-        """Stored tupleset tuples of a DERIVED tupleset relation: raw admitted writes
-        live on its leaf families (rewrite routing), so parents are the direct
-        incoming entity subjects across those leaf nodes."""
-        return self._split_parents(
-            self._derived_stored_split(object_type, obj_name, ts, parent_types))
-
-    def derived_stored_star_types(self, object_type: str, obj_name: str, ts: str,
-                                  parent_types: tuple) -> list[str]:
-        """Types T with a stored ``T:*`` tupleset tuple of a DERIVED tupleset relation
-        (RC2) -- the star half of ``derived_stored_parents``, across its storage
-        leaves."""
-        return self._split_star_types(
-            self._derived_stored_split(object_type, obj_name, ts, parent_types))
-
     def _keys_referencing(self, node_id: int) -> list[Key]:
         """Reconcile keys of every residue whose ``neg``/``upos`` records this subject
         node id -- an UNCONDITIONAL scan, on every schema.
@@ -630,14 +544,10 @@ class DeltaProcessor:
         have nodes."""
         keys: dict[SubjectKey, None] = {}
         for spec, node in zip(plan.leaves, plan.leaf_nodes):
-            if spec.kind == 'derived-ttu':
-                parents = self.tupleset_parents(object_type, obj_name,
-                                                node.tupleset_rel, node.parent_types)
-            elif spec.kind == 'derived-tupleset-ttu':
-                parents = self.derived_stored_parents(object_type, obj_name,
-                                                      node.tupleset_rel, node.parent_types)
-            else:
+            if spec.kind != 'derived-ttu':
                 continue
+            parents = self.tupleset_parents(object_type, obj_name,
+                                            node.tupleset_rel, node.parent_types)
             for (pt, pn) in parents:
                 keys[(node.target_rel, pt, pn)] = None
         return list(keys)
@@ -657,41 +567,6 @@ class DeltaProcessor:
                 n = nodes.get(nid)
                 if n is not None:
                     out.append(n)
-        return out
-
-    def _stored_parent_objects_of_entity(self, e_type: str, e_name: str,
-                                         object_type: str, ts: str) -> set[str]:
-        """Objects obj with a stored tuple (entity, ts, obj) where ts is a derived
-        tupleset: the entity's direct outgoing edges into ts's leaf families.
-
-        ⚠ RC2 -- the STAR source is load-bearing, and omitting it is a silent staleness
-        bug rather than a missing feature. A stored ``T:*`` tupleset tuple makes every
-        entity of type T a parent of that object, but it hangs off the ``w_any(T,'...')``
-        node, NOT off the entity. Reading only the entity's own edges, a later delta on
-        some ``T:x`` would invalidate nothing and the dependent's derived state would
-        stay stale until an unrelated write happened to reconcile it -- the fix would
-        then pass the pins (which write in one batch) and fail incremental maintenance."""
-        leaf_preds = set(self._ts_leaf_predicates(object_type, ts))
-        src_ids: list[int] = []
-        ent = self._node('...', e_type, e_name)
-        if ent is not None:
-            src_ids.append(ent.id)
-        star = self.widx._w_node(e_type, '...', 'any', create=False)
-        if star is not None:
-            src_ids.append(star.id)
-        if not src_ids:
-            return set()
-        out: set[str] = set()
-        edges = self.session.exec(
-            select(EdgeV4).where(EdgeV4.store_id == self.store_id)
-            .where(EdgeV4.subject_id.in_(src_ids))  # type: ignore[attr-defined]
-            .where(EdgeV4.direct_edge_count > 0)  # type: ignore[arg-type]
-        ).all()
-        nodes = self._nodes_by_ids(e.object_id for e in edges)
-        for e in edges:
-            o = nodes.get(e.object_id)
-            if o is not None and o.type == object_type and o.predicate in leaf_preds:
-                out.add(o.name)
         return out
 
     # ------------------------------------------------------------------ #
@@ -775,9 +650,6 @@ class DeltaProcessor:
             names are declared relation names; storage-leaf predicates are
             ``<relation>.<index>`` (``.`` is reserved), and an untainted tupleset
             relation is never a derived-public name either.
-          * ``_ts_leaf_predicates`` filters the derived-tupleset case to ``spec.storage``
-            leaves, which are RewriteFilter-fed only -- rule-routed leaves carry
-            computed state and are deliberately excluded.
           * the bridge/GC machinery cannot move either answer. ``_ensure_own_bridges``
             (the ONLY bridge-edge writer, reached from ``_ensure_bridges`` /
             ``_ensure_entity_middles``) creates exactly two edge shapes:
@@ -822,8 +694,8 @@ class DeltaProcessor:
         a stored-tuple memo there would outlive writes that change the very edges it
         caches, which is a silent wrong-answer authorization bug, not a crash.
 
-        ⚠ DO NOT extend the memo to ``tupleset_parents`` / ``tupleset_star_types`` /
-        ``derived_stored_parents`` / ``derived_stored_star_types``: they fan a star
+        ⚠ DO NOT extend the memo to ``tupleset_parents`` / ``tupleset_star_types``
+        (nor to the ``derived_stored_*`` pair they had until TK107): they fan a star
         parent through ``_instances_of_type``, which reads the global NodeV4 table, and
         that table legitimately changes mid-reconcile. See
         ``_expand_tupleset_parents``."""
@@ -1209,14 +1081,6 @@ class DeltaProcessor:
                 if (pt, node.target_rel) in self.compiled.tainted:
                     out |= self._residue_state(pt, node.target_rel, pn)[1]
             return out
-        if spec.kind == 'derived-tupleset-ttu':
-            node = self._find_leaf_node(spec)
-            out = set()
-            for (pt, pn) in self.derived_stored_parents(object_type, obj_name,
-                                                        node.tupleset_rel, node.parent_types):
-                if (pt, node.target_rel) in self.compiled.tainted:
-                    out |= self._residue_state(pt, node.target_rel, pn)[1]
-            return out
         raise TypeError(f'unknown leaf kind {spec.kind!r}')
 
     def _leaf_concretes(self, object_type: str, obj_name: str, spec) -> list[NodeV4]:
@@ -1276,19 +1140,6 @@ class DeltaProcessor:
             # the parents' residue upos, or the dependent never sees them (X4b)
             for n in self._ttu_target_upos_nodes(parents, node.target_rel):
                 out[n.id] = n
-            return list(out.values())
-        if spec.kind == 'derived-tupleset-ttu':
-            node = self._find_leaf_node(spec)
-            out = {}
-            parents = self.derived_stored_parents(object_type, obj_name,
-                                                  node.tupleset_rel, node.parent_types)
-            for (pt, pn) in parents:
-                p_node = self._node(node.target_rel, pt, pn)
-                if p_node is not None:
-                    for n in self._incoming_concretes(p_node.id):
-                        out[n.id] = n
-            for n in self._ttu_target_upos_nodes(parents, node.target_rel):
-                out[n.id] = n           # X4b, derived-tupleset variant
             return list(out.values())
         raise TypeError(f'unknown leaf kind {spec.kind!r}')
 
@@ -1417,9 +1268,9 @@ class DeltaProcessor:
         # a residue scan for GC'd subjects, and the whole dependent/tupleset/target
         # fan-out) once PER ROW. Two facts let us collapse it: (1) the subject-GC
         # residue scan depends only on ``subject_node_id``; (2) all the dependent
-        # fan-out (leaf tupleset-ttu dependents, DerivedFamily ``_fan_out``, tupleset
-        # and target feeders) depends only on ``(o_type, o_name, o_pred)`` -- never on
-        # the subject. Only the leaf's OWN-key full/subject decision is subject-shaped.
+        # fan-out (DerivedFamily ``_fan_out``, tupleset and target feeders; leaf
+        # tupleset-ttu dependents too, until TK107) depends only on
+        # ``(o_type, o_name, o_pred)`` -- never on the subject. Only the leaf's OWN-key full/subject decision is subject-shaped.
         # ``_map_deltas_to_keys`` mutates no node/residue state, so a per-call
         # ``session.get`` memo is exact; ``full``/``subject`` merge order-independently
         # and idempotently, so running each object's fan-out once is equivalent.
@@ -1487,14 +1338,7 @@ class DeltaProcessor:
             if obj_ident in processed_objects:
                 continue
             processed_objects.add(obj_ident)
-            if isinstance(fam, LeafFamily):
-                # a stored tuple of a derived TUPLESET changed: the parent set of its
-                # tupleset-ttu dependents changed on this object (stored-tuple TTU
-                # semantics -- membership changes alone don't move parents)
-                for edge in self.compiled.dependents.get((o_type, fam.owner_relation), []):
-                    if edge.via == 'tupleset-ttu':
-                        full((edge.dependent[0], edge.dependent[1], o_name))
-            elif isinstance(fam, DerivedFamily):
+            if isinstance(fam, DerivedFamily):
                 self._fan_out((o_type, o_pred), o_name, keys, full)
             # a tupleset tuple appeared/vanished: the dependent on the SAME object
             for edge in self.compiled.tupleset_feeders.get((o_type, o_pred), []):
@@ -1502,27 +1346,23 @@ class DeltaProcessor:
             for edge in self.compiled.target_feeders.get((o_type, o_pred), []):
                 # delta on an (untainted) TTU target relation
                 dep_t, dep_r = edge.dependent
-                if edge.via == 'tupleset-ttu':
-                    # dependents = objects holding a STORED tupleset tuple from this
-                    # entity (on the derived tupleset's leaf families)
-                    for obj_name in self._stored_parent_objects_of_entity(
-                            o_type, o_name, dep_t, edge.tupleset_rel):
-                        full((dep_t, dep_r, obj_name))
-                else:   # 'ttu' (mixed-type untainted target of a PDerivedTTU)
-                    # dependents = objects holding a tupleset tuple from this entity --
-                    # or a STAR one of this entity's type, which hangs off w_any and so
-                    # is invisible from the entity alone (RC2; see
-                    # _stored_parent_objects_of_entity for why that is staleness, not a
-                    # missing feature)
-                    srcs = [n for n in (self._node('...', o_type, o_name),
-                                        self.widx._w_node(o_type, '...', 'any',
-                                                          create=False))
-                            if n is not None]
-                    for src in srcs:
-                        for oid in self.idx.lookup_reachable(src.id):
-                            o2 = self.session.get(NodeV4, oid)
-                            if o2 is not None and (o2.type, o2.predicate) == (dep_t, edge.tupleset_rel):
-                                full((dep_t, dep_r, o2.name))
+                # 'ttu' only (a mixed-type untainted target of a PDerivedTTU): the
+                # 'tupleset-ttu' kind went with TK107.
+                # dependents = objects holding a tupleset tuple from this entity -- or a
+                # STAR one of this entity's type, which hangs off w_any and so is
+                # invisible from the entity alone (RC2). Omitting the star source is a
+                # silent STALENESS bug, not a missing feature: a later delta on some
+                # ``T:x`` would invalidate nothing, and the dependent would stay stale
+                # until an unrelated write happened to reconcile it.
+                srcs = [n for n in (self._node('...', o_type, o_name),
+                                    self.widx._w_node(o_type, '...', 'any',
+                                                      create=False))
+                        if n is not None]
+                for src in srcs:
+                    for oid in self.idx.lookup_reachable(src.id):
+                        o2 = self.session.get(NodeV4, oid)
+                        if o2 is not None and (o2.type, o2.predicate) == (dep_t, edge.tupleset_rel):
+                            full((dep_t, dep_r, o2.name))
         return keys
 
     def _fan_out(self, source: tuple[str, str], obj_name: str,
@@ -1550,18 +1390,6 @@ class DeltaProcessor:
                     o = self.session.get(NodeV4, oid)
                     if o is not None and (o.type, o.predicate) == (dep_t, edge.leaf):
                         full((dep_t, dep_r, o.name))
-            elif edge.via == 'tupleset-ttu':
-                if source[1] == edge.tupleset_rel:
-                    # the derived tupleset itself changed: same object reconciles
-                    full((dep_t, dep_r, obj_name))
-                else:
-                    # a (tainted) TTU target changed: dependents are the objects
-                    # holding a STORED tupleset tuple from this entity (blind-audit
-                    # P1: this called a method deleted in the stored-tuple-semantics
-                    # rework -- any derived tupleset with a tainted target crashed)
-                    for on in self._stored_parent_objects_of_entity(
-                            source[0], obj_name, dep_t, edge.tupleset_rel):
-                        full((dep_t, dep_r, on))
             else:
                 raise AssertionError(f'unknown dependency via {edge.via!r}')
 
@@ -1810,11 +1638,6 @@ class DeltaProcessor:
                     .where(NodeV4.wildcard == '')
                 ).all()
                 names.update(n.name for n in rows)
-            elif spec.kind == 'derived-tupleset-ttu':
-                # stored tuples of a derived tupleset live on ITS leaf families,
-                # which its own live keys enumerate (strictly lower stratum)
-                node = self._find_leaf_node(spec)
-                names |= self._live_keys_of(object_type, node.tupleset_rel)
         return names
 
     def backfill(self, chunk_size: int = 200) -> None:

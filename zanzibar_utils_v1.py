@@ -1537,9 +1537,13 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
     its rewrite rules land derived triples on the tupleset family, and the TTU rule
     would illegally propagate them (the oracle and the set engine, reading raw
     tuples, would not) -- a silent cross-backend divergence. Rejected loudly instead,
-    exactly as OpenFGA validates its models. Tainted (derived) tuplesets are exempt:
-    their stored tuples live on dedicated storage leaves, which the boolean path
-    already reads exclusively."""
+    exactly as OpenFGA validates its models.
+
+    Tainted (derived) tuplesets were exempt until TK107 (2026-10-05) and compiled to
+    ``PDerivedTuplesetTTU``. Since TK106 both checked parsers refuse every non-direct
+    tupleset, so that plan node was reachable only from a hand-built or unchecked AST,
+    through code no differential exercised. It was deleted, and this check now refuses
+    a tainted tupleset too, so no input reaches plan construction with one."""
     # A TTU inside an UNTAINTED relation compiles to a rewrite Rule whose then-pattern
     # carries `target_rel` as its subject predicate (`_emit_expr` -> `_rewrite_rule`).
     # If that NAME is also a derived relation, the rule would route derived state
@@ -1585,21 +1589,20 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
     for (object_type, relation), expr in ast.items():
         for e in _iter_ttus(expr):
             ts_key = (object_type, e.tupleset_rel)
-            # REFUSED SHAPE: an untainted tupleset with computed / TTU arms. WHY: the
-            # docstring above. Since TK106 every non-direct tupleset is refused at parse
-            # time (`_validate_tuplesets_direct`), so only a hand-built AST reaches this.
+            # REFUSED SHAPE: a tupleset with computed / TTU / boolean arms, tainted or
+            # not. WHY: the docstring above. Since TK106 every non-direct tupleset is
+            # refused at parse time (`_validate_tuplesets_direct`), so only a hand-built
+            # or unchecked AST reaches this; since TK107 it is the guard that keeps a
+            # tainted tupleset out of plan construction.
             # INSTEAD: store the links on a direct relation,
             # ``define parent_link: [folder]``, and use ``viewer from parent_link``.
-            # NOTE: the message's own suggestion is stale ("make the whole chain boolean":
-            # since TK106 a tainted non-direct tupleset is refused at parse as well).
-            if ts_key in ast and ts_key not in tainted and not _directs_only(ast[ts_key]):
+            if ts_key in ast and not _directs_only(ast[ts_key]):
                 raise UnsupportedByGraphIndex(
                     f"relation {object_type}#{relation}: tupleset "
-                    f"{e.tupleset_rel!r} has computed/rewritten arms; Zanzibar "
-                    f"tupleset semantics read stored tuples only, and the graph "
-                    f"index cannot separate raw from rewritten members of an "
-                    f"untainted relation (declare it direct-only, or make the "
-                    f"whole chain boolean so storage leaves apply)")
+                    f"{e.tupleset_rel!r} has computed/rewritten arms (or boolean "
+                    f"ones); Zanzibar tupleset semantics read stored tuples only, so "
+                    f"declare it direct-only (e.g. 'define parent_link: [folder]') "
+                    f"and use 'from parent_link'")
             if ts_key in ast:
                 # USERSET restrictions in tuplesets are rejected (OpenFGA model
                 # rule): they bypassed taint analysis entirely (a relation
@@ -1677,7 +1680,7 @@ def _assert_ttu_parent_types_cover_admission(compiled, rules_and_filters: list) 
     for plan in compiled.plans.values():
         o_type = plan.key[0]
         for node in plan.leaf_nodes:
-            if not isinstance(node, (PDerivedTTU, PDerivedTuplesetTTU)):
+            if not isinstance(node, PDerivedTTU):
                 continue
             accepts = admitted.get((o_type, node.tupleset_rel), set())
             missing = sorted(accepts - set(node.parent_types))
@@ -2098,22 +2101,6 @@ class PDerivedTTU:
 
 
 @dataclass(frozen=True, slots=True)
-class PDerivedTuplesetTTU:
-    """``target from tupleset`` where the *tupleset* itself is derived. Parents are
-    the STORED tupleset tuples only (the pinned Zanzibar TTU semantics -- the oracle's
-    ttu_leaf reads raw tuples, never computed membership), which for a derived
-    tupleset live on its leaf families. A derived tupleset with no Direct restrictions
-    can hold no stored tuples, making its dependent TTU constantly empty -- exactly
-    the oracle's answer. (Deviation from spec decision 15, which rejected this shape:
-    the frozen acceptance event requires demorgans_law_1.fga to flip 4-way, and that
-    fixture is three of these. See docs/spec-deviations.md.)"""
-    target_rel: str
-    tupleset_rel: str
-    positive: bool
-    parent_types: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
 class PUnion:
     children: tuple
 
@@ -2134,7 +2121,7 @@ class PExclusion:
 @dataclass(frozen=True, slots=True)
 class LeafSpec:
     predicate: str          # leaf predicate for closure/userset kinds; public name otherwise
-    kind: str               # 'closure' | 'derived-computed' | 'derived-userset' | 'derived-ttu' | 'derived-tupleset-ttu'
+    kind: str               # 'closure' | 'derived-computed' | 'derived-userset' | 'derived-ttu'
     positive: bool
     storage: bool = False   # True iff this family holds the relation's raw stored tuples
 
@@ -2162,7 +2149,7 @@ class DependentEdge:
     """One invalidation fan-out edge (boolean spec §5.2): when the keyed relation's
     state changes on some object, ``dependent`` must reconcile."""
     dependent: tuple[str, str]          # (object_type, relation)
-    via: str                            # 'computed' | 'userset' | 'ttu' | 'tupleset-ttu'
+    via: str                            # 'computed' | 'userset' | 'ttu'
     tupleset_rel: str | None = None
     leaf: str | None = None             # storage leaf, for via='userset'
 
@@ -2325,8 +2312,8 @@ def _is_pure(expr: Expr, object_type: str, tainted: frozenset, ast: SchemaAST) -
     if isinstance(expr, Computed):
         return (object_type, expr.relation) not in tainted
     if isinstance(expr, TTU):
-        if (object_type, expr.tupleset_rel) in tainted:
-            return False
+        # a tupleset is never tainted: `_validate_ttu_tuplesets` refuses every
+        # non-direct one before plans are built (TK107)
         return all((t, expr.target_rel) not in tainted
                    for t in _member_types(object_type, expr.tupleset_rel, ast, frozenset()))
     if isinstance(expr, Union):
@@ -2445,8 +2432,6 @@ def _build_plan_tree(key: tuple[str, str], expr: Expr, tainted: frozenset,
             return PDerivedComputed(e.relation, positive)
         if isinstance(e, TTU):
             parent_types = tuple(sorted(_member_types(object_type, e.tupleset_rel, ast, frozenset())))
-            if (object_type, e.tupleset_rel) in tainted:
-                return PDerivedTuplesetTTU(e.target_rel, e.tupleset_rel, positive, parent_types)
             return PDerivedTTU(e.target_rel, e.tupleset_rel, positive, parent_types)
         raise TypeError(f"unknown Expr node {e!r}")
 
@@ -2475,8 +2460,6 @@ def _plan_leaves(tree) -> tuple[tuple[LeafSpec, ...], tuple]:
             leaf(LeafSpec(n.predicate, 'derived-userset', n.positive, storage=True), n)
         elif isinstance(n, PDerivedTTU):
             leaf(LeafSpec(n.target_rel, 'derived-ttu', n.positive), n)
-        elif isinstance(n, PDerivedTuplesetTTU):
-            leaf(LeafSpec(n.target_rel, 'derived-tupleset-ttu', n.positive), n)
         elif isinstance(n, (PUnion, PIntersection)):
             for c in n.children:
                 walk(c)
@@ -2503,9 +2486,6 @@ def _compile_check_fn(node) -> Callable:
     if isinstance(node, PDerivedTTU):
         tr, ts, pt = node.target_rel, node.tupleset_rel, node.parent_types
         return lambda ctx, s: ctx.ttu_check(tr, ts, pt, s)
-    if isinstance(node, PDerivedTuplesetTTU):
-        tr, ts, pt = node.target_rel, node.tupleset_rel, node.parent_types
-        return lambda ctx, s: ctx.tupleset_ttu_check(tr, ts, pt, s)
     if isinstance(node, PUnion):
         fns = tuple(_compile_check_fn(c) for c in node.children)
         return lambda ctx, s: any(f(ctx, s) for f in fns)
@@ -2534,9 +2514,6 @@ def _compile_stars_fn(node) -> Callable:
     if isinstance(node, PDerivedTTU):
         tr, ts, pt = node.target_rel, node.tupleset_rel, node.parent_types
         return lambda ctx: ctx.ttu_stars(tr, ts, pt)
-    if isinstance(node, PDerivedTuplesetTTU):
-        tr, ts, pt = node.target_rel, node.tupleset_rel, node.parent_types
-        return lambda ctx: ctx.tupleset_ttu_stars(tr, ts, pt)
     if isinstance(node, PUnion):
         fns = tuple(_compile_stars_fn(c) for c in node.children)
         return lambda ctx: reduce(frozenset.__or__, (f(ctx) for f in fns))
@@ -2587,23 +2564,6 @@ def _plan_deps_and_fanout(key: tuple[str, str], tree, tainted: frozenset, ast: S
                     # its ordinary closure deltas must still invalidate this plan
                     target_feeders.setdefault(k, []).append(
                         DependentEdge(key, 'ttu', tupleset_rel=n.tupleset_rel))
-        elif isinstance(n, PDerivedTuplesetTTU):
-            ts_key = (object_type, n.tupleset_rel)
-            dep(ts_key)
-            dependents.setdefault(ts_key, []).append(
-                DependentEdge(key, 'tupleset-ttu', tupleset_rel=n.tupleset_rel))
-            for t in _member_types(object_type, n.tupleset_rel, ast, frozenset()):
-                target_key = (t, n.target_rel)
-                if target_key not in ast:
-                    continue
-                edge = DependentEdge(key, 'tupleset-ttu', tupleset_rel=n.tupleset_rel)
-                if target_key in tainted:
-                    dep(target_key)
-                    dependents.setdefault(target_key, []).append(edge)
-                else:
-                    # untainted target: its ordinary closure deltas must still fan out
-                    # to this plan (the residue-scan path; see spec-deviations)
-                    target_feeders.setdefault(target_key, []).append(edge)
         elif isinstance(n, (PUnion, PIntersection)):
             for c in n.children:
                 walk(c)

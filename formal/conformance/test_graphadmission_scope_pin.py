@@ -467,6 +467,47 @@ def test_every_control_probe_is_admitted():
     assert all(_expected(lb) == "ADMITTED" for lb in controls), controls
 
 
+#: The two `ttuDirect` probes, one per half of the compile-time refusal (`TK107`).
+_TTU_DIRECT_PROBES = ("ttuDirect.untainted/tupleset-with-computed-arm",
+                      "ttuDirect.derived/derived-tupleset")
+
+
+@pytest.mark.parametrize("label", _TTU_DIRECT_PROBES)
+def test_ttudirect_probe_is_refused_by_the_graph_compiler_on_the_unchecked_ast(label):
+    """`ttuDirect` (a tupleset def is direct-only) holds in the GRAPH COMPILER, not only in
+    the parsers: `zanzibar_utils_v1.py::_validate_ttu_tuplesets` refuses a non-direct
+    tupleset, tainted or not, when handed the UNCHECKED AST (`TK107`, 2026-10-05).
+
+    Both parsers refuse these probes first (`test_schema_probe_outcome_still_holds`), so
+    the compiler check is reached only by a hand-built or unchecked AST. It is still the
+    guard that keeps a tainted tupleset out of plan construction, whose dedicated code
+    path `TK107` deleted. One probe per half: the derived probe's tupleset is TAINTED, the
+    untainted probe's is a plain computed alias. That is asserted here, so a probe edit
+    cannot quietly leave one half uncovered.
+
+    SABOTAGE 2026-10-05 (`.scratch/tk107_sweep.py`; M2, refuse a tupleset only when it is
+    tainted). Before this test existed, that mutant left all 156 tests of the six modules
+    it ran GREEN::
+
+        M2 refuse tainted only: rc=0 | 156 passed in 97.40s (0:01:37) | []
+
+    With this test, the untainted row goes red (literal output in the TK107 plan doc,
+    `docs/tk107-tainted-tupleset-removal-2026-10-05.md` sec 3).
+    """
+    from zanzibar_utils_v1 import (
+        UnsupportedByGraphIndex, _parse_schema_ast_unchecked, compile_ruleset,
+        compute_taint, derive_schema_info)
+
+    schema, obj_wild, _exp = SCHEMA_PROBES[label]
+    ast = _parse_schema_ast_unchecked(schema)
+    tupleset_tainted = ("doc", "parent") in compute_taint(ast)
+    assert tupleset_tainted == label.startswith("ttuDirect.derived/"), (
+        f"[{label}] doc#parent tainted={tupleset_tainted}: the probe no longer covers the "
+        f"half of the refusal its label names")
+    with pytest.raises(UnsupportedByGraphIndex, match="has computed/rewritten arms"):
+        compile_ruleset(ast, derive_schema_info(ast, frozenset(obj_wild)))
+
+
 @pytest.mark.parametrize("label", sorted(SCHEMA_PROBES))
 def test_schema_probe_outcome_still_holds(label):
     got = _schema_outcome(label)

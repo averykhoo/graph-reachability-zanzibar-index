@@ -193,9 +193,6 @@ def _preds_without_rel(bf, o_type, rel, enumerate_sub):
         elif spec.kind == 'derived-ttu':
             node = bf._find_leaf_node(spec)
             names |= set(bf.family_names.get((o_type, node.tupleset_rel), ()))
-        elif spec.kind == 'derived-tupleset-ttu':
-            node = bf._find_leaf_node(spec)
-            names |= enumerate_sub(bf, o_type, node.tupleset_rel)
     return names
 
 

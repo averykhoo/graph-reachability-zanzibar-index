@@ -133,32 +133,6 @@ class _BulkEvalContext:
             out |= self.bf._member_stars(pt, target, pn)
         return out
 
-    # -- derived-tupleset TTU: parents are the STORED tupleset tuples (leaf families) --
-    def tupleset_ttu_check(self, target: str, ts: str, parent_types: tuple,
-                           s: SubjectKey) -> bool:
-        sp, st, sn = s
-        for pt in self.bf._derived_stored_star_types(self.object_type, self.obj_name,
-                                                     ts, parent_types):
-            if (st, sp) == (pt, target):
-                return True                  # star-parent shape rule (RC2)
-        for (pt, pn) in self.bf._derived_stored_parents(self.object_type, self.obj_name,
-                                                        ts, parent_types):
-            if (sp, st, sn) == (target, pt, pn):
-                return True                  # from-chain identity rule (X4a)
-            if self.bf._member_check(pt, target, pn, s):
-                return True
-        return False
-
-    def tupleset_ttu_stars(self, target: str, ts: str, parent_types: tuple) -> frozenset:
-        out: frozenset = frozenset(
-            (pt, target) for pt in self.bf._derived_stored_star_types(
-                self.object_type, self.obj_name, ts, parent_types))       # RC2
-        for (pt, pn) in self.bf._derived_stored_parents(self.object_type, self.obj_name,
-                                                        ts, parent_types):
-            out |= self.bf._member_stars(pt, target, pn)
-        return out
-
-
 class _BulkBackfill:
     """Computes the fresh-build derived state of ``compiled`` over the bulk builder's
     in-memory direct multigraph ``m`` (design 2.2). Mutates ``m`` (derived edges +
@@ -503,27 +477,6 @@ class _BulkBackfill:
         """Types T with a stored ``T:*`` tupleset tuple on (obj, ts)."""
         return self._stored_tupleset_subjects(o_type, o_name, ts, parent_types)[1]
 
-    def _ts_leaf_predicates(self, o_type: str, ts: str) -> list[str]:
-        plan = self.compiled.plans[(o_type, ts)]
-        return [spec.predicate for spec in plan.leaves if spec.storage]
-
-    def _derived_stored_parents(self, o_type: str, o_name: str, ts: str,
-                                parent_types: tuple) -> list[tuple[str, str]]:
-        seen: dict[tuple[str, str], None] = {}
-        for leaf in self._ts_leaf_predicates(o_type, ts):
-            for pp in self._tupleset_parents(o_type, o_name, leaf, parent_types):
-                seen[pp] = None
-        return list(seen)
-
-    def _derived_stored_star_types(self, o_type: str, o_name: str, ts: str,
-                                   parent_types: tuple) -> list[str]:
-        """The star half of ``_derived_stored_parents`` (RC2), across storage leaves."""
-        seen: dict[str, None] = {}
-        for leaf in self._ts_leaf_predicates(o_type, ts):
-            for pt in self._tupleset_star_types(o_type, o_name, leaf, parent_types):
-                seen[pt] = None
-        return list(seen)
-
     def _ttu_target_upos_nodes(self, parents: list[tuple[str, str]],
                                target: str) -> list[NodeKey]:
         """Userset-shaped members of tainted TTU targets are edge-free (P4): lift them
@@ -575,14 +528,10 @@ class _BulkBackfill:
             for n in self._ttu_target_upos_nodes([(o_type, o_name)], spec.predicate):
                 out[n] = None
             return list(out)
-        if spec.kind in ('derived-ttu', 'derived-tupleset-ttu'):
+        if spec.kind == 'derived-ttu':
             node = self._find_leaf_node(spec)
-            if spec.kind == 'derived-ttu':
-                parents = self._tupleset_parents(o_type, o_name, node.tupleset_rel,
-                                                 node.parent_types)
-            else:
-                parents = self._derived_stored_parents(o_type, o_name, node.tupleset_rel,
-                                                       node.parent_types)
+            parents = self._tupleset_parents(o_type, o_name, node.tupleset_rel,
+                                             node.parent_types)
             out: dict[NodeKey, None] = {}
             for (pt, pn) in parents:
                 p_key = self._concrete_key(node.target_rel, pt, pn)
@@ -614,14 +563,6 @@ class _BulkBackfill:
                 if (pt, node.target_rel) in self.compiled.tainted:
                     out |= self._residue_state(pt, node.target_rel, pn)[1]
             return out
-        if spec.kind == 'derived-tupleset-ttu':
-            node = self._find_leaf_node(spec)
-            out = set()
-            for (pt, pn) in self._derived_stored_parents(o_type, o_name, node.tupleset_rel,
-                                                         node.parent_types):
-                if (pt, node.target_rel) in self.compiled.tainted:
-                    out |= self._residue_state(pt, node.target_rel, pn)[1]
-            return out
         raise TypeError(f'unknown leaf kind {spec.kind!r}')
 
     def _from_chain_keys(self, o_type: str, o_name: str, plan) -> list[SubjectKey]:
@@ -629,14 +570,10 @@ class _BulkBackfill:
         (target_rel, parent_type, parent_name) per stored tupleset parent (X4a)."""
         keys: dict[SubjectKey, None] = {}
         for spec, node in zip(plan.leaves, plan.leaf_nodes):
-            if spec.kind == 'derived-ttu':
-                parents = self._tupleset_parents(o_type, o_name, node.tupleset_rel,
-                                                 node.parent_types)
-            elif spec.kind == 'derived-tupleset-ttu':
-                parents = self._derived_stored_parents(o_type, o_name, node.tupleset_rel,
-                                                       node.parent_types)
-            else:
+            if spec.kind != 'derived-ttu':
                 continue
+            parents = self._tupleset_parents(o_type, o_name, node.tupleset_rel,
+                                             node.parent_types)
             for (pt, pn) in parents:
                 keys[(node.target_rel, pt, pn)] = None
         return list(keys)
@@ -820,9 +757,6 @@ class _BulkBackfill:
             elif spec.kind == 'derived-ttu':
                 node = self._find_leaf_node(spec)
                 names |= set(self.family_names.get((o_type, node.tupleset_rel), ()))
-            elif spec.kind == 'derived-tupleset-ttu':
-                node = self._find_leaf_node(spec)
-                names |= self._live_keys_of(o_type, node.tupleset_rel)
         return names
 
     def run(self) -> None:

@@ -571,9 +571,10 @@ def test_compile_refuses_parent_types_narrower_than_admission():
     import zanzibar_utils_v1 as zu
 
     # Until TK106 (2026-09-26) this was RC1's own `parent: [folder] but not [doc]`, now a
-    # parse refusal. The invariant only inspects `PDerivedTTU` / `PDerivedTuplesetTTU`
-    # plan nodes, so the tupleset going direct is not enough on its own: the TARGET must be
-    # derived, or no plan node exists and the sabotage below would pass silently.
+    # parse refusal. The invariant only inspects `PDerivedTTU` plan nodes
+    # (`PDerivedTuplesetTTU` too, until TK107 deleted it), so the tupleset going direct
+    # is not enough on its own: the TARGET must be derived, or no plan node exists and
+    # the sabotage below would pass silently.
     schema = _RC1_LIVE_SCHEMA
 
     # control: the tree as it stands compiles, so the red below is the sabotage's doing
