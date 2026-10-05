@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: 5765e5e69346
 created: 2026-08-16
-moved: 2026-09-27d
-updated: 2026-09-27d
+moved: 2026-10-05b
+updated: 2026-10-05b
 closed: 2026-09-27d
 ---
 
@@ -36,3 +36,7 @@ Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`cre
 ### 2026-09-27d
 
 Re-run done 2026-09-27/28. The 2026-08-10 run's transcripts were gone, so candidates were re-discovered: 225 raw hits, the rule-2 predicate applied by hand, 12 curated, each audited and adversarially verified (every verifier upheld its audit). Result: 9 HOLE, 3 SOUND. Filed: TK111 (NEXT, live fail-open: a poison row stalls async catch_up and untokened check serves a revoked ALLOW -- reproduced first-hand by the orchestrator), TK112 (NEXT, fan-out cap vs revocation, same stale-ALLOW mechanism, reproduced first-hand), TK113 (remove_node divergence), TK114 (non-stratifiable negation), TK115 (JSON front end), TK116 and TK117 (coverage). Comments on ASK-2, TK109, P23, SD-1, TK33. Side finding fixed: tests/test_invariants_docstring_matches_body.py now skips .claude (worktree copies turned it red; sabotaged both ways). Map: docs/p10-scope-audit-2026-09-27.md.
+
+### 2026-10-05b
+
+SALVAGED 2026-10-05b from .scratch/wf-0927 (verify-2 of silent-fields-differential-coverage, READ first-hand): the per-sub-case coverage map behind this doc's "records=502, failed=0" -- 13 W4Fragment sub-case labels, split finer than w4_fragment_report can, each with driven/with_true counts and the tracked tests that carry it, plus the correction that test_matrix_4way_union_wildcard[0] covers bareStar.objWildcard and NOT usersetStar. It is the input to the doc sec 7 "optional LATER hardening" (tie each W4FRAGMENT_SCOPE row to a differential test), which no row owns. Snapshot predates TK106/TK107/TK108. docs/history/scratch-salvage-2026-10-05.md sec 2.

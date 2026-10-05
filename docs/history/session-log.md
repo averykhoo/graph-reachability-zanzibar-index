@@ -32,6 +32,52 @@ from here.
 
 ---
 
+## 2026-10-05b — pre-`TK120` pre-flight: `.scratch/` swept, three findings salvaged, `TK120` scouted
+
+rows: P12, P10, TK44, TK120 (comments only; nothing opened, closed or re-ranked)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 29 warning(s)`
+
+`read: board + note`
+
+The user asked what should happen before `TK120`. Nothing BLOCKS it: every prerequisite the
+board named (`TK116`, `TK101`, `TK121`, `TK107`) is closed, no open row depends on it, and
+`TK102`/`TK79` both say they are independent of it. Four pre-flight items were agreed:
+(1) push `master`, (2) confirm no other session is working in this repo, (3) delete the
+merged branch `bl-2-leaf-name-read-leak`, (4) sweep `.scratch/`, since a re-layout would make
+every path in it stale. (2) was confirmed: no peer session on this repo, no process running
+against it. (1) and (3) were refused by the harness permission classifier; the user then
+approved (3) and the branch was deleted (it was at `38aef9c`, merged). (1) is left to the user.
+
+**(4) The sweep.** A read-only subagent classified all 285 files with evidence (154
+SUPERSEDED, 128 DERIVABLE, 3 SALVAGE, 0 UNCLEAR). The session READ the three SALVAGE files
+first-hand and transcribed them into
+[`docs/history/scratch-salvage-2026-10-05.md`](scratch-salvage-2026-10-05.md), because both
+target docs are FROZEN. The closed `P12` and `P10` rows point at it. The finding worth
+carrying: the `P12` verifier's mutation **V2 (`break` vs `continue`) stayed GREEN** because
+every `P12` fixture has exactly one crossable shape, so that degree of freedom is unpinned.
+The `P10` finding is the per-sub-case coverage map behind "records=502, failed=0", the input
+to that doc's unowned "optional LATER hardening". Then all 295 files went to the Recycle Bin.
+`DeleteDirectory` failed on three subdirectories, so files were recycled one by one and the
+count was verified in the bin.
+
+Gate: see `python scripts/gate_status.py`; all ten phases are run after this entry is written.
+
+**(5) `TK120` scouted, at the user's go.** Two read-only agents measured the tree for the
+restructure: a code-side census and a rename-trap census. The session re-checked their
+headline claims first-hand and transcribed both into
+[`docs/tk120-repo-restructure-2026-10-05.md`](../tk120-repo-restructure-2026-10-05.md)
+(ACTIVE-PLAN). It answers the row's UNVERIFIED item: the goldens embed no module or versioned
+name, though they do embed four class reprs. It also finds `NodeV2` dead and `MultiSet` the
+only live product use of `legacy/`, and lists the strings a mechanical rename would miss. No
+layout is chosen and nothing moved; the plan still needs the user's approval.
+
+Push: the user approved it this session, after the gate.
+
+Still owed: `TK120`'s layout and old -> new name map (doc sec 2), then user approval.
+
+---
+
 ## 2026-10-05 — TK107 CLOSED: the tainted-tupleset code path is deleted, behind a compiler refusal
 
 rows: TK107 (CLOSED)

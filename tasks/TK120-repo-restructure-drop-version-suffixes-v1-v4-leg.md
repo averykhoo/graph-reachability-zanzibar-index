@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-10-02
-moved: 2026-10-04f
-updated: 2026-10-04f
+moved: 2026-10-05b
+updated: 2026-10-05b
 closed:
 ---
 
@@ -77,3 +77,7 @@ to the user for approval. No moves before approval.
 ### 2026-10-04c
 
 PROMOTED LATER -> NEXT 2026-10-04c by user instruction, with an ORDER. (1) Run this AFTER the correctness fixes at NOW/NEXT, which are TK116, TK101 and TK121; it is NEXT, but last of them. (2) Docs work is ON HOLD until this restructure lands (user, 2026-10-04c: "hold off on docs til after the restructure"). The reason is that a re-layout rewrites every file:symbol cite, so docs edits made before it are paid twice. When this row closes, the parked docs and process rows become pickable again.
+
+### 2026-10-05b
+
+SCOUTED 2026-10-05b (pre-flight before the planning session). Census doc: docs/tk120-repo-restructure-2026-10-05.md (ACTIVE-PLAN). LANDED: a code-side census (versioned-name inventory, reference counts by area, import graph, legacy/ reachability, module sizes, seams of zanzibar_utils_v1.py) and a rename-trap census (silent / hard-red / cosmetic), both from read-only agents transcribed verbatim, plus sec 1 = the claims the session re-checked first-hand. Headlines (sec 1): goldens embed NO module/versioned names (the UNVERIFIED item, now answered) but do embed Filter/Rule/RewriteFilter/RelationalTriplePattern reprs; NodeV2 is dead code; MultiSet is the only live product dependency on legacy/; legacy/index_v3.py declares node/edge tables in the shared SQLModel registry; several path/name string literals survive a sed and two fail by passing. Sec 2 lists the decisions the plan must take (layout + name map, class vs TABLE rename, legacy/ fate, split or move the schema module, rewrite mechanics). Nothing moved; nothing is RED. NEXT ACTION: write the layout + old->new map into that doc (sec 2), then present it to the user for approval before any move.

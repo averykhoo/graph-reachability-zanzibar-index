@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-10-04g
-updated: 2026-10-04g
+moved: 2026-10-05b
+updated: 2026-10-05b
 closed:
 ---
 
@@ -51,3 +51,7 @@ Nothing mechanical catches it, and this is worth carrying: `check_restated_count
 ### 2026-10-04g
 
 PROMOTED LATER -> NEXT 2026-10-04g (user pick: NEXT raised to 5). Why: ~30% of the generator pair-cell space unreached even at deep budget, with unexplained residue -- each unreached cell is an input class no property test has ever seen, so explaining (or reaching) them can surface real bugs. Open-ended: time-box the census first and record it in an ACTIVE-PLAN doc. Do NOT close the gap by adding cells to an exemption list.
+
+### 2026-10-05b
+
+Note (pre-TK120 scratch sweep, 2026-10-05b): the 2026-08-21b body still says "That is why this is HOLD"; the row has been NEXT since 2026-10-04g. The body is history, the pri field is current.
