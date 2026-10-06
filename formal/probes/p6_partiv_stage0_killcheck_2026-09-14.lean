@@ -3,7 +3,7 @@
 
   WHY. The `D1-split` decision (task row `P6`, 2026-09-14g) commits to correcting
   `GraphIndex/ReconcileStars.lean:97::wildcardShapes` to match the shipped two-pass
-  `zanzibar_utils_v1.py::SchemaInfo.subject_wildcard_shapes`, and to re-pointing
+  `src/zanzibar/schema/rules.py::SchemaInfo.subject_wildcard_shapes`, and to re-pointing
   `FullScope.lean::W4Fragment.wsBare` at a `declaredWildcardShapes` so the fragment does not
   shrink. That cone is `235` references across `18` files.
 

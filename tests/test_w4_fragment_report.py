@@ -1,4 +1,4 @@
-"""`zanzibar_utils_v1.py::w4_fragment_report` -- the input surface the Lean differential
+"""`src/zanzibar/schema/reports.py::w4_fragment_report` -- the input surface the Lean differential
 cannot see (`DW-1` step 3, 2026-09-23).
 
 The per-field VERDICT is pinned against Lean's decider in
@@ -11,9 +11,9 @@ here is the one that reddens.
 """
 from __future__ import annotations
 
-from setengine.models import TupleV1
+from zanzibar.setengine.models import RelationTuple
 from tests.oracle import OracleTuple
-from zanzibar_utils_v1 import (
+from zanzibar.schema import (
     W4_FRAGMENT_FIELDS,
     parse_schema_ast,
     w4_fragment_report,
@@ -39,13 +39,13 @@ def test_every_bare_predicate_spelling_is_the_bare_predicate():
 
 
 def test_tuple_carriers_agree():
-    """`TupleV1` rows, `OracleTuple`s and plain 6-sequences give one report."""
+    """`RelationTuple` rows, `OracleTuple`s and plain 6-sequences give one report."""
     rows = [("member", "user", "*", "viewer", "doc", "d1"),
             ("...", "user", "alice", "viewer", "doc", "*")]
     plain = w4_fragment_report(_SCHEMA, rows)
     assert plain.failures == ("bareStar",)
     oracle = w4_fragment_report(_SCHEMA, [OracleTuple(*r) for r in rows])
-    v1 = w4_fragment_report(_SCHEMA, [TupleV1(store_id="s", subject_predicate=r[0],
+    v1 = w4_fragment_report(_SCHEMA, [RelationTuple(store_id="s", subject_predicate=r[0],
                                               subject_type=r[1], subject_name=r[2],
                                               relation=r[3], object_type=r[4],
                                               object_name=r[5]) for r in rows])

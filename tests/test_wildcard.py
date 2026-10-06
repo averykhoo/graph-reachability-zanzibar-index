@@ -8,8 +8,8 @@ and the structural invariant checker after every op. P4 adds the read-path tests
 import pytest
 from sqlmodel import select
 
-from index_v4 import NodeV4, EdgeV4
-from zanzibar_utils_v1 import (
+from zanzibar.graphindex import Node, Edge
+from zanzibar.schema import (
     Entity, RelationalTriple, parse_openfga_schema,
 )
 from tests.wildcard_helpers import make_wildcard_index, assert_wildcard_invariants, snapshot
@@ -57,13 +57,13 @@ def _info(schema, object_wildcard_shapes=frozenset()):
 
 def _direct_edges(widx):
     session, store_id = widx.idx.session, widx.idx.store_id
-    return [e for e in session.exec(select(EdgeV4).where(EdgeV4.store_id == store_id)).all()
+    return [e for e in session.exec(select(Edge).where(Edge.store_id == store_id)).all()
             if e.direct_edge_count > 0]
 
 
 def _nodes(widx):
     session, store_id = widx.idx.session, widx.idx.store_id
-    return list(session.exec(select(NodeV4).where(NodeV4.store_id == store_id)).all())
+    return list(session.exec(select(Node).where(Node.store_id == store_id)).all())
 
 
 # ---------------------------------------------------------------------------
@@ -205,8 +205,8 @@ def test_no_bridge_edges_for_bare_shapes():
 
     # No concrete->w_any(user,'...') bridge rows exist.
     w_any_user = session.exec(
-        select(NodeV4).where(NodeV4.type == 'user').where(NodeV4.predicate == '...')
-        .where(NodeV4.wildcard == 'any')
+        select(Node).where(Node.type == 'user').where(Node.predicate == '...')
+        .where(Node.wildcard == 'any')
     ).first()
     assert w_any_user is not None                       # created as the grant's source
     incoming = [e for e in _direct_edges(widx) if e.object_id == w_any_user.id]

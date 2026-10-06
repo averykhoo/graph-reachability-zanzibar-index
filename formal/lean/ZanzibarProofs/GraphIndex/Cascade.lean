@@ -24,18 +24,18 @@ import ZanzibarProofs.GraphIndex.UsStarWrite
 /-!
 # The cascade scheduling layer — logged writes, delta→key mapping, the drain loop (ROADMAP W3d-1a)
 
-`index_v4/processor.py::DeltaProcessor.run_cascade` (a thin `_node_cache_scope()`
+`src/zanzibar/graphindex/processor.py::DeltaProcessor.run_cascade` (a thin `_node_cache_scope()`
 wrapper) → `::DeltaProcessor._run_cascade` (the modeled body),
 `::DeltaProcessor._map_deltas_to_keys`, `::DeltaProcessor._fan_out`;
-`index_v4/core.py::ReachabilityIndex._emit` (buffered) + `::ReachabilityIndex._flush_outbox`;
-`index_v4/outbox.py`; `connectedstore/apply.py::advance_index`; boolean spec §5.1–5.2.
+`src/zanzibar/graphindex/core.py::ReachabilityIndex._emit` (buffered) + `::ReachabilityIndex._flush_outbox`;
+`src/zanzibar/graphindex/outbox.py`; `src/zanzibar/connectedstore/apply.py::advance_index`; boolean spec §5.1–5.2.
 Design + faithfulness notes: ROADMAP "W3d — the multi-stratum cascade".
 
 W3a–W3c treated a reconcile pass as an externally-scheduled batch job. **W3d models the
 scheduler**: writes emit outbox deltas inside the transaction, `_run_cascade` maps the
 frontier's deltas to affected derived keys, reconciles each, and advances the watermark
 — with Python's final leftover check (the `raise InvariantViolation` on non-quiescence
-at the tail of `index_v4/processor.py::DeltaProcessor._run_cascade`) modeled as a
+at the tail of `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`) modeled as a
 REJECT branch, and T5 = the reject provably never
 fires on the fragment (`runCascade_no_abort`) so the watermark advance is justified,
 never asserted (`cascade_drains`).
@@ -54,7 +54,7 @@ Modeling decisions (ROADMAP W3d, decisions 1–6):
    terminality (re-proved over the interleaved closure:
    `reconcileJobsL_Rnode_not_source`).
 4. **The key mapping** `affectedKeys` =
-   `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`'s LeafFamily own-key
+   `src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys`'s LeafFamily own-key
    branch + `::DeltaProcessor._fan_out`'s `via='computed'` arm, restricted to the
    fragment (`hLU`: operands
    are same-object untainted computed refs; the ttu/userset/tupleset-ttu dependent
@@ -69,7 +69,7 @@ Modeling decisions (ROADMAP W3d, decisions 1–6):
 7. **The pass is the DIFFING audit** (`reconcileStarsKeyD`, 2026-07-11f): W3d's store
    grows between cascades, so a derived guard can flip DOWN (`excl` operand add) and
    the pass must RETRACT the stale derived edge — exactly the removal arm of
-   `index_v4/processor.py::DeltaProcessor._reconcile_subject`'s bare-entity tail
+   `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject`'s bare-entity tail
    (`_write_derived(..., add=False)`). The add-only pass
    model was refuted by `#eval` at a cascaded state (see `ReconcileDiff.lean` header);
    W3a–W3c keep the add-only pass, where fixed-store guard stability makes the
@@ -98,7 +98,7 @@ namespace Zanzibar
 
 /-! ## Outbox primitives -/
 
-/-- The highest outbox id (0 if empty) — `index_v4/outbox.py::outbox_watermark`. -/
+/-- The highest outbox id (0 if empty) — `src/zanzibar/graphindex/outbox.py::outbox_watermark`. -/
 def GraphState.maxOutboxId (σ : GraphState) : Nat :=
   σ.outbox.foldl (fun m d => max m d.id) 0
 
@@ -144,7 +144,7 @@ theorem foldl_max_comm (l : List Delta) :
 def GraphState.nextDeltaId (σ : GraphState) : Nat :=
   max σ.maxOutboxId σ.watermark + 1
 
-/-- Append one delta row (`index_v4/core.py::ReachabilityIndex._emit` — since perf N16
+/-- Append one delta row (`src/zanzibar/graphindex/core.py::ReachabilityIndex._emit` — since perf N16
     the row is STAGED in `self._outbox_buffer` and bulk-inserted by
     `::ReachabilityIndex._flush_outbox` at the end of the driving
     `::ReachabilityIndex._add_direct_edge_unsafe`, still inside the writing
@@ -192,7 +192,7 @@ because this is their final home, so step 3 is a pure composition edit with no f
 The `Cascade → UsStarWrite` import that makes it possible is the one added at the top of
 this file; it was measured free (whole-tree build green, job count unchanged, 2026-09-13b).
 
-**Why logged.** Python's bridges go through `index_v4/core.py::ReachabilityIndex.
+**Why logged.** Python's bridges go through `src/zanzibar/graphindex/core.py::ReachabilityIndex.
 add_edge_by_id` / `::remove_edge_by_id`, which record reachability flips in the delta
 outbox (`:1101-1107`) — so the LOGGED variant is the faithful one, and the step-1 probe
 measured what that buys: with the bridge UNLOGGED, tier-1 stability (`uReachStable` /
@@ -219,7 +219,7 @@ def GraphState.ensureInBridgesLogged (σ : GraphState) (c : NodeKey) : GraphStat
   else (σ.ensureInBridges c).pushDelta (wAnyNode (c.type, c.pred)) c.pred true
 
 /-- **Is `c` now nothing but its own in-bridge?** The guard of
-    `index_v4/wildcard.py::WildcardIndex._maybe_remove_bridges` (`:363-386`) — "implicit and
+    `src/zanzibar/graphindex/wildcard.py::WildcardIndex._maybe_remove_bridges` (`:363-386`) — "implicit and
     `reference_count == bridge degree`" — as a predicate on the edge list: `c` is of a
     bridged-in shape and carries no incident edge other than `c → w_any(c)`. The Python
     guard also defers to `::_sync_entity_middles` for CROSSING middles (a shape bridged in
@@ -493,7 +493,7 @@ theorem releaseInBridges_edges_subset (σ : GraphState) (c : NodeKey) :
     `GraphState.writeLoggedOne` below onto it, which is the composition the whole item
     exists for; that is the cone payment and it is deliberately NOT taken here.
 
-    Mirrors `index_v4/wildcard.py::WildcardIndex._add_tuple_trusted`: resolve both
+    Mirrors `src/zanzibar/graphindex/wildcard.py::WildcardIndex._add_tuple_trusted`: resolve both
     endpoints with `create=True` (the `addNode` pair), then `_ensure_bridges(subject)` and
     `_ensure_bridges(obj)`, and only then `add_edge_by_id`. The unlogged twin is
     `UsStarWrite.lean::GraphState.bridgePre` — same prologue, no delta rows — and
@@ -522,7 +522,7 @@ def GraphState.bridgePreLogged (σ : GraphState) (t : Tuple) : GraphState :=
     in the then-branch would re-probe `admitEdge` on the UNBRIDGED `σ` inside it and so
     double-guard against the wrong state — a write the shipped index rejects for a cycle
     through a fresh bridge would be admitted here. The order is Python's: bridge first,
-    then probe, then grant (`index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` ahead
+    then probe, then grant (`src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_own_bridges` ahead
     of `add_edge_by_id`), and it is behaviourally pinned at
     `UsStarWrite.lean::BridgedWriteWitness.{bridged_probe_refuses_the_cycle,
     unbridged_probe_admits_the_cycle, cycle_write_materialises_nothing}`.
@@ -913,7 +913,7 @@ theorem writeLoggedRules_watermark (σ : GraphState) (S : Schema) (t : Tuple) :
 /-! ## Logged retractions (W3d remove-leg R2 substrate — the retract mirror of the
     logged writes above)
 
-`connectedstore/apply.py::_apply_row` routes BOTH an ADD and a REMOVE log row
+`src/zanzibar/connectedstore/apply.py::_apply_row` routes BOTH an ADD and a REMOVE log row
 through the IDENTICAL `ruleset.apply(triple)` rewrite fan-out, then applies
 `_add_tuple_trusted` (ADD) or `_remove_tuple_trusted` (REMOVE) per rewrite-closure member.
 So the retraction of a raw tuple is the fold of a per-member edge decrement over the SAME
@@ -926,7 +926,7 @@ the `remove` constructor on `ReachedByW3d2E` (which consumes them) is a LATER le
 armed with the R4 confluence — added last so every increment stays green. -/
 
 /-- ★ **The retract mirror of `bridgePreLogged` — the EPILOGUE of a logged retraction.**
-    Python's `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted` runs
+    Python's `src/zanzibar/graphindex/wildcard.py::WildcardIndex._remove_tuple_trusted` runs
     `remove_edge_by_id`, then `_maybe_remove_bridges(subject)` and
     `_maybe_remove_bridges(obj)` — so the release is an epilogue on BOTH endpoints, in that
     order, and `P6` step 3b re-point #3 wraps exactly this around `removeLoggedOne`'s
@@ -946,8 +946,8 @@ def GraphState.releasePostLogged (σ : GraphState) (t : Tuple) : GraphState :=
     (the direct-edge multiset GREW), the retraction emits iff the edge was PRESENT (the
     multiset SHRANK) — same "emit on an actual flip of the direct-edge multiset" rule, one
     delta at the object node with the tuple's relation. Mirror of Python
-    `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted` →
-    `index_v4/core.py::ReachabilityIndex.remove_edge_by_id` →
+    `src/zanzibar/graphindex/wildcard.py::WildcardIndex._remove_tuple_trusted` →
+    `src/zanzibar/graphindex/core.py::ReachabilityIndex.remove_edge_by_id` →
     `::ReachabilityIndex._remove_edge_locked`: the ref-counted `-1` update
     (`_add_direct_edge_unsafe(subject_id, object_id, -1)`) is the sole
     driver of `_emit(subject_id, object_id, "REMOVED")` on the reachability flip
@@ -955,19 +955,19 @@ def GraphState.releasePostLogged (σ : GraphState) (t : Tuple) : GraphState :=
     that cone at cascade time via `affectedObjects`, decision 1). The presence guard
     mirrors the `direct_edge_count == 0 ⇒ ValueError` reject in
     `::ReachabilityIndex._remove_edge_locked` / the non-existent-endpoint `ValueError`
-    in `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted`; store consistency
+    in `src/zanzibar/graphindex/wildcard.py::WildcardIndex._remove_tuple_trusted`; store consistency
     makes the else-branch dead at every admitted removal (an R3 fact), so it is present
     only for totality.
 
     ★ **`P6` step 3b RE-POINT #3 LANDED 2026-09-14 — the bridge RELEASE epilogue.** The
     then-branch is now wrapped in `releasePostLogged`, mirroring Python's order in
-    `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted`: `remove_edge_by_id`
+    `src/zanzibar/graphindex/wildcard.py::WildcardIndex._remove_tuple_trusted`: `remove_edge_by_id`
     (which emits) FIRST, then `_maybe_remove_bridges` on both endpoints. So the wrap goes
     **outside** `pushDelta`, not between the erase and the emit.
 
     ⚠ **The else-branch stays a bare `σ`, and that is a fidelity decision, not an
     oversight.** Python raises `AdmissionRejected` out of `remove_edge_by_id`
-    (`index_v4/core.py::ReachabilityIndex._remove_edge_locked`) and so never reaches the
+    (`src/zanzibar/graphindex/core.py::ReachabilityIndex._remove_edge_locked`) and so never reaches the
     release pair: a removal that found no edge must not run the epilogue. Wrapping the
     whole `if` instead would release bridges on a no-op retraction.
 
@@ -983,9 +983,9 @@ def GraphState.removeLoggedOne (σ : GraphState) (t : Tuple) : GraphState :=
 
 /-- **The logged rule-routed retraction**: the retract mirror of `writeLoggedRules` — fold
     `removeLoggedOne` over the SAME `rewriteClosureL S (rawWriteTuples S t)` the write path
-    folds `writeLoggedOne` over (`zanzibar_utils_v1.py::RuleSet.apply` as a list, stage 1 =
+    folds `writeLoggedOne` over (`src/zanzibar/schema/rules.py::RuleSet.apply` as a list, stage 1 =
     the re-addressing onto storage leaves, stage 2 = the closure under
-    `schemaRewritesL`). Mirrors `connectedstore/apply.py::_apply_row`'s REMOVE branch: the
+    `schemaRewritesL`). Mirrors `src/zanzibar/connectedstore/apply.py::_apply_row`'s REMOVE branch: the
     `ruleset.apply(triple)` fan-out with `WildcardIndex._remove_tuple_trusted` per member.
 
     **RE-POINTED by step R5 (the remove leg of THE FLIP)**: `apply.py::_apply_row`
@@ -1001,7 +1001,7 @@ def GraphState.removeLoggedRules (σ : GraphState) (S : Schema) (t : Tuple) : Gr
 
 /-- **The chain-level retraction admission guard** — the retract mirror of the write leg's
     `FoldAdmits`. A raw tuple may be retracted only if it is IN the store: `t ∈ T`. Mirror
-    of `connectedstore/source.py::TupleSource.remove`, whose `engine.remove_tuple`
+    of `src/zanzibar/connectedstore/source.py::TupleSource.remove`, whose `engine.remove_tuple`
     raises `ValueError` and logs nothing on an absent tuple. **Scope caveat
     (`ZT-P4-2c`):** presence is only ONE conjunct of the chain's remove gate —
     `GraphIndex/Exec.lean::removeGateB` additionally demands a DRAINED prior state,
@@ -1510,7 +1510,7 @@ theorem unbridged_probe_would_have_admitted_it :
 
 /-- ★★ **THE ELSE-BRANCH IS OBSERVABLE, and this is the only pin that sees it.** A
     retraction that finds no edge must be the IDENTITY: Python raises `AdmissionRejected`
-    out of `remove_edge_by_id` (`index_v4/core.py::ReachabilityIndex._remove_edge_locked`)
+    out of `remove_edge_by_id` (`src/zanzibar/graphindex/core.py::ReachabilityIndex._remove_edge_locked`)
     and never reaches `_maybe_remove_bridges`. Re-point #3 therefore wraps
     `removeLoggedOne`'s **then-branch**, not its whole `if`.
 
@@ -1640,7 +1640,7 @@ def GraphState.affectedObjects (σ : GraphState) (d : Delta) : List NodeKey :=
   d.node :: σ.nodes.filter (fun v => σ.reach d.node v)
 
 /-- **The delta → derived-key mapping**
-    (`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`).
+    (`src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys`).
 
     Two branches, matching Python's LeafFamily/DerivedFamily split on the delta row.
     **Scope note (`ZT-P4-1`/§7.1, 2026-07-26):** Python's mapper has grown further
@@ -1686,7 +1686,7 @@ def GraphState.affectedObjects (σ : GraphState) (d : Delta) : List NodeKey :=
     * **DerivedFamily fan-out** (`::DeltaProcessor._fan_out`'s `edge.via == 'computed'`
       arm, fragment-restricted): a candidate object node `v` (concrete — derived keys
       are never star-named, which is what the wildcard-object `raise InvariantViolation`
-      above and the compile-time `zanzibar_utils_v1.py::_reject_object_wildcard_scope`
+      above and the compile-time `src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope`
       jointly enforce) dirties every declared derived key `(v.type, R)` whose def
       reads `v.pred` as a computed operand, at object `v.name`.
 
@@ -1745,7 +1745,7 @@ def W3cJob.applyLogged (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) :
   (j.applyD S T σ).pushDelta (objNode ⟨j.dt, j.on⟩ j.R) j.R
 
 /-- Run a batch of logged reconcile jobs left-to-right
-    (`index_v4/processor.py::DeltaProcessor._run_cascade`'s per-round
+    (`src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`'s per-round
     key loop; one-stratum, so ordering is irrelevant — operand reads are
     pass-inert). -/
 def reconcileJobsL (S : Schema) (T : Store) (σ : GraphState) (jobs : List W3cJob) :
@@ -1851,14 +1851,14 @@ theorem reconcileJobsL_outbox_sound (S : Schema) (T : Store) :
 
 /-! ## The drain loop (decision 5) -/
 
-/-- **`runCascade`** (`index_v4/processor.py::DeltaProcessor._run_cascade`, at
+/-- **`runCascade`** (`src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`, at
     one stratum): reconcile
     the batch, then Python's final quiescence check — the rows above the round
     frontier must map to NO keys, else `InvariantViolation` aborts the transaction.
     The abort is modeled as the reject branch (state unchanged); on accept the
     watermark advances past everything, which the next transaction's frontier read
-    (`connectedstore/apply.py::advance_index` re-reads
-    `index_v4/outbox.py::outbox_watermark`) makes faithful. -/
+    (`src/zanzibar/connectedstore/apply.py::advance_index` re-reads
+    `src/zanzibar/graphindex/outbox.py::outbox_watermark`) makes faithful. -/
 def runCascade (S : Schema) (T : Store) (σ : GraphState) (jobs : List W3cJob) :
     GraphState :=
   if ((reconcileJobsL S T σ jobs).outbox.filter
@@ -2245,7 +2245,7 @@ theorem reconcileJobsL_Rnode_not_source {σ : GraphState} {S : Schema} {T : Stor
     R-node, whose reach cone is empty (terminality) and whose own predicate is
     derived — hence not a computed operand of any derived def (`hLU`) — so it maps
     to no keys. Python's leftover `raise InvariantViolation` (the tail of
-    `index_v4/processor.py::DeltaProcessor._run_cascade`) is dead code
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`) is dead code
     at one stratum. -/
 theorem runCascade_no_abort {σ : GraphState} {S : Schema} {T : Store}
     {jobs : List W3cJob}

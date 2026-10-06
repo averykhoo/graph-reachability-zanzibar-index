@@ -5,14 +5,14 @@ Property guarded
 ----------------
 When ``parse_openfga_schema`` refuses a schema (``UnsupportedByGraphIndex`` /
 ``CyclicDerivedDependency``, the decision-15 scope families), the set engine still accepts
-it and runs WITHOUT a graph partner: ``setengine/engine.py::SetEngine.__init__`` leaves
+it and runs WITHOUT a graph partner: ``src/zanzibar/setengine/engine.py::SetEngine.__init__`` leaves
 ``_ruleset = None``, which also switches data-cycle rejection off
 (``SetEngine._would_cycle``). On those schemas the oracle is the ONLY cross-check. Before
 this module, the refusals were pinned only by ``pytest.raises`` and every randomized driver
 skipped a refused schema, so no write -- and no remove -- was ever compared on them.
 
 For every refusal family reachable from a checked parse (``WITNESSES``, one per raise site
-in ``zanzibar_utils_v1.py``):
+in ``src/zanzibar/schema/``):
 
 * the graph refuses it with THAT family's message, and no other witness's message matches
   (so the nine witnesses are nine distinct families, not one family nine times);
@@ -26,7 +26,7 @@ in ``zanzibar_utils_v1.py``):
   the oracle on the same schemas, set-only, by ``tests/test_lookup_oracle.py::_Gate``.
 
 ``test_every_graph_refusal_site_has_a_witness`` is the census: it counts the refusal raise
-sites in ``zanzibar_utils_v1.py`` and demands ``len(WITNESSES) + len(UNREACHABLE)``, zero
+sites in ``src/zanzibar/schema/`` and demands ``len(WITNESSES) + len(UNREACHABLE)``, zero
 headroom. A new refusal site is red here until it gets a witness (or a reason it cannot be
 reached from a checked parse).
 
@@ -38,7 +38,7 @@ accepted when an unrelated relation makes it graph-refused
 graph index's admission constraint (a ref-counted closure cannot hold a cycle), not a
 semantic rule -- Zanzibar/OpenFGA accept cyclic tuples, and the oracle evaluates them. With
 no graph partner there is nothing to stay in admission parity with, and refusing would
-need a RuleSet these schemas do not have. ``connectedstore/schema_io.py::save_schema``
+need a RuleSet these schemas do not have. ``src/zanzibar/connectedstore/schema_io.py::save_schema``
 refuses every graph-refused schema, so only a standalone ``SetEngine`` sees the
 difference. What this module adds is that the accepted cycles are now oracle-checked.
 """
@@ -51,7 +51,7 @@ from pathlib import Path
 
 import pytest
 
-from zanzibar_utils_v1 import (CyclicDerivedDependency, UnsupportedByGraphIndex,
+from zanzibar.schema import (CyclicDerivedDependency, UnsupportedByGraphIndex,
                                parse_openfga_schema, parse_schema_ast)
 from tests.parity import ParityEngine
 from tests.test_hypothesis import _directs
@@ -191,7 +191,10 @@ UNREACHABLE: tuple[tuple[str, str], ...] = (
      'refused at parse since TK108 (`_validate_tuplesets_direct`); hand-built AST only'),
 )
 
-_SRC = Path(__file__).resolve().parent.parent / 'zanzibar_utils_v1.py'
+# The whole schema PACKAGE, globbed (TK120, 2026-10-06): it was one file until the split,
+# and a fixed path would let a refusal in a new submodule escape this census unseen.
+_SRC_DIR = Path(__file__).resolve().parent.parent / 'src/zanzibar/schema'
+_SRC_FILES = sorted(_SRC_DIR.rglob('*.py'))
 _RAISE = re.compile(r'raise (UnsupportedByGraphIndex|CyclicDerivedDependency)\(')
 
 
@@ -244,9 +247,10 @@ def test_witness_families_are_distinct():
 
 def test_every_graph_refusal_site_has_a_witness():
     """Census, zero headroom: refusal raise sites == witnesses + unreachable sites."""
-    sites = _RAISE.findall(_SRC.read_text(encoding='utf-8'))
+    assert len(_SRC_FILES) >= 9, _SRC_FILES   # anti-vacuity: the glob still finds the package
+    sites = [s for f in _SRC_FILES for s in _RAISE.findall(f.read_text(encoding='utf-8'))]
     assert len(sites) == len(WITNESSES) + len(UNREACHABLE), (
-        f'{len(sites)} graph-refusal raise sites in zanzibar_utils_v1.py, but '
+        f'{len(sites)} graph-refusal raise sites in src/zanzibar/schema/, but '
         f'{len(WITNESSES)} witnesses + {len(UNREACHABLE)} unreachable. A new refusal needs '
         f'a WITNESSES entry (driven set-vs-oracle below) or an UNREACHABLE reason; a '
         f'removed one needs its entry retired.')
@@ -310,7 +314,7 @@ def test_walk_catches_a_planted_set_engine_lie(monkeypatch):
     graph partner, a set-engine lie on the family's own state must still be caught by the
     ParityEngine's oracle comparison. Both SetOps lie identically, so unanimity between
     them cannot catch it -- only the oracle can."""
-    from setengine import engine as se_mod
+    from zanzibar.setengine import engine as se_mod
     real = se_mod.SetEngine.check
 
     def lying(self, sp, st, sn, rel, ot, on):
@@ -370,7 +374,7 @@ def test_generated_refused_schemas_run_the_set_only_lookup_gate():
     at least one remove on each."""
     from tests.test_hypothesis import _op_pool, _schema_ast, _RandomChoices
     from tests.test_lookup_oracle import _run_gate
-    from zanzibar_utils_v1 import unparse_schema_ast
+    from zanzibar.schema import unparse_schema_ast
     want, ran = 4, 0
     for seed in range(240):
         ast = _schema_ast(_RandomChoices(random.Random(seed)))

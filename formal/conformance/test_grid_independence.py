@@ -9,7 +9,7 @@ dropped from (or distorted in) the query grid — so the harness deletes the ver
 query that would expose its own misparse. The "three genuinely independent
 corners" phrasing was therefore 2-of-3 at the schema-READING layer.
 
-`grid.py` now derives declared targets from `zanzibar_utils_v1.parse_schema_ast`
+`grid.py` now derives declared targets from `zanzibar.schema.parse_schema_ast`
 (the production parser; step 1 of `parse_openfga_schema`). This module is the
 anti-regression pin for that, in three parts:
 
@@ -33,7 +33,7 @@ from __future__ import annotations
 import pytest
 
 from tests.oracle import parse_schema_ast as oracle_parse, t as mk_tuple
-from zanzibar_utils_v1 import parse_schema_ast as prod_parse
+from zanzibar.schema import parse_schema_ast as prod_parse
 
 from formal.conformance import corpus as C
 from formal.conformance import grid as grid_mod
@@ -66,7 +66,7 @@ def test_the_two_parsers_are_really_different_code():
     """The two parsers are separate code, so this file is not pinning an alias. (`encode.py`'s
     docstring is honest about the shared-parser coupling; this is the demonstration.)
 
-    Until 2026-10-03e the demonstration was a live DISAGREEMENT: `zanzibar_utils_v1` refused a
+    Until 2026-10-03e the demonstration was a live DISAGREEMENT: `zanzibar.schema` refused a
     duplicate `define` and `tests/oracle.py` kept the last one. `P23`/`TK105` removed it on
     purpose. The checked parsers must now accept exactly the same schemas
     (`tests/test_p23_parser_refusal_parity.py`), so the difference has to be shown some other
@@ -76,7 +76,8 @@ def test_the_two_parsers_are_really_different_code():
     oast, past = oracle_parse(schema), prod_parse(schema)
     assert set(oast) == set(past) == {("doc", "viewer")}
     assert type(oast[("doc", "viewer")]).__module__ == "tests.oracle"
-    assert type(past[("doc", "viewer")]).__module__ == "zanzibar_utils_v1"
+    # `zanzibar.schema.syntax` since the TK120 split (2026-10-06): the AST classes live there.
+    assert type(past[("doc", "viewer")]).__module__ == "zanzibar.schema.syntax"
 
     bad = "type user\ntype doc\n  relations\n    define *: [user]\n"
     with pytest.raises(ValueError) as o_exc:
@@ -107,7 +108,7 @@ def test_grid_uses_the_production_parser_not_the_oracle():
         "the shared query grid MOVED when the oracle's parser was replaced — "
         "grid.py is reading the encoder's parser again (ZT-P4-6 regression)")
     assert grid_mod.parse_schema_ast is prod_parse, (
-        "grid.py's `parse_schema_ast` is not zanzibar_utils_v1's")
+        "grid.py's `parse_schema_ast` is not zanzibar.schema's")
 
 
 def test_declared_keys_agree_on_every_corpus():

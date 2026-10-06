@@ -59,11 +59,11 @@ the pin from its evidence.
 """
 import pytest
 
-from index_v4.core import ReachabilityIndex  # noqa: F401  (documents the node API used below)
+from zanzibar.graphindex.core import ReachabilityIndex  # noqa: F401  (documents the node API used below)
 from tests.parity import ParityEngine
 
 # `doc#parent: [folder:*]` used as a TTU tupleset is exactly the star-tupleset
-# through-shape of `zanzibar_utils_v1.py::derive_schema_info`'s SECOND loop, i.e. the
+# through-shape of `src/zanzibar/schema/compiler.py::derive_schema_info`'s SECOND loop, i.e. the
 # shape `W4Fragment.ttuStarFree` is about. `admin`/`gate` put it behind a `but not` and
 # an `and`, so the derived (residue-backed) read path is the one under test.
 SCHEMA = (

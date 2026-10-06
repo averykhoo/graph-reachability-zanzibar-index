@@ -28,7 +28,7 @@ stored objects), so the graph is compared Python-to-agreed-answer over the FULL 
 shape is PINNED (`graph` in `_SHAPES`, checked against `parse_openfga_schema`), so a
 shape cannot quietly drop to 3-way. `boolean_exclusion` is 3-way on purpose: the
 graph refuses an object wildcard that expands onto a boolean leaf
-(`zanzibar_utils_v1.py::_reject_object_wildcard_scope`). It is here because a
+(`src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope`). It is here because a
 `doc:*#banned` write is the revocation-shaped `*` object that `TK116` found a set-
 engine fail-open on.
 
@@ -62,7 +62,7 @@ from formal.conformance.test_conformance_enum import (
     _direct_restrictions,
     _tuple_space,
 )
-from zanzibar_utils_v1 import UnsupportedByGraphIndex, parse_openfga_schema
+from zanzibar.schema import UnsupportedByGraphIndex, parse_openfga_schema
 
 
 class Shape(NamedTuple):

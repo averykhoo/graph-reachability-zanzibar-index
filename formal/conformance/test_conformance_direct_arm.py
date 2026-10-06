@@ -31,8 +31,8 @@ import itertools
 
 import pytest
 
-from setengine import SetEngine
-from setengine.setops import ALL_SETOPS
+from zanzibar.setengine import SetEngine
+from zanzibar.setengine.setops import ALL_SETOPS
 from sqlmodel import Session, SQLModel, create_engine
 
 from tests.oracle import Oracle, t as mk_tuple

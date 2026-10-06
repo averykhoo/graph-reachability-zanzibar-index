@@ -18,11 +18,11 @@ original repro where one existed. Grouped:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from index_v4 import ReachabilityIndex, NodeV4
-from index_v4.models import StoreV4
-from index_v4.invariants import check_invariants
-from setengine import SetEngine, ALL_SETOPS
-from zanzibar_utils_v1 import (Entity, RelationalTriple, UnsupportedByGraphIndex,
+from zanzibar.graphindex import ReachabilityIndex, Node
+from zanzibar.graphindex.models import Store
+from zanzibar.graphindex.invariants import check_invariants
+from zanzibar.setengine import SetEngine, ALL_SETOPS
+from zanzibar.schema import (Entity, RelationalTriple, UnsupportedByGraphIndex,
                                parse_openfga_schema, parse_schema_ast)
 from tests.oracle import Oracle, OracleTuple
 from tests.oracle import _tokenize as oracle_tokenize
@@ -247,7 +247,7 @@ def test_userset_edge_does_not_poison_member_exclusions():
 
 def _core_index():
     session = _fresh_session()
-    session.add(StoreV4(id='t'))
+    session.add(Store(id='t'))
     session.commit()
     return session, ReachabilityIndex(session, 't')
 
@@ -263,7 +263,7 @@ def test_remove_node_decrements_neighbour_refcounts():
     idx.remove_node('...', 'user', 'alice')
     session.commit()
     # the implicit neighbour's refcount honestly hit zero -> implicit GC
-    assert session.exec(select(NodeV4)).all() == []
+    assert session.exec(select(Node)).all() == []
     check_invariants(session, 't')   # includes I13
     session.close()
 
@@ -405,7 +405,7 @@ def test_connected_store_ctor_commits_bootstrap():
     """X3: the constructor persists schema source + store rows and COMMITS them;
     before the fix a reader opening a second session saw nothing until the first
     data write happened to commit."""
-    from connectedstore import ConnectedStore
+    from zanzibar.connectedstore import ConnectedStore
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s1:
@@ -420,7 +420,7 @@ def test_catch_up_idle_leaves_no_open_transaction():
     """X2: the zero-row catch_up path still opened a transaction (store lock +
     cursor refresh + log read) and left it open -- pinning the worker's read
     snapshot forever and, on PostgreSQL, holding the FOR UPDATE store lock."""
-    from connectedstore import ConnectedStore
+    from zanzibar.connectedstore import ConnectedStore
     session = _fresh_session()
     cs = ConnectedStore(session, 'cs', schema=_CS_SCHEMA)
     cs.add_tuple('...', 'user', 'u', 'viewer', 'doc', 'd')

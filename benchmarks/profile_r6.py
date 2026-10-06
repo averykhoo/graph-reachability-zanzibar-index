@@ -17,8 +17,8 @@ the profile with **targeted counters** keyed to the candidate's own claim:
                                                and their share of expand time
                                          R6-3  the star branch actually firing
   graph-lookup (demorgans, graph index)  R6-4  _collect_residue_memberships share,
-                                               json.loads calls + ResidueV1 rows scanned
-                                         R6-5  EdgeV4/NodeV4 ORM rows instantiated
+                                               json.loads calls + Residue rows scanned
+                                         R6-5  Edge/Node ORM rows instantiated
   graph-check  (gdrive, graph index)     R6-6  SQL statements per check(), split into
                                                node-resolution vs the batched edge probe
 
@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import cProfile
 import pstats
+import re
 import sys
 import time
 from collections import Counter
@@ -63,7 +64,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import event
 
-from setengine import RoaringSets
+from zanzibar.setengine import RoaringSets
 
 from benchmarks._harness import build_set, build_graph
 from benchmarks import scale_bench as sb
@@ -170,10 +171,12 @@ class StmtCounter:
                 return
             self.total += 1
             s = ' '.join(statement.split())
-            if 'node_v4' in s and 'edge_v4' not in s:
-                self.counts['node_v4'] += 1
-            elif 'edge_v4' in s:
-                self.counts['edge_v4'] += 1
+            # word-bounded: the tables were node_v4/edge_v4 until TK120 (2026-10-06), and a
+            # bare 'node' substring would also match columns like object_node_id
+            if re.search(r'\bnode\b', s) and not re.search(r'\bedge\b', s):
+                self.counts['node'] += 1
+            elif re.search(r'\bedge\b', s):
+                self.counts['edge'] += 1
             elif 'residue' in s:
                 self.counts['residue'] += 1
             else:
@@ -214,9 +217,9 @@ def target_set_lookup(scale, calls):
     rows = _rows(stats)
     wall = max(ct for (_n, _t, ct) in rows.values()) if rows else 0.0
 
-    chk_n, chk_t, chk_c = _find(rows, func='check', file_frag='setengine/engine.py')
-    inst_n, inst_t, inst_c = _find(rows, func='_instances_of_type', file_frag='setengine/engine.py')
-    drive_n, _dt, _dc = _find(rows, func='_drive', file_frag='setengine/engine.py')
+    chk_n, chk_t, chk_c = _find(rows, func='check', file_frag='src/zanzibar/setengine/engine.py')
+    inst_n, inst_t, inst_c = _find(rows, func='_instances_of_type', file_frag='src/zanzibar/setengine/engine.py')
+    drive_n, _dt, _dc = _find(rows, func='_drive', file_frag='src/zanzibar/setengine/engine.py')
 
     print(f'\n  results returned      : {total:,}')
     print(f'  wall (profiled)       : {wall:.2f} s   ({calls / wall:,.1f} lookups/s under profiler)')
@@ -274,11 +277,11 @@ def target_set_expand(scale, calls):
     rows = _rows(stats)
     wall = max(ct for (_n, _t, ct) in rows.values()) if rows else 0.0
 
-    uni_n, uni_t, uni_c = _find(rows, func='union', file_frag='setengine/memberset.py')
-    star_n, star_t, star_c = _find(rows, func='_starpop', file_frag='setengine/memberset.py')
-    norm_n, norm_t, norm_c = _find(rows, func='_normalize', file_frag='setengine/memberset.py')
-    ext_n, ext_t, ext_c = _find(rows, func='_ext', file_frag='setengine/memberset.py')
-    inst_n, inst_t, inst_c = _find(rows, func='_instances_of_type', file_frag='setengine/engine.py')
+    uni_n, uni_t, uni_c = _find(rows, func='union', file_frag='src/zanzibar/setengine/memberset.py')
+    star_n, star_t, star_c = _find(rows, func='_starpop', file_frag='src/zanzibar/setengine/memberset.py')
+    norm_n, norm_t, norm_c = _find(rows, func='_normalize', file_frag='src/zanzibar/setengine/memberset.py')
+    ext_n, ext_t, ext_c = _find(rows, func='_ext', file_frag='src/zanzibar/setengine/memberset.py')
+    inst_n, inst_t, inst_c = _find(rows, func='_instances_of_type', file_frag='src/zanzibar/setengine/engine.py')
 
     algebra_t = uni_t + star_t + norm_t + ext_t
     print(f'\n  members returned      : {total:,}')
@@ -313,10 +316,10 @@ def target_graph_lookup(scale, calls):
     widx, ntup = build_graph(spec['schema'], spec['shapes'], spec['gen'](scale))
     subs = spec['lookups'](scale, calls)
 
-    from index_v4.models import ResidueV1
+    from zanzibar.graphindex.models import Residue
     from sqlmodel import select
-    nres = len(widx.idx.session.exec(select(ResidueV1).where(
-        ResidueV1.store_id == widx.idx.store_id)).all())
+    nres = len(widx.idx.session.exec(select(Residue).where(
+        Residue.store_id == widx.idx.store_id)).all())
     print(f'  dataset: {ntup:,} raw tuples, {nres:,} residue rows in store')
 
     def work():
@@ -329,11 +332,11 @@ def target_graph_lookup(scale, calls):
     rows = _rows(stats)
     wall = max(ct for (_n, _t, ct) in rows.values()) if rows else 0.0
 
-    res_n, res_t, res_c = _find(rows, func='_collect_residue_memberships', file_frag='index_v4/wildcard.py')
+    res_n, res_t, res_c = _find(rows, func='_collect_residue_memberships', file_frag='src/zanzibar/graphindex/wildcard.py')
     js_n, js_t, js_c = _find(rows, func='loads', file_frag='json/__init__.py')
-    cls_n, cls_t, cls_c = _find(rows, func='_classify_ids', file_frag='index_v4/wildcard.py')
-    ln_n, ln_t, ln_c = _find(rows, func='_load_nodes', file_frag='index_v4/core.py')
-    lr_n, lr_t, lr_c = _find(rows, func='lookup_reachable', file_frag='index_v4/core.py')
+    cls_n, cls_t, cls_c = _find(rows, func='_classify_ids', file_frag='src/zanzibar/graphindex/wildcard.py')
+    ln_n, ln_t, ln_c = _find(rows, func='_load_nodes', file_frag='src/zanzibar/graphindex/core.py')
+    lr_n, lr_t, lr_c = _find(rows, func='lookup_reachable', file_frag='src/zanzibar/graphindex/core.py')
 
     print(f'\n  results returned      : {total:,}')
     print(f'  wall (profiled)       : {wall:.2f} s   ({calls / wall:,.1f} lookups/s under profiler)')
@@ -387,8 +390,8 @@ def target_graph_check(scale, calls):
     for k, v in sorted(ctr.counts.items(), key=lambda kv: -kv[1]):
         print(f'      {k:<12} {v:>8,}  ({v / calls:,.2f} per check)')
 
-    node_per = ctr.counts.get('node_v4', 0) / calls
-    edge_per = ctr.counts.get('edge_v4', 0) / calls
+    node_per = ctr.counts.get('node', 0) / calls
+    edge_per = ctr.counts.get('edge', 0) / calls
 
     # NON-VACUITY, and it became load-bearing the moment R6-6 landed
     # (`docs/sabotage-procedure.md`, "A MEASUREMENT is an assurance step too"). The
@@ -402,14 +405,14 @@ def target_graph_check(scale, calls):
         f'INSTRUMENT BROKEN: {hits} of {calls:,} checks were true -- the query grid '
         f'no longer exercises a granted path, so a statement count over it means '
         f'nothing.')
-    assert ctr.counts.get('node_v4', 0) >= calls, (
-        f'INSTRUMENT BROKEN: {node_per:,.2f} node_v4 statements per check. Below 1.00 '
+    assert ctr.counts.get('node', 0) >= calls, (
+        f'INSTRUMENT BROKEN: {node_per:,.2f} node statements per check. Below 1.00 '
         f'the identity resolution is not running at all (or is not being counted); '
         f'that is not a better result than 1.00, it is no measurement.')
     _verdict('R6-6',
              'check issues up to 4 sequential point SELECTs for node resolution '
              'before its single batched edge probe',
-             f'{node_per:,.2f} node_v4 statements + {edge_per:,.2f} edge_v4 statements per check '
+             f'{node_per:,.2f} node statements + {edge_per:,.2f} edge statements per check '
              f'({per:,.2f} total); the fix batches the node resolutions into 1',
              node_per >= 2.0)
     return {'stmts_per_check': per, 'node_per_check': node_per}

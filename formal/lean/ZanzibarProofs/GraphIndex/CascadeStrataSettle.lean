@@ -11,9 +11,9 @@ leaves read through the shadow (W2, as in `checkFn_eq_sem_w3d`), derived operand
 leaves read `probeDerived` at a settled+complete key, which is exactly the `sem`
 verdict (`probeDerived_eq_sem_settled`, factored out of `graph_correct_w3d`'s
 derived branch). This is the guard form
-`index_v4/processor.py::DeltaProcessor._reconcile` actually evaluates at a
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` actually evaluates at a
 stratum-2 key once round 1 has re-settled its stratum-1 operands
-(`index_v4/processor.py::_EvalContext` routing;
+(`src/zanzibar/graphindex/processor.py::_EvalContext` routing;
 `::DeltaProcessor._run_cascade`'s per-round key loop).
 
 **Attack-first (2026-07-12e, `#eval` against the real `writeLoggedRules` /
@@ -652,7 +652,7 @@ theorem reachedByRulesAdmitted_edge_target_untainted {σ0 : GraphState} {S : Sch
 
 /-- A DECLARED relation name is dot-free (`WF.relNames`), hence never a minted leaf name.
     The store-shape half of the R5 shadow bridge, and the Lean image of Python's
-    `zanzibar_utils_v1.py::_validate_ast_references::check_name`, which raises iff
+    `src/zanzibar/schema/parser.py::_validate_ast_references::check_name`, which raises iff
     `'.' in name and name != '...'`. -/
 theorem isLeafPred_relation_false_of_lookup {S : Schema} (hWF : WF S) {t : Tuple} {e : Expr}
     (hlk : S.lookup (t.object.type, t.relation) = some e) : isLeafPred t.relation = false := by
@@ -1461,7 +1461,7 @@ theorem untaintedShadow_cascade2_d {S : Schema} {T : Store} {σ σ0 : GraphState
     tuple whose relation is literally `viewer.0` satisfies `hND` (it is not a declared key)
     while its seed edge IS leaf-targeted. So a genuine store-shape premise is required, and
     it is `hSN` below — every store relation is dot-free. That is Python-enforced, not
-    assumed: `zanzibar_utils_v1.py::_validate_ast_references`'s `check_name` raises iff
+    assumed: `src/zanzibar/schema/parser.py::_validate_ast_references`'s `check_name` raises iff
     `'.' in name and name != '...'`, and `TupleSource` admission runs it. `hLS`/`hMatch`
     supply `WF` and the two rewrite-layer components the bridge consumes. -/
 theorem untaintedShadow_removeLeg_d {σp σ0 σ0' : GraphState} {S : Schema} {T : Store}
@@ -2014,7 +2014,7 @@ rules base (`graphRec_base_eq_bs`, the W2 leg — exactly as `checkFn_eq_sem_w3d
 a DERIVED operand reads `probeDerived` at its own key, which is the `sem` verdict
 once that key is settled+complete (`probeDerived_eq_sem_settled`). `evalE` then
 computes one `sem` step, and fuel stability closes the loop. This is the guard
-`index_v4/processor.py::DeltaProcessor._reconcile` evaluates at a stratum-2 key in
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` evaluates at a stratum-2 key in
 round 2, after round 1 re-settled the stratum-1 operands
 (`::_EvalContext` routing; `::DeltaProcessor._run_cascade`'s per-round key loop). -/
 
@@ -3105,7 +3105,7 @@ theorem reconcileJobsLR_reach_collapse {S : Schema} {T : Store}
 `ReachedByW3d2` plus per-round audit-enumeration coverage: round-1 jobs coverage-
 complete relative to the LEG-START state, round-2 jobs relative to the MID state
 (their passes re-enumerate against the graph as round 1 left it —
-`index_v4/processor.py::DeltaProcessor._reconcile`'s step-(2)/(2b) enumeration runs
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile`'s step-(2)/(2b) enumeration runs
 inside the round). Chain-side hypotheses as in W3d-1c;
 the state-derived discharge is the W3d-2 E-chain tail (with the residue-named
 candidates, 12c finding (c)).
@@ -3144,7 +3144,7 @@ inductive ReachedByW3d2C : GraphState → Schema → Store → Prop where
       (hprev : ReachedByW3d2C σ S T) :
       ReachedByW3d2C (σ.removeLoggedRules S t) S (T.erase t)
   -- hSVT/hBST/hTST/htermT: the pre-remove store T was validly built. FAITHFUL — Python's
-  -- TupleSource.remove (connectedstore/source.py) only retracts admission-validated tuples
+  -- TupleSource.remove (src/zanzibar/connectedstore/source.py) only retracts admission-validated tuples
   -- (validate_write_identifiers + matching Direct arm = StoreValidRules); the star/ttu/term
   -- conditions are the W4Fragment carries graph_correct already assumes about the store.
   -- hdrain: Python drains the view between applied log rows (cascadeKeys non-monotone under
@@ -4012,7 +4012,7 @@ private theorem mem_rewriteClosureL_of_mem_seeds {S : Schema} {seeds : List Tupl
 /-- **A raw admitted, ROUTED write on a derived key dirties its OWN PUBLIC key** — the
     chain-level form of the `affectedKeys` LeafFamily own-key branch (the
     `isinstance(fam, LeafFamily)` arm of
-    `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`, `processor.py:1411-1422`).
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys`, `processor.py:1411-1422`).
 
     **Post-(alpha) mechanism, which is NOT the pre-flip one.** The write no longer emits a
     delta at the public node: it fans out over `rawWriteTuples S t`, whose members carry

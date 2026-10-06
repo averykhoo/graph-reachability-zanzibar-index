@@ -113,10 +113,10 @@ clean module.
 import pytest
 from sqlmodel import select
 
-from index_v4.invariants import (PARANOIA_LEVELS, InvariantViolation,
+from zanzibar.graphindex.invariants import (PARANOIA_LEVELS, InvariantViolation,
                                  paranoia_level)
-from index_v4.models import EdgeV4, ResidueV1
-from setengine import ALL_SETOPS
+from zanzibar.graphindex.models import Edge, Residue
+from zanzibar.setengine import ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from tests.test_matrix import GraphBackend, SetBackend
 
@@ -383,7 +383,7 @@ def test_settle_pass_detects_genuine_staleness(tier):
     ``graph.widx.paranoia = False`` under a docstring claiming "Paranoia is OFF so the
     settle assert is the instrument under test rather than I6". BOTH halves were wrong.
     ``WildcardIndex`` has no ``paranoia`` attribute (``grep -c paranoia
-    index_v4/wildcard.py`` -> 0), so that line created a fresh instance attribute nothing
+    src/zanzibar/graphindex/wildcard.py`` -> 0), so that line created a fresh instance attribute nothing
     reads and the arm actually ran at FULL paranoia -- the project's house failure mode,
     a control that fails by passing, sitting inside the module that pins TK73. And the
     rationale was false in its premise too: the tier is IRRELEVANT here, because the
@@ -421,9 +421,9 @@ def test_settle_pass_detects_genuine_staleness(tier):
                     row = None
                     if node is not None:
                         row = graph.session.exec(
-                            select(ResidueV1)
-                            .where(ResidueV1.store_id == 'g')
-                            .where(ResidueV1.object_node_id == node.id)).first()
+                            select(Residue)
+                            .where(Residue.store_id == 'g')
+                            .where(Residue.object_node_id == node.id)).first()
                     state['row_existed'] = row is not None
                     if row is not None:
                         graph.session.delete(row)
@@ -480,7 +480,7 @@ def test_a_commit_phase_violation_is_tagged_so_test_3_can_tell_them_apart():
     try:
         _apply_witness(graph)
         edge = graph.session.exec(
-            select(EdgeV4).where(EdgeV4.store_id == 'g')).first()
+            select(Edge).where(Edge.store_id == 'g')).first()
         assert edge is not None, (
             'no closure edge on the witness store -- INSTRUMENT BROKEN, there is '
             'nothing here to corrupt and this test asserts nothing')

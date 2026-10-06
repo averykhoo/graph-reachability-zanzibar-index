@@ -8,7 +8,7 @@ enumeration analog of the curated-corpus `test_conformance_state.py`: for a
 DETERMINISTIC SAMPLE of the enumerated stores it compares the Lean operational
 graph model's canonical final materialized state (zcli mode `"graph-state"` —
 the `graphRun` fold of the `ReachedBy` chain's own constructors) against the
-real Python graph index's extracted `EdgeV4`/`ResidueV1` state, under the SAME
+real Python graph index's extracted `Edge`/`Residue` state, under the SAME
 documented projections P1–P7 as `test_conformance_state.py` — including P3 as
 narrowed 2026-07-29, so untainted-arm edge MULTIPLICITY is compared exactly across
 every sampled store here too.

@@ -37,9 +37,9 @@ wastefully rewrites the untouched majority).
 from-empty builders are add-only exempt from.** That exemption is the entire reason the
 shipped bulk paths are simple, and it does not survive seeding from existing state:
 
-* `EdgeV4` direct/indirect counts, including boundary composition
+* `Edge` direct/indirect counts, including boundary composition
 * the I5 `derived` flag
-* `ResidueV1` stars/neg/upos + version
+* `Residue` stars/neg/upos + version
 * from-chain nodes
 * node `reference_count` / implicit GC — **order-sensitive**
 * sticky explicit promotion

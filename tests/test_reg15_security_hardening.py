@@ -8,9 +8,9 @@ one-line fix and the value is entirely in the regression pin:
   because the newline is not consumed by the ``{1,256}`` repeat, so did
   257-character names ending in one — a control character reaching persisted
   identity strings and an off-by-one against the documented bound, both in direct
-  contradiction of ``zanzibar_utils_v1``'s stated contract. Fixed with ``\\Z`` +
+  contradiction of ``zanzibar.schema``'s stated contract. Fixed with ``\\Z`` +
   ``re.fullmatch``.
-* **ZT-P1-2** — sixteen load-bearing safety checks in ``index_v4/core.py`` (plus one
+* **ZT-P1-2** — sixteen load-bearing safety checks in ``src/zanzibar/graphindex/core.py`` (plus one
   in ``processor.py``) were bare ``assert`` statements, which ``python -O`` REMOVES.
   Three of them are the only guard on their path: the batch/bridge cycle detector
   (whose bypass yields unbounded path counts, hence permanent phantom reachability,
@@ -38,10 +38,10 @@ from pathlib import Path
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from index_v4.core import ReachabilityIndex
-from index_v4.invariants import InvariantViolation
-from index_v4.models import StoreV4
-from zanzibar_utils_v1 import is_valid_identifier, validate_write_identifiers
+from zanzibar.graphindex.core import ReachabilityIndex
+from zanzibar.graphindex.invariants import InvariantViolation
+from zanzibar.graphindex.models import Store
+from zanzibar.schema import is_valid_identifier, validate_write_identifiers
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PY = sys.executable
@@ -51,7 +51,7 @@ def _fresh_index(store_id: str = 't'):
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    session.add(StoreV4(id=store_id))
+    session.add(Store(id=store_id))
     session.commit()
     return session, ReachabilityIndex(session, store_id)
 
@@ -106,7 +106,7 @@ def test_reg15_write_validation_rejects_trailing_newline_end_to_end():
 # ZT-P1-2 — safety checks must survive `python -O`
 # --------------------------------------------------------------------------- #
 
-_GUARDED_MODULES = ['index_v4/core.py', 'index_v4/processor.py']
+_GUARDED_MODULES = ['src/zanzibar/graphindex/core.py', 'src/zanzibar/graphindex/processor.py']
 
 
 @pytest.mark.parametrize('rel', _GUARDED_MODULES)
@@ -153,14 +153,14 @@ def test_reg15_direct_edge_delta_guard_survives_O():
     """A converted guard (`count in {-1, 1}`) still fires with assertions disabled."""
     proc = _run_under_O("""
         from sqlmodel import Session, SQLModel, create_engine
-        from index_v4.core import ReachabilityIndex
-        from index_v4.invariants import InvariantViolation
-        from index_v4.models import StoreV4
+        from zanzibar.graphindex.core import ReachabilityIndex
+        from zanzibar.graphindex.invariants import InvariantViolation
+        from zanzibar.graphindex.models import Store
 
         engine = create_engine('sqlite:///:memory:')
         SQLModel.metadata.create_all(engine)
         s = Session(engine)
-        s.add(StoreV4(id='t')); s.commit()
+        s.add(Store(id='t')); s.commit()
         idx = ReachabilityIndex(s, 't')
         try:
             idx._add_direct_edge_unsafe_impl(1, 2, 7)   # 7 is neither -1 nor +1
@@ -179,13 +179,13 @@ def test_reg15_self_edge_cycle_guard_survives_O():
     regressed, the node-DELETION shortcut would run on a self-referential edge."""
     proc = _run_under_O("""
         from sqlmodel import Session, SQLModel, create_engine
-        from index_v4.core import ReachabilityIndex
-        from index_v4.models import StoreV4
+        from zanzibar.graphindex.core import ReachabilityIndex
+        from zanzibar.graphindex.models import Store
 
         engine = create_engine('sqlite:///:memory:')
         SQLModel.metadata.create_all(engine)
         s = Session(engine)
-        s.add(StoreV4(id='t')); s.commit()
+        s.add(Store(id='t')); s.commit()
         idx = ReachabilityIndex(s, 't')
         try:
             idx._add_edge_locked(5, 5)
@@ -261,7 +261,7 @@ def test_reg15_source_lock_memo_keys_on_nested_transaction_too():
     validation against current committed state."""
     import inspect
 
-    from connectedstore import source as source_mod
+    from zanzibar.connectedstore import source as source_mod
 
     src = inspect.getsource(source_mod.TupleSource._lock_source)
     assert 'get_nested_transaction' in src, (

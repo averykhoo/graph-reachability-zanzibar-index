@@ -14,7 +14,7 @@ sys.path.insert(0, r'C:\Users\user\PycharmProjects\graph-reachability-zanzibar-i
 from hypothesis import HealthCheck, Phase, given, settings, strategies as st
 
 import zz_cells as C
-from zanzibar_utils_v1 import unparse_schema_ast
+from zanzibar.schema import unparse_schema_ast
 
 N = int(os.environ.get('N', '400'))
 

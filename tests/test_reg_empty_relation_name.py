@@ -3,7 +3,7 @@
 Property guarded
 ----------------
 ``define : [user]`` (a ``define`` line whose name is empty or whitespace-only) is a
-``ValueError`` from ``zanzibar_utils_v1.parse_schema_ast`` AND, independently, from
+``ValueError`` from ``zanzibar.schema.parse_schema_ast`` AND, independently, from
 ``tests.oracle.parse_schema_ast``; the message names the enclosing type. This is what
 makes ``FullScope.lean::GraphAdmission.keysNonempty`` (a declared relation name is
 non-empty) a Python-enforced SCOPE claim rather than a proof-side assumption. Before
@@ -83,7 +83,7 @@ import pytest
 
 from tests import oracle as oracle_mod
 from tests.parity import ParityEngine
-from zanzibar_utils_v1 import parse_openfga_schema, parse_schema_ast
+from zanzibar.schema import parse_openfga_schema, parse_schema_ast
 
 # One schema per shape the empty name can take. `whitespace` is the `strip()` case;
 # `boolean` mints the `.0` leaf predicate the Lean docstring reasons about;
@@ -113,10 +113,10 @@ _SIBLING_SPACED = "type user\ntype doc\n  relations\n    define   viewer  : [use
 
 @pytest.mark.parametrize('shape', sorted(_EMPTY_NAME_SCHEMAS))
 def test_production_parser_refuses_empty_declared_name(shape):
-    """`zanzibar_utils_v1.parse_schema_ast` raises on every empty-name shape.
+    """`zanzibar.schema.parse_schema_ast` raises on every empty-name shape.
 
     Sabotage A (2026-09-06): make the `if not relation_name: raise` in
-    `zanzibar_utils_v1.py::parse_schema_ast` unreachable (leave the oracle's) ->
+    `src/zanzibar/schema/parser.py::parse_schema_ast` unreachable (leave the oracle's) ->
     `E       Failed: DID NOT RAISE ValueError` on all five shapes,
     `FAILED tests/test_reg_empty_relation_name.py::test_production_parser_refuses_empty_declared_name[plain]`
     ... `8 failed, 7 passed`; the oracle-side pins stayed green."""

@@ -10,12 +10,12 @@ a second reconcile of every live key must change nothing.
 import pytest
 from sqlmodel import select
 
-from index_v4 import EdgeV4
-from index_v4.models import ResidueV1
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
-from index_v4.invariants import snapshot_rows
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.graphindex import Edge
+from zanzibar.graphindex.models import Residue
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
+from zanzibar.graphindex.invariants import snapshot_rows
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 from tests.wildcard_helpers import make_wildcard_index
 
 
@@ -42,7 +42,7 @@ def build(schema, object_wc=frozenset()):
 
 def _residues(session):
     return {r.relation: (r.stars, r.neg, r.version)
-            for r in session.exec(select(ResidueV1)).all()}
+            for r in session.exec(select(Residue)).all()}
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ def test_symbolic_flip_reconciles_concretes_exclusion():
     write('add', ('...', 'user', '*', 'blocked', 'doc', 'd1'))     # symbolic, no bob delta
     assert proc.derived_check('doc', 'viewer', 'd1', ('...', 'user', 'bob')) is False
     # and the edge itself is gone, not just masked
-    assert not [e for e in session.exec(select(EdgeV4)).all() if e.derived]
+    assert not [e for e in session.exec(select(Edge)).all() if e.derived]
 
     # removal flips him back
     write('remove', ('...', 'user', '*', 'blocked', 'doc', 'd1'))
@@ -121,7 +121,7 @@ def test_star_minus_concrete_residue_ghost_and_star():
     assert proc.derived_check('doc', 'viewer', 'd1', ('...', 'user', '*')) is True
 
     # the residue is exactly (stars={user bare}, neg={alice})
-    row = session.exec(select(ResidueV1)).one()
+    row = session.exec(select(Residue)).one()
     assert row.relation == 'viewer'
     assert row.stars == '[["user", "..."]]'
     alice = widx.idx.node('...', 'user', 'alice', create_if_missing=False)
@@ -152,8 +152,8 @@ def test_user_but_not_user_star_is_empty():
     assert proc.derived_check('doc', 'viewer', 'd1', ('...', 'user', 'alice')) is False
     assert proc.derived_check('doc', 'viewer', 'd1', ('...', 'user', 'ghost')) is False
     assert proc.derived_check('doc', 'viewer', 'd1', ('...', 'user', '*')) is False
-    assert session.exec(select(ResidueV1)).all() == []          # empty residue
-    assert not [e for e in session.exec(select(EdgeV4)).all() if e.derived]
+    assert session.exec(select(Residue)).all() == []          # empty residue
+    assert not [e for e in session.exec(select(Edge)).all() if e.derived]
 
     proc.audit_fixpoint()
     session.close()
@@ -225,7 +225,7 @@ def test_removing_last_positive_leaf_revokes_downstream():
     write('remove', ('...', 'user', 'alice', 'admin', 'doc', 'd1'))
     assert proc.derived_check('doc', 'approver', 'd1', ('...', 'user', 'alice')) is False
     assert proc.derived_check('doc', 'auditor', 'd1', ('...', 'user', 'alice')) is False
-    assert not [e for e in session.exec(select(EdgeV4)).all() if e.derived]
+    assert not [e for e in session.exec(select(Edge)).all() if e.derived]
 
     proc.audit_fixpoint()
     session.close()
@@ -265,7 +265,7 @@ def test_interleaved_order_independence():
         nodes, edges = snapshot_rows(session, 'test')
         # neg ids are order-dependent surrogates; compare by node identity
         residues = {(r.relation, r.stars, frozenset(_neg_names(session, widx, r)))
-                    for r in session.exec(select(ResidueV1)).all()}
+                    for r in session.exec(select(Residue)).all()}
         states.append((nodes, edges, residues))
         session.close()
 
@@ -274,10 +274,10 @@ def test_interleaved_order_independence():
 
 def _neg_names(session, widx, row):
     import json
-    from index_v4 import NodeV4
+    from zanzibar.graphindex import Node
     out = []
     for nid in json.loads(row.neg):
-        n = session.get(NodeV4, nid)
+        n = session.get(Node, nid)
         assert n is not None, f'residue neg holds a dead node id {nid} (I6)'
         out.append((n.predicate, n.type, n.name))
     return out

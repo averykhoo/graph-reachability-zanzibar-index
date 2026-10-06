@@ -5,7 +5,7 @@ P1 verification foundation (boolean spec §8.1/§8.2/§8.4):
     fans out to oracle + set engine (both SetOps) + graph (when the schema compiles),
     with unanimous accept/reject, I12 rejection cleanliness, and full-grid check parity
     asserted per op *inside* the engine.
-  * The invariant checker (index_v4.invariants) catches deliberately-corrupted stores:
+  * The invariant checker (zanzibar.graphindex.invariants) catches deliberately-corrupted stores:
     each seeded mutation class (I1 counts, I2 acyclicity, I3 bridge hygiene) must raise
     InvariantViolation -- proving the checker can actually see the bugs paranoia mode
     exists to catch.
@@ -17,9 +17,9 @@ import random
 import pytest
 from sqlmodel import select
 
-from index_v4 import EdgeV4
-from index_v4.invariants import InvariantViolation, check_invariants
-from zanzibar_utils_v1 import SchemaInfo, parse_openfga_schema
+from zanzibar.graphindex import Edge
+from zanzibar.graphindex.invariants import InvariantViolation, check_invariants
+from zanzibar.schema import SchemaInfo, parse_openfga_schema
 from tests.parity import ParityEngine
 from tests.scenarios import SCENARIOS
 from tests.test_wildcard_property import _candidate_raw_tuples, OBJECT_WC
@@ -273,7 +273,7 @@ def _plain_widx():
 
 def test_checker_catches_i1_zero_indirect():
     session, widx = _plain_widx()
-    edge = session.exec(select(EdgeV4)).first()
+    edge = session.exec(select(Edge)).first()
     edge.indirect_edge_count = 0                     # stale zero-reachability row
     session.add(edge)
     session.flush()
@@ -284,7 +284,7 @@ def test_checker_catches_i1_zero_indirect():
 
 def test_checker_catches_i1_indirect_below_direct():
     session, widx = _plain_widx()
-    edge = session.exec(select(EdgeV4)).first()
+    edge = session.exec(select(Edge)).first()
     edge.direct_edge_count = edge.indirect_edge_count + 1
     session.add(edge)
     session.flush()
@@ -299,7 +299,7 @@ def test_checker_catches_i2_direct_cycle():
     a = idx.node('...', 'user', 'alice', create_if_missing=False)
     d = idx.node('viewer', 'doc', 'd1', create_if_missing=False)
     # close the loop behind the core's back: d1#viewer -> alice
-    session.add(EdgeV4(store_id='test', subject_id=d.id, object_id=a.id,
+    session.add(Edge(store_id='test', subject_id=d.id, object_id=a.id,
                        direct_edge_count=1, indirect_edge_count=1))
     session.flush()
     with pytest.raises(InvariantViolation, match='I2'):
@@ -318,7 +318,7 @@ def test_checker_catches_i3_unjustified_bridge():
     # forge a w_any(doc, viewer) and bridge d1's viewer node into it -- never declared
     d1 = idx.node('viewer', 'doc', 'd1', create_if_missing=False)
     w = idx.node('viewer', 'doc', '*', create_if_missing=True, implicit=True, wildcard='any')
-    session.add(EdgeV4(store_id='test', subject_id=d1.id, object_id=w.id,
+    session.add(Edge(store_id='test', subject_id=d1.id, object_id=w.id,
                        direct_edge_count=1, indirect_edge_count=1))
     session.flush()
     with pytest.raises(InvariantViolation, match='I3'):
@@ -339,7 +339,7 @@ def test_checker_catches_i3_missing_bridge():
     g1 = idx.node('member', 'group', 'g1', create_if_missing=False)
     w_any = idx.node('member', 'group', '*', create_if_missing=False, wildcard='any')
     bridge = session.exec(
-        select(EdgeV4).where(EdgeV4.subject_id == g1.id).where(EdgeV4.object_id == w_any.id)
+        select(Edge).where(Edge.subject_id == g1.id).where(Edge.object_id == w_any.id)
     ).first()
     assert bridge is not None
     session.delete(bridge)
@@ -356,7 +356,7 @@ def test_paranoia_aborts_corrupted_commit():
     widx.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
     session.commit()                                  # clean state commits fine
 
-    edge = session.exec(select(EdgeV4)).first()
+    edge = session.exec(select(Edge)).first()
     edge.indirect_edge_count = 0
     session.add(edge)
     with pytest.raises(InvariantViolation):

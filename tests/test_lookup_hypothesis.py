@@ -132,10 +132,10 @@ import random
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from setengine import ALL_SETOPS, SetEngine
-from setengine.engine import LookupResult
+from zanzibar.setengine import ALL_SETOPS, SetEngine
+from zanzibar.setengine.engine import LookupResult
 from tests.test_lookup_oracle import _names_by_type, _subject_candidates
-from zanzibar_utils_v1 import parse_schema_ast
+from zanzibar.schema import parse_schema_ast
 
 _OWC_CORPORA = ['wildcards', 'owc_star_ttu']
 

@@ -1,0 +1,77 @@
+"""Persistence for the connected store (connected-store spec §3).
+
+``SchemaRecord`` -- the store's schema SOURCE, write-once (spec §2.1/§2.2: schemas are
+static everywhere; compiled artifacts are cache, recompiled on open, never stored).
+
+``TupleLog`` -- the permanent, append-only tuple event log (spec §2.3): the audit
+log, the replay source, and the token domain. Written in the same transaction as the
+``RelationTuple`` mutation; never cleared (compaction is a documented hook). ``RelationTuple``
+stays the current-state snapshot; this is the history.
+
+``IndexCursor`` -- "this graph index reflects that tuple store through log row N"
+(spec §4). Applied rows and the cursor advance commit in one transaction: that
+transactionality IS the exactly-once guarantee (spec §2.6). It also carries the
+apply step's STALL marker (``stalled_after``), which the read path consults so an
+index that cannot advance is never served as if it were merely behind (TK111).
+"""
+
+import time
+
+from sqlalchemy import Index
+from sqlmodel import Field, SQLModel, UniqueConstraint
+
+
+class SchemaRecord(SQLModel, table=True):
+    __tablename__ = "schema_record"
+    __table_args__ = {'extend_existing': True}
+
+    store_id: str = Field(primary_key=True)
+    schema_text: str
+    object_wildcard_shapes: str = Field(default='[]')   # JSON: [[type, relation], ...]
+    created_at: float = Field(default_factory=time.time)
+
+
+class TupleLog(SQLModel, table=True):
+    __tablename__ = "tuple_log"
+    __table_args__ = (
+        # Composite replaces the single `store_id` index (N5 audit 2026-07-14):
+        # `log_rows` (`store_id AND id > ? ORDER BY id`, per sync write) and
+        # `log_watermark` (`store_id ... ORDER BY id DESC`) are keyset/max-id shapes;
+        # the log is append-only forever, so this is asymptotic protection as it grows.
+        Index('ix_tuple_log_store_id_id', 'store_id', 'id'),
+        {'extend_existing': True},
+    )
+
+    id: int | None = Field(default=None, primary_key=True)   # the token / cursor domain
+    store_id: str
+    op: str                                                  # 'ADD' | 'REMOVE'
+    subject_predicate: str
+    subject_type: str
+    subject_name: str
+    relation: str
+    object_type: str
+    object_name: str
+    created_at: float = Field(default_factory=time.time)
+
+
+class IndexCursor(SQLModel, table=True):
+    __tablename__ = "index_cursor"
+    __table_args__ = (
+        UniqueConstraint('index_store_id', name='index_cursor_unique'),
+        {'extend_existing': True},
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    # `index_store_id` index dropped (N5 audit 2026-07-14): `index_cursor_unique`
+    # already indexes it (it's the sole constraint column).
+    index_store_id: str
+    source_store_id: str = Field(index=True)
+    applied_log_id: int = Field(default=0)
+    # TK111/TK112 stall marker: the ``applied_log_id`` the apply step last FAILED to
+    # advance past. A stall is live only while it equals ``applied_log_id`` -- any
+    # successful advance invalidates it even if nothing clears it. Persisted (not held
+    # in memory) because the reader that must stop trusting the index is usually a
+    # different instance from the worker that hit the failure. See
+    # ``ConnectedStore.index_stalled``.
+    stalled_after: int | None = Field(default=None)
+    stall_error: str | None = Field(default=None)

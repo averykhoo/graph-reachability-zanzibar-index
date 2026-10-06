@@ -47,12 +47,12 @@ deterministic minimal repro.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from connectedstore import ConnectedStore
-from setengine import ALL_SETOPS
+from zanzibar.connectedstore import ConnectedStore
+from zanzibar.setengine import ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from tests.parity import GHOST_NAME, _GraphSide, _SetSide
 from tests.test_processor import build
-from zanzibar_utils_v1 import parse_openfga_schema
+from zanzibar.schema import parse_openfga_schema
 
 SCHEMA = """
 type user

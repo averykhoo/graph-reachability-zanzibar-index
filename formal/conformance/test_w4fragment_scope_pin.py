@@ -188,6 +188,24 @@ from pathlib import Path
 
 import pytest
 
+
+def _resolve_reported_by(reported_by: str):
+    """`reported_by` (`<file>::<symbol>`) -> the callable it names, resolved FROM THAT FILE.
+
+    TK120 (2026-10-06): this used to compare the path to a literal and then look the symbol
+    up on the schema package, so after the module split into `src/zanzibar/schema/` a row
+    naming the WRONG submodule would still have passed (the package re-exports every
+    report). Now the path is imported as a module and the symbol must be DEFINED there."""
+    import importlib
+    path, _, symbol = reported_by.partition("::")
+    assert path.startswith("src/zanzibar/") and path.endswith(".py") and symbol, reported_by
+    mod_name = path[len("src/"):-len(".py")].replace("/", ".").removesuffix(".__init__")
+    mod = importlib.import_module(mod_name)
+    fn = getattr(mod, symbol, None)
+    assert callable(fn) and fn.__module__ == mod_name, (
+        f"reported_by {reported_by!r}: {symbol!r} is not a callable DEFINED in {path}")
+    return fn
+
 # --------------------------------------------------------------------------- #
 # Locations
 # --------------------------------------------------------------------------- #
@@ -237,8 +255,8 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "derived definition is out of scope."
         ),
         "classification": "SILENT",
-        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
-        "evidence": "zanzibar_utils_v1.py::_build_plan_tree",
+        "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
+        "evidence": "src/zanzibar/schema/boolean.py::_build_plan_tree",
         "note": (
             "`_build_plan_tree.build` compiles a TTU under a derived def straight into a "
             "`PDerivedTTU` plan leaf with no rejection; probe "
@@ -253,8 +271,8 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "(`[user]`), never a userset restriction (`[group#member]`)."
         ),
         "classification": "SILENT",
-        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
-        "evidence": "zanzibar_utils_v1.py::_build_plan_tree",
+        "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
+        "evidence": "src/zanzibar/schema/boolean.py::_build_plan_tree",
         "note": (
             "An untainted userset restriction folds into the `pure` closure leaf and a "
             "tainted one becomes a `PDerivedUserset` node; neither path raises. Probe "
@@ -268,8 +286,8 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "`[user:*]` on a boolean relation is out of scope."
         ),
         "classification": "SILENT",
-        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
-        "evidence": "zanzibar_utils_v1.py::_build_plan_tree",
+        "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
+        "evidence": "src/zanzibar/schema/boolean.py::_build_plan_tree",
         "note": (
             "Probe `directArmsConcrete/star-direct-arm` "
             "(`define approver: [user, user:*] but not banned`) was ADMITTED at 1 stratum, "
@@ -284,8 +302,8 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "ComputedOnly, i.e. only the top derived definition may carry a `direct` arm."
         ),
         "classification": "SILENT",
-        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
-        "evidence": "zanzibar_utils_v1.py::compile_boolean_schema",
+        "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
+        "evidence": "src/zanzibar/schema/boolean.py::compile_boolean_schema",
         "note": (
             "Probe `computedOnlyOperands/direct-one-stratum-down` "
             "(`editor: [user] but not banned` read by `view: editor but not banned`) "
@@ -299,8 +317,8 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "`but not` shape."
         ),
         "classification": "SILENT",
-        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
-        "evidence": "zanzibar_utils_v1.py::_build_plan_tree",
+        "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
+        "evidence": "src/zanzibar/schema/boolean.py::_build_plan_tree",
         "note": (
             "A union-reachable direct arm compiles to a `PUnion` over a `PClosureLeaf`; "
             "probe `noUnionDirects/union-reachable-direct` "
@@ -313,7 +331,7 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "derived operands have no derived operands of their own."
         ),
         "classification": "SILENT",
-        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
+        "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
         "evidence": (
             "formal/conformance/test_conformance_nary_strata.py::test_nary_corpus_encoding"
         ),
@@ -336,13 +354,13 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "fails` pins that."
         ),
         "classification": "MIXED",
-        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
-        "evidence": "zanzibar_utils_v1.py::_build_plan_tree",
+        "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
+        "evidence": "src/zanzibar/schema/boolean.py::_build_plan_tree",
         "note": (
             "LOUD sub-case: a wildcard userset over a DERIVED relation raises "
             "`UnsupportedByGraphIndex` -- the `r.wildcard` raise in `_build_plan_tree.build`'s "
             "`Direct` arm, plus the star-tupleset through-shape form in "
-            "`zanzibar_utils_v1.py::_reject_object_wildcard_scope`. SILENT sub-case: over an "
+            "`src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope`. SILENT sub-case: over an "
             "UNTAINTED relation `[group:*#member]` is admitted outright (probe "
             "`wsBare/wildcard-userset-over-UNTAINTED`, ADMITTED, 0 strata), and that is the "
             "sub-case a reader is most likely to hit."
@@ -354,8 +372,8 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "no stored tuple has a wildcard OBJECT (`doc:*`)."
         ),
         "classification": "MIXED",
-        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
-        "evidence": "setengine/engine.py::SetEngine._validate",
+        "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
+        "evidence": "src/zanzibar/setengine/engine.py::SetEngine._validate",
         "note": (
             "LOUD sub-case, and only this one: a wildcard-OBJECT write on an UNDECLARED "
             "object-wildcard shape raises `AdmissionRejected` "
@@ -372,8 +390,8 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "reads as its tupleset."
         ),
         "classification": "SILENT",
-        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
-        "evidence": "zanzibar_utils_v1.py::_validate_ttu_tuplesets",
+        "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
+        "evidence": "src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets",
         "note": (
             "The opposite of a refusal: `_validate_ttu_tuplesets` rejects USERSET "
             "restrictions in tuplesets while deliberately keeping wildcard restrictions "
@@ -389,8 +407,8 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "(NoStoreSubjectR)."
         ),
         "classification": "MIXED",
-        "reported_by": "zanzibar_utils_v1.py::w4_fragment_report",
-        "evidence": "zanzibar_utils_v1.py::_validate_ttu_tuplesets",
+        "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
+        "evidence": "src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets",
         "note": (
             "LOUD sub-case, and it is NARROWER than it looks: `_validate_ttu_tuplesets` "
             "raises `UnsupportedByGraphIndex` for a TTU onto a derived relation only while "
@@ -651,15 +669,12 @@ def test_every_field_is_reported_and_has_a_rerunnable_probe(field):
     makes sure the scope pin points at it and cannot name a symbol that does not exist.
     The probe link is what replaced this module's docstring, where the 2026-08-31 probe
     inputs had survived only as labels."""
-    import zanzibar_utils_v1
+    import zanzibar.schema
     from formal.conformance.w4_scope_probes import SCOPE_PROBES
 
     reported_by = W4FRAGMENT_SCOPE[field].get("reported_by", "")
-    path, _, symbol = reported_by.partition("::")
-    assert path == "zanzibar_utils_v1.py" and callable(getattr(zanzibar_utils_v1, symbol, None)), (
-        f"{field}: reported_by {reported_by!r} does not resolve to a callable in "
-        f"zanzibar_utils_v1.py")
-    assert field in zanzibar_utils_v1.W4_FRAGMENT_FIELDS, (
+    _resolve_reported_by(reported_by)
+    assert field in zanzibar.schema.W4_FRAGMENT_FIELDS, (
         f"{field}: the report named by reported_by does not emit this field")
     probes = [label for label, (_s, _t, _ow, exp) in SCOPE_PROBES.items()
               if re.match(rf"{re.escape(field)}[./]", label) and field in exp]

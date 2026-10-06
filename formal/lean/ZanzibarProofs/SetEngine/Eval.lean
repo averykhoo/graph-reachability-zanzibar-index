@@ -7,7 +7,7 @@ import ZanzibarProofs.SetEngine.MemberSet
 `SEMANTICS.md` §6.3. The set engine evaluates the AST *set-at-a-time*: it expands a
 node `(otype, oname, rel)` into the full `MemberSet` of subjects holding that
 relation, then answers `check` by probing that set with `containsShape` at the query
-subject. This mirrors `setengine/engine.py::SetEngine.expand` and the closures nested
+subject. This mirrors `src/zanzibar/setengine/engine.py::SetEngine.expand` and the closures nested
 inside it (`::SetEngine.expand.do` / `::SetEngine.expand.do_expr` /
 `::SetEngine.expand.direct_expand` / `::SetEngine.expand.ttu_expand`) — the boolean
 folds are `union`/`intersect`/`subtract`, the leaves are
@@ -30,15 +30,15 @@ folds are `union`/`intersect`/`subtract`, the leaves are
   rewrite (2026-07-26) the control-flow gap is wider still:** Python's `check` and
   `expand` are no longer language-level recursion at all — every evaluator closure is
   a GENERATOR whose recursive calls are `x = yield f(...)`, driven on an explicit heap
-  stack by `setengine/engine.py::_drive`, so depth is bounded by memory rather than
+  stack by `src/zanzibar/setengine/engine.py::_drive`, so depth is bounded by memory rather than
   `sys.getrecursionlimit()`. The rewrite is documented as mechanical and
   semantics-preserving (same statements, same order, same memo/cycle handling), but
   nothing in this model witnesses that — it is netted only by the conformance and
   differential suites.
 * **`check` is not the algorithm twin of this definition** (`ZT-P4-2a`;
-  `CORRESPONDENCE.md` §2). `setengine/engine.py::SetEngine.check` is a
+  `CORRESPONDENCE.md` §2). `src/zanzibar/setengine/engine.py::SetEngine.check` is a
   short-circuiting boolean DFS that never materializes a `MemberSet`; the shape twin
-  of the Lean `check` below is `setengine/engine.py::SetEngine.expand`, which no
+  of the Lean `check` below is `src/zanzibar/setengine/engine.py::SetEngine.expand`, which no
   conformance gate drives directly. The pin to `SetEngine.check` is
   answer-for-answer, across an algorithm boundary.
 -/
@@ -59,7 +59,7 @@ def unionFold (s : SubjectRef) (l : List (MemberSet SubjectRef)) : MemberSet Sub
   l.foldr (MemberSet.union (popOf s)) MemberSet.empty
 
 /-- The `MemberSet` contributed by one `Direct`-leaf grant tuple `g`, under the
-    recursive expander `rc` (`setengine/engine.py::SetEngine.expand.direct_expand`).
+    recursive expander `rc` (`src/zanzibar/setengine/engine.py::SetEngine.expand.direct_expand`).
     A concrete/bare
     grant contributes its entity; a bare wildcard a `star` shape; a userset grant
     the token itself PLUS its flow-through expansion; a wildcard userset the shape
@@ -103,7 +103,7 @@ def ttuParents (T : Store) (tuplesetRel otype oname : String) : List Tuple :=
     (matchingObjects oname).contains tup.object.name)
 
 /-- The `MemberSet` contributed by one TTU parent tuple
-    (`setengine/engine.py::SetEngine.expand.ttu_expand`):
+    (`src/zanzibar/setengine/engine.py::SetEngine.expand.ttu_expand`):
     the target-relation members of the parent, plus the
     from-chain userset token; a wildcard parent contributes the shape `star` plus
     the flow-throughs over `instances`. -/

@@ -32,9 +32,9 @@ import json
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from setengine import ALL_SETOPS
+from zanzibar.setengine import ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
-from zanzibar_utils_v1 import parse_openfga_schema, UnsupportedByGraphIndex
+from zanzibar.schema import parse_openfga_schema, UnsupportedByGraphIndex
 
 
 def _backends(schema, owc=frozenset()):
@@ -154,7 +154,7 @@ def test_zt_p5_reg11_multihop_out_bridge_IS_reachable():
 # criterion can reject the dangerous write without deleting a working class (proved
 # by construction in `test_zt_p5_starstar_fix_does_not_over_reject_the_legal_class`
 # below). It is a WRITE-time rejection in
-# `index_v4.wildcard.WildcardIndex._reject_star_self_edge`: a routed edge
+# `zanzibar.graphindex.wildcard.WildcardIndex._reject_star_self_edge`: a routed edge
 # `w_any(T,p) -> w_all(T,p)` on a shape that is both bridged-in and bridged-out is a
 # cycle by construction. That is the position-split restatement of the rule the set
 # engine already had (`SetEngine._would_cycle`'s raw-level `any(u == v ...)`), so the
@@ -347,7 +347,7 @@ def test_zt_p5_starstar_generator_blind_spot_is_closed():
 def test_zt_p5_connectedstore_is_not_exposed_to_the_starstar_divergence():
     """The composed system rejects the write (TupleSource delegates admission to
     the SetEngine), so the exposure is the graph index used DIRECTLY."""
-    from connectedstore import ConnectedStore
+    from zanzibar.connectedstore import ConnectedStore
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s:
@@ -491,7 +491,7 @@ def test_zt_p5_from_chain_target_shape_IS_reachable():
     note across the 2026-07-17 Fix A lift, the `rootB` widening and the Direct-arm
     corpora.
     """
-    import index_v4.processor as P
+    import zanzibar.graphindex.processor as P
     from tests.test_matrix import GraphBackend, SetBackend
 
     rs = parse_openfga_schema(FROM_CHAIN_SCHEMA)
@@ -534,11 +534,11 @@ def test_zt_p5_from_chain_target_shape_IS_reachable():
 
             # the mid-cascade intern really minted the in-bridge, and the closure
             # really carries the bridge-fed truth
-            from index_v4.models import NodeV4, EdgeV4
+            from zanzibar.graphindex.models import Node, Edge
             nodes = {n.id: (n.type, n.name, n.predicate, n.wildcard)
-                     for n in g.session.exec(select(NodeV4)).all()}
+                     for n in g.session.exec(select(Node)).all()}
             edges = {(nodes[e.subject_id], nodes[e.object_id])
-                     for e in g.session.exec(select(EdgeV4)).all()}
+                     for e in g.session.exec(select(Edge)).all()}
             assert (('folder', 'f1', 'member', ''),
                     ('folder', '*', 'member', 'any')) in edges, \
                 'the from-chain intern must mint the concrete -> w_any in-bridge'
@@ -603,16 +603,16 @@ type folder
 
 def _state_projections(session, store_id):
     """The canonical natural-key projections of tests/test_bulk_build.py."""
-    from index_v4.models import EdgeV4, NodeV4, ResidueV1
-    nodes = list(session.exec(select(NodeV4).where(NodeV4.store_id == store_id)).all())
+    from zanzibar.graphindex.models import Edge, Node, Residue
+    nodes = list(session.exec(select(Node).where(Node.store_id == store_id)).all())
     idmap = {n.id: (n.predicate, n.type, n.name, n.wildcard) for n in nodes}
     proj_nodes = {idmap[n.id]: (n.implicit, n.reference_count) for n in nodes}
     proj_edges = {(idmap[e.subject_id], idmap[e.object_id]):
                   (e.direct_edge_count, e.indirect_edge_count, e.derived)
                   for e in session.exec(
-                      select(EdgeV4).where(EdgeV4.store_id == store_id)).all()}
+                      select(Edge).where(Edge.store_id == store_id)).all()}
     proj_res = {}
-    for r in session.exec(select(ResidueV1).where(ResidueV1.store_id == store_id)).all():
+    for r in session.exec(select(Residue).where(Residue.store_id == store_id)).all():
         proj_res[idmap[r.object_node_id]] = (
             frozenset(tuple(x) for x in json.loads(r.stars)),
             frozenset(idmap[i] for i in json.loads(r.neg)),
@@ -638,9 +638,9 @@ def _live_state(schema, owc, seq):
     as an OPTIONAL argument and silently drops half its body without it — the rest of
     I3 (bridge completeness/exclusivity), I14, I4 namespace and every derived
     invariant. This helper returns the handle so its callers cannot accidentally run
-    the reduced checker; `connectedstore/store.py` exposes it as `cs.widx.schema_info`.
+    the reduced checker; `src/zanzibar/connectedstore/store.py` exposes it as `cs.widx.schema_info`.
     """
-    from connectedstore import ConnectedStore
+    from zanzibar.connectedstore import ConnectedStore
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
@@ -670,7 +670,7 @@ def test_zt_p5_object_wildcard_state_level_live_equals_rebuild(corpus, k):
 
     ⚠ THIS DOCSTRING CLAIMED "I1-I13 are green on all three" UNTIL 2026-09-19f AND IT
     WAS FALSE (`TK72`). The three calls below passed no `schema_info`, and without it
-    `index_v4/invariants.py::check_invariants` skips the rest of I3 (bridge
+    `src/zanzibar/graphindex/invariants.py::check_invariants` skips the rest of I3 (bridge
     completeness/exclusivity), I14, I4 namespace classification and every derived
     invariant — roughly half the body. A test that names the invariants it runs must
     name the ones it actually ran.
@@ -698,8 +698,8 @@ def test_zt_p5_object_wildcard_state_level_live_equals_rebuild(corpus, k):
             implicit=True predicate='viewer' type='folder' wildcard=''
             reference_count=3 of bridged-out shape missing its w_all->concrete bridge
     """
-    from connectedstore import build_index
-    from index_v4.invariants import check_invariants
+    from zanzibar.connectedstore import build_index
+    from zanzibar.graphindex.invariants import check_invariants
 
     schema, owc, space = corpus
     stores = [s for kk in range(k + 1) for s in itertools.combinations(space, kk)]
@@ -966,7 +966,7 @@ def test_zt_p5_undefined_references_are_refused(name):
     its docstring said: "pinning it means a future 'reject undefined references' change
     is a deliberate, visible decision rather than a silent behaviour flip". This is that
     change. Every form below except `direct_type` is now refused at PARSE time by the
-    production parser AND the oracle's (`zanzibar_utils_v1.py::_validate_ast_consistency`,
+    production parser AND the oracle's (`src/zanzibar/schema/parser.py::_validate_ast_consistency`,
     `tests/oracle.py::_validate_consistency`). Before, all of them compiled, and every
     backend read the reference as EMPTY, unanimously and fail-closed.
     """

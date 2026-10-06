@@ -83,7 +83,7 @@ the target relation, the self-referential subject, and the extra
 Computed/folder relations of the original counterexample.
 """
 
-from index_v4.invariants import snapshot_rows
+from zanzibar.graphindex.invariants import snapshot_rows
 from tests.test_processor import build
 
 # The repro on a LEGAL schema (TK106, 2026-09-26). The filed one was

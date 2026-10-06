@@ -16,7 +16,7 @@ updated: 2026-09-22b
 closed:
 ---
 
-`index_v4/wildcard.py::WildcardIndex._collect_residue_memberships`
+`src/zanzibar/graphindex/wildcard.py::WildcardIndex._collect_residue_memberships`
 
 **Measured (2026-08-17 motivating-measurement pass):** **30.1%** of every boolean lookup and **193 `json.loads` per lookup** over only **100** residue rows — and the scan is O(#derived objects), so the share GROWS with the store.
 
@@ -26,7 +26,7 @@ closed:
 
 ⚠ **Read your id’s entry in [`perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) — INCLUDING its verifier corrections — and that file’s §"Traps the numbers do not carry", before taking this id.** The audit’s own rule: *do not implement from titles alone*. Eighteen findings survived adversarial verification with **0 refuted**, but several impacts were downgraded, several fix sketches were corrected, and one fix was refuted outright while its finding stood.
 
-⚠ **`R6-4(a)` is UNSOUND AS FILED — do not implement it as written.** Its `(row.id, row.version)` decode memo breaks on SQLite: deleted residues restart at `version=1` and rowids recycle, so the key is not unique over time. The fix sketch is a verbatim block that calls the key "sound", which is why the correction had to be pinned dated (2026-08-21) beside the sketch itself and not only in the traps section. **`R6-4(b)` — the stars reverse-index — is the real fix, remains open, and is its own session**; it needs a stars twin, `bulk_build` population and an I6 extension. `ResidueRefV1` already exists and reads never use it.
+⚠ **`R6-4(a)` is UNSOUND AS FILED — do not implement it as written.** Its `(row.id, row.version)` decode memo breaks on SQLite: deleted residues restart at `version=1` and rowids recycle, so the key is not unique over time. The fix sketch is a verbatim block that calls the key "sound", which is why the correction had to be pinned dated (2026-08-21) beside the sketch itself and not only in the traps section. **`R6-4(b)` — the stars reverse-index — is the real fix, remains open, and is its own session**; it needs a stars twin, `bulk_build` population and an I6 extension. `ResidueRef` already exists and reads never use it.
 
 ⚠ **Lean impact: a `CORRESPONDENCE.md` §8.1/§7 log entry, and — on the more specific record — NO Lean proof change.** The audit’s round-wide "Rules that bind this list" bullet groups this id with `R6-2`/`R6-16` as changing modeled algorithms, which reads as owing a model update plus the full phased gate and a fuzz sweep. `R6-4`’s own verifier Lean-impact block is narrower and later: it *"touches `CORRESPONDENCE.md`-anchored symbols but no proved Lean model … the fix needs a matching §8.1/§7 log entry … but no Lean proof change."* Take the specific record, log the gap, and re-read both before assuming the expensive branch — the gate is still owed for the code change either way.
 
@@ -37,7 +37,7 @@ closed:
 - [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §`### R6-4` — the entry, **including its verifier corrections**
 - the same file, §"Traps the numbers do not carry" — the round-wide traps. Read the section; it is short, and it is the only home for how many there are. (This line used to say "the five", attributed to the tree generator recounting them at generation time. That generator was deleted with `.scratch/tasktool/` on 2026-09-07, so the attribution named a mechanism that could not run — `TK61`, reworded 2026-09-07b. A bare "five" with no attribution would have been worse: that is an unsourced restated count.)
 - [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md) — verdicts, method, and the two honest limits (in-memory SQLite understates statement-count wins; cProfile depresses throughput)
-- `index_v4/wildcard.py::WildcardIndex._collect_residue_memberships` — the code
+- `src/zanzibar/graphindex/wildcard.py::WildcardIndex._collect_residue_memberships` — the code
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the fence and the reopening rule
 - `python scripts/task.py show R6` — the parent: round-wide order, traps and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
@@ -57,8 +57,8 @@ The graph-lookup profile run serves both rows (`profile_r6.py::target_graph_look
 attribution (`.scratch/r6-decomp/probe_instance_by_class.py`, SQLAlchemy InstanceEvents.load
 per mapped class, deduped total reconciling EXACTLY to the profile's recorded 22,410):
 
-       6,000  (26.8%)  ResidueV1   <- this row
-      16,410  (73.2%)  NodeV4+EdgeV4
+       6,000  (26.8%)  Residue   <- this row
+      16,410  (73.2%)  Node+Edge
 
 So 26.8% of that block is this row's residue full-scan. Those 6,000 constructions already sit
 inside this row's own 30.1% `_collect_residue_memberships` cum -- so the honest reading is NOT
@@ -77,10 +77,10 @@ UNCHANGED AND STILL BINDING: R6-4(a) is UNSOUND as filed -- `_store_residue` del
 residues and recreated rows restart at version=1 while SQLite recycles rowids, so the
 (row.id, row.version) decode memo is not unique over time. R6-4(b) is the live half and the
 audit says it is its own session. The new table must be populated in THREE places -- live
-`_store_residue`, offline `index_v4/bulk_build.py::bulk_build`, and the I6 agreement check --
+`_store_residue`, offline `src/zanzibar/graphindex/bulk_build.py::bulk_build`, and the I6 agreement check --
 each an independent way to ship a silently-empty index, plus a hand PG migration (no alembic
 in the repo). `size: L` is, unusually for this repo, not an undercount.
 
 Full audit: docs/r6-sizing-census-2026-09-22.md
 
-Path correction, same session: the probe cited in the 2026-09-22b entry above now lives in the TRACKED tree at benchmarks/probe_r6_instance_by_class.py. It was first cited at a gitignored .scratch/ path, which would have rotted the citation and lost the instrument -- the measurement is evidence, so the instrument belongs in the tree. Re-run from the repo root; output is byte-identical (6,000 ResidueV1 / 16,410 NodeV4+EdgeV4, deduped total 22,410 reconciling to the profile line).
+Path correction, same session: the probe cited in the 2026-09-22b entry above now lives in the TRACKED tree at benchmarks/probe_r6_instance_by_class.py. It was first cited at a gitignored .scratch/ path, which would have rotted the citation and lost the instrument -- the measurement is evidence, so the instrument belongs in the tree. Re-run from the repo root; output is byte-identical (6,000 Residue / 16,410 Node+Edge, deduped total 22,410 reconciling to the profile line).

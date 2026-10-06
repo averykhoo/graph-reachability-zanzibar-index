@@ -16,8 +16,8 @@ step the sync schedule inlines. Asserted here:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from connectedstore import ConnectedStore
-from index_v4.invariants import snapshot_rows
+from zanzibar.connectedstore import ConnectedStore
+from zanzibar.graphindex.invariants import snapshot_rows
 from tests.test_connectedstore_build import _SCHEMA, _OPS, _GRID, _residues_by_name
 from tests.wildcard_helpers import assert_wildcard_invariants
 

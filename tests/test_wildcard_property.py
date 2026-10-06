@@ -13,9 +13,9 @@ from types import EllipsisType
 
 import pytest
 
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 from tests.oracle import Oracle, OracleTuple
 from tests.wildcard_helpers import (make_wildcard_index, assert_wildcard_invariants,
                                     record_middle_syncs)
@@ -190,7 +190,7 @@ def test_wildcard_property_vs_oracle(load_fga_schema, seed):
 # nor `tests/test_matrix.py` compiles a single crossable schema (0 of 3 and 0 of
 # 36 parses, MEASURED 2026-09-19c), so the two mechanisms this repo relies on to
 # find semantic divergence had ZERO reach into I14 -- the
-# `w_all -> concrete -> w_any` crossing `index_v4/wildcard.py` maintains per live
+# `w_all -> concrete -> w_any` crossing `src/zanzibar/graphindex/wildcard.py` maintains per live
 # entity. §2 of that census also closed the cheap fix: 13 of the 15
 # `tests/fga_schemas/` fixtures have an empty `bridged_in_shapes`, so NO
 # `object_wildcard_shapes` argument can make them crossable, and `wildcards.fga`

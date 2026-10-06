@@ -9,7 +9,7 @@ evidence that anything new ran.
 This probe answers the question mechanically, for the branch the corpus exists for:
 the leading ``rel`` term of the bulk mirror
 
-    index_v4/bulk_backfill.py::_BulkBackfill._live_keys_of
+    src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._live_keys_of
         preds = [rel] + [spec.predicate for spec in plan.leaves
                          if spec.positive and spec.kind in ('closure', 'derived-userset')]
 
@@ -43,7 +43,7 @@ import sys
 from formal.conformance.corpus import SCHEMAS
 from formal.conformance import test_conformance_remove as R
 from formal.conformance.backends import graphindex_drive_ops, bulk_build_drive
-from index_v4 import bulk_backfill
+from zanzibar.graphindex import bulk_backfill
 
 NEW = "derived_userset_subject"
 

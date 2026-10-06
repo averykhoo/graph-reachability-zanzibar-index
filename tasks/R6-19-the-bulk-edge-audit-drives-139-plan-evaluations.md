@@ -16,7 +16,7 @@ updated: 2026-09-22b
 closed:
 ---
 
-`index_v4/bulk_backfill.py::_BulkBackfill._reconcile_subject_edge`
+`src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._reconcile_subject_edge`
 
 **Measured (2026-08-17 motivating-measurement pass):** **145,560 calls; cum 25.4%, but tottime only 2.0%** — 145,560 calls over 1,050 `_reconcile` calls = **~138.6 bare-entity audit members per object reconcile**, each paying a full `plan.check_fn` evaluation. **The honest statement is that this call site is the DENOMINATOR**, not that the function is a quarter of a bulk build.
 
@@ -41,7 +41,7 @@ closed:
 - [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §`### R6-19` — the entry, **including its verifier corrections**
 - the same file, §"Traps the numbers do not carry" — the round-wide traps. Read the section; it is short, and it is the only home for how many there are. (This line used to say "the five", attributed to the tree generator recounting them at generation time. That generator was deleted with `.scratch/tasktool/` on 2026-09-07, so the attribution named a mechanism that could not run — `TK61`, reworded 2026-09-07b. A bare "five" with no attribution would have been worse: that is an unsourced restated count.)
 - [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md) — verdicts, method, and the two honest limits (in-memory SQLite understates statement-count wins; cProfile depresses throughput)
-- `index_v4/bulk_backfill.py::_BulkBackfill._reconcile_subject_edge` — the code
+- `src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._reconcile_subject_edge` — the code
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the fence and the reopening rule
 - `python scripts/task.py show R6` — the parent: round-wide order, traps and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
@@ -56,7 +56,7 @@ closed:
 CORRECTION 2026-09-22b: step (2)'s claim that the `_residue_state` hoist "needs no soundness
 argument at all" is WRONG AS WRITTEN, verified first-hand.
 
-`index_v4/bulk_backfill.py::_BulkBackfill._residue_state` (`:390`) returns FRESH COPIES --
+`src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._residue_state` (`:390`) returns FRESH COPIES --
 `return e.stars, set(e.neg), set(e.upos)` -- and the loop body in `::_reconcile_subject_edge`
 MUTATES AND WRITES BACK: `(neg.add if want_neg else neg.discard)(skey)` then
 `self._store_residue(o_type, rel, o_name, stars, neg, upos)` (`:706-707`, dated 2026-09-22).

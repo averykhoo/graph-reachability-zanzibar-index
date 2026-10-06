@@ -1,12 +1,12 @@
-"""ZT-P1-8 (retention): ``delta_outbox_v1`` was append-only -- there was no ``DELETE``
-anywhere in ``index_v4/outbox.py``, so the table grew for the life of a store.
+"""ZT-P1-8 (retention): ``delta_outbox`` was append-only -- there was no ``DELETE``
+anywhere in ``src/zanzibar/graphindex/outbox.py``, so the table grew for the life of a store.
 
 ``prune_outbox`` is the retention helper. These tests pin the three things that make
 it safe rather than merely small:
 
   (a) it deletes DRAINED rows (id <= a watermark every consumer has passed);
   (b) it never touches UNDRAINED rows, and refuses a nonsensical watermark;
-  (c) it keeps the HEAD row as an id anchor -- on SQLite ``delta_outbox_v1.id`` is
+  (c) it keeps the HEAD row as an id anchor -- on SQLite ``delta_outbox.id`` is
       the rowid, and an emptied table restarts at 1, which would hand a consumer
       holding cursor 500 a stream of rows it can never see again. This is the one
       way a "retention" helper could lose a delta permanently;
@@ -20,12 +20,12 @@ knowledge, not the library's.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from index_v4 import ReachabilityIndex, Store
-from index_v4.invariants import snapshot_rows
-from index_v4.models import DeltaOutboxV1
-from index_v4.outbox import outbox_rows, outbox_watermark, prune_outbox
-from index_v4.processor import DeltaProcessor
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.graphindex import ReachabilityIndex, Store
+from zanzibar.graphindex.invariants import snapshot_rows
+from zanzibar.graphindex.models import DeltaOutbox
+from zanzibar.graphindex.outbox import outbox_rows, outbox_watermark, prune_outbox
+from zanzibar.graphindex.processor import DeltaProcessor
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 from tests.wildcard_helpers import make_wildcard_index
 
 
@@ -43,8 +43,8 @@ def env():
 
 def _ids(session, store_id='s'):
     return [r.id for r in session.exec(
-        select(DeltaOutboxV1).where(DeltaOutboxV1.store_id == store_id)
-        .order_by(DeltaOutboxV1.id)).all()]
+        select(DeltaOutbox).where(DeltaOutbox.store_id == store_id)
+        .order_by(DeltaOutbox.id)).all()]
 
 
 def test_prune_deletes_drained_rows_and_keeps_the_head_anchor(env):
@@ -91,7 +91,7 @@ def test_head_anchor_is_what_prevents_permanent_delta_loss(env):
     assert cursor == 4
 
     # -- the hazard, by hand ------------------------------------------------- #
-    session.execute(delete(DeltaOutboxV1).where(DeltaOutboxV1.store_id == 's'))
+    session.execute(delete(DeltaOutbox).where(DeltaOutbox.store_id == 's'))
     session.commit()
     idx.add_edge(..., 'user', 'after-wipe', 'viewer', 'doc', 'd1')
     session.commit()

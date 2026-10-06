@@ -16,7 +16,7 @@ updated: 2026-09-22b
 closed:
 ---
 
-`index_v4/invariants.py::_check_outbox_sanity`
+`src/zanzibar/graphindex/invariants.py::_check_outbox_sanity`
 
 **Measured (2026-08-17 motivating-measurement pass):** **20.7%** of a paranoid build, and the decisive figure: per-commit cost grows **14.14×** from first to last quartile over 336 commits — the only per-commit term that grows without bound. `check_invariants` overall is **64.1%**. `PARANOIA_FULL` never runs in production, but it IS the `tests/` default, so this is gate wall-clock.
 
@@ -37,7 +37,7 @@ closed:
 - [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §`### R6-7` — the entry, **including its verifier corrections**
 - the same file, §"Traps the numbers do not carry" — the round-wide traps. Read the section; it is short, and it is the only home for how many there are. (This line used to say "the five", attributed to the tree generator recounting them at generation time. That generator was deleted with `.scratch/tasktool/` on 2026-09-07, so the attribution named a mechanism that could not run — `TK61`, reworded 2026-09-07b. A bare "five" with no attribution would have been worse: that is an unsourced restated count.)
 - [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md) — verdicts, method, and the two honest limits (in-memory SQLite understates statement-count wins; cProfile depresses throughput)
-- `index_v4/invariants.py::_check_outbox_sanity` — the code
+- `src/zanzibar/graphindex/invariants.py::_check_outbox_sanity` — the code
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the fence and the reopening rule
 - `python scripts/task.py show R6` — the parent: round-wide order, traps and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
@@ -56,7 +56,7 @@ narrows a MODELLED WHOLE-STATE PREDICATE, which is why the log entry is owed eve
 evaluation semantics are untouched and the names survive, so `verify.sh lean` stays green.
 
 As isolated code this is the cheapest change in the round -- 4 touch points, one file
-(`index_v4/invariants.py`), no migration. BUT R6-16's co-design trap forbids taking it alone
+(`src/zanzibar/graphindex/invariants.py`), no migration. BUT R6-16's co-design trap forbids taking it alone
 ("Take all three in one session, or take none of them"), because `ParanoiaGuard.before_commit`
 passes the watermark only to `verify_outbox_deltas`; gating emission without gating this
 consumer makes the checker silently vacuous. A solo win here needs an explicit recorded decision

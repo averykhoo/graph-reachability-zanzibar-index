@@ -4,7 +4,7 @@ P3 tests (boolean spec §4, §8.3): the delta outbox replaces in-memory delta li
   * stream equivalence: the drained outbox range reproduces exactly the flips the
     legacy list API used to return, order included;
   * rollback discards the transaction's outbox rows (deltas are transactional);
-  * EdgeV4.derived is set/cleared by processor writes only;
+  * Edge.derived is set/cleared by processor writes only;
   * the delta-scoped verifier (§8.3) catches a seeded closure-maintenance bug at the
     moment and location it occurs.
 """
@@ -12,11 +12,11 @@ P3 tests (boolean spec §4, §8.3): the delta outbox replaces in-memory delta li
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from index_v4 import EdgeV4, ReachabilityIndex, Store
-from index_v4.invariants import InvariantViolation, verify_outbox_deltas
-from index_v4.models import DeltaOutboxV1
-from index_v4.outbox import drain_deltas, outbox_rows, outbox_watermark
-from zanzibar_utils_v1 import parse_openfga_schema
+from zanzibar.graphindex import Edge, ReachabilityIndex, Store
+from zanzibar.graphindex.invariants import InvariantViolation, verify_outbox_deltas
+from zanzibar.graphindex.models import DeltaOutbox
+from zanzibar.graphindex.outbox import drain_deltas, outbox_rows, outbox_watermark
+from zanzibar.schema import parse_openfga_schema
 from tests.wildcard_helpers import make_wildcard_index
 
 
@@ -111,14 +111,14 @@ def test_derived_flag_set_only_by_processor_writes():
     # ordinary (leaf) write: no derived flag anywhere
     widx.add_tuple('...', 'user', 'alice', 'viewer.0', 'doc', 'd1')
     session.commit()
-    assert all(not e.derived for e in session.exec(select(EdgeV4)).all())
+    assert all(not e.derived for e in session.exec(select(Edge)).all())
 
     # processor write into the derived-public family: direct edge flagged
     widx.processor_writes = True
     widx.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
     widx.processor_writes = False
     session.commit()
-    flagged = [e for e in session.exec(select(EdgeV4)).all() if e.derived]
+    flagged = [e for e in session.exec(select(Edge)).all() if e.derived]
     assert len(flagged) == 1 and flagged[0].direct_edge_count == 1
 
     # processor removal clears it (row deleted entirely here)
@@ -126,7 +126,7 @@ def test_derived_flag_set_only_by_processor_writes():
     widx.remove_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
     widx.processor_writes = False
     session.commit()
-    assert all(not e.derived for e in session.exec(select(EdgeV4)).all())
+    assert all(not e.derived for e in session.exec(select(Edge)).all())
     session.close()
 
 
@@ -157,13 +157,13 @@ def test_delta_verifier_catches_seeded_closure_bug(env):
     g1 = idx.node('member', 'group', 'g1', create_if_missing=False)
     doc = idx.node('viewer', 'document', 'doc1', create_if_missing=True)
     alice = idx.node(..., 'user', 'alice', create_if_missing=False)
-    session.add(EdgeV4(store_id='s', subject_id=g1.id, object_id=doc.id,
+    session.add(Edge(store_id='s', subject_id=g1.id, object_id=doc.id,
                        direct_edge_count=1, indirect_edge_count=1))
-    session.add(DeltaOutboxV1(store_id='s', subject_node_id=g1.id,
+    session.add(DeltaOutbox(store_id='s', subject_node_id=g1.id,
                               object_node_id=doc.id, action='ADDED'))
     # the missing closure row means alice->doc is BFS-reachable but has no row; a
     # delta for that pair makes the verifier compare the two:
-    session.add(DeltaOutboxV1(store_id='s', subject_node_id=alice.id,
+    session.add(DeltaOutbox(store_id='s', subject_node_id=alice.id,
                               object_node_id=doc.id, action='ADDED'))
     session.flush()
 
@@ -181,7 +181,7 @@ def test_delta_verifier_catches_false_removal_claim(env):
 
     alice = idx.node(..., 'user', 'alice', create_if_missing=False)
     doc = idx.node('viewer', 'document', 'doc1', create_if_missing=False)
-    session.add(DeltaOutboxV1(store_id='s', subject_node_id=alice.id,
+    session.add(DeltaOutbox(store_id='s', subject_node_id=alice.id,
                               object_node_id=doc.id, action='REMOVED'))
     session.flush()
 
@@ -205,7 +205,7 @@ def test_paranoia_runs_delta_verifier_per_commit():
 
     alice = widx.idx.node('...', 'user', 'alice', create_if_missing=False)
     d1 = widx.idx.node('viewer', 'doc', 'd1', create_if_missing=False)
-    session.add(DeltaOutboxV1(store_id='test', subject_node_id=d1.id,
+    session.add(DeltaOutbox(store_id='test', subject_node_id=d1.id,
                               object_node_id=alice.id, action='ADDED'))
     with pytest.raises(InvariantViolation):
         session.commit()

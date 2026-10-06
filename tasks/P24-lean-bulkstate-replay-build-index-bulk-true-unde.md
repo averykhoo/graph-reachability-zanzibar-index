@@ -17,7 +17,7 @@ closed:
 ---
 
 Filed 2026-09-06b as the deferred half of `P17` (user decision: option (c) now, Lean shape
-SOMEDAY). A `ReadEq`-style theorem that the offline constructor (`index_v4/bulk_build.py`
+SOMEDAY). A `ReadEq`-style theorem that the offline constructor (`src/zanzibar/graphindex/bulk_build.py`
 + `bulk_backfill.py`) reaches the same `GraphState` as replaying the same tuples through
 `ReachedBy` would put `build_index(bulk=True)` under the headline theorems instead of
 under the scope statement in `formal/FINAL_REVIEW.md` section 3.1 item 6 / 4(h).

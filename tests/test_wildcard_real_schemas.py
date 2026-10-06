@@ -11,7 +11,7 @@ hand-computed expectation.
 
 from types import EllipsisType
 
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 from tests.oracle import Oracle, OracleTuple
 from tests.wildcard_helpers import make_wildcard_index, assert_wildcard_invariants
 

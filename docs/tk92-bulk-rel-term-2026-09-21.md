@@ -3,6 +3,8 @@
 **ACTIVE-PLAN** (`docs/README.md` §3). Opened 2026-09-21. Corrections append **dated at
 the top**. FREEZE when `TK92` closes.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 Provenance labels are per claim: **READ** (verified first-hand against the live tree by
 the session that wrote the line), **RAN** (the session executed it and quotes the literal
 output), **REASONED**, **UNVERIFIED** (reported by a subagent and *not* re-checked here).

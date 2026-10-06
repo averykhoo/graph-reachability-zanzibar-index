@@ -14,17 +14,25 @@ P5: reads (boolean spec §6, §11-P5).
 """
 
 import random
+import re
 from contextlib import contextmanager
 
 import pytest
 from sqlalchemy import event
 from sqlmodel import Session, SQLModel, create_engine
 
-from setengine import SetEngine, ALL_SETOPS
-from zanzibar_utils_v1 import parse_openfga_schema
+from zanzibar.setengine import SetEngine, ALL_SETOPS
+from zanzibar.schema import parse_openfga_schema
 from tests.oracle import Oracle, OracleTuple
 from tests.test_processor import build
 from tests.test_matrix import _boolean_pool, _boolean_grid, _demorgan_pool
+
+
+def _mentions_table(table: str, sql: str) -> bool:
+    """Does `sql` name TABLE as a whole word? The tables were `node_v4`/`edge_v4` until
+    TK120 (2026-10-06); a bare substring test on `node` would also match columns such as
+    `object_node_id`, so the filter is word-bounded."""
+    return re.search(r'\b' + table + r'\b', sql.lower()) is not None
 from tests.wildcard_helpers import make_wildcard_index
 
 
@@ -68,7 +76,7 @@ def test_untainted_check_is_one_edge_statement(load_fga_schema):
     ]:
         with _count_statements(session) as stmts:
             assert widx.check(*q) is expected, q
-        edge_probes = [s for s in stmts if 'edge_v4' in s.lower()]
+        edge_probes = [s for s in stmts if _mentions_table('edge', s)]
         assert len(edge_probes) <= 1, \
             f'{q}: expected at most one edge-probe statement, got {len(edge_probes)}:\n' \
             + '\n'.join(edge_probes)
@@ -82,7 +90,7 @@ def test_untainted_check_is_one_edge_statement(load_fga_schema):
 #
 # The probe above was always one statement; the up-to-4 identity resolutions feeding
 # it were not (subject, object, w_any, w_all -- a `_db_node` point SELECT each,
-# measured at 4.00 node_v4 statements per check on `profile_r6 --target graph-check`).
+# measured at 4.00 node statements per check on `profile_r6 --target graph-check`).
 # They are now one row-value IN through `ReachabilityIndex.resolve_node_ids`.
 #
 # Batching a set of point lookups has exactly one interesting failure mode -- a key
@@ -178,14 +186,14 @@ def _r66_index(store_id='r66'):
 
 
 def _node_statements(stmts):
-    return [s for s in stmts if 'node_v4' in s.lower() and 'edge_v4' not in s.lower()]
+    return [s for s in stmts if _mentions_table('node', s) and not _mentions_table('edge', s)]
 
 
 def test_untainted_check_resolves_its_node_ids_in_one_statement():
-    """R6-6: ONE node_v4 statement per untainted check, not one per identity.
+    """R6-6: ONE node statement per untainted check, not one per identity.
 
     The floor is derived, not tuned: `check` needs up to four node ids and they are
-    independent, so one row-value IN over `node_v4_unique_constraint` answers all of
+    independent, so one row-value IN over `node_unique_constraint` answers all of
     them (`ReachabilityIndex.resolve_node_ids`). Asserting `== 1` rather than `<= 4`
     is the point -- the pre-R6-6 code passed `<= 4`.
 
@@ -330,7 +338,7 @@ def test_a_node_created_inside_the_scope_is_seen_by_the_next_resolution():
 
 def test_read_purity_i11(load_fga_schema):
     """Reads never intern or create nodes (I11: row counts unchanged)."""
-    from index_v4.invariants import snapshot_rows
+    from zanzibar.graphindex.invariants import snapshot_rows
     session, widx, proc, write = build('''
         type user
         type doc
@@ -527,7 +535,7 @@ def test_grid_parity_boolean_wildcards(load_fga_schema, seed):
                                      'star_admitting_intersection.fga'])
 @pytest.mark.parametrize('seed', [0, 1])
 def test_grid_parity_demorgans(load_fga_schema, fixture, seed):
-    from zanzibar_utils_v1 import parse_schema_ast
+    from zanzibar.schema import parse_schema_ast
     schema = load_fga_schema(fixture)
     pool = _demorgan_pool(schema)
     ast = parse_schema_ast(schema)

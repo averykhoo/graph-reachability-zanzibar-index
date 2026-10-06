@@ -15,16 +15,16 @@ It is the pre/post instrument for the `TK69` fix.
   F1  order A,B,C,D -- the audited case. The last write D closes the userset cycle. The
       graph refuses it; both set backends accept it. The set engine cannot see the
       crossing because its flow-graph nodes exist per incident EDGE
-      (`setengine/engine.py::SetEngine._shape_node_ref`, "Added on the first incident
+      (`src/zanzibar/setengine/engine.py::SetEngine._shape_node_ref`, "Added on the first incident
       edge") while the graph's crossing middles exist per ENTITY
-      (`index_v4/wildcard.py::WildcardIndex._ensure_entity_middles`).
+      (`src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_entity_middles`).
 
   F2  order B,C,D,A -- the DETONATION. With no `folder` entity yet, the graph ACCEPTS the
       cycle-closing write D, and then refuses A = `user:u1 editor folder:f1` -- an
       ordinary grant naming no wildcard, no userset and not the crossable relation --
       because minting that entity's I14 middle emits the bridge edge that closes the
       now-latent cycle. This is exactly the failure
-      `index_v4/wildcard.py::WildcardIndex._reject_star_self_edge` was written to
+      `src/zanzibar/graphindex/wildcard.py::WildcardIndex._reject_star_self_edge` was written to
       prevent, and its docstring names both the mechanism and the verdict: "admitting the
       edge while the shape happens to have no concretes yet therefore does not avoid the
       cycle -- it defers it onto the next innocent write, which is then permanently
@@ -92,7 +92,7 @@ goes red too, and both are meant to be flipped deliberately in the same change. 
 """
 import sys
 
-from setengine.setops import ALL_SETOPS
+from zanzibar.setengine.setops import ALL_SETOPS
 from tests.test_matrix import GraphBackend, SetBackend
 
 SCHEMA = '''

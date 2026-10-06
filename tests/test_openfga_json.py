@@ -32,8 +32,8 @@ import re
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from connectedstore import ConnectedStore
-from zanzibar_utils_v1 import (openfga_json_to_dsl, parse_openfga_json,
+from zanzibar.connectedstore import ConnectedStore
+from zanzibar.schema import (openfga_json_to_dsl, parse_openfga_json,
                                parse_schema_ast)
 
 

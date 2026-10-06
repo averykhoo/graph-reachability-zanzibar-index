@@ -1,4 +1,4 @@
-"""`zanzibar_utils_v1.py::graph_admission_report` -- the operator surface of `TK104`.
+"""`src/zanzibar/schema/reports.py::graph_admission_report` -- the operator surface of `TK104`.
 
 The report covers the two `GraphAdmission` fields that Python neither refused nor shadowed
 until ASK-1 (`matchDecl`, `ranked`). Since 2026-09-26 both parsers REFUSE every violation of
@@ -13,7 +13,7 @@ long computed chain, which is a valid schema).
 """
 from __future__ import annotations
 
-from zanzibar_utils_v1 import (
+from zanzibar.schema import (
     GRAPH_ADMISSION_REPORTED_FIELDS,
     _parse_schema_ast_unchecked,
     graph_admission_report,

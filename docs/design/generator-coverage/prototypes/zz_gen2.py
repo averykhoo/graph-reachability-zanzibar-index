@@ -17,7 +17,7 @@ import sys
 sys.path.insert(0, r'C:\Users\user\PycharmProjects\graph-reachability-zanzibar-index')
 
 from hypothesis import strategies as st
-from zanzibar_utils_v1 import (Computed, Direct, Exclusion, Intersection, Restriction,
+from zanzibar.schema import (Computed, Direct, Exclusion, Intersection, Restriction,
                                TTU, Union)
 
 # --- the tiny universe, now typed ------------------------------------------- #

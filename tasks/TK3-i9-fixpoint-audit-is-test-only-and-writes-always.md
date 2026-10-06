@@ -16,7 +16,7 @@ updated: 2026-10-04g
 closed:
 ---
 
-`install_paranoia` (`index_v4/invariants.py::install_paranoia`) wires, at `level='full'`, the invariant checker plus the delta-scoped verifier — and at `level='residue'` only `check_residue_hygiene`. **`audit_fixpoint` is not among them**, deliberately: `invariants.py:184` says *"Not here, by design: I9 is the processor's fixpoint audit"*. Every I9 call site is a test. Second half, same gap: nothing structural forces `run_cascade` to run on a boolean write — cascade-as-precondition is convention, enforced by review and by `GraphBackend.apply` in the test harness, not by a checked invariant.
+`install_paranoia` (`src/zanzibar/graphindex/invariants.py::install_paranoia`) wires, at `level='full'`, the invariant checker plus the delta-scoped verifier — and at `level='residue'` only `check_residue_hygiene`. **`audit_fixpoint` is not among them**, deliberately: `invariants.py:184` says *"Not here, by design: I9 is the processor's fixpoint audit"*. Every I9 call site is a test. Second half, same gap: nothing structural forces `run_cascade` to run on a boolean write — cascade-as-precondition is convention, enforced by review and by `GraphBackend.apply` in the test harness, not by a checked invariant.
 
 `formal/SEMANTICS.md:891-899` raises the escalation in as many words — *"do you want a Phase-7-style check that the write paths always cascade?"* — and it was never answered. `grep -n 'I9\|audit_fixpoint' HANDOFF.md` returns 0 hits.
 
@@ -31,8 +31,8 @@ The deliverable is the ADJUDICATION first (is the scope boundary accepted, or is
 ## Read first
 
 - [`formal/SEMANTICS.md`](formal/SEMANTICS.md)`:891-899` — item A1 and the unanswered escalation; also `:549-554`
-- `index_v4/invariants.py::install_paranoia` — what the tiers actually wire (`:773-803`), and `:184` for the by-design exclusion
-- `index_v4/processor.py::DeltaProcessor.audit_fixpoint` — the check itself
+- `src/zanzibar/graphindex/invariants.py::install_paranoia` — what the tiers actually wire (`:773-803`), and `:184` for the by-design exclusion
+- `src/zanzibar/graphindex/processor.py::DeltaProcessor.audit_fixpoint` — the check itself
 - `tests/parity.py:98` — the "paranoia dose" call site, one of the test-only ones
 - [`docs/sabotage-procedure.md`](docs/sabotage-procedure.md) — mandatory before adding the check
 
@@ -40,16 +40,16 @@ The deliverable is the ADJUDICATION first (is the scope boundary accepted, or is
 
 ### 2026-08-21b
 
-**Provenance.** COVERAGE.md PART 1 U-3 (`SEM-A1`, tier 1, sweep-g only); CONFIRMED OPEN in code by COVERAGE.md §C3 against index_v4/invariants.py:773-803. The escalation at formal/SEMANTICS.md:898-899 is verbatim unanswered.
+**Provenance.** COVERAGE.md PART 1 U-3 (`SEM-A1`, tier 1, sweep-g only); CONFIRMED OPEN in code by COVERAGE.md §C3 against src/zanzibar/graphindex/invariants.py:773-803. The escalation at formal/SEMANTICS.md:898-899 is verbatim unanswered.
 
 ### 2026-09-10
 
 LANDED 2026-09-10 (TK53 append). The statement now lives in `formal/README.md`, appended to the "Residual unverified surface:" paragraph in "## The claim (what this does and does NOT prove)": the I9 cascade precondition is a CONVENTION, `install_paranoia` wires the checker and the delta-scoped verifier but not I9, and `SEMANTICS.md` sec 11-A1 flags it as wanting sign-off that was never given.
 
-Verified first-hand before writing, not taken from the agent report: `index_v4/processor.py::DeltaProcessor.audit_fixpoint` is defined at :1658 and EVERY call site is under `tests/` (parity.py:98, test_connectedstore*.py, test_connectedstore_concurrency.py:145) -- no production caller. `invariants.py:184` states the exclusion by design. `SEMANTICS.md` sec 11 is at :902 and A1 at :907 (the row's own `## Read first` cites :891-899, which is 16 lines stale -- lint check 14 resolves pointers, not line numbers, so it stays green).
+Verified first-hand before writing, not taken from the agent report: `src/zanzibar/graphindex/processor.py::DeltaProcessor.audit_fixpoint` is defined at :1658 and EVERY call site is under `tests/` (parity.py:98, test_connectedstore*.py, test_connectedstore_concurrency.py:145) -- no production caller. `invariants.py:184` states the exclusion by design. `SEMANTICS.md` sec 11 is at :902 and A1 at :907 (the row's own `## Read first` cites :891-899, which is 16 lines stale -- lint check 14 resolves pointers, not line numbers, so it stays green).
 
 Not closed: the row is still the open question of whether a per-write check is wanted. What changed is that the STATEMENT is no longer sole-homed in `tasks/`.
 
 ### 2026-10-04g
 
-Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): PARTLY SUPERSEDED. TK82 shipped the per-cascade fixpoint tier (index_v4/invariants.py PARANOIA_FIXPOINT), so 'I9 is test-only' no longer holds for the execution-side class. Remaining: 'writes always cascade' is still a convention (connectedstore/apply.py always cascades on the composed path); the never-scheduled class is TK85. Merge with TK85 or narrow this row to the convention half.
+Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): PARTLY SUPERSEDED. TK82 shipped the per-cascade fixpoint tier (src/zanzibar/graphindex/invariants.py PARANOIA_FIXPOINT), so 'I9 is test-only' no longer holds for the execution-side class. Remaining: 'writes always cascade' is still a convention (src/zanzibar/connectedstore/apply.py always cascades on the composed path); the never-scheduled class is TK85. Merge with TK85 or narrow this row to the convention half.

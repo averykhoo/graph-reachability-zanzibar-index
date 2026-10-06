@@ -107,9 +107,9 @@ non-stratifiable schemas, `expand`/`lookup`, and the fidelity of the model-to-co
 correspondence itself. `FINAL_REVIEW.md` §3 is the full list and governs.
 One of those residuals is a *convention* rather than a missing model (added
 2026-09-10, `TK3`): nothing structural forces a boolean write to run the cascade
-in the same transaction. `index_v4/invariants.py::install_paranoia` deliberately
+in the same transaction. `src/zanzibar/graphindex/invariants.py::install_paranoia` deliberately
 wires the invariant checker and the delta-scoped verifier but **not** I9, the
-fixpoint audit — `index_v4/processor.py::DeltaProcessor.audit_fixpoint` has no
+fixpoint audit — `src/zanzibar/graphindex/processor.py::DeltaProcessor.audit_fixpoint` has no
 production call site, only test ones. The Lean model bakes the cascade into every
 write op, so the theorems prove the *algorithm* correct and say nothing about the
 Python forgetting to call it. `SEMANTICS.md` §11-A1 records exactly this, flags it

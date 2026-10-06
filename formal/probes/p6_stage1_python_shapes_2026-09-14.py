@@ -32,7 +32,7 @@ WHAT IT ESTABLISHES.
     `W4Fragment`, and with it the scope of every headline theorem. This is the shipped-code
     form of `FullScope.lean::sxThruDerived_wsBare_over_full_list_fails`.
 
- 3. `SxThruDerived` is REFUSED by `zanzibar_utils_v1.py::_reject_object_wildcard_scope`,
+ 3. `SxThruDerived` is REFUSED by `src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope`,
     which is consistent with `FullScope.lean::W4Witness.sxThruDerived_not_admitted` and with
     that schema's docstring. ⚠ Note the asymmetry this creates and do not misread it: the
     refusal is about the through-shape being DERIVED, not about it being non-bare, which is
@@ -43,7 +43,7 @@ WHAT IT ESTABLISHES.
  what attributes the compile-time refusal to the taint and the non-bare shape to the star
  tupleset, rather than letting one explain the other.
 """
-from zanzibar_utils_v1 import (
+from zanzibar.schema import (
     parse_schema_ast, parse_openfga_schema, derive_schema_info,
     UnsupportedByGraphIndex,
 )

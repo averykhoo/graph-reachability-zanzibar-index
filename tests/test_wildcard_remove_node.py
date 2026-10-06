@@ -12,9 +12,9 @@ of lingering with a stale count.)
 import pytest
 from sqlmodel import select
 
-from index_v4 import NodeV4
-from index_v4.invariants import check_invariants
-from zanzibar_utils_v1 import parse_openfga_schema
+from zanzibar.graphindex import Node
+from zanzibar.graphindex.invariants import check_invariants
+from zanzibar.schema import parse_openfga_schema
 from tests.wildcard_helpers import make_wildcard_index
 
 _SCHEMA = '''
@@ -35,7 +35,7 @@ def _store():
 
 
 def _w_nodes(session):
-    return [n for n in session.exec(select(NodeV4)).all() if n.wildcard != '']
+    return [n for n in session.exec(select(Node)).all() if n.wildcard != '']
 
 
 def test_remove_node_strips_bridges_and_gcs_orphan_w_node():

@@ -12,8 +12,8 @@ ValueError, never silently stored or executed as SQL.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from setengine import SetEngine, ALL_SETOPS
-from zanzibar_utils_v1 import parse_openfga_schema, is_valid_identifier
+from zanzibar.setengine import SetEngine, ALL_SETOPS
+from zanzibar.schema import parse_openfga_schema, is_valid_identifier
 from tests.wildcard_helpers import make_wildcard_index
 
 SCHEMA = '''
@@ -33,7 +33,7 @@ VALID_NAMES = [
 INVALID_NAMES = [
     'alice#member', 'user:bob', 'a, b', 'x or y', 'p but not q', 'has space',
     'tab\tsep', 'new\nline', 'quote"d', "apos'x", 'C:\\win\\path', '日本語',
-    '😀emoji🚀', 'null\x00byte', "rob'); DROP TABLE node_v4; --", '{"json":true}',
+    '😀emoji🚀', 'null\x00byte', "rob'); DROP TABLE node; --", '{"json":true}',
     '', 'x' * 257,
 ]
 

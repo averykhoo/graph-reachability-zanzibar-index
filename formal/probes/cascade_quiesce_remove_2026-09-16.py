@@ -2,7 +2,7 @@
 
 (!) STATUS, 2026-09-17: this probe now exits **0**. The bug is closed; the cause was the
 terminal quiescence check testing a SYNTACTIC proxy for a SEMANTIC property, and
-reconcile-time node GC pulling the two apart. `index_v4/processor.py::DeltaProcessor
+reconcile-time node GC pulling the two apart. `src/zanzibar/graphindex/processor.py::DeltaProcessor
 ._run_cascade` now ends in a bounded settle-and-assert pass. Full record:
 `docs/tk73-cascade-quiesce-gc-2026-09-17.md`; model gap: `formal/CORRESPONDENCE.md` §7.1.
 
@@ -17,10 +17,10 @@ WITNESS and its ingredient controls, not as a gate.
 
 Three writes on a legal boolean schema with NO object wildcards raise
 
-    index_v4.invariants.InvariantViolation: cascade failed to quiesce after 1 strata
+    zanzibar.graphindex.invariants.InvariantViolation: cascade failed to quiesce after 1 strata
     rounds; leftover keys: [('folder', 'owner', 'x')]
 
-out of the graph index's stratified IVM delta processor (`index_v4/processor.py`), on the
+out of the graph index's stratified IVM delta processor (`src/zanzibar/graphindex/processor.py`), on the
 REMOVE. The two adds are clean; the removal is what fails to converge.
 
 HOW IT WAS FOUND, and why that matters. It was NOT found by looking for it. It fell out of
@@ -34,12 +34,12 @@ committed, two independent ways:
 
   1. the falsifying schema has `object_wildcard_shapes=frozenset()`, so
      `bridged_out_shapes` is empty and `SchemaInfo.crossable_shapes` is EMPTY -- the
-     `TK69` hop in `setengine/engine.py::SetEngine._flow_reaches` is unreachable on it;
+     `TK69` hop in `src/zanzibar/setengine/engine.py::SetEngine._flow_reaches` is unreachable on it;
   2. the minimal witness below reproduces IDENTICALLY against a pre-`TK69` copy of the
      tree (verified genuinely pre-fix: zero occurrences of `_any_entity_of_type`).
 
-Also note the failure is raised from `index_v4/`, and the `TK69` fix touched only
-`setengine/`.
+Also note the failure is raised from `src/zanzibar/graphindex/`, and the `TK69` fix touched only
+`src/zanzibar/setengine/`.
 
 -- THE MINIMAL WITNESS, and every ingredient measured ------------------------------------
 

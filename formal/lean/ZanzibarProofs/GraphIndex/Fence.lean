@@ -3,11 +3,11 @@ import ZanzibarProofs.GraphIndex.Leaf
 /-!
 # The public read fence — `GraphModel.checkPublic`
 
-**Model source: `index_v4/wildcard.py::WildcardIndex.check` (the PUBLIC entry) versus
+**Model source: `src/zanzibar/graphindex/wildcard.py::WildcardIndex.check` (the PUBLIC entry) versus
 `::WildcardIndex._check_internal` (the unfenced probe).** Since `BL-2` (2026-08-21b) the
 public entry answers `False` for every LEAF FAMILY name and delegates everything else to
 `_check_internal`; the delta processor's operand reads deliberately enter *below* that
-fence, via `_check_internal` (`index_v4/processor.py::_EvalContext.leaf_check`). The two
+fence, via `_check_internal` (`src/zanzibar/graphindex/processor.py::_EvalContext.leaf_check`). The two
 layers are pinned apart by `tests/test_reg18_leaf_name_read_leak.py` and recorded in
 `docs/spec-deviations.md`.
 

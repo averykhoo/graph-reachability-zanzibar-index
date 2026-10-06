@@ -53,10 +53,10 @@ set of stored tupleset tuples the graph is willing to look at.
 
 ## RC1 — a type that appears ONLY in the NEGATIVE arm of the tupleset relation
 
-``zanzibar_utils_v1.py::_member_types`` handles ``Exclusion`` as ``return walk(e.base)``
+``src/zanzibar/schema/boolean.py::_member_types`` handles ``Exclusion`` as ``return walk(e.base)``
 (the docstring says so out loud: *"Exclusion members come from its base only"*). The
 result is the ``parent_types`` tuple baked into ``PDerivedTTU`` / ``PDerivedTuplesetTTU``,
-and ``index_v4/processor.py::tupleset_parents`` filters stored parents with
+and ``src/zanzibar/graphindex/processor.py::tupleset_parents`` filters stored parents with
 ``n.type in parent_types``. So on ``define parent: [folder] but not [doc]`` the type
 ``doc`` never reaches ``parent_types`` and every stored ``doc``-typed parent is invisible
 to the TTU.
@@ -92,7 +92,7 @@ under a negated consumer. ``tests/test_p12_severity_sign.py``; ``docs/spec-devia
 
 ## RC2 — a stored ``T:*`` tupleset parent, when the tupleset relation is DERIVED
 
-``index_v4/processor.py::tupleset_parents`` also filters ``n.wildcard == ''``, so a stored
+``src/zanzibar/graphindex/processor.py::tupleset_parents`` also filters ``n.wildcard == ''``, so a stored
 ``(doc:*, parent, doc:d1)`` tuple — a legal ``[doc, doc:*]`` write, admitted by all three
 backends — is not a TTU parent for the derived read path. No exclusion and no object
 wildcard are needed; the tupleset relation just has to be tainted.
@@ -143,7 +143,7 @@ split is honoured there too::
 
 ## Fix locations — WHAT WAS DONE
 
-* **RC1 (fixed 2026-08-10, ``ed46e54``)** — ``zanzibar_utils_v1.py::_member_types``:
+* **RC1 (fixed 2026-08-10, ``ed46e54``)** — ``src/zanzibar/schema/boolean.py::_member_types``:
   ``if isinstance(e, Exclusion): return walk(e.base)`` now unions the subtrahend's member
   types (a subtrahend restriction is still a *storable* subject type on the public
   relation, and stored-tuple TTU semantics do not care which arm admitted it). Its
@@ -165,7 +165,7 @@ split is honoured there too::
   entity, so a later delta on some ``T:x`` would otherwise invalidate nothing and leave
   the dependent stale.
 * **RC2 genuinely needed BOTH sites** — unlike RC1, whose ``parent_types`` is shared. The
-  clause is duplicated verbatim in ``index_v4/bulk_backfill.py::_tupleset_parents``, so
+  clause is duplicated verbatim in ``src/zanzibar/graphindex/bulk_backfill.py::_tupleset_parents``, so
   the offline bulk bootstrap would otherwise have kept the divergence alive. The
   ``rc2_star_tupleset`` corpus in ``tests/test_bulk_build.py`` now pins that: reverting
   the bulk half alone takes it from ``7 passed`` to
@@ -316,7 +316,7 @@ def test_rc1_shape_is_refused_by_every_backend(name):
     `inherited` False and the negated `access` True (a fail-open) where the other three
     backends said True / False."""
     from tests.oracle import parse_schema_ast as oracle_parse
-    from zanzibar_utils_v1 import parse_schema_ast
+    from zanzibar.schema import parse_schema_ast
     schema = _RC1_REFUSED[name]
     for build in (parse_schema_ast, oracle_parse,
                   lambda s: _Gate(s, _NO_OBJECT_WILDCARDS, _RC1_POOL)):
@@ -401,12 +401,12 @@ def test_rc1_class_second_tupleset_type_dropped_would_fail_open():
 #
 # Until TK106 (2026-09-26) these pins used `parent: [doc, doc:*] and gate`, a DERIVED
 # tupleset, which is now a parse refusal. The fix site is still live:
-# `index_v4/processor.py::_stored_tupleset_subjects` / `::_expand_tupleset_parents` are
+# `src/zanzibar/graphindex/processor.py::_stored_tupleset_subjects` / `::_expand_tupleset_parents` are
 # shared with the `derived-ttu` path (untainted tupleset, derived target). So the star
 # parent now reaches them through `folder#viewer` being derived, which puts `inherited` /
 # `access` on `PDerivedTTU` with `parent_types` ('doc', 'folder'); `doc#viewer` stays plain
 # `[user]`, because a star tupleset whose OWN type's target is derived is a scope refusal
-# (`zanzibar_utils_v1.py::_reject_object_wildcard_scope`).
+# (`src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope`).
 #
 # SABOTAGE, 2026-09-26 (literal, `.scratch` probe; docs/tk106-boolean-tuplesets-2026-09-26.md
 # § 6). (A) `_stored_tupleset_subjects` returning no star types, and (B)
@@ -568,7 +568,11 @@ def test_compile_refuses_parent_types_narrower_than_admission():
 
     and restoring the arm compiled clean again.
     """
-    import zanzibar_utils_v1 as zu
+    import zanzibar.schema as zu
+    # `_member_types` is defined AND called in `zanzibar.schema.boolean` (TK120 split,
+    # 2026-10-06); the sabotage must replace it there -- assigning it on the `zu` facade
+    # would leave every caller on the real function and the refusal below would not fire.
+    import zanzibar.schema.boolean as zb
 
     # Until TK106 (2026-09-26) this was RC1's own `parent: [folder] but not [doc]`, now a
     # parse refusal. The invariant only inspects `PDerivedTTU` plan nodes
@@ -580,7 +584,7 @@ def test_compile_refuses_parent_types_narrower_than_admission():
     # control: the tree as it stands compiles, so the red below is the sabotage's doing
     zu.parse_openfga_schema(schema)
 
-    real = zu._member_types
+    real = zb._member_types
 
     def rc1_narrowed(object_type, relation, ast, seen):
         """RC1 in its essential form: the subtrahend's type never reaches parent_types."""
@@ -589,12 +593,12 @@ def test_compile_refuses_parent_types_narrower_than_admission():
             out = out - {'doc'}
         return out
 
-    zu._member_types = rc1_narrowed
+    zb._member_types = rc1_narrowed
     try:
         with pytest.raises(ValueError) as ei:
             zu.parse_openfga_schema(schema)
     finally:
-        zu._member_types = real
+        zb._member_types = real
 
     msg = str(ei.value)
     assert 'omits type(s)' in msg and "'doc'" in msg, msg

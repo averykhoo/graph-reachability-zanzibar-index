@@ -7,16 +7,16 @@ import ZanzibarProofs.Spec.Stabilize
 
 Python's compiler splits every **tainted (derived)** relation `R` into a family of
 **leaf predicates** `R.0`, `R.1`, … minted by `alloc` inside `_build_plan_tree`
-(`zanzibar_utils_v1.py::_build_plan_tree`, the only creator, called once per tainted key from
+(`src/zanzibar/schema/boolean.py::_build_plan_tree`, the only creator, called once per tainted key from
 `compile_ruleset`). `RuleSet.apply` refuses a raw write that names a
 leaf and fan-in-expands a write on the derived **public** name onto the leaf
-family via `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py::RuleSet.apply`).
+family via `replace_relation(triple, f.rewrite_relation)` (`src/zanzibar/schema/rules.py::RuleSet.apply`).
 
 The consequence the model has never carried: **edges land on the LEAF node while the
-residue stays keyed at the PUBLIC node** (`index_v4/processor.py::_store_residue`,
+residue stays keyed at the PUBLIC node** (`src/zanzibar/graphindex/processor.py::_store_residue`,
 and `_write_derived` pins the public node non-implicit because it
 "anchors the residue row"). Invariant I4 requires every `'.'`-predicate node to be a
-declared leaf family (`index_v4/invariants.py::_check_derived_invariants`).
+declared leaf family (`src/zanzibar/graphindex/invariants.py::_check_derived_invariants`).
 
 Until 2026-09-05 the conformance extractor hid the difference: projection **P6** dropped
 every Python edge row whose target predicate carries a `'.'`
@@ -57,7 +57,7 @@ now **measured wrong**, and this file carries the corrected model:
   `double_exclusion`, `nary_intersection`, `nary_union_derived4`, `nested_boolean`. The
   load-bearing half (an index-0-only routing fails most of the fragment) survives; the
   breadth claim did not.
-* **The allocation rule** (`zanzibar_utils_v1.py::_build_plan_tree`, `alloc`):
+* **The allocation rule** (`src/zanzibar/schema/boolean.py::_build_plan_tree`, `alloc`):
   pre-order, left-to-right over **persisted-leaf positions** — a `Direct` block mints
   one storage leaf; a computed reference mints one closure leaf **iff its target is
   untainted** (a derived reference consumes NO index); a TTU arm mints one closure leaf
@@ -68,7 +68,7 @@ now **measured wrong**, and this file carries the corrected model:
   is derived.
 * **A raw write FANS OUT.** `RuleSet.apply` expands a public-name write onto **every**
   storage leaf whose `RewriteFilter` admits the subject, deduped
-  (`zanzibar_utils_v1.py::RuleSet.apply`, the fan-in expansion). Measured:
+  (`src/zanzibar/schema/rules.py::RuleSet.apply`, the fan-in expansion). Measured:
   `approver: [user] or ([user, employee] but not banned)` routes `user:alice` to BOTH
   `approver.0` and `approver.1`, and `employee:bob` to `approver.1` alone. So the
   faithful routing is `rawWriteRels : … → List String`, not a single relation —
@@ -102,7 +102,7 @@ defects, both structural:
   fixture**, `tests/fga_schemas/userset_over_derived.fga::doc#editor` — it is not a
   constructed-only shape.
 
-`rawWriteRels` was checked against `zanzibar_utils_v1.py::RuleSet.apply`'s real seed set
+`rawWriteRels` was checked against `src/zanzibar/schema/rules.py::RuleSet.apply`'s real seed set
 on **744/744** subject × derived-key comparisons, with three positive controls reddening
 it (4, 1 and 4 mismatches), so that instrument is not vacuous.
 
@@ -171,7 +171,7 @@ side by
 > **Leaf predicates must NOT enter `S.defs`.**
 
 `Core/Schema.lean`'s `relNameOK` already forbids `'.'` in a *declared* relation name —
-mirroring Python's own reservation (`zanzibar_utils_v1.py::_validate_ast_references`)
+mirroring Python's own reservation (`src/zanzibar/schema/parser.py::_validate_ast_references`)
 — so a leaf node is **provably** distinct from every
 bare R-node for free. `leafPred_ne_relName` below is that lemma and it is the linchpin the
 whole leg rests on; no new sentinel axiom alongside `STAR`/`BARE` is needed. If leaf names
@@ -191,13 +191,13 @@ namespace Zanzibar
 /-! ## Leaf predicate names -/
 
 /-- The leaf predicate of family index `i` under public relation `R` — Python's
-    `f'{relation}.{counter[0]}'` (`zanzibar_utils_v1.py::_build_plan_tree`). -/
+    `f'{relation}.{counter[0]}'` (`src/zanzibar/schema/boolean.py::_build_plan_tree`). -/
 def leafPred (R : String) (i : Nat) : String := R ++ "." ++ toString i
 
 /-- Is a node predicate a leaf-family predicate? Leaf names are the only dot-carrying
     predicates that can reach an object node (`'.'` is reserved in declared relation names
     by `relNameOK`), so dot-carrying is the whole test — the mirror of Python's I4 scan
-    (`index_v4/invariants.py::_check_derived_invariants`).
+    (`src/zanzibar/graphindex/invariants.py::_check_derived_invariants`).
 
     ⚠ **Deliberately WIDER than I4 in exactly one place**, recorded as a theorem rather
     than a comment: see `isLeafPred_bare`.
@@ -208,7 +208,7 @@ def leafPred (R : String) (i : Nat) : String := R ++ "." ++ toString i
 def isLeafPred (p : String) : Bool := p.toList.contains '.'
 
 /-- ⚠ **The one point where `isLeafPred` is wider than Python's I4 test.** I4 carries an
-    `and n.predicate != '...'` guard (`index_v4/invariants.py::_check_derived_invariants`) because it scans
+    `and n.predicate != '...'` guard (`src/zanzibar/graphindex/invariants.py::_check_derived_invariants`) because it scans
     *subject* nodes too, and the bare-subject sentinel `BARE = "..."` is dot-carrying.
     This predicate omits the guard, so it must only ever be applied to **object**-node
     predicates, which carry relation names.
@@ -292,7 +292,7 @@ theorem leafNode_ne_objNode {R' : String} (h : relNameOK R') (o o' : ObjectRef)
 /-! ## The leaf-family allocation — Python's `_build_plan_tree`, measured
 
 The index a leaf gets is its **position in the allocation order** of the derived def's
-expression (`zanzibar_utils_v1.py::_build_plan_tree`, whose `alloc()` is the only
+expression (`src/zanzibar/schema/boolean.py::_build_plan_tree`, whose `alloc()` is the only
 minting site). The first cut of this model (2026-08-15) read that order off the AST
 pre-order, one entry per `Direct` block / computed reference / pure TTU arm. **That was
 measured WRONG on 2026-08-16** and this section carries the corrected model; the
@@ -339,7 +339,7 @@ So on the domain of schemas Python compiles, `derivedAnywhere` **is** the
 `parent_types` test for this purpose. -/
 
 /-- One persisted (index-consuming) leaf position of a derived def's plan tree.
-    Python: the `alloc()` calls in `zanzibar_utils_v1.py::_build_plan_tree` —
+    Python: the `alloc()` calls in `src/zanzibar/schema/boolean.py::_build_plan_tree` —
     `storage` is a merged `Direct`-restriction block (`LeafSpec.storage=True`),
     `closure` the merged pure non-Direct remainder of one pure subtree, and `userset`
     one tainted userset restriction's own storage leaf (`PDerivedUserset`).
@@ -364,7 +364,7 @@ def derivedAnywhere (S : Schema) (R : String) : Bool :=
 def isTaintedUserset (S : Schema) (r : Restriction) : Bool :=
   (r.2.1 != BARE) && isDerived S (r.1, r.2.1)
 
-/-- **Purity** — `zanzibar_utils_v1.py::_is_pure`: no boolean operator and no
+/-- **Purity** — `src/zanzibar/schema/boolean.py::_is_pure`: no boolean operator and no
     derived-relation reference anywhere in the subtree, so it can become ONE closure
     leaf. `inter`/`excl` are never pure (Python returns `False` for both). -/
 def isPure (S : Schema) (ty : String) : Expr → Bool
@@ -375,7 +375,7 @@ def isPure (S : Schema) (ty : String) : Expr → Bool
   | .inter _ _  => false
   | .excl _ _   => false
 
-/-- **The pure-subtree flattening** — `zanzibar_utils_v1.py::_split_pure`. A pure
+/-- **The pure-subtree flattening** — `src/zanzibar/schema/::_split_pure`. A pure
     subtree is a union of `{Direct, Computed, TTU}`, so splitting it into "all the
     restrictions" and "all the other members" is lossless. -/
 def splitPure : Expr → List Restriction × List Expr
@@ -418,7 +418,7 @@ mutual
 
 /-- **The allocation.** The list of persisted-leaf positions of `e` compiled under
     object type `ty`; a leaf's family index IS its position in this list. Mirrors
-    `zanzibar_utils_v1.py::_build_plan_tree`'s `build` per the measured rules in the
+    `src/zanzibar/schema/boolean.py::_build_plan_tree`'s `build` per the measured rules in the
     section header.
 
     WARNING: the impure `union` arm goes through `unionSpineLeaves`, NOT through
@@ -458,7 +458,7 @@ The (α) fork decision (scope doc §11.5, PROOF_STATUS 2026-08-14 §1) moves the
 row to the leaf node, so `affectedKeys`' own-key branch must recover the PUBLIC relation
 from a leaf predicate. Python carries the public name in the compiled `LeafFamily` table
 and parses the `.i` suffix only to record the index
-(`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`); the model's analogue is
+(`src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys`); the model's analogue is
 `S.keys` + `isDerived`, exactly as §11.5 records.
 
 **INDEX-AGNOSTIC by construction**: `leafPublic` takes everything before the FIRST
@@ -686,7 +686,7 @@ theorem bare_subjNode_not_leafNode {S : Schema} {u : SubjectRef}
 
 Faithful shape per the 2026-08-15 measurement (module header): a raw write on a
 **derived** public relation is fan-in-expanded onto EVERY storage leaf whose
-restrictions admit the subject (`zanzibar_utils_v1.py::RuleSet.apply`, matching via the
+restrictions admit the subject (`src/zanzibar/schema/rules.py::RuleSet.apply`, matching via the
 compiled `RewriteFilter`s — modeled by `restrictionMatches`, the same test
 `StoreValidRules` uses); a raw write on an untainted key is not rewritten at all and
 keeps landing on its bare R-node exactly as today. -/
@@ -700,7 +700,7 @@ keeps landing on its bare R-node exactly as today. -/
     unreachable for a derived key (derived ⇒ declared, `taintedKeys_subset_keys`) and
     is a fail-closed backstop.
 
-    **Validated against `zanzibar_utils_v1.py::RuleSet.apply`'s real seed set**
+    **Validated against `src/zanzibar/schema/rules.py::RuleSet.apply`'s real seed set**
     (2026-08-16): 744 subject × derived-key comparisons over every corpus and `.fga`
     fixture, **0 mismatches**, with three positive controls each reddening it (drop the
     userset leaves → 4; drop the pure-subtree merge → 1; allocate storage last → 4). -/
@@ -771,7 +771,7 @@ theorem publicOfLeaf_rawWriteRels {S : Schema} (hWF : WF S) {t : Tuple} {r : Str
 Scope doc §4 prescribed forking `GraphState.writeDirect` itself. **It is cheaper than
 that, and more faithful.** Python does not fork its write path at all: `RuleSet.apply`
 re-addresses the **tuples** — `replace_relation(triple, f.rewrite_relation)`
-(`zanzibar_utils_v1.py::RuleSet.apply`) — and then the ordinary
+(`src/zanzibar/schema/rules.py::RuleSet.apply`) — and then the ordinary
 `add_tuple`/`_add_edge_locked` path runs unchanged, once per expanded triple. Modelling
 the fork the same way (`rawWriteTuples` below, then a fold of today's `writeDirect`)
 means `GraphState.writeDirect` is **byte-identical**, and the `∀ (ts : List Tuple)`
@@ -788,7 +788,7 @@ this section is only the addressing half. -/
 
 /-- **The raw write, fan-in-expanded onto its leaf family.** Python's
     `replace_relation(triple, f.rewrite_relation)` over every matching storage filter
-    (`zanzibar_utils_v1.py::RuleSet.apply`). On an untainted relation there is no
+    (`src/zanzibar/schema/rules.py::RuleSet.apply`). On an untainted relation there is no
     family and this is `[t]`. -/
 def rawWriteTuples (S : Schema) (t : Tuple) : List Tuple :=
   (rawWriteRels S t).map fun r => { t with relation := r }

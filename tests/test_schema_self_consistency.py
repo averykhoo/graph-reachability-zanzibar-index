@@ -1,7 +1,7 @@
 """ASK-1 (user decision, 2026-09-26): a schema must be SELF-CONSISTENT.
 
 Both parsers refuse a dangling reference and a cycle of schema references:
-`zanzibar_utils_v1.py::_validate_ast_consistency` (both front ends) and its independent
+`src/zanzibar/schema/parser.py::_validate_ast_consistency` (both front ends) and its independent
 twin `tests/oracle.py::_validate_consistency`. These are the `GraphAdmission` fields
 `matchDecl` and `ranked`, which were SILENT until this change. The Lean-side tie (every
 input Lean says fails either field is refused by both parsers) is
@@ -17,7 +17,7 @@ import json
 import pytest
 
 from tests import oracle
-from zanzibar_utils_v1 import parse_openfga_json, parse_schema_ast
+from zanzibar.schema import parse_openfga_json, parse_schema_ast
 
 #: label -> (schema, substring of the PRODUCTION message). The oracle's messages differ
 #: on purpose (independence contract); only that it refuses is asserted for it.
@@ -178,7 +178,7 @@ def test_oracle_parser_refuses(label):
 def test_unchecked_parses_accept_what_the_refusal_rejects(label):
     """Control: the refusal is the ONLY thing rejecting these, so the rows above test it
     and not some other parse error."""
-    from zanzibar_utils_v1 import _parse_schema_ast_unchecked
+    from zanzibar.schema import _parse_schema_ast_unchecked
     _parse_schema_ast_unchecked(REFUSED[label][0])
     oracle.parse_schema_ast_unchecked(REFUSED[label][0])
 

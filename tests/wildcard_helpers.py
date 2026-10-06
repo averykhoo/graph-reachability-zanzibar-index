@@ -2,7 +2,7 @@
 Test helpers for the wildcard façade: an invariant checker (spec §8.3) and a
 row-multiset snapshot for the GC parity test (§7.3 / §8.2).
 
-The checker logic itself moved to ``index_v4.invariants`` (boolean spec P1) so that
+The checker logic itself moved to ``zanzibar.graphindex.invariants`` (boolean spec P1) so that
 paranoia mode can run it pre/post-commit in production wiring; these helpers keep the
 original test-facing API and semantics.
 """
@@ -12,9 +12,9 @@ from contextlib import contextmanager
 
 from sqlmodel import Session, create_engine, SQLModel
 
-from index_v4 import ReachabilityIndex, Store, WildcardIndex
-from index_v4.invariants import check_invariants, install_paranoia, snapshot_rows
-from zanzibar_utils_v1 import SchemaInfo
+from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
+from zanzibar.graphindex.invariants import check_invariants, install_paranoia, snapshot_rows
+from zanzibar.schema import SchemaInfo
 
 
 def make_wildcard_index(schema_info: SchemaInfo, store_id: str = 'test', *,
@@ -45,7 +45,7 @@ def make_wildcard_index(schema_info: SchemaInfo, store_id: str = 'test', *,
 
 
 # ---------------------------------------------------------------------------
-# Invariant checker (§8.3) -- now backed by index_v4.invariants
+# Invariant checker (§8.3) -- now backed by zanzibar.graphindex.invariants
 # ---------------------------------------------------------------------------
 
 def assert_wildcard_invariants(widx: WildcardIndex) -> None:
@@ -72,7 +72,7 @@ class MiddleSyncRecord:
 
     ⚠ **A RAW count is not reach.** ``WildcardIndex._sync_entity_middles`` is called
     UNCONDITIONALLY -- from ``::remove_edge`` (both endpoints), from ``::remove_node``,
-    and from ``index_v4/processor.py`` -- and returns at a guard when the schema has no
+    and from ``src/zanzibar/graphindex/processor.py`` -- and returns at a guard when the schema has no
     crossable shape of that entity's type, so a corpus with an empty
     ``SchemaInfo.crossable_shapes`` still books hundreds of calls that do nothing. The
     census measured **7408 raw vs 257 effective** across seven modules
@@ -100,7 +100,7 @@ def record_middle_syncs(widx: WildcardIndex):
     """Record ``_sync_entity_middles`` calls on ``widx`` for the duration (TK77).
 
     Patches the INSTANCE attribute, so ``self.widx._sync_entity_middles(...)`` from
-    ``index_v4/processor.py`` is recorded too; restored on exit.
+    ``src/zanzibar/graphindex/processor.py`` is recorded too; restored on exit.
     """
     rec = MiddleSyncRecord(widx.schema_info)
     original = widx._sync_entity_middles

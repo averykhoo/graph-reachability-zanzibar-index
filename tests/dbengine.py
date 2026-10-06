@@ -36,9 +36,9 @@ from sqlmodel import SQLModel, create_engine
 
 # Import for the side effect of registering every table on SQLModel.metadata --
 # ``create_all`` below must create all nine, whoever imports this helper first.
-import connectedstore.models  # noqa: F401
-import index_v4.models        # noqa: F401
-import setengine.models       # noqa: F401
+import zanzibar.connectedstore.models  # noqa: F401
+import zanzibar.graphindex.models        # noqa: F401
+import zanzibar.setengine.models       # noqa: F401
 
 #: Point this at a real server (e.g.
 #: ``postgresql+psycopg2://postgres@127.0.0.1:55432/zanzibar_test``) to re-run the

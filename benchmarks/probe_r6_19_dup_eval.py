@@ -28,9 +28,9 @@ sys.path.insert(0, '.')
 from sqlmodel import Session, SQLModel, create_engine  # noqa: E402
 
 from benchmarks.scale_bench import WORKLOADS  # noqa: E402
-from connectedstore import build_index  # noqa: E402
-from connectedstore import save_schema  # noqa: E402
-from setengine.models import TupleV1  # noqa: E402
+from zanzibar.connectedstore import build_index  # noqa: E402
+from zanzibar.connectedstore import save_schema  # noqa: E402
+from zanzibar.setengine.models import RelationTuple  # noqa: E402
 
 CALLS = Counter()            # (plan_id, key) -> times evaluated
 ANSWERS = defaultdict(set)   # (plan_id, key) -> set of answers seen
@@ -106,7 +106,7 @@ def main(workload='demorgans', scale=40):
         if t in seen:
             continue
         seen.add(t)
-        rows.append(TupleV1(store_id=f'{workload}_src', subject_predicate=t[0],
+        rows.append(RelationTuple(store_id=f'{workload}_src', subject_predicate=t[0],
                             subject_type=t[1], subject_name=t[2], relation=t[3],
                             object_type=t[4], object_name=t[5]))
     session.add_all(rows)
@@ -115,7 +115,7 @@ def main(workload='demorgans', scale=40):
 
     # Instrument every compiled plan as the backfill object is constructed --
     # that is the only place the CompiledBooleans artifact is reachable.
-    import index_v4.bulk_backfill as bb
+    import zanzibar.graphindex.bulk_backfill as bb
     orig_init = bb._BulkBackfill.__init__
 
     orig_rec = bb._BulkBackfill._reconcile

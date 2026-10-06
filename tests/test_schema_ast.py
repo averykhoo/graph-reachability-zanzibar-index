@@ -6,7 +6,7 @@ the retired `test_integration_demorgans` xfail (spec §7.4a).
 
 import pytest
 
-from zanzibar_utils_v1 import (
+from zanzibar.schema import (
     Direct,
     Restriction,
     Computed,
@@ -204,7 +204,7 @@ def test_demorgans_law_1_pre_tk106_is_refused_but_still_parses_unchecked():
     """The checked parse REFUSES the old chain (TK106); the UNCHECKED parse, which the
     reports and the conformance encoder read, still returns its AST unchanged."""
     from tests import oracle
-    from zanzibar_utils_v1 import _parse_schema_ast_unchecked
+    from zanzibar.schema import _parse_schema_ast_unchecked
     with pytest.raises(ValueError, match='tupleset must be direct'):
         parse_schema_ast(_DEMORGANS_LAW_1_PRE_TK106)
     with pytest.raises(ValueError, match='tupleset must be direct'):

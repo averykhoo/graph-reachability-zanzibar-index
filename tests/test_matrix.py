@@ -19,13 +19,13 @@ from types import EllipsisType
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
-from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
+from zanzibar.schema import parse_openfga_schema, Entity, RelationalTriple
 from tests.oracle import Oracle, OracleTuple
 from tests.wildcard_helpers import (make_wildcard_index, assert_wildcard_invariants,
                                     record_middle_syncs)
-from setengine import SetEngine, PySets, RoaringSets, ALL_SETOPS
+from zanzibar.setengine import SetEngine, PySets, RoaringSets, ALL_SETOPS
 from tests.test_wildcard_property import (_candidate_raw_tuples, _query_grid,
                                           OBJECT_WC, CROSSABLE_WC,
                                           _crossable_raw_tuples,
@@ -147,7 +147,7 @@ class ConnectedBackend:
     name = 'connected'
 
     def __init__(self, schema, object_wc=frozenset()):
-        from connectedstore import ConnectedStore
+        from zanzibar.connectedstore import ConnectedStore
         self.session = _fresh_session()
         self.cs = ConnectedStore(self.session, 'cx', schema=schema,
                                  object_wildcard_shapes=object_wc)
@@ -458,7 +458,7 @@ def _from_chain_userset_subjects(schema_text, names):
     TTU from-chain shape in the schema (lookup-gate X4a): a stored tupleset parent
     ``p`` makes ``p#target_rel`` itself a member of the TTU relation, so these
     subjects exercise the derived-TTU from-chain rule the old grids never queried."""
-    from zanzibar_utils_v1 import parse_schema_ast, TTU, Union, Intersection, Exclusion, _iter_directs
+    from zanzibar.schema import parse_schema_ast, TTU, Union, Intersection, Exclusion, _iter_directs
     ast = parse_schema_ast(schema_text)
     subs = []
 
@@ -487,13 +487,13 @@ def _from_chain_userset_subjects(schema_text, names):
 
 def _demorgan_pool(schema_text):
     """All schema-valid raw tuples over a tiny universe, derived from the AST directions."""
-    from zanzibar_utils_v1 import parse_schema_ast, Direct
+    from zanzibar.schema import parse_schema_ast, Direct
     ast = parse_schema_ast(schema_text)
     names = {'user': ['a', 'b'], 'role': ['r1'], 'cond': ['c1'], 'attr': ['at1'],
              'doc': ['dc1'], 'group': ['g1']}
     out = []
     for (otype, rel), expr in ast.items():
-        from zanzibar_utils_v1 import _iter_directs
+        from zanzibar.schema import _iter_directs
         for direct in _iter_directs(expr):
             for r in direct.restrictions:
                 onames = names.get(otype, ['o1'])
@@ -520,7 +520,7 @@ def test_demorgan_oracle_equals_setengine_equals_graph(load_fga_schema, fixture,
     tuple sets."""
     schema = load_fga_schema(fixture)
     pool = _demorgan_pool(schema)
-    from zanzibar_utils_v1 import parse_schema_ast
+    from zanzibar.schema import parse_schema_ast
     ast = parse_schema_ast(schema)
     rels = sorted({(ot, rel) for (ot, rel) in ast})
 

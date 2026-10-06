@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from zanzibar_utils_v1 import parse_openfga_schema, UnsupportedByGraphIndex
+from zanzibar.schema import parse_openfga_schema, UnsupportedByGraphIndex
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots" / "compiled_ruleset"
 FGA_DIR = Path(__file__).parent / "fga_schemas"

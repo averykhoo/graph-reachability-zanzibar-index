@@ -26,7 +26,7 @@ This file pins two things:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from setengine import SetEngine, ALL_SETOPS
+from zanzibar.setengine import SetEngine, ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from tests.test_matrix import GraphBackend
 from tests.test_hypothesis import build, _state

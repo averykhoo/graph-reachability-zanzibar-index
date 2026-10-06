@@ -99,13 +99,13 @@ from __future__ import annotations
 
 import pytest
 
-from setengine import SetEngine
-from setengine.setops import ALL_SETOPS
+from zanzibar.setengine import SetEngine
+from zanzibar.setengine.setops import ALL_SETOPS
 from sqlmodel import Session, SQLModel, create_engine
 
 from tests.oracle import Oracle, OIntersection, OUnion, parse_schema_ast
 
-from zanzibar_utils_v1 import (
+from zanzibar.schema import (
     Intersection, Union, parse_openfga_schema,
     parse_schema_ast as prod_parse_schema_ast)
 
@@ -179,7 +179,7 @@ def test_nary_corpus_encoding(name):
     assert max(arities.values()) >= 3, (
         f"[{name}] no >= 3-arm operator in the oracle AST: {arities}")
 
-    # 2. The PRODUCTION parser (zanzibar_utils_v1) agrees on the arities — the
+    # 2. The PRODUCTION parser (zanzibar.schema) agrees on the arities — the
     #    two independent parsers must both really be reading `a or b or c`.
     prod = parse_openfga_schema(schema_text)
     prod_ast = prod_parse_schema_ast(schema_text)
@@ -304,7 +304,7 @@ def test_nary_union_derived4_arms_load_bearing():
 # **73** as of 2026-07-29 — 33 curated + 40 generated, NOT re-walked here):
 #   closure 211 · derived-computed 42 · derived-ttu 50 · derived-userset 0
 #   · derived-tupleset-ttu 0
-# `derived-userset` (`zanzibar_utils_v1.py::PDerivedUserset`) was compiled by NO
+# `derived-userset` (`src/zanzibar/schema/boolean.py::PDerivedUserset`) was compiled by NO
 # corpus, in exactly the plan-leaf area where the X4 adjudication found five real
 # divergences. `corpus.py::TTU_USERSET_SCHEMAS['derived_userset']` closes it.
 #
@@ -321,7 +321,7 @@ def test_nary_union_derived4_arms_load_bearing():
 #
 # The tuple is checked against the compiler below (`test_required_leaf_kinds_are_
 # exactly_the_compilers_kinds`) so a NEW plan-leaf kind cannot be added to
-# `zanzibar_utils_v1` and silently stay uncovered.
+# `zanzibar.schema` and silently stay uncovered.
 #
 # ⚠ 2026-09-26 (`TK106`, user decision: refuse boolean tuplesets, as OpenFGA does):
 # `derived-tupleset-ttu` became UNREACHABLE from every checked parse, and its carrier moved
@@ -337,7 +337,7 @@ _REQUIRED_LEAF_KINDS = ("closure", "derived-computed", "derived-ttu",
                         "derived-userset")
 
 #: The fixed fragment both parsers' refusal messages contain
-#: (`zanzibar_utils_v1.py::_validate_tuplesets_direct`,
+#: (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`,
 #: `tests/oracle.py::_validate_tuplesets_direct`).
 _TUPLESET_REFUSAL = "tupleset must be direct"
 
@@ -348,9 +348,9 @@ def _checked_refusals(schema_text: str, ow=()) -> dict[str, str]:
     refusal cannot pass for this one."""
     out: dict[str, str] = {}
     for name, parse in (
-            ("zanzibar_utils_v1.parse_schema_ast", prod_parse_schema_ast),
+            ("zanzibar.schema.parse_schema_ast", prod_parse_schema_ast),
             ("tests.oracle.parse_schema_ast", parse_schema_ast),
-            ("zanzibar_utils_v1.parse_openfga_schema",
+            ("zanzibar.schema.parse_openfga_schema",
              lambda s: parse_openfga_schema(s, frozenset(ow)))):
         try:
             parse(schema_text)
@@ -403,7 +403,7 @@ def test_every_plan_leaf_kind_is_reached_by_some_corpus():
 
 
 def test_required_leaf_kinds_are_exactly_the_compilers_kinds():
-    """`_REQUIRED_LEAF_KINDS` names EVERY kind `zanzibar_utils_v1._plan_leaves`
+    """`_REQUIRED_LEAF_KINDS` names EVERY kind `zanzibar.schema._plan_leaves`
     can emit — so adding a new plan-leaf kind to the compiler cannot leave the
     coverage floor quietly one kind short.
 
@@ -416,13 +416,13 @@ def test_required_leaf_kinds_are_exactly_the_compilers_kinds():
     import inspect
     import re
 
-    import zanzibar_utils_v1
+    import zanzibar.schema
 
-    src = inspect.getsource(zanzibar_utils_v1._plan_leaves)
+    src = inspect.getsource(zanzibar.schema._plan_leaves)
     emitted = set(re.findall(r"LeafSpec\([^,]+,\s*'([a-z][a-z-]*)'", src))
     assert emitted, (
         "ANTI-VACUITY: no `LeafSpec(..., '<kind>')` literal found in "
-        "`zanzibar_utils_v1._plan_leaves` — the regex has rotted and this "
+        "`zanzibar.schema._plan_leaves` — the regex has rotted and this "
         "comparison would be against an empty set")
     assert emitted == set(_REQUIRED_LEAF_KINDS), (
         f"the plan-leaf coverage floor and the compiler disagree about which "
@@ -479,7 +479,7 @@ def test_required_leaf_kinds_are_exactly_the_compilers_kinds():
 #
 # ⚠ 2026-09-26 (`TK106`): the `derived_tupleset_ttu` half of this section is SUPERSEDED.
 # The user decided boolean tuplesets are refused, as OpenFGA refuses them, so the shape
-# is rejected at parse time by both parsers (`zanzibar_utils_v1.py::
+# is rejected at parse time by both parsers (`src/zanzibar/schema/::
 # _validate_tuplesets_direct`, `tests/oracle.py::_validate_tuplesets_direct`) and the
 # corpus moved to `corpus.py::REFUSED_TUPLESET_SCHEMAS`. The "graph index ADMITS both
 # shapes" sentence above is now true of `wildcard_userset` only. What this section pins
@@ -524,7 +524,7 @@ def test_harness_wide_wildcard_userset_floor():
     the userset ones specifically, because the bare ones would otherwise keep this
     assertion green while the feature stayed at zero — which is exactly the state
     the harness was in until 2026-07-28."""
-    from zanzibar_utils_v1 import wildcard_userset_restriction_shapes
+    from zanzibar.schema import wildcard_userset_restriction_shapes
 
     shapes: dict[str, set] = {}
     for label, schema_text, _tuples, _ow in _all_corpora():
@@ -545,7 +545,7 @@ def test_wildcard_userset_corpus_features():
     load-bearing — including the ghost-group userset (probe-2 parity) and the
     exclusion applied to star-derived membership."""
     from formal.conformance.corpus import TTU_USERSET_SCHEMAS
-    from zanzibar_utils_v1 import (
+    from zanzibar.schema import (
         derive_schema_info, wildcard_userset_restriction_shapes)
 
     schema_text, tuples, _ow = TTU_USERSET_SCHEMAS[_WILDCARD_USERSET]
@@ -614,7 +614,7 @@ def test_derived_tupleset_ttu_carrier_is_refused_by_every_parser_and_the_graph_c
     (`corpus.py::REFUSED_TUPLESET_SCHEMAS['derived_tupleset_ttu']`) is refused by every
     checked entry point with the TK106 message, it is kept out of every conformance
     family, and the GRAPH COMPILER refuses it too when handed the unchecked AST
-    (`zanzibar_utils_v1.py::_validate_ttu_tuplesets`, `UnsupportedByGraphIndex`). That last
+    (`src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets`, `UnsupportedByGraphIndex`). That last
     refusal is what makes the deleted code unreachable from any input rather than only
     from a checked parse: without it, an unchecked AST would compile a tainted tupleset as
     an ordinary `PDerivedTTU` over a tupleset whose stored tuples sit on leaf families
@@ -628,7 +628,7 @@ def test_derived_tupleset_ttu_carrier_is_refused_by_every_parser_and_the_graph_c
     """
     from formal.conformance.corpus import (
         REFUSED_TUPLESET_SCHEMAS, SELF_REFERENTIAL_SCHEMAS, TTU_USERSET_SCHEMAS)
-    from zanzibar_utils_v1 import (
+    from zanzibar.schema import (
         UnsupportedByGraphIndex, _parse_schema_ast_unchecked, compile_ruleset,
         compute_taint, derive_schema_info)
 
@@ -970,7 +970,7 @@ def test_schemas_carries_a_derived_userset_subject():
       (b) some such subject object appears as the OBJECT of no stored tuple, so it is
           interned during the bulk LOAD purely because it is a stored subject and has
           no positive-leaf state. That is the only shape under which the leading `rel`
-          term of `index_v4/bulk_backfill.py::_BulkBackfill._live_keys_of` enumerates a
+          term of `src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._live_keys_of` enumerates a
           name nothing else does (`TK92`, `tests/test_reg_tk92_bulk_rel_term.py`).
 
     Claim (b) is the load-bearing half. Without it the corpus RUNS the line and learns

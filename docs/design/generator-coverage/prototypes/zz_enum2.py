@@ -4,7 +4,7 @@ import sys, time, itertools, collections, json
 sys.path.insert(0, r'C:\Users\user\AppData\Local\Temp')
 sys.path.insert(0, r'C:\Users\user\PycharmProjects\graph-reachability-zanzibar-index')
 import zz_cells as C, zz_gen2 as G
-from zanzibar_utils_v1 import (Computed, Direct, Exclusion, Intersection, Restriction,
+from zanzibar.schema import (Computed, Direct, Exclusion, Intersection, Restriction,
                                TTU, Union, unparse_schema_ast)
 
 A=C.alphabet(); ALLP={frozenset(p) for p in itertools.combinations(sorted(A),2)}

@@ -6,7 +6,7 @@ sys.path.insert(0, r'C:\Users\user\PycharmProjects\graph-reachability-zanzibar-i
 import zz_cells as C, zz_gen2 as G
 from zz_enum2 import witness
 from zz_diff import Diff
-from zanzibar_utils_v1 import unparse_schema_ast
+from zanzibar.schema import unparse_schema_ast
 A=C.alphabet(); ALLP={frozenset(p) for p in itertools.combinations(sorted(A),2)}
 SW=G.SWARM_SWITCHES
 K=int(sys.argv[1]) if len(sys.argv)>1 else 2

@@ -139,12 +139,12 @@ WCHECK = "        if (o_type, relation) in self.schema_info.leaf_families:\n    
 
 def test_B_python_body_edit_moves_the_pin(monkeypatch, tmp_path, cache):
     """The BL-2 fence tests the wrong family set -- one token, same signature."""
-    _patch_file(monkeypatch, tmp_path, "index_v4/wildcard.py",
+    _patch_file(monkeypatch, tmp_path, "src/zanzibar/graphindex/wildcard.py",
                 lambda t: _sub(t, WCHECK, WCHECK.replace("leaf_families",
                                                          "derived_families")))
     bad = claim_rot.check_content_pin(DOC_TEXT, claim_rot.read_pin(), cache)
     assert len(bad) == 1 and bad[0].startswith(
-        "index_v4/wildcard.py::WildcardIndex.check: BODY CHANGED"), bad
+        "src/zanzibar/graphindex/wildcard.py::WildcardIndex.check: BODY CHANGED"), bad
 
 
 def test_B_comment_and_docstring_edits_do_not_move_the_pin(monkeypatch, tmp_path, cache):
@@ -157,7 +157,7 @@ def test_B_comment_and_docstring_edits_do_not_move_the_pin(monkeypatch, tmp_path
     assert claim_rot.check_content_pin(DOC_TEXT, claim_rot.read_pin(), cache) == []
 
     monkeypatch.undo()
-    _patch_file(monkeypatch, tmp_path, "index_v4/wildcard.py",
+    _patch_file(monkeypatch, tmp_path, "src/zanzibar/graphindex/wildcard.py",
                 lambda t: _sub(t, '"""Public read entry: the BL-2 leaf-name fence',
                                '"""Public read entry (reworded): the BL-2 leaf-name fence')
                 .replace(WCHECK, "        # a comment\n" + WCHECK, 1))
@@ -191,13 +191,13 @@ EDGE_DERIVED = "    derived: bool = Field(default=False)\n"
 
 def test_B_class_is_pinned_at_its_shell(monkeypatch, tmp_path, cache):
     """A class-level FIELD change moves the class pin; a new method does not."""
-    _patch_file(monkeypatch, tmp_path, "index_v4/models.py",
+    _patch_file(monkeypatch, tmp_path, "src/zanzibar/graphindex/models.py",
                 lambda t: _sub(t, EDGE_DERIVED, EDGE_DERIVED.replace("False", "True")))
     bad = claim_rot.check_content_pin(DOC_TEXT, claim_rot.read_pin(), cache)
-    assert len(bad) == 1 and bad[0].startswith("index_v4/models.py::EdgeV4: BODY CHANGED"), bad
+    assert len(bad) == 1 and bad[0].startswith("src/zanzibar/graphindex/models.py::Edge: BODY CHANGED"), bad
 
     monkeypatch.undo()
-    _patch_file(monkeypatch, tmp_path, "index_v4/models.py",
+    _patch_file(monkeypatch, tmp_path, "src/zanzibar/graphindex/models.py",
                 lambda t: _sub(t, EDGE_DERIVED, EDGE_DERIVED
                                + "\n    def a_new_helper(self) -> int:\n        return 1\n"))
     assert claim_rot.check_content_pin(DOC_TEXT, claim_rot.read_pin(), cache) == []

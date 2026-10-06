@@ -135,7 +135,7 @@ project. The seeded-corruption tests prove each invariant class actually fires.
 * **Multi-writer admission is serialized, but concurrency coverage stays
   SQLite-shaped.** Multiple `TupleSource`/`ConnectedStore` writer instances on one
   store are now correct by construction: each write runs a per-store critical
-  section (`_lock_source`, a `FOR UPDATE` lock on the `SchemaV4` row → catch the
+  section (`_lock_source`, a `FOR UPDATE` lock on the `SchemaRecord` row → catch the
   evaluator up → validate → append, one transaction), so duplicate / remove-existence
   / cycle-parity admission validates against caught-up committed state, and the
   in-section append makes log ids commit in order per store (closing the out-of-order
@@ -166,8 +166,8 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   `TupleSource`/`ConnectedStore` refuse anything else at construction
   (`UnsafeIsolationLevel`). All access is otherwise flavour-agnostic through
   SQLModel/SQLAlchemy; the entire dialect-specific surface is three places —
-  `index_v4/core.py::is_sqlite`, `index_v4/core.py::take_row_write_lock`, and
-  `connectedstore/source.py::assert_read_isolation` — and new branching belongs there
+  `src/zanzibar/graphindex/core.py::is_sqlite`, `src/zanzibar/graphindex/core.py::take_row_write_lock`, and
+  `src/zanzibar/connectedstore/source.py::assert_read_isolation` — and new branching belongs there
   rather than spread across call sites.
 
 ## 5. How to extend without breaking the argument

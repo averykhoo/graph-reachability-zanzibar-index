@@ -1,7 +1,7 @@
 """
 Multi-instance set-engine support: several TupleSource / ConnectedStore instances
 (one Session each) share ONE store in ONE database; each instance's set engine is
-in-memory-local, kept coherent via the TupleLogV1 log.
+in-memory-local, kept coherent via the TupleLog log.
 
 The honest local simulation of "read replicas over a shared primary" is file-backed
 SQLite in WAL mode (snapshot-isolated readers that never block the writer) -- the
@@ -34,9 +34,9 @@ import pytest
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import (ConnectedStore, StaleRead, TupleSource,
+from zanzibar.connectedstore import (ConnectedStore, StaleRead, TupleSource,
                             log_rows, log_watermark)
-from setengine import SetEngine, TupleV1
+from zanzibar.setengine import SetEngine, RelationTuple
 from tests.dbengine import rdbms_dsn, shared_engine
 from tests.oracle import Oracle, OracleTuple
 
@@ -270,8 +270,8 @@ def test_cross_instance_remove_unseen(tmp_path):
         sa.rollback()
         remaining = {(r.subject_predicate, r.subject_type, r.subject_name,
                       r.relation, r.object_type, r.object_name)
-                     for r in sa.exec(select(TupleV1)
-                                      .where(TupleV1.store_id == 's')).all()}
+                     for r in sa.exec(select(RelationTuple)
+                                      .where(RelationTuple.store_id == 's')).all()}
         assert t not in remaining
 
 
@@ -307,7 +307,7 @@ def test_rejection_leaves_evaluator_truthful(tmp_path):
 
 # --------------------------------------------------------------------------- #
 # 8. Crash recovery: a brand-new instance on a fresh Session rebuilds from
-#    TupleV1 -- watermark at the log head, lag 0, grid parity with the oracle.
+#    RelationTuple -- watermark at the log head, lag 0, grid parity with the oracle.
 # --------------------------------------------------------------------------- #
 
 def test_crash_recovery_rebuild(tmp_path):
@@ -381,7 +381,7 @@ def test_result_keys_portability():
         a.add_tuple('...', 'user', 'u1', 'member', 'group', 'g1')
         session.flush()
 
-        # fresh instance rebuilds from the final TupleV1 -> different id assignment
+        # fresh instance rebuilds from the final RelationTuple -> different id assignment
         b = SetEngine(session, 's', SCHEMA)
 
         a_res = a.lookup('...', 'user', 'u1')

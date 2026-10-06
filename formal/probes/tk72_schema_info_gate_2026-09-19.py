@@ -2,7 +2,7 @@
 """`TK72` -- what `check_invariants(..., schema_info)` actually buys, demonstrated.
 
 THE CLAIM UNDER TEST. `tests/test_zt_p5_readjudication.py` called
-`index_v4/invariants.py::check_invariants(session, store)` with no `schema_info` at three
+`src/zanzibar/graphindex/invariants.py::check_invariants(session, store)` with no `schema_info` at three
 sites, and its docstring said *"I1-I13 are green on all three"*. Without the handle the
 checker skips the rest of I3 (bridge completeness/exclusivity), I14, I4 namespace
 classification and every derived invariant -- so the docstring named invariants the run did
@@ -35,9 +35,9 @@ if str(_REPO_ROOT) not in sys.path:
 
 from sqlmodel import Session, SQLModel, create_engine, select      # noqa: E402
 
-from connectedstore import ConnectedStore                          # noqa: E402
-from index_v4.invariants import check_invariants                   # noqa: E402
-from index_v4.models import EdgeV4, NodeV4                         # noqa: E402
+from zanzibar.connectedstore import ConnectedStore                          # noqa: E402
+from zanzibar.graphindex.invariants import check_invariants                   # noqa: E402
+from zanzibar.graphindex.models import Edge, Node                         # noqa: E402
 from tests.test_zt_p5_readjudication import _OWC_TTU_CORPUS        # noqa: E402
 
 
@@ -71,9 +71,9 @@ def main() -> int:
     print('    -> I14 iterates NOTHING on this corpus. The clause under test is I3')
     print('       bridge completeness/exclusivity.')
 
-    nodes = list(session.exec(select(NodeV4).where(NodeV4.store_id == 'live')).all())
+    nodes = list(session.exec(select(Node).where(Node.store_id == 'live')).all())
     by_id = {n.id: n for n in nodes}
-    edges = list(session.exec(select(EdgeV4).where(EdgeV4.store_id == 'live')).all())
+    edges = list(session.exec(select(Edge).where(Edge.store_id == 'live')).all())
     victim = None
     for e in edges:
         if e.direct_edge_count <= 0:

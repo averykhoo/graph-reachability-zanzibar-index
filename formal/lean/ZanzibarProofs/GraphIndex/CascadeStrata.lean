@@ -5,16 +5,16 @@ import ZanzibarProofs.GraphIndex.CascadeEnum
 
 Two strata (derived-reading-derived). Model sources:
 
-* **The routed read.** `index_v4/processor.py::_EvalContext`: an UNTAINTED operand
+* **The routed read.** `src/zanzibar/graphindex/processor.py::_EvalContext`: an UNTAINTED operand
   leaf dispatches to `::_EvalContext.leaf_check` = `WildcardIndex._check_internal`
   (the plain wildcard-aware closure read = `probeNonDerived` on an untainted key;
   it enters BELOW the public entry's leaf-name fence — since `BL-2`, 2026-08-21b,
   the public `.check` answers False for every leaf family,
   `docs/spec-deviations.md` + `tests/test_reg18_leaf_name_read_leak.py`), while a DERIVED
   operand leaf dispatches to `::_EvalContext.derived_check` →
-  `::DeltaProcessor.derived_check` → `index_v4/wildcard.py::WildcardIndex._check_derived`
+  `::DeltaProcessor.derived_check` → `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived`
   (edge probe + residue = `probeDerived`).
-  `index_v4/processor.py::DeltaProcessor.member_check` states the routing
+  `src/zanzibar/graphindex/processor.py::DeltaProcessor.member_check` states the routing
   explicitly: tainted ⇒ derived read, else plain read. The single routed
   node-recursion `graphRecR` — every leaf reads the graph's own `GraphModel.check`,
   which routes on `isDerived σ.schema` — captures both dispatches at once.
@@ -23,7 +23,7 @@ Two strata (derived-reading-derived). Model sources:
   subject, so `coveredFnR sh = checkFnR (starSubj sh)` mirrors the compiled
   `stars_fn` fold the same way W3c's `coveredFn` did (boolean spec §7), now routed.
 
-* **The two-round drain.** `index_v4/processor.py::DeltaProcessor._run_cascade` runs
+* **The two-round drain.** `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade` runs
   `rounds = len(self.compiled.strata)` rounds; each round reads the frontier rows above
   the running frontier cursor, advances the cursor to the max id read, maps rows to
   keys, and reconciles each key. With two strata a stratum-1 pass EMITS rows that
@@ -57,7 +57,7 @@ the unrouted scheduler is the single-stratum image of this one.
 
 **Candidate enumeration note (for the W3d-2 E-chain tail):** Python's per-pass audit
 at a derived-reading key pulls, besides the leaf concretes and edge holders, the
-operand residues' `neg` ids (`index_v4/processor.py::DeltaProcessor._derived_leaf_neg_ids`,
+operand residues' `neg` ids (`src/zanzibar/graphindex/processor.py::DeltaProcessor._derived_leaf_neg_ids`,
 called from `::DeltaProcessor._reconcile` step (2) — "exclusions recorded in
 lower-strata residues must surface as candidates") and the
 old `upos` ids (step (2b)). A W3d-2 `enumJobs` must extend `leafConcretes`
@@ -70,8 +70,8 @@ namespace Zanzibar
 namespace GraphModel
 
 /-- **Routing, made pointwise.** `check` on an untainted key IS the plain ≤4-probe
-    read (`index_v4/wildcard.py::WildcardIndex.check` routing;
-    `index_v4/processor.py::DeltaProcessor.member_check`). -/
+    read (`src/zanzibar/graphindex/wildcard.py::WildcardIndex.check` routing;
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor.member_check`). -/
 theorem check_untainted (σ : GraphState) (q : Query)
     (h : isDerived σ.schema (q.object.type, q.relation) = false) :
     check σ q = probeNonDerived σ q := by
@@ -89,7 +89,7 @@ theorem check_derived (σ : GraphState) (q : Query)
 
 /-- **The ROUTED node-recursion for `check_fn`** (the W3d-2 model extension):
     every operand leaf reads the graph's own `check`, which routes an untainted
-    key to `probeNonDerived` (= `index_v4/processor.py::_EvalContext.leaf_check` →
+    key to `probeNonDerived` (= `src/zanzibar/graphindex/processor.py::_EvalContext.leaf_check` →
     `WildcardIndex._check_internal`, below the public leaf-name fence — `BL-2`)
     and a derived key to `probeDerived` (= `::_EvalContext.derived_check` →
     `::DeltaProcessor.derived_check` → `WildcardIndex._check_derived`; the routing
@@ -106,10 +106,10 @@ theorem graphRecR_eq_graphRec {σ : GraphState} (s : SubjectRef) {dt : String}
 end GraphModel
 
 /-- **The routed compiled `check_fn`.** `evalE` with the routed node-recursion —
-    faithful to `index_v4/processor.py::DeltaProcessor._reconcile`'s per-subject boolean
+    faithful to `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile`'s per-subject boolean
     evaluation once derived operands are allowed (`plan.check_fn`, compiled by
-    `zanzibar_utils_v1.py::_compile_check_fn`, dispatching through
-    `index_v4/processor.py::_EvalContext`). -/
+    `src/zanzibar/schema/boolean.py::_compile_check_fn`, dispatching through
+    `src/zanzibar/graphindex/processor.py::_EvalContext`). -/
 def GraphState.checkFnR (σ : GraphState) (T : Store) (s : SubjectRef)
     (dt on R : String) (e : Expr) : Bool :=
   evalE (GraphModel.graphRecR σ s) s T ⟨s, R, ⟨dt, on⟩⟩ dt on R e
@@ -126,7 +126,7 @@ theorem checkFnR_eq_checkFn (σ : GraphState) (T : Store) (s : SubjectRef)
     (fun r' hr' => GraphModel.graphRecR_eq_graphRec s on (hLU r' hr'))
 
 /-- Routed star coverage of one shape — the pointwise `stars_fn` with routed leaves
-    (`index_v4/processor.py::_EvalContext.leaf_stars` on untainted leaves,
+    (`src/zanzibar/graphindex/processor.py::_EvalContext.leaf_stars` on untainted leaves,
     `::_EvalContext.derived_stars` → `::DeltaProcessor.residue_stars` = the operand
     residue's stored `stars` on derived leaves). -/
 def GraphState.coveredFnR (σ : GraphState) (T : Store) (dt on R : String) (e : Expr)
@@ -179,7 +179,7 @@ theorem checkFnR_evalEq {σ σ' : GraphState} (h : EvalEq σ' σ) (T : Store)
 /-! ## The routed reconcile pass (wholesale residue recompute + diffing edge audit) -/
 
 /-- The routed wholesale residue recompute —
-    `index_v4/processor.py::DeltaProcessor._reconcile` steps (1)–(3)
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` steps (1)–(3)
     with routed guards. Mirrors
     `GraphState.reconcileResidueKey` exactly, `checkFn`/`coveredFn` → routed. -/
 def GraphState.reconcileResidueKeyR (σ : GraphState) (T : Store) (dt on R : String)
@@ -206,7 +206,7 @@ theorem reconcileResidueKeyR_eq (σ : GraphState) (T : Store) (dt on R : String)
     (negCands uposCands : List SubjectRef) :
     (σ.reconcileResidueKeyR T dt on R e shapes negCands uposCands).schema = σ.schema := rfl
 
-/-- The routed diffing edge audit — `index_v4/processor.py::DeltaProcessor._reconcile`
+/-- The routed diffing edge audit — `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile`
     step (4) → `::DeltaProcessor._reconcile_subject`
     (`want_edge = should and not covered`; add on want, retract on ¬want, both via
     `::DeltaProcessor._write_derived`) with the routed guard. -/
@@ -260,7 +260,7 @@ theorem reconcileKeyDR_eq {S : Schema} (T : Store) (dt on R : String) (e : Expr)
     · exact ih _ (by rw [removeEdgePair_schema, hs])
 
 /-- The routed full-object pass: residue recompute THEN diffing edge audit
-    (`index_v4/processor.py::DeltaProcessor._reconcile` stores the row in step (3)
+    (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` stores the row in step (3)
     before auditing edges in step (4)). -/
 def GraphState.reconcileStarsKeyDR (σ : GraphState) (T : Store) (dt on R : String)
     (e : Expr) (shapes : List Shape) (cands negCands uposCands : List SubjectRef) :
@@ -306,7 +306,7 @@ def W3cJob.applyLoggedR (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) 
   rw [pushDelta_schema, reconcileStarsKeyDR_schema]
 
 /-- Run a batch of routed logged jobs left-to-right
-    (`index_v4/processor.py::DeltaProcessor._run_cascade`'s per-round key
+    (`src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`'s per-round key
     loop; batch order left free — attack-confirmed not load-bearing). -/
 def reconcileJobsLR (S : Schema) (T : Store) (σ : GraphState) (jobs : List W3cJob) :
     GraphState :=
@@ -363,7 +363,7 @@ def GraphState.frontierRowsAbove (σ : GraphState) (n : Nat) : List Delta :=
     occurrence kept (`List.eraseDups`; NOT Mathlib's `List.dedup`, which keeps the LAST
     occurrence and would reorder the jobs — see `ReconcileDiff.lean`'s hazard note).
 
-    Python dedups here too: `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`
+    Python dedups here too: `src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys`
     collects into `keys: dict` (`:1362`) and short-circuits repeated objects through
     `processed_objects: set` (`:1407`, `:1443-1445`), so a key dirtied by two frontier
     rows is reconciled ONCE per round. Until
@@ -392,11 +392,11 @@ theorem mem_cascadeKeys_iff_above (S : Schema) (σ : GraphState)
 
 /-- Advance the frontier cursor past a round's read
     (`frontier_start = max((r.id for r in rows), default=frontier_start)` in
-    `index_v4/processor.py::DeltaProcessor._run_cascade`). -/
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`). -/
 def GraphState.frontierMax (σ : GraphState) (n : Nat) : Nat :=
   (σ.frontierRowsAbove n).foldl (fun m d => max m d.id) n
 
-/-- **`runCascade2`** (`index_v4/processor.py::DeltaProcessor._run_cascade` at
+/-- **`runCascade2`** (`src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade` at
     `rounds = len(self.compiled.strata) = 2`): round 1 on the
     frontier above the stored watermark, round 2 on the rows round 1 emitted, then
     the quiescence check — the rows above the round-2 cursor must map to NO keys,
@@ -434,7 +434,7 @@ inductive ReachedByW3d2 : GraphState → Schema → Store → Prop where
       (hprev : ReachedByW3d2 σ S T) :
       ReachedByW3d2 (σ.removeLoggedRules S t) S (T.erase t)
   -- hSVT/hBST/hTST/htermT: the pre-remove store T was validly built. FAITHFUL — Python's
-  -- TupleSource.remove (connectedstore/source.py) only retracts admission-validated tuples
+  -- TupleSource.remove (src/zanzibar/connectedstore/source.py) only retracts admission-validated tuples
   -- (validate_write_identifiers + matching Direct arm = StoreValidRules); the star/ttu/term
   -- conditions are the W4Fragment carries graph_correct already assumes about the store.
   -- hdrain: Python drains the view between applied log rows (cascadeKeys non-monotone under
@@ -1849,7 +1849,7 @@ theorem GraphState.outbox_le_frontierMax (σ : GraphState) (n : Nat) :
 The fragment condition **`hLU2`** (the 2-strata condition without invoking
 `stratify`): every `computed` operand of a derived def is untainted OR itself a
 declared derived key whose own `computed` operands are ALL untainted. Faithful to
-`len(strata) == 2` — `zanzibar_utils_v1.py::_stratify` layers the tainted
+`len(strata) == 2` — `src/zanzibar/schema/boolean.py::_stratify` layers the tainted
 keys by Kahn; two layers means every derived-reading-derived chain stops after one
 hop. Stated dependency-wise (as `hLU` was), not via `stratify`, so the W3d-1
 condition is literally the special case (`hLU2_of_hLU`). -/
@@ -1875,7 +1875,7 @@ theorem hLU2_of_hLU {S : Schema}
     round-1 job's derived pred as a computed operand. `hLU2` then forces ALL of
     `j`'s operands untainted — contradiction. So NO derived def reads `j.R`: the
     emission maps to no keys, and Python's leftover `raise InvariantViolation`
-    (the tail of `index_v4/processor.py::DeltaProcessor._run_cascade`) is dead code
+    (the tail of `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`) is dead code
     at two strata. -/
 theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
     {jobs1 jobs2 : List W3cJob}

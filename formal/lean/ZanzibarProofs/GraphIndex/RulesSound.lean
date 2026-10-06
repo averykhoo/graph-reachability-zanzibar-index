@@ -35,7 +35,7 @@ namespace Zanzibar
 `schemaRewrites` fans out over *all* defs (`flatMap`); `sem`/`evalE` reads
 `S.lookup key` = the *first* def with that key. To match a rewrite rule against the
 def `sem` actually evaluates, keys must be unique — faithful to the Python schema being
-a dict (`zanzibar_utils_v1.py`: `compile_ruleset` keys a `dict`). `NodupKeys` records
+a dict (`src/zanzibar/schema/`: `compile_ruleset` keys a `dict`). `NodupKeys` records
 it; `lookup_of_mem` is the payoff. -/
 
 /-- **`NodupKeys S`** — declared keys are distinct (the Python schema is a dict). -/

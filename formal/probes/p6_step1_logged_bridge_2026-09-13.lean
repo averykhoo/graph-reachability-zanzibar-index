@@ -112,7 +112,7 @@
            subject `folder:f1`) leaves `residue := 2` that `RESIDUE DETAIL` shows is
            **EMPTY of new edges** — two extra COPIES of a bridge already present.  The GC
            correctly declines (the node is still live), so the copies accumulate per write.
-           **Python does not do this**: `index_v4/wildcard.py::WildcardIndex.
+           **Python does not do this**: `src/zanzibar/graphindex/wildcard.py::WildcardIndex.
            _ensure_own_bridges` guards with `if not self.idx.direct_edge_exists_by_id(
            node.id, w_any.id)` before `add_edge_by_id`.  The Lean definition
            (`UsStarWrite.lean:213-218`) has no such guard; its docstring claims only
@@ -826,7 +826,7 @@ exists to collect.
 
 `releaseInBridgesProto` is a PROTOTYPE only — it lives in this probe, not in the model, and
 its job here is to turn "some GC is needed" into "this much residue, and this collects it".
-It mirrors `index_v4/wildcard.py::WildcardIndex._maybe_remove_bridges` (`:363-386`): drop
+It mirrors `src/zanzibar/graphindex/wildcard.py::WildcardIndex._maybe_remove_bridges` (`:363-386`): drop
 the bridge iff the concrete node's only remaining incident edge IS its bridge. -/
 
 def GraphState.releaseInBridgesProto (σ : GraphState) (c : NodeKey) : GraphState :=

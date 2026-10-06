@@ -56,7 +56,7 @@ floor out and must show the same lie escaping.
 **What the spec says.** Identifiers are validated on WRITES (`[A-Za-z0-9_./@+=-]`, 1-256
 chars). Nothing is said about declared names beyond the `.` leaf lock (boolean spec sec 3.2).
 **What the code does since 2026-10-03e:** `parse_schema_ast` and `parse_openfga_json` refuse a
-declared TYPE or RELATION name outside that charset (`zanzibar_utils_v1.py::_validate_declared_name`).
+declared TYPE or RELATION name outside that charset (`src/zanzibar/schema/parser.py::_validate_declared_name`).
 The oracle's parser refuses the same thing independently
 (`tests/oracle.py::_validate_declared_name`). It also gained twins of six refusals production
 already had: an unrecognised line, a malformed `type` line, a duplicate type, a duplicate
@@ -80,7 +80,7 @@ asserting both parsers give the same verdict and keys.
 `AdmissionRejected`, any node whose `(type, predicate)` is in
 `SchemaInfo.unremovable_node_shapes`. That set holds every rewrite source and target, every
 TTU tupleset subject and TTU-produced subject, and every derived/leaf family. It is filled
-by `zanzibar_utils_v1.py::_node_removal_fence`, on every schema, boolean or not.
+by `src/zanzibar/schema/compiler.py::_node_removal_fence`, on every schema, boolean or not.
 
 **Why.** `RuleSet.apply` stores a COPY of a tuple on another node for every Computed/TTU
 rewrite. Deleting one end left the graph diverged from the oracle and the set engine, and the
@@ -126,14 +126,14 @@ fail-open" is true only of the consumer it probed.**
 **The probe the 2026-08-10 entry prescribed cannot be run as written.** A negated TTU
 directly over the shape (`define access: [user] but not viewer from parent` on `doc`) is a
 graph compile refusal on the pre-fix tree and today alike — blind-audit D4,
-`zanzibar_utils_v1.py::_reject_object_wildcard_scope`: *"object-wildcard shape (folder,
+`src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope`: *"object-wildcard shape (folder,
 viewer) is the TTU target of derived relation doc#access"*. The consumers above read the
 defective relation one hop downstream instead. Also: the fix hashes the older entries cite
 (`c042056`, `ed46e54`) are not in `master`'s history; their byte-identical twins are
 `33242de` and `7cd12b5` (RC2's fix is `0838bcf`).
 
 **Kept permanently without shipping bad code.** `tests/test_p12_severity_sign.py` simulates
-the pre-fix graph by no-op'ing `index_v4/wildcard.py::WildcardIndex._ensure_entity_middles`
+the pre-fix graph by no-op'ing `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_entity_middles`
 on a paranoia-OFF store. That simulation on `d4ea804` reproduced the literal revert's
 counts exactly for all three consumers (B: `divergences=36`, OPEN 12, CLOSED 24; D: 30;
 E: 42; unsabotaged: 0), which is what makes the pin honest. It pins the sign for all three consumers, a live-code control, a
@@ -165,16 +165,16 @@ and then document it somewhere."* OpenFGA refuses it too (tupleset relations mus
 directly assignable types).
 
 **Why.** `from` takes a stored parent's type and name and never reads its predicate
-(`tests/oracle.py::Oracle.check`'s `ttu_leaf`; `setengine/engine.py::SetEngine.check`'s
+(`tests/oracle.py::Oracle.check`'s `ttu_leaf`; `src/zanzibar/setengine/engine.py::SetEngine.check`'s
 `ttu_leaf` discards it as `_pp`). So a stored `folder:f1#member` meant just `folder:f1`,
 and the `#member` was silently dropped. The graph refused the schema at compile time
-(`zanzibar_utils_v1.py::_validate_ttu_tuplesets`, `UnsupportedByGraphIndex`) while the set
+(`src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets`, `UnsupportedByGraphIndex`) while the set
 engine degraded past the refusal and answered: the backends disagreed about whether the
 schema existed. The graph could have been taught the same drop-the-predicate reading, but
 that reading is exactly `[folder]`, so it would have added no expressible schema.
 
 **Now it is a parse-time rule of the whole system**
-(`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+(`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`, oracle twin
 `tests/oracle.py::_validate_tuplesets_direct`), wildcard usersets `[folder:*#member]`
 included. Bare wildcards `[folder:*]` stay legal (`ASK-2`).
 
@@ -216,7 +216,7 @@ blockedp`, `check(f1 parent d1)` was False, yet `alice view d1` via f1 was True.
 - nothing refused the TAINTED (boolean) form.
 
 **Now it is a parse-time rule of the whole system**, tainted or not
-(`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+(`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`, oracle twin
 `tests/oracle.py::_validate_tuplesets_direct`). Only Directs, or a union of Directs, may
 be a tupleset, wildcard restrictions included. `GraphAdmission.ttuDirect` goes MIXED ->
 LOUD. The behaviour-preserving rewrite for every refused schema is
@@ -253,7 +253,7 @@ answered them the same way:
 
 Neither kind was inside any headline theorem's premise (`GraphAdmission.matchDecl`,
 `GraphAdmission.ranked`). Both are now refused at parse time
-(`zanzibar_utils_v1.py::_validate_ast_consistency`, oracle twin
+(`src/zanzibar/schema/parser.py::_validate_ast_consistency`, oracle twin
 `tests/oracle.py::_validate_consistency`), as OpenFGA refuses them (`ErrRelationUndefined`,
 `ErrCycle`).
 
@@ -337,10 +337,10 @@ crossing, and §6.2's prescribed mechanic (a DFS over the stored membership topo
 treating star sentinels as connecting to their shape's population) stopped short of it.
 On a CROSSABLE shape `(T, p)` — bridged in AND out — the graph index mints the crossing
 middle `(T, x, p)` with both bridges for every live ENTITY of type `T`
-(`index_v4/wildcard.py::WildcardIndex._ensure_entity_middles`, invariant I14), because
-`zanzibar_utils_v1.py::SchemaInfo.crossable_shapes` fixes the wildcard-materialization
+(`src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_entity_middles`, invariant I14), because
+`src/zanzibar/schema/rules.py::SchemaInfo.crossable_shapes` fixes the wildcard-materialization
 spec §3.4 existential as ENTITY-wise. The set engine's flow graph, by contrast, holds a
-node only once an edge is incident on it (`setengine/engine.py::SetEngine._shape_node_ref`,
+node only once an edge is incident on it (`src/zanzibar/setengine/engine.py::SetEngine._shape_node_ref`,
 "Added on the first incident edge"), so `::_flow_reaches`'s w_all OUT-bridge branch could
 step only to concretes some edge already touched. An entity mentioned by an unrelated
 relation was invisible, and with it the whole `w_all -> middle -> w_any` crossing.
@@ -349,10 +349,10 @@ Measured (`formal/probes/tk69_admission_parity_2026-09-16.py`, tracked, pre/post
 on the four-write witness in order A,B,C,D the graph refused the cycle-closing write and
 both `SetOps` backends accepted it — `graph=False set:py=True set:roaring=True`. The
 consequence in the COMPOSED system is not cosmetic: admission there is the SET ENGINE
-alone (`connectedstore/source.py::TupleSource.add` validates via
+alone (`src/zanzibar/connectedstore/source.py::TupleSource.add` validates via
 `_engine._add_tuple_direct`), so the row reaches the permanent log and the graph's refusal
 surfaces later inside the apply step, which is contractually forbidden to refuse anything
-(`connectedstore/apply.py` promotes any `ValueError` — and `AdmissionRejected` subclasses
+(`src/zanzibar/connectedstore/apply.py` promotes any `ValueError` — and `AdmissionRejected` subclasses
 it deliberately — into `InvariantViolation` with a corruption message). On the async
 schedule that wedges the cursor DURABLY: reopening the store re-reads the same lag and
 `catch_up` fails identically, and with the default `batch=None` the batch is atomic so the
@@ -380,7 +380,7 @@ NOT FIXED here, and it is a SEPARATE divergence family found while fixing this o
 same four writes in order B,C,D,A leave the graph ACCEPTING the cycle-closing write (no
 `folder` entity exists yet) and then REFUSING the ordinary grant `user:u1 editor
 folder:f1` — a write naming no wildcard, no userset and not the crossable relation. That
-is the DETONATION `index_v4/wildcard.py::WildcardIndex._reject_star_self_edge` was written
+is the DETONATION `src/zanzibar/graphindex/wildcard.py::WildcardIndex._reject_star_self_edge` was written
 to prevent, and its docstring is explicit that it is the graph locking itself out of a
 grant the set engine and the oracle both allow. Its fix therefore belongs on the GRAPH
 side — refuse the latent-cycle write early, as that method already does for the same-shape
@@ -406,8 +406,8 @@ Recorded as a divergence, not a decision. `docs/specs/wildcard-materialization-s
 would add a single `w_all(S) → w_any(S)` edge for the lenient/vacuous reading) but do not
 implement it."* That sentence names an artifact. **No such flag exists** — a sweep of the
 backends for a `per-shape` / lenient / vacuous config surface returns only unrelated prose
-(`zanzibar_utils_v1.py:493` on silent drops, `:1203` on vacuous tuplesets, and
-`index_v4/wildcard.py:641` on *read* leniency, which is a different thing entirely).
+(`src/zanzibar/schema/` on silent drops, `:1203` on vacuous tuplesets, and
+`src/zanzibar/graphindex/wildcard.py:641` on *read* leniency, which is a different thing entirely).
 
 **Why this is interpretive rather than a bug.** The same spec's §10 lists *"Lenient/vacuous
 ∀⇒∃ mode (hook only)"* under **Non-goals (do not build)**, with no condition attached — so
@@ -436,7 +436,7 @@ Recorded here rather than in the spec, which is held frozen at landing (`docs/RE
 flags `docs/specs/` as the hand-held half of that rule).
 
 The **missed-bridge** half is confirmed at answer level: the `## 2026-08-09` entry below
-roots its under-report in `index_v4/wildcard.py::WildcardIndex._ensure_bridges` never
+roots its under-report in `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_bridges` never
 interning a crossing middle, making `check` a false negative against the oracle. The
 **unnecessary-bridge** half is weaker than "harmless": `BL-1`, the released-userset bridge
 leak (`## 2026-08-20b`, fixed `## 2026-08-21`), left a bridge alive past its endpoint's
@@ -446,7 +446,7 @@ add/remove churn, and it poisoned rebuild-parity and permutation comparisons on 
 that had churned.
 
 So read §2.3 as *harmless to answers, not to state*. The same unqualified sentence is
-mirrored at `zanzibar_utils_v1.py::SchemaInfo` and needs the same reading. Any
+mirrored at `src/zanzibar/schema/rules.py::SchemaInfo` and needs the same reading. Any
 bridge-elision proposal must clear the §7 lifecycle as well as the §2.3 creation rule.
 
 ## 2026-09-10 — `TK36`: a symbolic-delta expansion layer would deliberately breach the read-path enumeration rule
@@ -459,7 +459,7 @@ with no condition attached. Recorded here rather than in the spec, per the freez
 The tension worth naming is with the bullet immediately above it, which makes *"Never
 enumerate a marker into concretes"* a read-path invariant — expansion is exactly that
 enumeration, done on purpose. The read side has since acquired a second, independent reason
-to refuse it: `index_v4/wildcard.py::WildcardIndex.lookup_reverse` fences leaf families
+to refuse it: `src/zanzibar/graphindex/wildcard.py::WildcardIndex.lookup_reverse` fences leaf families
 because a leaf family is storage-internal and enumerating one hands out a whole operand set.
 Whoever builds expansion must say why neither reason binds to deltas, and keep the
 enumeration confined to that one place — otherwise the next reader copies it back onto a
@@ -467,7 +467,7 @@ read path.
 
 ## 2026-09-06 — `TK55`: an empty declared relation name was accepted by both parsers and diverged the backends
 
-`define : [user]` parsed (both `zanzibar_utils_v1.py::parse_schema_ast` and
+`define : [user]` parsed (both `src/zanzibar/schema/parser.py::parse_schema_ast` and
 `tests/oracle.py::parse_schema_ast`) and compiled to a `Filter` on relation `''`. A
 direct write on `''` was refused by both backends (the write-path charset,
 `validate_write_identifiers`), but a COMPUTED reference (`define : viewer`) was
@@ -477,7 +477,7 @@ silent 3-way check divergence; `ParityEngine` raised `check parity broken`); boo
 the graph refused the write in `DeltaProcessor._write_derived` while both set engines
 accepted it (`ParityEngine` raised `accept/reject disagreement`). Both parsers now
 refuse the empty name at parse time (message `type 'doc': a declared relation name may
-not be empty (...)`, the same literal in `zanzibar_utils_v1.py` and `tests/oracle.py`,
+not be empty (...)`, the same literal in `src/zanzibar/schema/` and `tests/oracle.py`,
 deliberately NOT shared — the oracle's independence contract), pinned by
 `tests/test_reg_empty_relation_name.py` (15 tests collected 2026-09-06; the pre-fix
 probe output and both single-parser sabotages are in its module docstring). This is
@@ -508,12 +508,12 @@ check(user:alice, 'foo.bar',  doc:d1):  graph=False  set:py=False  set:roaring=F
 ```
 
 `viewer.0` is the compiled positive leaf of `viewer` (minted at
-`zanzibar_utils_v1.py::_build_plan_tree`, `leaf = f'{relation}.{counter[0]}'`; this schema
+`src/zanzibar/schema/boolean.py::_build_plan_tree`, `leaf = f'{relation}.{counter[0]}'`; this schema
 mints `viewer.0` for `editor` and `viewer.1` for the `banned` subtrahend). So a caller
 querying the leaf name reads the **positive operand with the `but not banned` subtraction
 never applied** — the boolean guard is bypassed by naming its own leaf.
 
-**Mechanism.** `index_v4/wildcard.py::WildcardIndex.check` routes derived reads by testing
+**Mechanism.** `src/zanzibar/graphindex/wildcard.py::WildcardIndex.check` routes derived reads by testing
 `(o_type, relation) in self.schema_info.derived_families`. A *leaf* family is not a *derived*
 family, so a leaf-name query falls through to the ordinary edge probe — and the delta
 processor has materialized a real node for it (`('doc', 'viewer.0', 'd1')` is present in the
@@ -521,7 +521,7 @@ store). `foo.bar` returns False through the same code path purely because no nod
 nothing on the read path rejects a dotted relation name.
 
 **The write side already fenced this, which is what makes it a one-sided hole.** Both
-`zanzibar_utils_v1.py::RuleSet.apply` and `setengine/engine.py::SetEngine.add_tuple` raise
+`src/zanzibar/schema/rules.py::RuleSet.apply` and `src/zanzibar/setengine/engine.py::SetEngine.add_tuple` raise
 `AdmissionRejected: relation 'viewer.0' is a compiled leaf predicate of a derived relation;
 tuples must be written against the public relation name`. `validate_write_identifiers`
 accepts the name (`.` is in the write charset `[A-Za-z0-9_./@+=-]`); the refusal is the
@@ -548,20 +548,20 @@ residual under a simulated DENY = 0; the positive control fired 8/8. Subject pos
 4,833 comparisons, **0 divergences** — which is why the subject-side guard below is a
 CONTRACT, not a repair. The leak does not require the derived relation to be true:
 `RuleSet.apply` fans a public write onto the leaf family at WRITE time. Surfaces that
-leaked: `index_v4/wildcard.py::WildcardIndex.check` (both the positive AND the negative
+leaked: `src/zanzibar/graphindex/wildcard.py::WildcardIndex.check` (both the positive AND the negative
 operand), `::WildcardIndex.lookup_reverse` (the enumeration form —
 `lookup_reverse('viewer.1', 'doc', 'd1')` returned the whole banned set
 `{user:bob, user:carol}`), `::WildcardIndex.lookup` (surfaced leaf-family node ids),
-`index_v4/core.py::ReachabilityIndex.check_reachable` (schema-blind, no production caller —
+`src/zanzibar/graphindex/core.py::ReachabilityIndex.check_reachable` (schema-blind, no production caller —
 deliberately NOT guarded), and `ConnectedStore.*` — which additionally FLIPPED with index
 freshness, because its third rung falls back to `SetEngine.check`, which denies.
 `SetEngine` (both `SetOps`) and the oracle were correct throughout.
 
-**The fix (`index_v4/`, adjudicated DENY per above).**
+**The fix (`src/zanzibar/graphindex/`, adjudicated DENY per above).**
 `WildcardIndex.check` split into a fenced public entry — returns `False` for
 `(o_type, relation) in self.schema_info.leaf_families` — and
 `::WildcardIndex._check_internal`, carrying the old body verbatim.
-`index_v4/processor.py::_EvalContext.leaf_check` and `::_EvalContext.leaf_stars`
+`src/zanzibar/graphindex/processor.py::_EvalContext.leaf_check` and `::_EvalContext.leaf_stars`
 retargeted onto `_check_internal`: they are the ONLY internal leaf-name readers and
 legitimately need grants — fencing them too would have zeroed ALL boolean evaluation.
 `lookup_reverse` returns the empty result for a leaf family; `lookup` gained the
@@ -603,16 +603,16 @@ Lean-touching session).
 Closes the divergence filed by `## 2026-08-20b` below, which characterized and pinned but
 deliberately did not fix. Board row `BL-1`; the gate is green again.
 
-**The fix, one reordering.** `index_v4/processor.py::DeltaProcessor._gc_subject_node` now
+**The fix, one reordering.** `src/zanzibar/graphindex/processor.py::DeltaProcessor._gc_subject_node` now
 calls `::DeltaProcessor._demote_released_node` **before**
-`index_v4/wildcard.py::WildcardIndex._maybe_remove_bridges`, instead of after. The strip
+`src/zanzibar/graphindex/wildcard.py::WildcardIndex._maybe_remove_bridges`, instead of after. The strip
 guard is `fresh.implicit and fresh.reference_count == degree`, and a released userset
 subject is still EXPLICIT at that point (the add-cascade's step-2d promotion; traced at the
 filing tree as `implicit=False, rc=1`) — so the strip-first order was a **guaranteed no-op
 on exactly the path that needed it**, and no path re-checked once the demote landed.
 
 **Why not the other fix.** Relaxing the `implicit` guard is what the shape of the bug
-suggests and it is wrong: that guard is how `index_v4/core.py::ReachabilityIndex.remove_node`'s
+suggests and it is wrong: that guard is how `src/zanzibar/graphindex/core.py::ReachabilityIndex.remove_node`'s
 policy — *"explicit nodes keep bridges for as long as they exist"* — is implemented. The
 2026-08-20b entry already called this out; it is repeated here because the wrong fix is the
 reachable one.
@@ -713,17 +713,17 @@ the same rows).
 **Located: the teardown is order-broken, asymmetric with its setup.** Setup: the derived
 star tupleset puts the TTU target shape `(doc, r0)` in
 `SchemaInfo.bridged_in_shapes`, so the raw leaf write bridges its subject —
-`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted` → `_ensure_bridges` →
+`src/zanzibar/graphindex/wildcard.py::WildcardIndex._add_tuple_trusted` → `_ensure_bridges` →
 `_ensure_own_bridges` writes `doc:d1#r0 -> w_any(doc, r0)`; the add-cascade records the
 subject in the object's residue `upos` and step 2d promotes it EXPLICIT. Teardown, traced
 at the filing tree:
 
-* `index_v4/wildcard.py::WildcardIndex._remove_tuple_trusted` calls
+* `src/zanzibar/graphindex/wildcard.py::WildcardIndex._remove_tuple_trusted` calls
   `_maybe_remove_bridges(subject)` after the leaf-edge removal, but the cascade has not
   run yet, the node is still explicit (state at call: `implicit=False, rc=1`), and the
   strip guard `fresh.implicit and fresh.reference_count == degree` refuses explicit
   nodes → no-op.
-* **`index_v4/processor.py::DeltaProcessor._gc_subject_node`** then drops the recording
+* **`src/zanzibar/graphindex/processor.py::DeltaProcessor._gc_subject_node`** then drops the recording
   and calls `widx._maybe_remove_bridges(n)` — but **BEFORE**
   `_demote_released_node(n)` flips the node back to implicit (still
   `implicit=False, rc=1` at call time) → no-op again; the demote then lands and **no
@@ -743,12 +743,12 @@ the fix lands**, deliberately. Not entered in `latent-gaps.md`: the step-1 probe
 is state-only (no live fail-open), and with a permanently red deterministic pin the bug
 is not *latent* — the failing test is the live tracker until the fix lands.
 
-## 2026-08-14 — the `_any_residue_reference` / `_keys_referencing` scan is FIXED: `ResidueRefV1`, the index `ZT-P0-1` prescribed
+## 2026-08-14 — the `_any_residue_reference` / `_keys_referencing` scan is FIXED: `ResidueRef`, the index `ZT-P0-1` prescribed
 
 Closes the board item opened by the 2026-07-29b **measurement** entry below, which
 deliberately measured and did not fix. Both node-release lookups were complete
-`ResidueV1` scans with a per-row JSON decode; they are now indexed seeks on a new
-reverse-index table `index_v4/models.py::ResidueRefV1`
+`Residue` scans with a per-row JSON decode; they are now indexed seeks on a new
+reverse-index table `src/zanzibar/graphindex/models.py::ResidueRef`
 (`object_node_id`, `subject_node_id`, one row per id in `neg | upos`).
 
 This is exactly the fix `ZT-P0-1`'s own note named — *"a subject-id → residue **index**
@@ -777,18 +777,18 @@ harness asserts its own residue-row and `neg`-id counts, because a run that buil
 would have timed an empty table and printed a believable result.
 
 **Maintenance and its checker.** `DeltaProcessor._sync_residue_refs` is called from
-`_store_residue` (the only live-path `ResidueV1` writer) and diffs against the rows that
+`_store_residue` (the only live-path `Residue` writer) and diffs against the rows that
 exist, so cost is O(rows for this object). `bulk_build.py` populates the index itself in
 a new `(2c)` block — it bypasses `_store_residue` entirely, and that omission is the
-single most plausible way to ship this broken. `ResidueV1.neg`/`upos` stay
+single most plausible way to ship this broken. `Residue.neg`/`upos` stay
 **authoritative**; a new I6 clause asserts the index agrees with them exactly and in both
 directions, plus an orphan clause for index rows outliving their residue. That clause
 decodes the JSON directly and never consults `processor.py`, so it is an independent
 check and not a mirror of its own subject.
 
 **Not in the state gate, deliberately.** `formal/conformance/extractor.py` names the
-tables it reads, so `ResidueRefV1` is not swept in. That loses nothing: its contents are
-a pure function of `ResidueV1.neg`/`upos`, which the gate already compares, and the I6
+tables it reads, so `ResidueRef` is not swept in. That loses nothing: its contents are
+a pure function of `Residue.neg`/`upos`, which the gate already compares, and the I6
 clause pins the function. It is therefore not a new projection — there is no independent
 state here to drop.
 
@@ -824,7 +824,7 @@ were wrong**, and the second correction is the one worth carrying:
 
 **Migration note, stated because there is no migration framework.** Tables are created by
 `SQLModel.metadata.create_all`, so an index built before this change gets an empty
-`residue_ref_v1` and its node-release guards would believe nothing is referenced — the
+`residue_ref` and its node-release guards would believe nothing is referenced — the
 ZT-P0-1 direction. There is no in-tree upgrade path and none is offered (schemas are
 static; a new schema means a new store/index). What exists is detection: the cheap
 `ZANZIBAR_PARANOIA=residue` tier fires on the first commit against such a store, with
@@ -845,7 +845,7 @@ divergences) found **exactly these two causes**, so the family is closed at two.
 The `n.wildcard == ''` clause was **not** deleted — the entry below records both dead ends,
 and both were re-confirmed before starting. The star parent is now *represented*, mirroring
 the semantics the oracle (`tests/oracle.py::Oracle.check.ttu_leaf`, the `pn == '*'` arm) and
-the set engine (`setengine/engine.py::SetEngine.check.ttu_leaf` /
+the set engine (`src/zanzibar/setengine/engine.py::SetEngine.check.ttu_leaf` /
 `::SetEngine.expand.ttu_expand`) already implement and have always
 agreed on. A stored `T:*` tupleset tuple contributes **two things, not one**:
 
@@ -853,7 +853,7 @@ agreed on. A stored `T:*` tupleset tuple contributes **two things, not one**:
    member whatever its name. New `DeltaProcessor.tupleset_star_types` /
    `derived_stored_star_types`, consumed by all four `_EvalContext` TTU methods and folded
    into the residue's `stars`. This is the direct analogue of `ms.star((pt, target))` at
-   `setengine/engine.py::SetEngine.expand.ttu_expand`.
+   `src/zanzibar/setengine/engine.py::SetEngine.expand.ttu_expand`.
 2. **an ∃-expansion over the tuple-mentioned instances of `T`** — folded into
    `tupleset_parents` itself, so every downstream consumer (`_from_chain_keys`,
    `_leaf_concretes`, `_derived_leaf_neg_ids`) became correct with **no edit**. The
@@ -893,7 +893,7 @@ invalidation path has been asked the same question.*
   testing what it exists for: the leaf kind is reached, a `doc:*` subject really lands on a
   **storage** leaf of `parent`, and some residue really carries the star shape.
 * **A compile-time invariant, and deliberately NOT a mirror.**
-  `zanzibar_utils_v1.py::_assert_ttu_parent_types_cover_admission`: every TTU's frozen
+  `src/zanzibar/schema/boolean.py::_assert_ttu_parent_types_cover_admission`: every TTU's frozen
   `parent_types` must cover every bare-entity type **admission** accepts onto that tupleset
   relation. ★ It reads the emitted `RewriteFilter`/`Filter` patterns, **never
   `_member_types`** — the function RC1 got wrong. An invariant reading `_member_types`
@@ -982,9 +982,9 @@ API with no deployment — so this is a library correctness defect, not an expos
 Both drop a stored tupleset tuple that `CLAUDE.md`'s pinned rule requires the TTU to walk.
 
 **RC1 — a type reaching the tupleset relation only through the exclusion's subtrahend.**
-`zanzibar_utils_v1.py::_member_types` returns `walk(e.base)` for an `Exclusion`, so on
+`src/zanzibar/schema/boolean.py::_member_types` returns `walk(e.base)` for an `Exclusion`, so on
 `define parent: [folder] but not [doc]` the type `doc` never enters the compiled
-`parent_types`, and `index_v4/processor.py::DeltaProcessor.tupleset_parents` filters the stored parent out
+`parent_types`, and `src/zanzibar/graphindex/processor.py::DeltaProcessor.tupleset_parents` filters the stored parent out
 with `n.type in parent_types`. Fix: union `walk(e.subtract)`. Its docstring encodes the same
 mistake and must change with it.
 
@@ -992,7 +992,7 @@ mistake and must change with it.
 clause of the same filter drops it. Needs no exclusion and no object wildcard; the tupleset
 relation only has to be tainted. ⚠ **Not a one-liner** — deleting the clause breaks admission
 parity first (`accept/reject divergence on add ('...','doc','*','parent','doc','d1'):
-graph=False set:py=True`) and a naive widening crashes at `index_v4/core.py::ReachabilityIndex.node`
+graph=False set:py=True`) and a naive widening crashes at `src/zanzibar/graphindex/core.py::ReachabilityIndex.node`
 (`name=='*' and a non-empty wildcard must go together`). The star parent must be
 **represented** (the set engine's `MemberSet.stars` algebra is the analogue), not merely
 admitted. This is a semantics decision, not a filter tweak.
@@ -1048,7 +1048,7 @@ hand-found bug is one cell of a family, not a one-off — and the family is clos
 ### Fix-site note that saves a wasted step
 
 `parent_types` is **not** computed in `processor.py` or `bulk_backfill.py` — it is compiled
-once in `zanzibar_utils_v1.py::_build_plan_tree.build` from `::_member_types` and frozen onto
+once in `src/zanzibar/schema/boolean.py::_build_plan_tree.build` from `::_member_types` and frozen onto
 the plan node (`::PDerivedTTU.parent_types`), which both files merely read. So **RC1's single
 fix repairs the incremental AND bulk paths together** (measured: `tests/test_bulk_build.py`
 6 passed, byte-identity snapshots survive). **RC2 does need the duplicated fix** at
@@ -1138,7 +1138,7 @@ it breaks the repo's central contract that the two backends have identical seman
 > fail-open for every subtracting consumer measured (cases B/D/E); that it holds for
 > every schema subtracting this relation is REASONED, not measured. See `## 2026-09-27b`.
 
-**Root cause — measured, not inferred.** `index_v4/wildcard.py::WildcardIndex._ensure_bridges` only ever
+**Root cause — measured, not inferred.** `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_bridges` only ever
 links `w_all(T,p) -> concrete -> w_any(T,p)` through an **interned node of shape `(T,p)`**;
 `backfill`'s own docstring says so ("Does not create a w node for a shape that has no
 concrete instances"). `tests/oracle.py::Oracle.check.instances` witnesses the existential with any
@@ -1161,9 +1161,9 @@ the first step of any fix — this entry does not presume the graph is the side 
 only that three of four backends currently disagree with it.
 
 **The pointer for the fix.** The set engine has an explicit, named mechanism for exactly
-this composition and the graph has no analogue — `setengine/engine.py::SetEngine.lookup`, *"the
+this composition and the graph has no analogue — `src/zanzibar/setengine/engine.py::SetEngine.lookup`, *"the
 star-parent cross for the triple combo owc x star-parent x TTU where NO concrete
-`(T, X, r')` is interned"*. `index_v4/core.py` contains zero occurrences of `ttu`.
+`(T, X, r')` is interned"*. `src/zanzibar/graphindex/core.py` contains zero occurrences of `ttu`.
 
 ### ✅ FIXED the same day — the middle tracks the ENTITY (invariant I14)
 
@@ -1176,9 +1176,9 @@ the graph violated the spec's own stated equivalence. (3) The graph was
 **self-inconsistent under irrelevant data** — an unrelated grant to another principal
 flipped the answer. The oracle and both set engines stay untouched.
 
-**The fix**, `index_v4/wildcard.py::WildcardIndex._ensure_entity_middles` /
+**The fix**, `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_entity_middles` /
 `::WildcardIndex._sync_entity_middles`, with the property lifted into
-`index_v4/invariants.py` as **I14**:
+`src/zanzibar/graphindex/invariants.py` as **I14**:
 
 > for every crossable shape `(T, p)` (`SchemaInfo.crossable_shapes` — bridged in AND out)
 > and every entity name `x` such that the store holds at least one node `(T, x, *)` that
@@ -1241,7 +1241,7 @@ where the bug lived has no Lean counterpart at all. Filed as a fragment boundary
 > materializes the edge until part (ii) lands. Read this as "the definition-level gap is
 > closed, the machinery-level gap is not".
 
-**★ A fourth: a live comment was refuted.** `zanzibar_utils_v1.py::wildcard_userset_restriction_shapes`
+**★ A fourth: a live comment was refuted.** `src/zanzibar/schema/compiler.py::wildcard_userset_restriction_shapes`
 justified its narrowing partly with "…the legal reg11 / `owc_star_ttu` class … whose whole
 write space is oracle-correct and unanimous on both backends". That clause was false —
 `owc_star_ttu` is exactly where the graph disagreed. The narrowing itself still stands on
@@ -1273,7 +1273,7 @@ is a sample, not a proof, and nothing in the gate says so.*
 **Decision (user, 2026-07-29): no store-level write quota.** *"I don't want to limit
 what can be added to a permission store — it might be slow but it should not be
 limited by perf."* Board item (A) is closed as DECLINED, not deferred. The decision is
-coherent with the codebase's own reasoning: `index_v4/core.py` already exempts removals
+coherent with the codebase's own reasoning: `src/zanzibar/graphindex/core.py` already exempts removals
 from the fan-out cap because "a cap that can refuse a REVOCATION is a fail-open".
 
 **Proposal evaluated instead:** *"if we detect a DoS-causing fan-out, do a bulk rebuild
@@ -1323,7 +1323,7 @@ NOT unconditionally inline — `store.py::ConnectedStore._write` calls it only w
 Measured at N=480: the async write phase is **1.31 s for 480 writes (2.7 ms/write, max
 6.6 ms)** against 19.1 s / 105 ms max in sync — a **14.5× drop in write-path latency**,
 with the closure work off the write path entirely. Lock-wise strictly better: writers
-hold the source lock (`SchemaV4` row), catch-up holds the graph store lock (`StoreV4`
+hold the source lock (`SchemaRecord` row), catch-up holds the graph store lock (`Store`
 row) — different rows, so on PostgreSQL a catching-up worker does not block writers.
 `catch_up(batch=k)` is a direct lock-hold knob (batch=8 → max 733 ms). The consistency
 contract already exists and is pinned (`check(at_least=)` falls back to the always-fresh
@@ -1344,10 +1344,10 @@ of — so don't materialise it.*
 ### Fixed here: the cap misreported itself as corruption through `ConnectedStore`
 
 Found while measuring the above. `AdmissionRejected` subclasses `ValueError`, and
-`connectedstore/apply.py::_apply_row` promotes every `ValueError` to
+`src/zanzibar/connectedstore/apply.py::_apply_row` promotes every `ValueError` to
 `InvariantViolation('... the log is admission-validated, so this is corruption or a
 validity-parity bug ...')`. So a tuned-down cap surfaced as a corruption report — **the
-exact opposite of what `index_v4/core.py`'s own raise-site comment says** ("not an
+exact opposite of what `src/zanzibar/graphindex/core.py`'s own raise-site comment says** ("not an
 InvariantViolation, because nothing is corrupt"). The two comments contradicted each
 other and neither was tested through the composed system (`tests/test_reg17_*` drove
 only the raw `ReachabilityIndex`).
@@ -1371,7 +1371,7 @@ which also covers `PathCountExceeded` (`TK111`); that bound is never suspended. 
 
 Sabotage (remove the escape, re-run `test_cap_through_connectedstore_is_a_refusal_not_a_corruption_report`):
 ```
-E  index_v4.invariants.InvariantViolation: log row 13 (ADD) was rejected by the index --
+E  zanzibar.graphindex.invariants.InvariantViolation: log row 13 (ADD) was rejected by the index --
    the log is admission-validated, so this is corruption or a validity-parity bug:
    closure fan-out cap exceeded: this edge would materialise 12 closure rows ...
 ```
@@ -1380,7 +1380,7 @@ E  index_v4.invariants.InvariantViolation: log row 13 (ADD) was rejected by the 
 
 ## 2026-07-29b — `_any_residue_reference` / `_keys_referencing` MEASURED (`ZT-P5` bullet 6)
 
-Both are complete `ResidueV1` scans (select every residue row for the store, then
+Both are complete `Residue` scans (select every residue row for the store, then
 JSON-decode `neg` and `upos` per row) on every node-release path.
 `_keys_referencing` became **unconditional** when the N3 leaf-kind elision was
 withdrawn as unsound (`ZT-P0-1`, 2026-07-26). It had never been measured; the board
@@ -1404,18 +1404,18 @@ rows and becomes the *dominant* term above that; a full churn over R objects tur
 quadratic past the crossover. Extrapolating the measured slope, a store with 100k
 residue-bearing keys costs **~1.4 s per node release**.
 
-**Scoping, so this is not over-read:** a `ResidueV1` row exists only for a DERIVED
+**Scoping, so this is not over-read:** a `Residue` row exists only for a DERIVED
 key carrying symbolic star coverage. R is the number of `(object, derived relation)`
 pairs with a wildcard grant, not the number of tuples. Stores with no boolean
 relations, or with only concrete grants, have R = 0 and pay nothing.
 
 **Not fixed here.** The fix is the one `ZT-P0-1`'s own note named — *"replace the
-full `ResidueV1` scan with a real index rather than eliding it"* — i.e. a
+full `Residue` scan with a real index rather than eliding it"* — i.e. a
 node-id-keyed reference table maintained alongside `neg`/`upos`. That is an
 algorithm change (gate + multi-seed fuzz + a Lean/CORRESPONDENCE look), not a
 measurement, so it is recorded rather than smuggled in.
 
-> **FIXED 2026-08-14** — `ResidueRefV1` landed; see the entry at the top of this file
+> **FIXED 2026-08-14** — `ResidueRef` landed; see the entry at the top of this file
 > for the design, the re-measurement (the new lookup is FLAT in R), and the sabotage
 > findings. The numbers in this entry are the *pre-fix* baseline and are kept as such.
 
@@ -1491,7 +1491,7 @@ projection **P3 compared edges as a SET**, so the difference was structurally in
   `test_derived_arm_multiplicity_ledger`), so the artifact's shape is a checked
   quantity. This **supersedes the E-chain plan's §D.6 hand-probe**.
 * the exemption boundary comes from the SCHEMA (`compute_taint`) and is cross-checked
-  against `EdgeV4.derived` (`_classify_edges`), so a corrupted flag cannot move it.
+  against `Edge.derived` (`_classify_edges`), so a corrupted flag cannot move it.
 * two docstrings corrected: `ReconcileDiff.lean`'s "list multiplicity ==
   `direct_edge_count`" and `Cli.lean`'s dedup justification both asserted a
   correspondence that fails on the derived arm.
@@ -1502,7 +1502,7 @@ projection **P3 compared edges as a SET**, so the difference was structurally in
 |---|---|---|
 | 1a | `Cli.lean` `edgeCountsJson` emits count `1` (i.e. someone reuses the de-duplicating `canonJsonArr`) | `edge MULTIPLICITY (untainted arm, P3) ('user','alice','...','') -> ('doc','d1','any_of',''): lean=1 python=3` + `ANTI-VACUITY: … 18 row(s) (0 with lean multiplicity > 1)` |
 | 1b | `extract_sql_state` weights by `1` instead of `direct_edge_count` | same untainted-arm line, `lean=3 python=1`; **exactly one** test fails, `nary_union` |
-| 2 | `derived_relations` returns `frozenset()` | `AssertionError: P3 edge classification disagreement (schema taint vs EdgeV4.derived)` |
+| 2 | `derived_relations` returns `frozenset()` | `AssertionError: P3 edge classification disagreement (schema taint vs Edge.derived)` |
 | 3 | one golden value `13 → 12` | `[boolean_exclusion] user:alice#.../ -> doc:d1#viewer/: golden=[12, 1] observed=[13, 1]` |
 | 4 | **subject-side:** drop `_reconcile_subject`'s presence guard (`if want_edge:`) | `PYTHON derived-arm direct_edge_count is no longer uniformly 1: {'nary_union_derived4:…': 4, …, 'two_stratum_cascade:…': 4}` |
 | 5 | ledger floor `18 → 19` | `ANTI-VACUITY: … observed 18 row(s) (18 with lean multiplicity > 1); floors are 19/18` |
@@ -1549,14 +1549,14 @@ Facts verified against the repo, with deviations from the spec text noted:
 
 1. **Count invariant exact form** (spec §2 "match the core's actual count asserts"):
    `indirect_edge_count >= direct_edge_count` and `indirect_edge_count > 0` per
-   persisted row (`index_v4/models.py::EdgeV4.indirect_edge_count`, checked by the I1 clause
-   of `index_v4/invariants.py::check_invariants`); zero-reachability rows are deleted,
+   persisted row (`src/zanzibar/graphindex/models.py::Edge.indirect_edge_count`, checked by the I1 clause
+   of `src/zanzibar/graphindex/invariants.py::check_invariants`); zero-reachability rows are deleted,
    not persisted. I1 uses this form.
 
 2. **`LookupResult` field names** (spec §6 says "concretes"/"markers"): actual fields
    are `node_ids: set[int]` and `markers: set[tuple[str, str, str]]` — markers are
    **3-tuples** `(type, predicate, variant)` with variant ∈ {'any','all'}
-   (`index_v4/wildcard.py::LookupResult`), not 2-tuple shapes. Residue `stars` rendered as
+   (`src/zanzibar/graphindex/wildcard.py::LookupResult`), not 2-tuple shapes. Residue `stars` rendered as
    markers will use variant `'any'` (subject-side coverage). `excluded_node_ids` is
    added in P5 as specced (additive, default empty).
 
@@ -1575,7 +1575,7 @@ Facts verified against the repo, with deviations from the spec text noted:
    the constructor argument, not as a retrofit onto the backends.
 
 5. **`check` today is ≤4 *separate* SQL point reads**, not one round trip
-   (`index_v4/wildcard.py::WildcardIndex.check` → `core.check_reachable_by_id` per probe). The
+   (`src/zanzibar/graphindex/wildcard.py::WildcardIndex.check` → `core.check_reachable_by_id` per probe). The
    single-round-trip consolidation is P5 work as planned, not a present fact.
 
 6. **`backfill()` precedent is idempotent but NOT chunked** (spec §5.5 says "chunked,
@@ -1585,7 +1585,7 @@ Facts verified against the repo, with deviations from the spec text noted:
    the part actually mirrored.
 
 7. **Filters do not rewrite and are first-match today**
-   (`zanzibar_utils_v1.py::RelationalTriplePattern`): Filters are pure admission gates (first match
+   (`src/zanzibar/schema/rules.py::RelationalTriplePattern`): Filters are pure admission gates (first match
    admits the raw triple, then `break`); all rewriting is Rule-driven and all-match.
    `Filter.rewrite_relation` (spec §3.3) is a new field with default `None`;
    `RuleSet.apply` keeps the existing first-match admission path for pure-union
@@ -1593,7 +1593,7 @@ Facts verified against the repo, with deviations from the spec text noted:
    expansion only for triples admitted by rewriting Filters.
 
 8. **`.` is currently a legal identifier char everywhere** (`IDENTIFIER_CHARSET`,
-   `zanzibar_utils_v1.py::IDENTIFIER_CHARSET`), and the DSL parser never runs the
+   `src/zanzibar/schema/errors.py::IDENTIFIER_CHARSET`), and the DSL parser never runs the
    write-validators, so
    relation *declarations* are entirely unvalidated today. The §3.2 lexical lock
    ("schema declarations reject `.` in relation names") is enforced at parse time in
@@ -1608,7 +1608,7 @@ Facts verified against the repo, with deviations from the spec text noted:
 10. **MemberSet fold is module functions, not operators** (spec §5.3 "lift the fold
     rules/table, not the type"): the star fold to lift is exactly
     `a.stars | b.stars` (union), `a.stars & b.stars` (intersection),
-    `a.stars - b.stars` (exclusion) — `setengine/memberset.py::union` / `::intersect` /
+    `a.stars - b.stars` (exclusion) — `src/zanzibar/setengine/memberset.py::union` / `::intersect` /
     `::subtract`, each handing the folded stars to `::_normalize` — over
     plain `frozenset[tuple[str, str]]`. `neg` is never folded there (it is
     renormalized against interner-backed populations); the processor computes `neg`
@@ -1627,7 +1627,7 @@ Facts verified against the repo, with deviations from the spec text noted:
 ## 2026-07-07 — P1 (verification foundation)
 
 1. **Paranoia wiring mechanism** (spec §8.1 *(adapt)*): SQLAlchemy session events.
-   `index_v4.invariants.install_paranoia(session, store_id, schema_info)` listens on
+   `zanzibar.graphindex.invariants.install_paranoia(session, store_id, schema_info)` listens on
    `before_commit` (flush + check inside the transaction; `InvariantViolation` aborts
    the commit) and `after_commit` (re-check in a fresh `Session` on the same bind).
    Wired on by default in `tests.wildcard_helpers.make_wildcard_index` — i.e. every
@@ -1731,13 +1731,13 @@ Facts verified against the repo, with deviations from the spec text noted:
    (`store_id, object_node_id`), the relation index, and `version` are as specced.
 
 2. **Write-path return type is now `None`** (`add_edge`/`remove_edge`/`remove_node`/
-   `add_tuple`/`remove_tuple`): flips go to `DeltaOutboxV1` inside the transaction.
-   Back-compat drain: `index_v4.outbox.drain_deltas(session, store, after_id)` +
+   `add_tuple`/`remove_tuple`): flips go to `DeltaOutbox` inside the transaction.
+   Back-compat drain: `zanzibar.graphindex.outbox.drain_deltas(session, store, after_id)` +
    `outbox_watermark`. `PermissionDelta` survives as the drained value type.
    Delta-consuming tests migrated to watermark+drain; stream equivalence pinned by
    `tests/test_outbox.py::test_outbox_stream_matches_legacy_flips` (order included).
 
-3. **`EdgeV4.derived` is written by the façade's processor context** (`processor_writes`
+3. **`Edge.derived` is written by the façade's processor context** (`processor_writes`
    flag → `ReachabilityIndex._writing_derived` around the direct-edge update), set on
    direct-count increase, cleared when the direct count retires. Equivalent to I5's
    "incoming direct edge on a derived-public family" because exclusivity (P2) already
@@ -1760,7 +1760,7 @@ Facts verified against the repo, with deviations from the spec text noted:
    subject node is already gone maps to a *full-object* reconcile so the neg recompute
    prunes the dead id.
 
-2. **Derived-public nodes are pinned non-implicit**: they anchor `ResidueV1` rows
+2. **Derived-public nodes are pinned non-implicit**: they anchor `Residue` rows
    (star-only objects legitimately have residues with zero edges), and implicit GC on
    the last derived edge's removal would orphan the residue.
 
@@ -1829,7 +1829,7 @@ Facts verified against the repo, with deviations from the spec text noted:
    gap is **unreachable on the graph; closed as benign.** For rule-routed members to
    land on a tupleset node the tupleset relation would need a Computed/TTU arm (a
    rewrite rule only ever lands edges on the relation it *defines*, `_rewrite_rule` /
-   `_emit_expr`), but `_validate_ttu_tuplesets` (zanzibar_utils_v1.py) **rejects** any
+   `_emit_expr`), but `_validate_ttu_tuplesets` (src/zanzibar/schema/) **rejects** any
    untainted tupleset that is not directs-only with `UnsupportedByGraphIndex`. So the
    only untainted tuplesets that compile receive raw stored edges exclusively, and
    `tupleset_parents` cannot see a rule-routed member — the over-granting shape never
@@ -1844,7 +1844,7 @@ Facts verified against the repo, with deviations from the spec text noted:
 4. **Untainted `check` consolidation counts**: node-id resolution (≤2 concrete
    lookups; w-ids cached) stays separate from the single edge-probe statement
    (`tuple_(subject_id, object_id).in_(keys) ... LIMIT 1`), per the spec's own
-   description. The statement-counter test asserts exactly one edge_v4 statement per
+   description. The statement-counter test asserts exactly one edge statement per
    check (zero allowed on a no-key miss).
 
 5. **`lookup_reverse` on derived relations returns the canonical representation**:
@@ -1895,7 +1895,7 @@ unanimous accept/reject, identical checks over the same grids as before. Suite:
 1. **`enable_boolean` defaults flipped to True** in `compile_ruleset` and
    `parse_openfga_schema`; `enable_boolean=False` keeps the historical refusal
    reachable (one test pins it). Refusal tests replaced with compile-success +
-   plan-shape assertions (test_schema_ast, test_zanzibar_utils, test_integration).
+   plan-shape assertions (test_schema_ast, test_schema, test_integration).
 
 2. **Set-engine cycle parity now covers boolean schemas**: `compile_ruleset`
    succeeding means `SetEngine._ruleset` exists, so its flow-graph reproduces the
@@ -1947,7 +1947,7 @@ unanimous accept/reject, identical checks over the same grids as before. Suite:
      `test_processor.py::test_regression_public_node_gc_on_add_remove`.
    * **Duplicate-raw-add divergence** (stateful machine): adding the SAME raw tuple
      twice then removing once left the graph's ref-counted edge at count 1 while the
-     set engine/oracle (raw tuples are a SET; TupleV1 unique) dropped it — a
+     set engine/oracle (raw tuples are a SET; RelationTuple unique) dropped it — a
      pre-existing pure-union divergence no pool ever exercised (matrix pools filter
      `raw not in present`). The graph core stays ref-counted (two *different* raw
      tuples may rewrite to the same derived edge — counts are load-bearing there);
@@ -2115,7 +2115,7 @@ treatment (`user:*` is a subject like any other; membership composes). Oracle an
 set engine now flow through; the graph was already correct. The wildcard spec's
 "intensional, per branch" wording (§7) now applies to **object**-side stars only.
 
-**D2/P4 — userset subjects on derived relations are edge-free (`ResidueV1.upos`).**
+**D2/P4 — userset subjects on derived relations are edge-free (`Residue.upos`).**
 CRITICAL: a derived EDGE from a userset node (`group:g#member` satisfying the
 expression) is transitive — the closure grants every member, silently defeating
 each member's own pointwise exclusion (`a but not b` leaked to excluded members).
@@ -2216,7 +2216,7 @@ reverse) and asserts BOTH backends' lookup surfaces against it after every
 accepted op of seeded add/remove walks (drained to the empty store) plus
 dense scripted states — **exact (two-sided) where the API is exact, one-sided
 where the API drops information by design** (set `lookup_reverse` drops `neg`,
-`setengine/engine.py::SetEngine._ensure_flow_graph`). Coverage: `wildcards.fga` (+object wildcards),
+`src/zanzibar/setengine/engine.py::SetEngine._ensure_flow_graph`). Coverage: `wildcards.fga` (+object wildcards),
 `boolean_wildcards.fga`, `demorgans_reverse.fga`. Permanent tamper tests
 (leaked id, dropped id, cleared exclusions, dropped neg) prove the checkers
 bite. 15 tests: 10 pass + 5 **strict xfails** — the xfails pin GENUINE
@@ -2384,7 +2384,7 @@ matrix now queries userset subjects on derived-TTU families after every op.
 
 ## 2026-07-13 — FIXED: self-referential TTU-parent add/remove state non-restoration (answer-benign)
 
-**Status: FIXED 2026-07-13** (`index_v4/processor.py` reconcile step 2a; regression
+**Status: FIXED 2026-07-13** (`src/zanzibar/graphindex/processor.py` reconcile step 2a; regression
 `tests/test_self_referential_tuples.py`). Found by the hypothesis campaign
 (`tests/test_hypothesis.py::test_add_then_remove_restores_row_multiset`); a
 falsifying example was discovered and persisted to the (gitignored) `.hypothesis/`
@@ -2451,7 +2451,7 @@ Three pre-existing set-engine divergences, all on states combining star tupleset
 parents (`[T, T:*]`) with TTU chains — a constellation NO prior corpus built. The
 first was found by the N17 design review (a `check`-recursion vs walk-hop audit),
 the other two by N17's new fuzz artifacts on their first runs. All fixed
-2026-07-15 (`setengine/engine.py`), landed with N17; the graph index and oracle
+2026-07-15 (`src/zanzibar/setengine/engine.py`), landed with N17; the graph index and oracle
 were never wrong — these are set-engine-only surface/admission bugs.
 
 1. **Walk drops downstream objects behind a STAR bare parent (H3 gap).** A stored
@@ -2478,7 +2478,7 @@ were never wrong — these are set-engine-only surface/admission bugs.
    same-type star parent `folder:* parent folder:f2` routes (TTU-rewrite
    through-shape) to `folder:*#viewer viewer folder:f2`, which the graph rejects
    by construction (bridge-before-grant: the object's in-bridge to the star
-   userset node + the grant edge = two-cycle; `index_v4/wildcard.py`'s reworded
+   userset node + the grant edge = two-cycle; `src/zanzibar/graphindex/wildcard.py`'s reworded
    cycle error). The set engine's §1.5 same-shape check only saw the RAW tuple
    (bare subject) and its flow graph carries only RuleSet-derived edges, never
    the materialized bridges — so it ACCEPTED. Found by the seed-7 hypothesis
@@ -2523,9 +2523,9 @@ rejects the 2nd (cycle `(folder,c,viewer) → (folder,y,admin) →[in-bridge] w_
 →[rule] (folder,c,viewer)`); the set engine's flow graph carried the two rule edges
 but not the materialized in-bridge, so it accepted. `ParityEngine` fires.
 
-**Fix (set engine only — `setengine/engine.py`).** The write-time cycle check
+**Fix (set engine only — `src/zanzibar/setengine/engine.py`).** The write-time cycle check
 (`_flow_reaches` / `_would_cycle`) is now **bridge-aware**, mirroring
-`index_v4/wildcard.py` `_ensure_bridges`: concrete `(T,x,p)` → `w_any(T,p)` for
+`src/zanzibar/graphindex/wildcard.py` `_ensure_bridges`: concrete `(T,x,p)` → `w_any(T,p)` for
 `bridged_in_shapes`, and `w_all(T,p)` → concrete for `bridged_out_shapes`, with
 `w_any`/`w_all` kept **distinct** (flow-graph star nodes are position-tagged 4-tuples
 `(T,'*',p,'any'|'all')`) so an in-bridge and an out-bridge on the same shape can't fuse
@@ -2665,7 +2665,7 @@ nothing detonates.
 > ⚠ **PARTLY FALSE — corrected 2026-07-26 (ZT-P5-NEW).** The clause "cannot mint a
 > persistent `w_any` node … so nothing detonates" is **wrong**. On reg11's OWN schema a
 > single `folder:* parent folder:*` write mints exactly such a node: the routed edge is
-> `w_any(folder,viewer) → w_all(folder,viewer)`, two DISTINCT `node_v4` rows under the
+> `w_any(folder,viewer) → w_all(folder,viewer)`, two DISTINCT `node` rows under the
 > position-split encoding, so it is not a self-loop and the cycle check never fires. It
 > was graph-ACCEPTED / set-REJECTED, and it **did** detonate — every later innocent
 > concrete `viewer` grant was permanently graph-rejected while the oracle said it should
@@ -2679,7 +2679,7 @@ nothing detonates.
 > reject the legal reg11 / `owc_star_ttu` class wholesale.
 >
 > The fix is therefore a **write-time** rejection, not a schema rejection:
-> `index_v4/wildcard.py::WildcardIndex._reject_star_self_edge` refuses a routed
+> `src/zanzibar/graphindex/wildcard.py::WildcardIndex._reject_star_self_edge` refuses a routed
 > `w_any(T,p) → w_all(T,p)` edge when the shape is in `bridged_in ∩ bridged_out` — a
 > cycle by construction, since bridges are schematic, so every present and future
 > concrete `T:x#p` closes `w_any → w_all → concrete → w_any`. This is the position-split
@@ -2695,7 +2695,7 @@ object-wildcard on `viewer`) IS genuinely doubly-bridged and **did** exhibit the
 accept/reject divergence (`folder:x#viewer viewer folder:*` graph-accepted, set-rejected) —
 those three tests were migrated to drop the superfluous, never-exercised OWC.
 
-**Fix (both backends, symmetric).** `zanzibar_utils_v1.py`:
+**Fix (both backends, symmetric).** `src/zanzibar/schema/`:
 - New `DoublyBridgedShapeError(UnsupportedByGraphIndex)` — its OWN type so the set engine
   can single it out (the other scope rejections the set engine *swallows* into an
   oracle-only/ruleset-less mode; this one it must **re-raise**, so both backends reject
@@ -2706,12 +2706,12 @@ those three tests were migrated to drop the superfluous, never-exercised OWC.
   propagation-derived intersection — the P3 case, where `viewer` is never *declared* an
   object wildcard but the compiler propagates it onto the OWC set through the `viewer from
   parent` TTU head).
-- `setengine/engine.py` re-raises `DoublyBridgedShapeError` (instead of swallowing it with
+- `src/zanzibar/setengine/engine.py` re-raises `DoublyBridgedShapeError` (instead of swallowing it with
   the other `UnsupportedByGraphIndex` scope rejections). Because the compiler runs
   expansion internally, this also covers the P3 propagation case the set engine's own
   *unexpanded* `schema_info` would miss.
 
-**(d) Safeguard (defense-in-depth, always-on, never fires).** `setengine/engine.py`
+**(d) Safeguard (defense-in-depth, always-on, never fires).** `src/zanzibar/setengine/engine.py`
 `_flow_reaches` gains a **ghost hop**: at a `w_all(T,p)` node whose shape is doubly-bridged
 (`self.doubly_bridged`, computed once from the literal-restriction ∩ object-wildcard set),
 it ALSO steps `w_all(T,p) → w_any(T,p)` — the virtual composition of the out-bridge and the
@@ -2721,7 +2721,7 @@ unreachable** (`self.doubly_bridged` is always empty for any constructible engin
 `self._ghost_hop_fired` flag (init `False`) flips only if the compile gate is
 bypassed/regressed, and `test_reg12_ghost_hop_never_fires_on_legal_star_bridges` asserts it
 never fires on the legal reg10/reg11 star-bridge sequences. A mirror-side note (no assert,
-since the precise check needs the AST) documents the same in `index_v4/wildcard.py`
+since the precise check needs the AST) documents the same in `src/zanzibar/graphindex/wildcard.py`
 `WildcardIndex.__init__`.
 
 **Regression pins** (`tests/test_lookup_oracle.py`, the reg12 block): F1 + F2 rejected on
@@ -2750,7 +2750,7 @@ hardened across six items:
 - **G2 — concrete usersets in `schema_asts`** (`schema_asts` `expr`): the leaf strategy now
   optionally emits a CONCRETE userset `[doc#r_k]` over an earlier (possibly derived)
   relation. When `r_k` is tainted this compiles to a `PDerivedUserset` and drives the
-  `ResidueV1.upos` / `_find_leaf_node` reconcile paths (2× historical CRITICALs found by
+  `Residue.upos` / `_find_leaf_node` reconcile paths (2× historical CRITICALs found by
   review, not fuzzing — 2026-07-08 D2, review-2 #1). `_op_pool` already routes the userset
   subject-predicate writes. Deterministic pin: `test_pderived_userset_add_remove_
   deterministic_pin`.
@@ -2769,7 +2769,7 @@ hardened across six items:
   proceed as before. Ghost-hop never-fires asserted in every machine teardown that reaches a
   SetEngine.
 - **G5 — `rebuild` + `remove_node`**: a low-frequency `rebuild_sets` rule (set-engine replay
-  from `TupleV1`, spec §6.5, asserting post-rebuild grid equality) added to both machines. A
+  from `RelationTuple`, spec §6.5, asserting post-rebuild grid equality) added to both machines. A
   `remove_node` PARITY rule was NOT added — the set engine has no node-level removal, so it
   cannot fan out through ParityEngine without a set-engine API change (declined per the
   no-forced-API-change instruction); remove_node + I13 (the 2026-07-08 refcount CRITICAL) is
@@ -2865,7 +2865,7 @@ schemas is the excluded-and-filed class).
 
 ## 2026-07-17 — FIXED: graph silently dropped no-restriction-match writes (accept/reject parity)
 
-**Status: FIXED** (`zanzibar_utils_v1.py` `RuleSet.apply`; regression `tests/test_lookup_oracle.py`
+**Status: FIXED** (`src/zanzibar/schema/` `RuleSet.apply`; regression `tests/test_lookup_oracle.py`
 reg13 block; test update `tests/test_wildcard_schema.py::test_concrete_filter_rejects_wildcard_tuple`).
 
 **Scout report.** On `boolean_wildcards`-shaped schemas the write `group:*#member editor doc:d1`
@@ -2924,7 +2924,7 @@ no modeled algorithm changes. The graph's acyclicity/admission model (`GraphAcce
 
 ## 2026-07-17 — FIXED: the three OPEN 2026-07-17 divergences CLOSED (+ a 4th found en route)
 
-**Status: FIXED** (`index_v4/processor.py`, `index_v4/bulk_backfill.py`, `index_v4/invariants.py`).
+**Status: FIXED** (`src/zanzibar/graphindex/processor.py`, `src/zanzibar/graphindex/bulk_backfill.py`, `src/zanzibar/graphindex/invariants.py`).
 The three OPEN/latent divergences filed earlier today (the "fuzzer blind-spot hardening" entry
 above) were root-caused and fixed — no longer file-and-pin, now closed with the strict xfails
 flipped to plain regression pins. A **4th** divergence in the same family surfaced during
@@ -2952,7 +2952,7 @@ helper).** Both branches now lift the referenced relation's residue `upos` membe
 set — the direct analog of the X4b TTU lift. **Safety:** the lift only *widens* the candidate set;
 membership is still decided by `plan.check_fn` (evaluation), so it cannot over-grant, and it reads
 strictly-lower-stratum residues (no new cascade rounds, no quiescence risk). Mirrored into
-`index_v4/bulk_backfill.py` (same two branches) so bulk build sees the same members. Closes:
+`src/zanzibar/graphindex/bulk_backfill.py` (same two branches) so bulk build sees the same members. Closes:
 - **xfail #2** `test_lookup_oracle.py::test_graph_from_chain_userset_through_boolean_ttu_arm` —
   flipped to a plain regression pin.
 - **xfail #3** `test_lookup_oracle.py::test_graph_userset_subject_through_derived_wildcard_gap` —
@@ -3030,7 +3030,7 @@ with an incoming direct edge). Two symmetric halves:
 
 ### reg13 — cross-reference (not duplicated)
 
-The graph vacuous-accept admission wart in `zanzibar_utils_v1.py::RuleSet.apply` (pure-union no-match
+The graph vacuous-accept admission wart in `src/zanzibar/schema/rules.py::RuleSet.apply` (pure-union no-match
 branch silently dropped a raw tuple where the set engine raises) was found by a scout in this same
 session and is written up in its own dated entry directly above ("graph silently dropped
 no-restriction-match writes"). It is a unanimity wart, not a completeness gap (0 rows materialized),
@@ -3084,11 +3084,11 @@ The connected-store spec (§2.4 admission, §2.5 freshness tokens) was written
 consumed only on `ConnectedStore.check`. The code now adds the multi-instance
 discipline — several `TupleSource`/`ConnectedStore` instances (one `Session` each)
 sharing a store, each set engine instance-local in-memory and synced from
-`TupleLogV1`. Additive; no single-instance behavior changes.
+`TupleLog`. Additive; no single-instance behavior changes.
 
 The new / relocated mechanisms:
 
-1. **`SetEngine.apply_logged`** (`setengine/engine.py`) — trusted replay of one
+1. **`SetEngine.apply_logged`** (`src/zanzibar/setengine/engine.py`) — trusted replay of one
    *committed* log row into in-memory state only (no validation, no DB writes). It
    performs exactly the `_apply_add`/`_apply_remove` sequence `rebuild()` would, so
    the state after tailing a log prefix equals a rebuild at that prefix
@@ -3109,12 +3109,12 @@ The new / relocated mechanisms:
 
 3. **`_lock_source` + the write critical section** — `add`/`remove` now run
    `_lock_source()` → `catch_up_evaluator()` → validate → `_append`, one transaction.
-   `_lock_source` takes a `FOR UPDATE` lock on the store's `SchemaV4` row
+   `_lock_source` takes a `FOR UPDATE` lock on the store's `SchemaRecord` row
    (transaction-memoed on `Session.get_transaction()` identity, mirroring
    `ReachabilityIndex._lock_store`). Under the lock no new commit can appear, so
    duplicate detection / remove-existence / cycle parity validate against **current
    committed state**, not a stale local cache. **LOCK ORDERING**: source lock
-   (`SchemaV4`) is taken before the graph store lock (`StoreV4`, inside
+   (`SchemaRecord`) is taken before the graph store lock (`Store`, inside
    `advance_index`) — one global order, deadlock-free.
 
    **This closes a latent, pre-existing real bug — not merely a new-feature
@@ -3133,7 +3133,7 @@ The new / relocated mechanisms:
    if the token is still not visible in this session's snapshot.
 
 5. **`StaleRead` relocated** from `store.py` to `source.py` (it is raised first by
-   `TupleSource.check`); **still re-exported** from `connectedstore.store` for
+   `TupleSource.check`); **still re-exported** from `zanzibar.connectedstore.store` for
    backward compatibility.
 
 6. **`ConnectedStore.check` fallback tails instead of rebuilding** — when the index
@@ -3141,7 +3141,7 @@ The new / relocated mechanisms:
    `catch_up_evaluator()`s (O(delta)) rather than a full O(store) rebuild.
 
 7. **`SetEngine.result_keys` + `LookupResult` instance-locality warning**
-   (`setengine/engine.py`) — `LookupResult.node_ids` are recycled instance-local
+   (`src/zanzibar/setengine/engine.py`) — `LookupResult.node_ids` are recycled instance-local
    interner ids, meaningless to another instance/process over the same store;
    `result_keys` translates them to the stable `(type, name, predicate)` surrogate
    keys — the portable form for any service boundary (`markers` are already
@@ -3174,7 +3174,7 @@ ZT-P0-1). **This was a real authorization escalation, not a canonicalization war
 `check` returned ALLOW where the oracle returned DENY. Reproduced, then fixed, then
 pinned by `tests/test_reg14_residue_gc_elision.py`.
 
-**What was wrong.** `DeltaProcessor` used to skip the `ResidueV1` scan in
+**What was wrong.** `DeltaProcessor` used to skip the `Residue` scan in
 `_keys_referencing` on any schema whose every leaf kind fell in a whitelist
 `_RESIDUE_LOCAL_LEAF_KINDS = {'closure', 'derived-computed'}` (the N3 perf item,
 2026-07-14). With the scan elided, `_residue_references` returned False
@@ -3276,7 +3276,7 @@ predicate-position sentinel. No principal confusion — but for a stronger reaso
 one originally given.
 
 **ZT-P1-2 — 16 load-bearing safety checks vanished under `python -O`.**
-`index_v4/core.py` (plus one in `processor.py`) expressed store invariants as bare
+`src/zanzibar/graphindex/core.py` (plus one in `processor.py`) expressed store invariants as bare
 `assert`s. Three were the only guard on their path: the batch/bridge expansion **cycle
 detector** (bypassed ⇒ unbounded path counts ⇒ permanent phantom reachability ⇒ **stale
 ALLOW**), the two **refcount-underflow** guards (⇒ GC stops, silent divergence from the
@@ -3304,7 +3304,7 @@ SHARED with the full checker, not duplicated, so the tiers cannot drift.
 O(objects carrying derived state)); `full` is +124%/+303%. Shipping a silent ~5%-and-
 rising write regression was judged worse than an accurate docstring, which now carries
 these numbers and recommends operators set `ZANZIBAR_PARANOIA=residue`. **I5 was
-deliberately kept OUT of the cheap tier** — as written it is a full `EdgeV4` scan, which
+deliberately kept OUT of the cheap tier** — as written it is a full `Edge` scan, which
 would have quietly made "cheap" O(store); that boundary is itself pinned by a test.
 
 **ZT-P1-7 — a caller `begin_nested()` silently disabled BOTH locks.** `_lock_store` /
@@ -3441,7 +3441,7 @@ type folder
 * **graph index: ACCEPTED.** `RuleSet.apply` routes it to
   `folder:*#viewer @ folder:*#viewer`, which is NOT a self-loop in the graph
   because the wildcard node is position-split (spec §1.2/§1.3): the edge is
-  `w_any(folder,viewer) -> w_all(folder,viewer)` between two distinct `node_v4`
+  `w_any(folder,viewer) -> w_all(folder,viewer)` between two distinct `node`
   rows (`wildcard='any'` / `'all'`). The cycle check does not fire.
 * **set engine: REJECTED** on both `SetOps` ("would create a cycle in the userset
   membership topology"). `ConnectedStore` is therefore NOT exposed — `TupleSource`
@@ -3500,7 +3500,7 @@ type folder
 > **FIXED 2026-07-26, later the same day** — correction appended 2026-08-20 (row `HS-2`),
 > because for three weeks this bullet was the only thing a reader of this entry saw and it
 > says "NOT FIXED". The second candidate direction is what landed:
-> `index_v4/wildcard.py::WildcardIndex._reject_star_self_edge` refuses the routed
+> `src/zanzibar/graphindex/wildcard.py::WildcardIndex._reject_star_self_edge` refuses the routed
 > `w_any(T,p) → w_all(T,p)` edge at WRITE time when the shape is in
 > `bridged_in ∩ bridged_out` — see the `## 2026-07-17 — F1/F2 CLOSED` entry, whose
 > "Precision of the criterion" paragraph carries the design and the reason it is not a
@@ -3736,13 +3736,13 @@ entries above keep theirs, because they record what was believed at the time.
 ### VERIFIED (previously reasoned-only)
 
 * **`FOR UPDATE` is real, blocking, and row-granular.** `TupleSource._lock_source` on the
-  store's `SchemaV4` row makes a second writer sit in the lock queue until the server
+  store's `SchemaRecord` row makes a second writer sit in the lock queue until the server
   cancels it (`QueryCanceled` after the statement timeout, not an instant pass-through),
   while a *different* store's row stays free — so it is a row lock, not a table lock — and
   it releases on commit. This arm had never executed in the repo's history.
 * **The documented LOCK ORDERING invariant holds**, observed rather than argued: with the
-  graph `StoreV4` row held by a third party, a writer queues on *that* lock while already
-  holding the `SchemaV4` one — source lock before store lock, exactly as the docstring
+  graph `Store` row held by a third party, a writer queues on *that* lock while already
+  holding the `SchemaRecord` one — source lock before store lock, exactly as the docstring
   claims.
 * **Multi-writer admission is sound under real contention.** 4 concurrent `TupleSource`
   instances on one store produce log rows that are contiguous and exactly-once, and the
@@ -3779,7 +3779,7 @@ entries above keep theirs, because they record what was believed at the time.
    silently disarmed. **This is the entry's headline lesson: an unsupported-database fact,
    sitting in a comment, was half the justification for a real bug.**
 3. **`assert_read_isolation` was not on the public write path.** It ran only in
-   `ConnectedStore.__init__`, while `TupleSource` — exported from `connectedstore/__init__`
+   `ConnectedStore.__init__`, while `TupleSource` — exported from `src/zanzibar/connectedstore/__init__`
    and a complete write path in its own right — got no check at all. The reproduced
    SERIALIZABLE escalation ran entirely through `TupleSource`, never touching
    `ConnectedStore`. It is now called from `TupleSource.__init__` too (cheap, idempotent, a
@@ -3825,7 +3825,7 @@ where the fix is deliberately NARROWER than the finding, and the residuals.
 
 **`lookup(at_least=)` REFUSES; it does not fall back.** `check`'s third rung answers
 from the set engine when the index lags. The enumeration surfaces cannot: graph
-`node_ids` are `NodeV4` row ids, set-engine ones are recycled instance-local interner
+`node_ids` are `Node` row ids, set-engine ones are recycled instance-local interner
 ids; markers are `(type, predicate, variant)` triples vs `(type, predicate)` pairs; and
 `excluded_node_ids` — the derived `neg` channel — has no set-engine counterpart at all.
 A fallback would silently change *what the return value means* as a function of worker
@@ -3869,7 +3869,7 @@ counted before anything is materialised, so a rejection leaves no partial state.
    holes were named, and both turned out to be reachable (the wildcard-userset one only
    over UNTAINTED relations — over derived relations it is a compile-time scope
    rejection, so the surface is narrower than the finding read).
-4. **`_any_residue_reference`'s complete `ResidueV1` scan is still unbenchmarked**, and
+4. **`_any_residue_reference`'s complete `Residue` scan is still unbenchmarked**, and
    it is now unconditional on every node-release path after the `ZT-P0-1` fix.
 
 > **Live status of these four → [`latent-gaps.md`](latent-gaps.md)** (correction appended
@@ -3881,7 +3881,7 @@ counted before anything is materialised, so a rejection leaves no partial state.
 ### Two findings that only appeared because a fix forced an audit
 
 * `processor_writes` had a **downstream mirror** — `ReachabilityIndex._writing_derived`,
-  the bool the row writer actually consults to stamp `EdgeV4.derived`, with the same
+  the bool the row writer actually consults to stamp `Edge.derived`, with the same
   shared-object defect. Fixing one flag without auditing every site would have left the
   half that touches the stored row.
 * `prune_outbox` must **keep the head row**. `id` is the SQLite rowid, so emptying the
@@ -3910,7 +3910,7 @@ wider than the reachable surface in one case, and narrower in the other.
 
 1. **Wildcard usersets `[T:*#p]` are reachable ONLY over UNTAINTED relations.**
    Over a **derived** relation the shape is a deliberate compile-time scope
-   rejection — `zanzibar_utils_v1.py::_build_plan_tree`'s `Direct` arm raises
+   rejection — `src/zanzibar/schema/boolean.py::_build_plan_tree`'s `Direct` arm raises
    `UnsupportedByGraphIndex` ("needs symbolic composition through residues"), and
    it raises out of `parse_openfga_schema` itself, so such a schema cannot be a
    conformance corpus at all (the plan-leaf coverage floor and
@@ -3964,7 +3964,7 @@ rule, and both were sabotaged red before being believed:
   so `test_every_plan_leaf_kind_is_reached_by_some_corpus` stays green while the
   TTU is empty and the differential compares nothing.
 Also added: `test_required_leaf_kinds_are_exactly_the_compilers_kinds`, which
-reads the kind literals out of `zanzibar_utils_v1._plan_leaves`' own source — a
+reads the kind literals out of `zanzibar.schema._plan_leaves`' own source — a
 hand-maintained "required kinds" list is itself a check that fails by passing
 once the compiler grows a branch.
 

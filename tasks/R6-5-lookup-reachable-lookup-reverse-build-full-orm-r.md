@@ -16,7 +16,7 @@ updated: 2026-09-22b
 closed:
 ---
 
-`index_v4/core.py::ReachabilityIndex.lookup_reachable`
+`src/zanzibar/graphindex/core.py::ReachabilityIndex.lookup_reachable`
 
 **Measured (2026-08-17 motivating-measurement pass):** **22,410 ORM rows built (32.7% of profiled time)** to read 3–4 columns; `lookup_reachable` + `_classify_ids` together are **52%** of a boolean lookup. Filed medium, measured as the largest single block.
 
@@ -33,7 +33,7 @@ closed:
 - [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §`### R6-5` — the entry, **including its verifier corrections**
 - the same file, §"Traps the numbers do not carry" — the round-wide traps. Read the section; it is short, and it is the only home for how many there are. (This line used to say "the five", attributed to the tree generator recounting them at generation time. That generator was deleted with `.scratch/tasktool/` on 2026-09-07, so the attribution named a mechanism that could not run — `TK61`, reworded 2026-09-07b. A bare "five" with no attribution would have been worse: that is an unsourced restated count.)
 - [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md) — verdicts, method, and the two honest limits (in-memory SQLite understates statement-count wins; cProfile depresses throughput)
-- `index_v4/core.py::ReachabilityIndex.lookup_reachable` — the code
+- `src/zanzibar/graphindex/core.py::ReachabilityIndex.lookup_reachable` — the code
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the fence and the reopening rule
 - `python scripts/task.py show R6` — the parent: round-wide order, traps and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
@@ -50,23 +50,23 @@ MEASURED 2026-09-22b: THE 32.7% IS NOT THIS ROW'S, AND ~26.8% OF IT BELONGS TO R
 The figure is one profile line -- `22410 ... sqlalchemy/orm/loading.py:1068(_instance)` -- which
 is SQLAlchemy's GENERIC ORM-instance constructor, i.e. every ORM construction in the run.
 `benchmarks/profile_r6.py::target_graph_lookup`'s banner is literally "[R6-4, R6-5]": ONE run
-serves both rows, and `_collect_residue_memberships` builds ResidueV1 rows inside it.
+serves both rows, and `_collect_residue_memberships` builds Residue rows inside it.
 
 Probe: `.scratch/r6-decomp/probe_instance_by_class.py`, same workload as the 2026-08-17 pass
 (demorgans_law_2, scale 40, 60 lookups, 980 raw tuples, 100 residue rows). It counts a
 SQLAlchemy InstanceEvents.load per mapped class. Literal output:
 
   ORM instances materialised during the 60 lookups: 22,410
-       8,280  ( 36.9%)  NodeV4     <- R6-5
-       8,130  ( 36.3%)  EdgeV4     <- R6-5
-       6,000  ( 26.8%)  ResidueV1  <- R6-4
+       8,280  ( 36.9%)  Node     <- R6-5
+       8,130  ( 36.3%)  Edge     <- R6-5
+       6,000  ( 26.8%)  Residue  <- R6-4
   R6-4 (residue rows)   : 6,000  (26.8%)
   R6-5 (node/edge rows) : 16,410 (73.2%)
   unattributed          : 0
 
 INSTRUMENT CONTROL: the deduped total is EXACTLY 22,410, reconciling to the profile's own
-recorded line. The first run of the probe reported 38,820 because `dir(index_v4.models)` exposes
-NodeV4/EdgeV4/StoreV4 under two names each and it registered two listeners per class -- the
+recorded line. The first run of the probe reported 38,820 because `dir(zanzibar.graphindex.models)` exposes
+Node/Edge/Store under two names each and it registered two listeners per class -- the
 disagreement with the recorded figure is what exposed it. Dedupe by class identity.
 
 CONSEQUENCES: this row's true share is 73.2% x 32.7% ~= 23.9 points, not 32.7. R6-4 is
@@ -79,4 +79,4 @@ BE ADDED; the row's "52%" is also `22.6 + 29.6` where the 29.6 `_classify_ids` c
 
 Full audit: docs/r6-sizing-census-2026-09-22.md
 
-Path correction, same session: the probe cited in the 2026-09-22b entry above now lives in the TRACKED tree at benchmarks/probe_r6_instance_by_class.py. It was first cited at a gitignored .scratch/ path, which would have rotted the citation and lost the instrument -- the measurement is evidence, so the instrument belongs in the tree. Re-run from the repo root; output is byte-identical (6,000 ResidueV1 / 16,410 NodeV4+EdgeV4, deduped total 22,410 reconciling to the profile line).
+Path correction, same session: the probe cited in the 2026-09-22b entry above now lives in the TRACKED tree at benchmarks/probe_r6_instance_by_class.py. It was first cited at a gitignored .scratch/ path, which would have rotted the citation and lost the instrument -- the measurement is evidence, so the instrument belongs in the tree. Re-run from the repo root; output is byte-identical (6,000 Residue / 16,410 Node+Edge, deduped total 22,410 reconciling to the profile line).

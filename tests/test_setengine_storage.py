@@ -1,7 +1,7 @@
 """
 P3 tests (spec §5, §6.1-6.2): set-engine storage, writes, validation, and replay.
 
-  * replay-equivalence: state rebuilt from the TupleV1 table equals the live state;
+  * replay-equivalence: state rebuilt from the RelationTuple table equals the live state;
   * accept/reject parity vs the graph backend over randomized op sequences (including
     the cycles the graph rejects -- group-membership and from-chain);
   * type-restriction validity ([user] rejects user:*, undeclared object wildcards, etc.).
@@ -12,9 +12,9 @@ import random
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
-from setengine import SetEngine, TupleV1, ALL_SETOPS
-from setengine.setops import PySets
+from zanzibar.schema import parse_openfga_schema, Entity, RelationalTriple
+from zanzibar.setengine import SetEngine, RelationTuple, ALL_SETOPS
+from zanzibar.setengine.setops import PySets
 from tests.wildcard_helpers import make_wildcard_index
 
 # Reuse the property harness's universe + candidate pool (spec §7.1: extend, don't rewrite).
@@ -23,7 +23,7 @@ from tests.test_wildcard_property import _candidate_raw_tuples, OBJECT_WC
 
 def _fresh_session() -> Session:
     engine = create_engine('sqlite:///:memory:')
-    SQLModel.metadata.create_all(engine)      # creates tuple_v1 + graph tables
+    SQLModel.metadata.create_all(engine)      # creates relation_tuple + graph tables
     return Session(engine)
 
 
@@ -70,12 +70,12 @@ def test_replay_equivalence(load_fga_schema, ops):
             session.rollback()
 
     live = _membership_edges(se)
-    # discard all in-memory state, rebuild purely from the TupleV1 rows
+    # discard all in-memory state, rebuild purely from the RelationTuple rows
     se.rebuild()
     assert _membership_edges(se) == live
 
     # the table holds exactly the present tuples
-    rows = session.exec(select(TupleV1).where(TupleV1.store_id == 'st')).all()
+    rows = session.exec(select(RelationTuple).where(RelationTuple.store_id == 'st')).all()
     stored = {(r.subject_predicate, r.subject_type, r.subject_name, r.relation,
                r.object_type, r.object_name) for r in rows}
     assert stored == present

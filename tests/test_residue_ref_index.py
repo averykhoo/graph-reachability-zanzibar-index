@@ -1,14 +1,14 @@
-"""The ``ResidueRefV1`` reverse index -- correctness, maintenance, and its detector.
+"""The ``ResidueRef`` reverse index -- correctness, maintenance, and its detector.
 
 The node-release guards (``_gc_subject_node`` / ``_gc_public_node`` /
 ``_demote_released_node``) ask "does ANY residue reference this node id?". That used to
-be a complete ``ResidueV1`` scan with a per-row JSON decode, measured at ~15 us/residue
+be a complete ``Residue`` scan with a per-row JSON decode, measured at ~15 us/residue
 row and quadratic under churn (``docs/spec-deviations.md`` 2026-07-29b). It is now an
-indexed seek on ``ResidueRefV1``, the index ``ZT-P0-1``'s own note prescribed.
+indexed seek on ``ResidueRef``, the index ``ZT-P0-1``'s own note prescribed.
 
 **The property these tests guard:** the indexed lookups answer EXACTLY what the old
-full scan answered -- i.e. ``ResidueRefV1`` is a faithful reverse index of the
-authoritative ``ResidueV1.neg | upos`` JSON, on every write path, after every
+full scan answered -- i.e. ``ResidueRef`` is a faithful reverse index of the
+authoritative ``Residue.neg | upos`` JSON, on every write path, after every
 maintenance operation. Under-coverage is an authorization escalation (a guard that
 believes nothing references a node deletes it, dangling the recording -- ZT-P0-1);
 over-coverage pins nodes alive forever and drifts the state-functional canonical form.
@@ -38,7 +38,7 @@ predicted outcomes were WRONG; the corrections are the useful part and are kept.
        witness. OBSERVED: it does NOT stay green, because ``test_bulk_build.py``
        calls ``check_invariants`` and the new I6 clause fires inside it --
            5 failed, 2 passed in 4.32s
-           index_v4.invariants.InvariantViolation: I6: residue_ref index disagrees
+           zanzibar.graphindex.invariants.InvariantViolation: I6: residue_ref index disagrees
            with neg|upos on store_id='demorgan1_bulk' type='doc' wildcard=''
            implicit=False id=62 predicate='non_labels' name='d1' reference_count=0:
            indexed=[] recorded=[37, 39]
@@ -74,14 +74,14 @@ import json
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import TupleSource, build_index, save_schema
-from index_v4.invariants import (InvariantViolation, check_invariants,
+from zanzibar.connectedstore import TupleSource, build_index, save_schema
+from zanzibar.graphindex.invariants import (InvariantViolation, check_invariants,
                                  check_residue_hygiene)
-from index_v4.models import NodeV4, ResidueRefV1, ResidueV1
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
+from zanzibar.graphindex.models import Node, ResidueRef, Residue
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
 from tests.wildcard_helpers import make_wildcard_index
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 
 # Wildcard grant (=> `stars`, and `neg` for the excluded), userset grants (=> `upos`),
 # and an exclusion to drive both. All three residue fields are populated -- pinned by
@@ -149,14 +149,14 @@ class _Harness:
 
 # --------------------------------------------------------------------------- #
 # Independent reference: the pre-index implementation. Decodes the authoritative
-# JSON and never touches ResidueRefV1 -- see the module docstring on mirroring.
+# JSON and never touches ResidueRef -- see the module docstring on mirroring.
 # --------------------------------------------------------------------------- #
 
 def _recorded_subject_ids(session, store_id) -> dict[int, set[int]]:
     """``object_node_id -> {subject node ids in neg | upos}``, straight from the JSON."""
     out: dict[int, set[int]] = {}
     for r in session.exec(
-            select(ResidueV1).where(ResidueV1.store_id == store_id)).all():
+            select(Residue).where(Residue.store_id == store_id)).all():
         out[r.object_node_id] = set(json.loads(r.neg)) | set(json.loads(r.upos))
     return out
 
@@ -166,9 +166,9 @@ def _reference_keys_referencing(session, store_id, node_id) -> list:
     liveness filter (a recording whose object node row is gone yields no key)."""
     out = []
     for r in session.exec(
-            select(ResidueV1).where(ResidueV1.store_id == store_id)).all():
+            select(Residue).where(Residue.store_id == store_id)).all():
         if node_id in json.loads(r.neg) or node_id in json.loads(r.upos):
-            obj = session.get(NodeV4, r.object_node_id)
+            obj = session.get(Node, r.object_node_id)
             if obj is not None:
                 out.append((obj.type, obj.predicate, obj.name))
     return out
@@ -178,7 +178,7 @@ def _reference_any_reference(session, store_id, node_id) -> bool:
     """Verbatim behaviour of the scan ``_any_residue_reference`` replaced: membership
     only, with NO liveness filter (the conservative direction for a demotion guard)."""
     for r in session.exec(
-            select(ResidueV1).where(ResidueV1.store_id == store_id)).all():
+            select(Residue).where(Residue.store_id == store_id)).all():
         if node_id in json.loads(r.neg) or node_id in json.loads(r.upos):
             return True
     return False
@@ -187,14 +187,14 @@ def _reference_any_reference(session, store_id, node_id) -> bool:
 def _index_contents(session, store_id) -> dict[int, set[int]]:
     out: dict[int, set[int]] = {}
     for row in session.exec(
-            select(ResidueRefV1).where(ResidueRefV1.store_id == store_id)).all():
+            select(ResidueRef).where(ResidueRef.store_id == store_id)).all():
         out.setdefault(row.object_node_id, set()).add(row.subject_node_id)
     return out
 
 
 def _all_node_ids(session, store_id) -> list[int]:
     return [n.id for n in session.exec(
-        select(NodeV4).where(NodeV4.store_id == store_id)).all()]
+        select(Node).where(Node.store_id == store_id)).all()]
 
 
 # --------------------------------------------------------------------------- #
@@ -207,7 +207,7 @@ def test_the_fixture_populates_all_three_residue_fields():
     g = _Harness().seed()
     try:
         rows = g.session.exec(
-            select(ResidueV1).where(ResidueV1.store_id == STORE)).all()
+            select(Residue).where(Residue.store_id == STORE)).all()
         assert rows, 'no residue rows at all -- every test in this file is vacuous'
         stars = {tuple(s) for r in rows for s in json.loads(r.stars)}
         neg = {n for r in rows for n in json.loads(r.neg)}
@@ -314,9 +314,9 @@ def test_residue_emptied_in_one_step_takes_its_index_rows_with_it():
         g.apply(('member', 'group', 'g2', 'viewer', 'doc', 'x'), 'remove')
 
         assert g.session.exec(
-            select(ResidueV1)
-            .where(ResidueV1.store_id == STORE)
-            .where(ResidueV1.object_node_id == doc_x.id)).first() is None, \
+            select(Residue)
+            .where(Residue.store_id == STORE)
+            .where(Residue.object_node_id == doc_x.id)).first() is None, \
             'setup: the residue should have been emptied and deleted in one step'
         assert doc_x.id not in _index_contents(g.session, STORE), \
             'index rows outlived the residue they index (the delete branch skipped ' \
@@ -335,7 +335,7 @@ def test_index_is_maintained_across_a_full_teardown():
         for raw in reversed(SETUP):
             g.apply(raw, 'remove')
         assert g.session.exec(
-            select(ResidueV1).where(ResidueV1.store_id == STORE)).all() == [], \
+            select(Residue).where(Residue.store_id == STORE)).all() == [], \
             'setup drifted: an empty store should hold no residue rows'
         assert _index_contents(g.session, STORE) == {}, \
             'reverse-index rows survived the residues they index'
@@ -345,7 +345,7 @@ def test_index_is_maintained_across_a_full_teardown():
 
 
 # --------------------------------------------------------------------------- #
-# The detector. These corrupt ResidueRefV1 directly -- the state a maintenance bug
+# The detector. These corrupt ResidueRef directly -- the state a maintenance bug
 # produces -- and assert I6 fires. Paranoia is off so the corruption can be staged.
 # --------------------------------------------------------------------------- #
 
@@ -355,7 +355,7 @@ def test_a_dropped_index_row_is_caught():
     g = _Harness().seed()
     try:
         row = g.session.exec(
-            select(ResidueRefV1).where(ResidueRefV1.store_id == STORE)).first()
+            select(ResidueRef).where(ResidueRef.store_id == STORE)).first()
         assert row is not None, 'setup: nothing to drop'
         g.session.delete(row)
         g.session.flush()
@@ -375,7 +375,7 @@ def test_a_stale_index_row_is_caught():
     g = _Harness().seed()
     try:
         obj = next(iter(_index_contents(g.session, STORE)))
-        g.session.add(ResidueRefV1(store_id=STORE, subject_node_id=999_999,
+        g.session.add(ResidueRef(store_id=STORE, subject_node_id=999_999,
                                    object_node_id=obj))
         g.session.flush()
         with pytest.raises(InvariantViolation, match='residue_ref index disagrees'):
@@ -390,7 +390,7 @@ def test_orphaned_index_rows_are_caught():
     g = _Harness().seed()
     try:
         rows = g.session.exec(
-            select(ResidueV1).where(ResidueV1.store_id == STORE)).all()
+            select(Residue).where(Residue.store_id == STORE)).all()
         assert rows, 'setup: need a residue to orphan'
         victim = rows[0].object_node_id
         g.session.delete(rows[0])
@@ -410,7 +410,7 @@ def test_orphans_are_caught_even_when_every_residue_is_gone():
     g = _Harness().seed()
     try:
         for r in g.session.exec(
-                select(ResidueV1).where(ResidueV1.store_id == STORE)).all():
+                select(Residue).where(Residue.store_id == STORE)).all():
             g.session.delete(r)
         g.session.flush()
         assert _index_contents(g.session, STORE), 'setup: index rows must remain'
@@ -435,7 +435,7 @@ def bulk_session():
 @pytest.mark.parametrize('bulk', [False, True])
 def test_bulk_built_store_has_a_correct_reverse_index(bulk_session, bulk):
     """SABOTAGE (S1) MADE PERMANENT -- and the reason it is worth a test of its own:
-    ``bulk_build`` writes ``ResidueV1`` rows directly, bypassing ``_store_residue``,
+    ``bulk_build`` writes ``Residue`` rows directly, bypassing ``_store_residue``,
     and the existing bulk differential gate compares ``snapshot_rows`` (nodes and
     edges only). Omitting the offline path's index population is therefore invisible
     to every other test in the tree while producing a store whose node-release guards

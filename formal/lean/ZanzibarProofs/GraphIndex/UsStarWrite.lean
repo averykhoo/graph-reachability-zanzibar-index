@@ -5,9 +5,9 @@ import ZanzibarProofs.GraphIndex.ObjStarWrite
 
 `SEMANTICS.md` §7.2–7.5; `wildcard-materialization-spec.md` §1.1, §7;
 ROADMAP "The staged T2 plan", sub-stage **W1c**;
-`index_v4/wildcard.py::WildcardIndex._ensure_bridges` /
+`src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_bridges` /
 `::WildcardIndex.add_tuple` → `::WildcardIndex._add_tuple_trusted`;
-`zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes`.
+`src/zanzibar/schema/rules.py::SchemaInfo.bridged_in_shapes`.
 
 ## What W1c adds vs W1a/W1b
 
@@ -27,13 +27,13 @@ ROADMAP "The staged T2 plan", sub-stage **W1c**;
 
 ## Why bridged-IN shapes are the userset stars only (`bridged_in_shapes`)
 
-`zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes`:
+`src/zanzibar/schema/rules.py::SchemaInfo.bridged_in_shapes`:
 `bridged_in_shapes = {s ∈ subject_wildcard_shapes | s.predicate ≠ '...'}`.
 Bare shapes `(T,'...')` never need in-bridges (nothing in this
 graph points into a `'...'`-predicate node, so a bare-shape hop can only be the
 *leading* hop, which probe 2 covers virtually — this is exactly W1a). A subject-
 wildcard shape `(T,P)` with `P ≠ BARE` comes from **either** loop of
-`zanzibar_utils_v1.py::derive_schema_info`: the FIRST, any literal `[T:*#P]` restriction
+`src/zanzibar/schema/compiler.py::derive_schema_info`: the FIRST, any literal `[T:*#P]` restriction
 in the schema; **or the SECOND, a star-tupleset TTU through-shape** — a TTU `P from ts`
 whose tupleset relation carries a bare wildcard `[T:*]`, which the TTU rule rewrites into
 a tuple of subject shape `(T,P)`. See `Schema.isStarTuplesetThrough` below.
@@ -50,7 +50,7 @@ disjunct is *not* filtered by `wsBare`, and that asymmetry is the whole content 
 ⚠ **CORRECTED 2026-09-14h — this paragraph used to say `wildcardShapes` where it now says
 `declaredWildcardShapes`, and that was not a naming quibble.** `::wildcardShapes` was the
 list the cascade's star fold enumerates AND was claimed to model the two-pass
-`zanzibar_utils_v1.py::derive_schema_info`, while implementing only its first pass — the
+`src/zanzibar/schema/compiler.py::derive_schema_info`, while implementing only its first pass — the
 very loop this file's `Schema.isStarTuplesetThrough` models. Two transcriptions of one
 Python loop, disagreeing. `::wildcardShapes` now covers both passes and `wsBare` was
 re-pointed at pass 1, so the sentence above is true again as written; the pair is pinned
@@ -58,7 +58,7 @@ equal by `TtuStarWide.lean::mem_throughShapes_iff_isStarTuplesetThrough`. Do not
 the old wording — under the corrected enumeration it is FALSE
 (`FullScope.lean::sxThruDerived_wsBare_over_full_list_fails`).
 
-## The model (`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted` and
+## The model (`src/zanzibar/graphindex/wildcard.py::WildcardIndex._add_tuple_trusted` and
 `::WildcardIndex._ensure_bridges`)
 
 `add_tuple` is **bridge-before-grant**: `_ensure_bridges` on each endpoint creates the
@@ -83,7 +83,7 @@ namespace Zanzibar
 
 /-! ## Subject-wildcard userset shapes -/
 
-/-- **Star-tupleset TTU through-shape** — the twin of `zanzibar_utils_v1.py::
+/-- **Star-tupleset TTU through-shape** — the twin of `src/zanzibar/schema/::
     derive_schema_info`'s SECOND loop. `(t, p)` is a through-shape when some definition
     `(dt, R) ↦ e` contains a TTU `p from ts` (`exprTtus`, the twin of `::_iter_ttus`) and
     the SAME object type's tupleset relation `(dt, ts)` carries a **bare** wildcard
@@ -111,7 +111,7 @@ def Schema.isStarTuplesetThrough (S : Schema) (t p : String) : Bool :=
     through-shape (`::derive_schema_info`'s SECOND loop, `isStarTuplesetThrough`)?
     Together with the outer `p != BARE` — which is `::SchemaInfo.bridged_in_shapes`'s
     final `s[1] != '...'` filter, applied to BOTH disjuncts as in Python — these are
-    exactly `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes`. The graph materializes a
+    exactly `src/zanzibar/schema/rules.py::SchemaInfo.bridged_in_shapes`. The graph materializes a
     `concrete → w_any(t,p)` in-bridge for every concrete node of such a shape.
 
     ⚠ **The outer `p != BARE` must stay OUTERMOST.** `UsStarCorrect.lean::
@@ -131,7 +131,7 @@ def Schema.isSubjectWildcardUserset (S : Schema) (t p : String) : Bool :=
 /-- **No DERIVED key is bridged in** — the scope carry `P6` step 3b threads, and the
     honest form of `FullScope.lean::GraphAdmission.usWild`
     (`TK68`, 2026-09-13e). Python refuses both disjuncts above over a tainted key:
-    `zanzibar_utils_v1.py::_build_plan_tree:1881-1886` for a literal `[T:*#p]`, and
+    `src/zanzibar/schema/boolean.py::_build_plan_tree:1881-1886` for a literal `[T:*#p]`, and
     `::_reject_object_wildcard_scope:1484-1492` for a star-tupleset through-shape.
 
     **Why a named `def` rather than a spelled-out binder.** Once the leaf-routed write
@@ -161,7 +161,7 @@ def NoBridgedDerived (S : Schema) : Prop :=
 
 /-- `c` is a concrete *userset* node whose shape `(type, pred)` is a declared
     subject-wildcard userset shape — the nodes that need a `c → w_any` in-bridge
-    (the `bridged_in_shapes` arm of `index_v4/wildcard.py::WildcardIndex._ensure_bridges`;
+    (the `bridged_in_shapes` arm of `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_bridges`;
     §5). Only concretes are bridged; the
     `pred ≠ BARE` guard is subsumed by `isSubjectWildcardUserset`. -/
 def GraphState.bridgedInConcrete (σ : GraphState) (c : NodeKey) : Bool :=
@@ -272,7 +272,7 @@ theorem concrete_node_control :
 end ThroughShapeWitness
 
 /-- **Ensure the in-bridge for a concrete userset endpoint**
-    (`index_v4/wildcard.py::WildcardIndex._ensure_bridges`, `bridged_in_shapes` arm):
+    (`src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_bridges`, `bridged_in_shapes` arm):
     if `c` is a concrete node of a bridged-in shape, create the
     `w_any(c.type, c.pred)` node (lazily) and — **iff no copy of the bridge edge is
     already present** — add the bridge edge `c → w_any`, under the same cycle-rejection
@@ -286,7 +286,7 @@ end ThroughShapeWitness
     `(0 calls, 1, 2, 3) = (0, 1, 2, 3)` bridge copies. That was inert only because no live
     chain called it (see `isSubjectWildcardUserset`'s note); increment B calls it **once per
     member of the leaf-routed list**, so copies would accumulate per write — the
-    `_leak_accumulates` shape. Python does not: `index_v4/wildcard.py::WildcardIndex.
+    `_leak_accumulates` shape. Python does not: `src/zanzibar/graphindex/wildcard.py::WildcardIndex.
     _ensure_own_bridges` interns the `w_any` node and then guards with
     `if not self.idx.direct_edge_exists_by_id(node.id, w_any.id)` before `add_edge_by_id`.
     The guard order here is Python's: intern first (the node is added on every bridged
@@ -303,7 +303,7 @@ def GraphState.ensureInBridges (σ : GraphState) (c : NodeKey) : GraphState :=
   else σ
 
 /-- **The userset-star bridge-materializing single-tuple write**
-    (`index_v4/wildcard.py::WildcardIndex.add_tuple` →
+    (`src/zanzibar/graphindex/wildcard.py::WildcardIndex.add_tuple` →
     `::WildcardIndex._add_tuple_trusted`): add both endpoint nodes, ensure the
     out-bridges (W1b —
     inert on this object-wildcard-free fragment) and then the in-bridges of each
@@ -323,7 +323,7 @@ def GraphState.writeUsStar (σ : GraphState) (t : Tuple) : GraphState :=
     `Cascade.lean::GraphState.writeLoggedOne`, and the per-member step
     `LeafRules.lean::GraphState.writeRulesRaw` folds. It is `writeDirect` with Python's
     bridge-before-grant prologue on BOTH endpoints
-    (`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted`'s `_ensure_bridges(subject)`
+    (`src/zanzibar/graphindex/wildcard.py::WildcardIndex._add_tuple_trusted`'s `_ensure_bridges(subject)`
     then `_ensure_bridges(obj)`), and nothing else.
 
     ⚠ **Why this is NOT `writeUsStar`, which is one line above and would have been free.**
@@ -480,7 +480,7 @@ calls the bridge once per member and the interesting state is the one after `k` 
 after two. -/
 
 /-- The bridged edge is left alone when a copy is already present — the presence branch,
-    isolated for reuse. Mirrors the short-circuit in `index_v4/wildcard.py::WildcardIndex.
+    isolated for reuse. Mirrors the short-circuit in `src/zanzibar/graphindex/wildcard.py::WildcardIndex.
     _ensure_own_bridges` (`if not …direct_edge_exists_by_id`): the `w_any` node is still
     interned, only the edge-add is skipped. -/
 theorem ensureInBridges_edges_of_mem {σ : GraphState} {c : NodeKey}
@@ -849,7 +849,7 @@ kind of edge. The two-disjunct lemma becomes three:
 3. `σ.schema.isSubjectWildcardUserset a.type a.pred = true ∧ b = wAnyNode (a.type, a.pred)`
    — an IN-BRIDGE: `GraphState.ensureInBridges` materialized `a → w_any(a.type, a.pred)`
    for a concrete endpoint of a declared subject-wildcard userset shape
-   (`index_v4/wildcard.py::WildcardIndex._ensure_own_bridges`, §5).
+   (`src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_own_bridges`, §5).
 
 ★ **Why disjunct (3) needs no existential, and is keyed on the fold's START-STATE schema.**
 The obvious statement — "∃ u ∈ us, `a` is an endpoint of `u` and the accumulator at that
@@ -1026,7 +1026,7 @@ it undone keeps the statement free of the split.
 Endpoint closure is stated BARE (`∀ ab ∈ _.edges, ab.1 ∈ _.nodes ∧ ab.2 ∈ _.nodes`), not
 wrapped in `StructInv`, to match `CascadeStable.lean::edgesClosed_foldl_writeDirect`, which
 four proofs in that file call in exactly that shape. It holds for the reason
-`structInv_ensureInBridges` does: `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges`
+`structInv_ensureInBridges` does: `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_own_bridges`
 interns the `w_any` with `create_if_missing=True` BEFORE it tests `direct_edge_exists_by_id`,
 and `GraphState.ensureInBridges` keeps that order — the node is added on every bridged branch,
 the `P6`-step-2 presence branch included — while `bridgePre` `addNode`s both endpoints first. -/
@@ -1403,7 +1403,7 @@ theorem bridged_creates_the_bridge :
     (subjNode tThru.subject, w0) ∈ (base.writeBridgedOne tThru).edges := by decide
 
 /-- ★ **…and `writeDirect` — what the live leg still folds until step 3b — does not.**
-    This is the divergence from `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges`,
+    This is the divergence from `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_own_bridges`,
     exhibited rather than described. -/
 theorem writeDirect_misses_the_bridge :
     (subjNode tThru.subject, w0) ∉ (base.writeDirect tThru).edges := by decide

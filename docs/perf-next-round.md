@@ -15,7 +15,7 @@ measurement/gate hygiene.
 
 - Round 3 (P12-M, P12a/b, N4–N9, the P1 follow-up, P13) landed and pushed; retired
   verbatim in [`docs/history/perf-round3-2026-07.md`](history/perf-round3-2026-07.md).
-- Round 4 (R4-BF, N15, N16, M2 + follow-up, N17, N10, N18, the index_v4 grab-bag
+- Round 4 (R4-BF, N15, N16, M2 + follow-up, N17, N10, N18, the zanzibar.graphindex grab-bag
   micros, N12; N11 design-skipped) landed and pushed; retired verbatim in
   [`docs/history/perf-round4-2026-07.md`](history/perf-round4-2026-07.md).
 - Round 5 (2026-07-16) landed **nothing** — it assessed the two remaining
@@ -136,7 +136,7 @@ composition-write round-trips that would change the modeled algorithm; leave the
   commits, async-first — genuine spec + Lean work (`ReachedByW3d2E` changes).
   Out of scope.
 - **`rebuild()` / incremental evaluator catch-up** (`source.py::assert_read_isolation`,
-  `setengine/engine.py rebuild`): the failure-path rebuild is what makes
+  `src/zanzibar/setengine/engine.py rebuild`): the failure-path rebuild is what makes
   rollback correct — the in-memory engine holds phantom state that can't be
   incrementally undone without an undo journal, and *that* is a new algorithm
   on the evaluator-freshness watermark contract. Cold path anyway (ordinary
@@ -148,12 +148,12 @@ composition-write round-trips that would change the modeled algorithm; leave the
 
 ## Standing hygiene / gate notes
 
-- `setengine/` and `index_v4/` do not cross-import (verified 2026-07-14); keep
+- `src/zanzibar/setengine/` and `src/zanzibar/graphindex/` do not cross-import (verified 2026-07-14); keep
   parallel tracks file-disjoint — a track that discovers it needs a file
   outside its list stops and reports.
 - **Full suite + phased verify.sh at every wave integration**, not just
   per-track targeted gates (the P0 lesson; the paranoia checker only runs in
-  the full index_v4 suite). Cap-safe recipe: [`docs/gate-runbook.md`](gate-runbook.md).
+  the full zanzibar.graphindex suite). Cap-safe recipe: [`docs/gate-runbook.md`](gate-runbook.md).
 - **Algorithm changes fuzz before push** (gate-runbook §3) — any item whose
   Lean line says it touches modeled territory ends with the multi-seed fuzz sweep.
 - **Measurement hygiene:** never two bench/pytest processes at once. New

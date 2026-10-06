@@ -153,7 +153,7 @@ Listed so this file is a complete index of what is open, and pointed rather than
   is the **adjudication** (model it, or record that the differential + hypothesis nets are
   the intended net), not necessarily a model.
 * **The per-subject cheap reconcile path is unmodelled and has twice gained real logic** —
-  `index_v4/processor.py::DeltaProcessor.reconcile_subject` (body:
+  `src/zanzibar/graphindex/processor.py::DeltaProcessor.reconcile_subject` (body:
   `::DeltaProcessor._reconcile_subject`); Lean models only the full-object reconcile. Home:
   `formal/CORRESPONDENCE.md` §7.1 (`:476-493`), which itemizes both growths — promote-on-
   record (2026-07-17) and escalation to a full reconcile (2026-07-26, `ZT-P0-1`/`ZT-P0-2`).
@@ -162,7 +162,7 @@ Listed so this file is a complete index of what is open, and pointed rather than
   design", so nothing records the expiry as owed. Distinct from the node-GC bullet above —
   different code, different argument, filed apart on purpose; do not merge them.
 * **Set-engine write admission is the gates' input filter, and is modelled only
-  Python-vs-Python** — `setengine/engine.py::SetEngine._validate` steps (1) and (3), the
+  Python-vs-Python** — `src/zanzibar/setengine/engine.py::SetEngine._validate` steps (1) and (3), the
   latter via `::SetEngine._would_cycle` → `::SetEngine._flow_reaches`; only step (2) has a
   Lean counterpart and only as a premise. Home: `formal/CORRESPONDENCE.md` §7.3
   (`:950-961`), which already states the shrinkage risk and that nothing formal watches it.
@@ -172,7 +172,7 @@ Listed so this file is a complete index of what is open, and pointed rather than
   of `anchor_check.py`'s `MIN_*` floors, may be worth more than a model and is a legitimate
   outcome.
 * **`advance_index`'s docstring asserts the exact claim the model leaves unproved** —
-  `connectedstore/apply.py:104-105` argues that batch size *"affects only latency/
+  `src/zanzibar/connectedstore/apply.py:104-105` argues that batch size *"affects only latency/
   granularity, not the final materialized state or any semantic guarantee"*. Home:
   `formal/CORRESPONDENCE.md` §6 (`:393-424`), which owns the batched-schedule gap and
   already marks it open (*"nothing in the Lean tree quantifies over 'apply N ops, then one
@@ -182,7 +182,7 @@ Listed so this file is a complete index of what is open, and pointed rather than
   one.**
 * **The two compile-time scope rejections are deliberate, not gaps** — object wildcards on
   derived relations, and wildcard usersets over derived relations, both raising
-  `zanzibar_utils_v1.py::UnsupportedByGraphIndex`. Stated in `CLAUDE.md`'s layout section;
+  `src/zanzibar/schema/errors.py::UnsupportedByGraphIndex`. Stated in `CLAUDE.md`'s layout section;
   board row `SD-1` tracks lifting them. Named here only so a reader hunting a gap does not
   mistake a rejection for one.
 
@@ -209,7 +209,7 @@ rail; delete a bullet only when its ledger text can no longer be misread.
 * **`ZT-P5`'s star-subject/star-object tupleset write divergence** (`folder:* parent
   folder:*`, accept/reject parity) — the 2026-07-26 entry says "**NOT FIXED here**
   (investigation scope)". It was **fixed the same day** by
-  `index_v4/wildcard.py::WildcardIndex._reject_star_self_edge`; the strict xfail and its
+  `src/zanzibar/graphindex/wildcard.py::WildcardIndex._reject_star_self_edge`; the strict xfail and its
   behaviour-of-today companion were flipped together into plain regression pins
   (`tests/test_zt_p5_readjudication.py::test_zt_p5_star_subject_star_object_tupleset_write_parity`,
   `::test_zt_p5_star_subject_star_object_fixed_behaviour_pinned`,
@@ -238,8 +238,8 @@ rail; delete a bullet only when its ledger text can no longer be misread.
 * **`Residuals` item 3** (zero coverage for wildcard usersets and the
   `derived-tupleset-ttu` leaf) — closed 2026-07-28; both are corpus'd or recorded as scope
   rejections. The ledger already strikes it through.
-* **`Residuals` item 4** (`_any_residue_reference`'s complete `ResidueV1` scan, unbenchmarked
-  and unconditional) — measured 2026-07-29b, **fixed 2026-08-14** by the `ResidueRefV1`
+* **`Residuals` item 4** (`_any_residue_reference`'s complete `Residue` scan, unbenchmarked
+  and unconditional) — measured 2026-07-29b, **fixed 2026-08-14** by the `ResidueRef`
   reverse index. The new lookup is flat in R.
 * **The untainted-arm `rewriteClosure` dedupe divergence** — the same `## 2026-07-29`
   §"Left open, deliberately" paragraph carries it in the present tense ("no corpus

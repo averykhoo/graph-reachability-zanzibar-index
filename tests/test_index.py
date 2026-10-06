@@ -13,9 +13,9 @@ class IndexPolyfill:
         raise NotImplementedError
 
 
-class IndexV4Polyfill(IndexPolyfill):
+class GraphIndexPolyfill(IndexPolyfill):
     def __init__(self):
-        from index_v4 import ReachabilityIndex, Store
+        from zanzibar.graphindex import ReachabilityIndex, Store
         from sqlmodel import Session, create_engine
         
         self.engine = create_engine('sqlite:///:memory:')
@@ -43,7 +43,7 @@ class IndexV4Polyfill(IndexPolyfill):
             self.session.close()
 
 
-@pytest.fixture(params=[IndexV4Polyfill])
+@pytest.fixture(params=[GraphIndexPolyfill])
 def index(request):
     """Provides a fresh index instance for each test across all versions."""
     return request.param()

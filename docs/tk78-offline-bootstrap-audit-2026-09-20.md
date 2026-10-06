@@ -7,6 +7,8 @@ below is labelled `READ` (first-hand, this tree, 2026-09-20), `REASONED`, or `UN
 Live state is the task row (`python scripts/task.py show TK78`), never this file.
 Corrections append **dated at the top**. Freeze it when `TK78` closes.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 ⚠ **This pass CONTRADICTS the row on two load-bearing points and CONFIRMS both of its
 literal claims.** The row's headline — *"an unaudited second reconcile implementation"* —
 is materially wrong about where the risk is, and the question it names as *"the actual

@@ -48,15 +48,15 @@ Modes (Phase 6 — graph-state conformance):
   the documented projections:
     - `edges`: the direct-edge SET (each `[[type,name,pred,variant],
       [type,name,pred,variant]]`, variant in `""`/`"any"`/`"all"` — the Python
-      `NodeV4.wildcard` encoding), sorted + deduplicated.
+      `Node.wildcard` encoding), sorted + deduplicated.
     - `edgeCounts`: the same edges with their MULTIPLICITY, `[[subj,obj],n]`,
       sorted. Added 2026-07-29 when `CORRESPONDENCE.md` §7.2 was adjudicated.
       The old wording here justified the `edges` dedup by saying "the model's
-      edge LIST carries multiplicity where Python ref-counts one `EdgeV4` row
+      edge LIST carries multiplicity where Python ref-counts one `Edge` row
       (`direct_edge_count`)" — i.e. that the two multiplicities CORRESPOND and
       only the representation differs. **That is false on the derived arm**:
       Python writes a processor-derived edge by a presence DIFF
-      (`index_v4/processor.py::DeltaProcessor._reconcile_subject`, `want_edge and not has_edge`),
+      (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject`, `want_edge and not has_edge`),
       so its `direct_edge_count` is always 0 or 1, while the model's list
       multiplicity doubles per cascade leg. `edges` stays deduplicated (it is
       what the equality gate compares); `edgeCounts` exists so the divergence is
@@ -65,7 +65,7 @@ Modes (Phase 6 — graph-state conformance):
       stars, neg, upos]` with `stars` a sorted list of `[type,pred]` shapes and
       `neg`/`upos` sorted lists of `[type,name,pred]` subjects. Rows are
       emitted RAW, including all-empty rows the model stores where Python
-      deletes them (`index_v4/processor.py::DeltaProcessor._store_residue` — "empty residues are
+      deletes them (`src/zanzibar/graphindex/processor.py::DeltaProcessor._store_residue` — "empty residues are
       deleted, never stored"); the Python-side comparison applies that
       documented drop-empty projection, so the divergence stays observable
       here.
@@ -223,8 +223,8 @@ def printAnswers (answers : List Bool) : IO UInt32 := do
 /-! ## Graph-state dump (mode `"graph-state"`) — driver-level, like the modes
 above; the projections it applies are enumerated in the file header. -/
 
-/-- The Python `NodeV4.wildcard` encoding of a node variant
-    (the `wildcard` column of `index_v4/models.py::NodeV4`). -/
+/-- The Python `Node.wildcard` encoding of a node variant
+    (the `wildcard` column of `src/zanzibar/graphindex/models.py::Node`). -/
 def variantStr : Variant → String
   | Variant.plain => ""
   | Variant.wAny => "any"
@@ -363,7 +363,7 @@ def main (args : List String) : IO UInt32 := do
           --
           -- ⚠ The read is `Exec.lean::graphModeAnswers`, whose body is the PUBLIC
           -- `GraphModel.checkPublic` — NOT the unfenced `check` (2026-08-28c). This
-          -- driver is a PUBLIC surface: it corresponds to `index_v4/wildcard.py::
+          -- driver is a PUBLIC surface: it corresponds to `src/zanzibar/graphindex/wildcard.py::
           -- WildcardIndex.check`, fenced since `BL-2`, not to `::_check_internal`.
           -- "Cover exactly what is printed here" is only true if the capstone theorems
           -- name the function this line calls, which is why the read is a NAMED,

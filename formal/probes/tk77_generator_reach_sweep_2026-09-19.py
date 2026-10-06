@@ -44,7 +44,7 @@ HYP = 'tests/test_hypothesis.py'
 GCOV = 'tests/test_generator_coverage.py'
 GSW = 'tests/genswarm.py'
 PROP = 'tests/test_wildcard_property.py'
-WC = 'index_v4/wildcard.py'
+WC = 'src/zanzibar/graphindex/wildcard.py'
 TARGETS = [HYP, GCOV, GSW, WC]          # PROP is run, never mutated, by this sweep
 
 SELECT = 'star_bridge or crossable_schema or silently_dropped or middle_sync'

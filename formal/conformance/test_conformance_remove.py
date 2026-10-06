@@ -5,17 +5,17 @@ documented gap, FINAL_REVIEW §4), but the spec `sem` is a pure function of the
 FINAL store. So removal conformance is testable today: drive the REAL Python
 `SetEngine` through interleaved add_tuple/remove_tuple sequences (the remove
 path: `_apply_remove`, interner `release` mask-scrub + id recycling,
-`setengine/engine.py:111-131, 296-322`), land on a final store, and compare the
+`src/zanzibar/setengine/engine.py:111-131, 296-322`), land on a final store, and compare the
 DRIVEN engine — not a rebuild — against the Lean spec and the oracle evaluated
 on that final store. This pins Python's remove path against `sem` for the first
 time. Two convergence pins ride along:
 
   * the driven engine must equal a fresh `rebuild()` (replay of the surviving
-    `TupleV1` rows) BOTH pointwise over the grid AND at key-level state
+    `RelationTuple` rows) BOTH pointwise over the grid AND at key-level state
     fingerprint (interner keys/refcounts/population masks, node_sets/member_of,
     flow-graph edge counts) — a freed id leaking residual state or a skipped
     mask scrub shows up here even when no grid query happens to read it;
-  * the surviving `TupleV1` rows must be exactly the expected final multiset.
+  * the surviving `RelationTuple` rows must be exactly the expected final multiset.
 
 Sequences are derived from the existing corpora: each corpus's tuples plus
 extras recombined from the corpus's OWN tuple space are added in random order
@@ -47,8 +47,8 @@ from sqlmodel import select
 
 from tests.oracle import Oracle, t as mk_tuple
 from tests.wildcard_helpers import assert_wildcard_invariants
-from setengine.models import TupleV1
-from zanzibar_utils_v1 import AdmissionRejected
+from zanzibar.setengine.models import RelationTuple
+from zanzibar.schema import AdmissionRejected
 
 from formal.conformance.corpus import SCHEMAS
 from formal.conformance.encode import build_request
@@ -165,7 +165,7 @@ def _sequence(rng, universe):
 
 
 def _build_engine(schema_text, obj_wild):
-    from setengine import SetEngine
+    from zanzibar.setengine import SetEngine
     session = _fresh_session()
     eng = SetEngine(session, 's1', schema_text,
                     object_wildcard_shapes=frozenset(obj_wild))
@@ -248,7 +248,7 @@ def _fp_diff(a, b):
 
 
 def _rows(session):
-    rows = session.exec(select(TupleV1).where(TupleV1.store_id == 's1')).all()
+    rows = session.exec(select(RelationTuple).where(RelationTuple.store_id == 's1')).all()
     return [(r.subject_predicate, r.subject_type, r.subject_name,
              r.relation, r.object_type, r.object_name) for r in rows]
 
@@ -288,7 +288,7 @@ def test_remove_sequences(name):
         # The surviving rows ARE the expected final store (no dup/ghost rows).
         db = _rows(session)
         assert sorted(db) == sorted(tuple(t) for t in final), (
-            f'[{name} seed={seed}] TupleV1 rows diverge from the expected '
+            f'[{name} seed={seed}] RelationTuple rows diverge from the expected '
             f'final store after the remove sequence')
 
         # Remove-path state convergence: driven == fresh replay of the rows.
@@ -364,7 +364,7 @@ def test_full_churn_restores(name):
         f'[{name}] a type population mask survived full removal')
     assert all(len(m) == 0 for m in eng.interner.ids_of_shape.values()), (
         f'[{name}] a shape population mask survived full removal')
-    assert not _rows(session), f'[{name}] TupleV1 rows survived full removal'
+    assert not _rows(session), f'[{name}] RelationTuple rows survived full removal'
 
     readd_order = list(corpus_tuples)
     rng.shuffle(readd_order)
@@ -397,7 +397,7 @@ def test_full_churn_restores(name):
 
 
 # ---------------------------------------------------------------------------
-# Graph backend (index_v4) — the SAME remove sequences, driven through the
+# Graph backend (zanzibar.graphindex) — the SAME remove sequences, driven through the
 # synchronous v1 write path (rule routing + same-transaction cascade, I5).
 #
 # Scope note. zcli `sem` parity is NOT re-run here for the graph: the sibling
@@ -416,9 +416,9 @@ def _residues_by_name(session, widx):
     build (which assign different node ids) compare equal."""
     import json
     from sqlmodel import select
-    from index_v4.models import ResidueV1
+    from zanzibar.graphindex.models import Residue
     out = {}
-    for r in session.exec(select(ResidueV1)).all():
+    for r in session.exec(select(Residue)).all():
         node = widx._node_by_id(r.object_node_id)
         neg = frozenset((n.predicate, n.type, n.name)
                         for n in (widx._node_by_id(i) for i in json.loads(r.neg))
@@ -434,14 +434,14 @@ def _graph_state(session, widx):
     latter's P2 projection would hide a stale bridge that a remove-path residue
     leak leaves behind, which is exactly what this gate must catch (P6 retired
     2026-09-05; leaf edges are compared now)."""
-    from index_v4.invariants import snapshot_rows
+    from zanzibar.graphindex.invariants import snapshot_rows
     return snapshot_rows(session, widx.idx.store_id), _residues_by_name(session, widx)
 
 
 @pytest.mark.parametrize('name', sorted(SCHEMAS))
 def test_graph_remove_sequences(name):
     """Seeded interleaved add/remove sequences per corpus, driven through the
-    REAL graph index (index_v4) — the first end-to-end pin of the graph remove
+    REAL graph index (zanzibar.graphindex) — the first end-to-end pin of the graph remove
     path. Identical universe/ops to `test_remove_sequences` (same generators,
     same seeds). Asserts, on the driven final state: (a) I1-I8 invariants and, on
     boolean schemas, the I9 fixpoint audit; (b) driven grid `check` ==
@@ -518,7 +518,7 @@ def test_graph_remove_sequences(name):
 @pytest.mark.parametrize('name', sorted(SCHEMAS))
 def test_graph_full_churn_restores(name):
     """Add every corpus tuple to the graph index, remove ALL of them (shuffled),
-    assert the graph SQL state is FULLY DRAINED (no NodeV4/EdgeV4/ResidueV1 rows —
+    assert the graph SQL state is FULLY DRAINED (no Node/Edge/Residue rows —
     empirically the drain equals a fresh-EMPTY index; permanent scaffolding like
     the store row is not a graph row and legitimately remains), then re-add all
     and assert the churned state + grid match a fresh add-only build and the
@@ -608,7 +608,7 @@ def test_graph_full_churn_restores(name):
 # ADD-ONLY write-by-write build of the survivors. That fresh build is the same
 # constructor, run again: `graphindex_drive_ops`, routing + same-transaction
 # cascade. The PRODUCTION bootstrap is a different constructor —
-# `connectedstore.build_index(bulk=True)` -> `index_v4/bulk_build.py` (one
+# `connectedstore.build_index(bulk=True)` -> `src/zanzibar/graphindex/bulk_build.py` (one
 # in-memory pass, closed-form path counts, `bulk_backfill.py`'s in-memory
 # boolean Phase-D backfill, bulk INSERTs) — and until this arm nothing anywhere
 # bulk-built from a POST-REMOVAL survivor set. `test_conformance_bulk_state.py`
@@ -647,7 +647,7 @@ _MIN_BULK_DERIVED_STATE = 1
 
 
 def _derived_edge_flags(session, store_id):
-    """Per-edge `EdgeV4.derived` stamp (I5), keyed id-free like `snapshot_rows`.
+    """Per-edge `Edge.derived` stamp (I5), keyed id-free like `snapshot_rows`.
 
     `invariants.py::snapshot_rows` captures `direct_edge_count` /
     `indirect_edge_count` but NOT `derived`, so `_graph_state` cannot see a
@@ -656,10 +656,10 @@ def _derived_edge_flags(session, store_id):
     2026-09-20 to redden under the bulk-backfill control in the test docstring
     below (12 of 130 cells) while staying green on the clean tree (0 of 130).
     """
-    from index_v4.models import EdgeV4, NodeV4
-    nodes = session.exec(select(NodeV4).where(NodeV4.store_id == store_id)).all()
+    from zanzibar.graphindex.models import Edge, Node
+    nodes = session.exec(select(Node).where(Node.store_id == store_id)).all()
     by_id = {n.id: (n.predicate, n.type, n.name, n.wildcard) for n in nodes}
-    edges = session.exec(select(EdgeV4).where(EdgeV4.store_id == store_id)).all()
+    edges = session.exec(select(Edge).where(Edge.store_id == store_id)).all()
     return Counter((by_id[e.subject_id], by_id[e.object_id], e.derived)
                    for e in edges)
 
@@ -690,7 +690,7 @@ def _incremental_constructor_label(schema_text, tuples, object_wildcards):
     per seed. It asserts nothing about STATE — `tests/test_bulk_build.py` owns
     the bulk/incremental identity differential.
     """
-    from connectedstore import TupleSource, build_index, save_schema
+    from zanzibar.connectedstore import TupleSource, build_index, save_schema
 
     session = _fresh_session()
     try:
@@ -727,16 +727,16 @@ def test_graph_remove_bulk_build_survivors(name):
       (d) driven grid `check` == bulk grid `check` over the full universe;
       (e) the BULK constructor is the one that actually RAN. `bulk_build_drive`
           refuses unless `build_index` reports `constructor == 'bulk'`
-          (`connectedstore/build.py::BuildReport`), and this arm carries the
+          (`src/zanzibar/connectedstore/build.py::BuildReport`), and this arm carries the
           CONTROL that keeps that refusal from being an assertion that cannot
           fail: once per corpus `_incremental_constructor_label` rebuilds the
           last seed's survivors with `bulk=False` and requires the OTHER label.
           Legs (a)-(d) are blind here BY DESIGN — P13's correctness bar is that
           the two constructors produce identical state — so nothing about the
           RESULT can distinguish them. Measured 2026-09-20, before leg (e)
-          existed: a byte edit of `connectedstore/build.py` turning `if bulk:`
+          existed: a byte edit of `src/zanzibar/connectedstore/build.py` turning `if bulk:`
           into `if False:` left this arm at `26 passed, 104 deselected` rc=0
-          while `index_v4.bulk_build.bulk_build` was called 0 times instead of
+          while `zanzibar.graphindex.bulk_build.bulk_build` was called 0 times instead of
           130 — the arm's whole stated subject silently replaced by the
           constructor it was written to differ from.
 
@@ -776,7 +776,7 @@ def test_graph_remove_bulk_build_survivors(name):
     WHAT THIS DOES *NOT* COVER, said plainly:
 
       * **The mutation TK91 was opened for.** Deleting the leading `rel` from
-        `index_v4/processor.py::_live_keys_of`'s `preds` list leaves this arm
+        `src/zanzibar/graphindex/processor.py::_live_keys_of`'s `preds` list leaves this arm
         GREEN, and that is not fixable by strengthening the comparison. Two
         measured reasons (2026-09-20): the bulk path never calls that function
         (`bulk_backfill.py::_live_keys_of` is its own mirror; the processor's
@@ -820,7 +820,7 @@ def test_graph_remove_bulk_build_survivors(name):
         MEASURED AND DELIBERATELY NOT PINNED (2026-09-20). Subject-side
         bridging in `bulk_build.py` Phase B; the `_ensure_bridges` call in
         `bulk_backfill.py::_write_derived_add`; Phase P's multiplicity weight
-        (`mult` is never != 1); `ResidueV1.version` != 1 on a fresh bulk build;
+        (`mult` is never != 1); `Residue.version` != 1 on a fresh bulk build;
         `bulk_backfill.py::_store_residue`'s re-store branch; and the step-4
         neg-maintenance `_store_residue`. Weakening any of them leaves this arm
         green because nothing here reaches them. Detail:
@@ -831,7 +831,7 @@ def test_graph_remove_bulk_build_survivors(name):
     ``pytest formal/conformance/test_conformance_remove.py
     -k test_graph_remove_bulk_build_survivors -q`` against this module as
     landed. The weakenings were applied as RUNTIME monkeypatches loaded with
-    `-p` from `.scratch/` rather than as edits to `index_v4/`, because sibling
+    `-p` from `.scratch/` rather than as edits to `src/zanzibar/graphindex/`, because sibling
     agents were running pytest against this same working tree in the same
     session; each replacement body is a byte-for-byte copy of the shipped one
     with only the named line changed.
@@ -840,11 +840,11 @@ def test_graph_remove_bulk_build_survivors(name):
 
       * ★ **The control that shows the arm is not vacuous.** Drop the
         `derived-computed` recursion from
-        `index_v4/bulk_backfill.py::_BulkBackfill._live_keys_of`
+        `src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._live_keys_of`
         (`names |= self._live_keys_of(o_type, spec.predicate)` -> `pass`) —
         the narrowest plausible weakening of the bulk mirror's enumeration::
 
-            E   index_v4.invariants.InvariantViolation: I9: reconcile of (doc, approver, d1) was not a fixpoint -- derived state was stale
+            E   zanzibar.graphindex.invariants.InvariantViolation: I9: reconcile of (doc, approver, d1) was not a fixpoint -- derived state was stale
             FAILED ...::test_graph_remove_bulk_build_survivors[cross_stratum_resettle]
             FAILED ...[nary_union_derived4]
             FAILED ...[residue_rich]
@@ -874,7 +874,7 @@ def test_graph_remove_bulk_build_survivors(name):
 
       * **INERT, recorded as such rather than worked around.** The mutation
         TK91 was opened for —
-        `index_v4/processor.py::DeltaProcessor._live_keys_of`'s
+        `src/zanzibar/graphindex/processor.py::DeltaProcessor._live_keys_of`'s
         `preds = [rel] + [...]` -> `preds = [] + [...]` — leaves this arm
         GREEN: ``26 passed, 104 deselected in 243.89s (0:04:03)``. The two
         measured reasons are in the "does NOT cover" list above. It is pinned
@@ -886,9 +886,9 @@ def test_graph_remove_bulk_build_survivors(name):
         (its canonical form never reads `indirect_edge_count`; `snapshot_rows`
         does). `bulk_build.py` Phase W `'indirect_edge_count': pvec[a][b]`
         -> `min(1, pvec[a][b])`, clamped at the `executemany` boundary
-        (`1751` `EdgeV4` rows touched)::
+        (`1751` `Edge` rows touched)::
 
-            E   index_v4.invariants.InvariantViolation: I1: indirect < direct on edge id=3 subject_id=1 direct_edge_count=2 derived=False store_id='conf' object_id=7 indirect_edge_count=1
+            E   zanzibar.graphindex.invariants.InvariantViolation: I1: indirect < direct on edge id=3 subject_id=1 direct_edge_count=2 derived=False store_id='conf' object_id=7 indirect_edge_count=1
             E   AssertionError: [deep_grid seed=1] driven/BULK-BUILT STATE divergence on the post-removal survivor set (the offline bootstrap does not reproduce the state the logged write path is in):
             E   AssertionError: [group_userset seed=2] driven/BULK-BUILT STATE divergence on the post-removal survivor set (the offline bootstrap does not reproduce the state the logged write path is in):
             FAILED ...[deep_grid]
@@ -902,7 +902,7 @@ def test_graph_remove_bulk_build_survivors(name):
         (0:02:11)``.
 
       * ★ **Leg (e), the constructor pin -- PROVEN BOTH WAYS, 2026-09-20.**
-        Both runs are BYTE EDITS of `connectedstore/build.py` (pristine bytes
+        Both runs are BYTE EDITS of `src/zanzibar/connectedstore/build.py` (pristine bytes
         restored and `cmp`-verified afterwards), on the 3-param subset
         ``-k "test_graph_remove_bulk_build_survivors and (object_wildcard or
         residue_rich or wildcard_public)"`` -- chosen for the bridge corpus,
@@ -915,7 +915,7 @@ def test_graph_remove_bulk_build_survivors(name):
             `if False:`), i.e. the whole arm silently downgraded to the
             incremental constructor::
 
-                E   AssertionError: bulk_build_drive: build_index ran its 'incremental' constructor, not 'bulk' -- index_v4/bulk_build.py never executed. ...
+                E   AssertionError: bulk_build_drive: build_index ran its 'incremental' constructor, not 'bulk' -- src/zanzibar/graphindex/bulk_build.py never executed. ...
                 3 failed, 127 deselected in 1.49s     rc=1
 
           * CONTROLLING THE INSTRUMENT -- the refusal above is only worth
@@ -931,8 +931,8 @@ def test_graph_remove_bulk_build_survivors(name):
             rc=0. Whole arm with leg (e) in place, unmutated:
             ``26 passed, 104 deselected in 169.65s (0:02:49)`` rc=0.
     """
-    from index_v4.processor import DeltaProcessor
-    from zanzibar_utils_v1 import parse_openfga_schema
+    from zanzibar.graphindex.processor import DeltaProcessor
+    from zanzibar.schema import parse_openfga_schema
 
     schema_text, corpus_tuples, obj_wild = SCHEMAS[name]
     ruleset = parse_openfga_schema(

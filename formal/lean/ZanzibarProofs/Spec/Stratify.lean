@@ -3,7 +3,7 @@ import ZanzibarProofs.Core.Schema
 /-!
 # Taint and stratification
 
-`SEMANTICS.md` §4.3, §4.4, transcribed from `zanzibar_utils_v1.py` (`compute_taint`
+`SEMANTICS.md` §4.3, §4.4, transcribed from `src/zanzibar/schema/` (`compute_taint`
 :1320, `_contains_boolean` :1282, `_stratify` :1630).
 
 A relation is **derived (tainted)** iff it transitively reaches an

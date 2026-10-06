@@ -1009,7 +1009,7 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     # three_strata_chain; **73** as of 2026-07-29 — 33 curated + 40 generated),
     # by walking every `RuleSet.compiled.plans` leaf: the leaf-kind histogram was
     #   closure 211 · derived-computed 42 · derived-ttu 50 · derived-userset 0
-    # — i.e. `zanzibar_utils_v1.py::PDerivedUserset` (and
+    # — i.e. `src/zanzibar/schema/boolean.py::PDerivedUserset` (and
     # `::PDerivedTuplesetTTU`) were compiled by NO corpus at all, in exactly the
     # plan-leaf area where the X4 adjudication found five real divergences and
     # where `tests/test_lookup_oracle.py` still carries regression pins. This
@@ -1078,7 +1078,7 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
     # REACHABILITY, established empirically before writing this (the finding as
     # filed reads wider than the reachable surface): a wildcard userset over a
     # DERIVED relation is a deliberate scope rejection —
-    # `zanzibar_utils_v1.py::_build_plan_tree`'s `Direct` arm raises
+    # `src/zanzibar/schema/boolean.py::_build_plan_tree`'s `Direct` arm raises
     # `UnsupportedByGraphIndex` ("needs symbolic composition through residues"),
     # so `[group:*#member]` with `member: base but not kicked` cannot be compiled
     # at all and cannot be a corpus here (the plan-leaf coverage floor calls
@@ -1142,15 +1142,15 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 #
 # A relation used as a TTU tupleset must be DIRECT-ONLY (`[folder]`, `[folder, doc]`,
 # `[folder] or [doc]`, wildcards allowed). Anything else is refused at parse time by
-# `zanzibar_utils_v1.py::_validate_tuplesets_direct` and by the oracle's independent twin
+# `src/zanzibar/schema/parser.py::_validate_tuplesets_direct` and by the oracle's independent twin
 # `tests/oracle.py::_validate_tuplesets_direct`, so `parse_openfga_schema`, `SetEngine`
 # and `Oracle` all raise `ValueError` ("tupleset must be direct"). The UNCHECKED parsers
-# (`zanzibar_utils_v1._parse_schema_ast_unchecked`,
+# (`zanzibar.schema._parse_schema_ast_unchecked`,
 # `tests.oracle.parse_schema_ast_unchecked`) still accept them, and the reports and
 # `encode.py` read those, so Lean's deciders still see these schemas.
 #
 # Why the entry is KEPT rather than deleted: it is the only carrier of the compiled
-# plan-leaf kind `derived-tupleset-ttu` (`zanzibar_utils_v1.py::_plan_leaves`), which no
+# plan-leaf kind `derived-tupleset-ttu` (`src/zanzibar/schema/boolean.py::_plan_leaves`), which no
 # checked parse can reach any more, since a direct tupleset is never tainted. The
 # consumers turn that into ASSERTED exclusions, each of which is revoked if the refusal
 # ever relaxes:
@@ -1249,7 +1249,7 @@ REFUSED_TUPLESET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # Anchors `sem` on self-referential tuples (subject entity == object entity), which
 # OpenFGA supports (the `IsSelfDefining` concept / self-defining attribute-marker
 # idiom). This is the trust-root confirmation for the 2026-07-13 self-referential
-# fix (index_v4 node-GC/implicit canonicalization; docs/spec-deviations.md): the fix
+# fix (zanzibar.graphindex node-GC/implicit canonicalization; docs/spec-deviations.md): the fix
 # followed the oracle, and `sem` agrees. Probed 2026-07-13: sem == oracle == set
 # engine on every grid query, including the self-referential rows.
 #

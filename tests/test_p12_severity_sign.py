@@ -18,7 +18,7 @@ fenced the sibling off as a PREDICTION, not an observation. ``P12`` measured it:
 pre-fix tree ``33242de^`` = the docs' ``c042056^``, exported with ``git archive``, no
 product file touched) and the grid counts. This module keeps the result permanently
 WITHOUT shipping bad code: the pre-fix behaviour is simulated in the test by no-op'ing
-``index_v4/wildcard.py::WildcardIndex._ensure_entity_middles`` -- the same narrowest
+``src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_entity_middles`` -- the same narrowest
 weakening ``tests/test_i14_crossing_middles.py`` uses -- on a store with paranoia OFF
 (paranoia's I14 check would otherwise abort the first write, which is the other half of
 today's severity and is pinned below too).
@@ -26,7 +26,7 @@ today's severity and is pinned below too).
 ## The consumer the 2026-08-10 entry proposed does not compile
 
 ``define access: [user] but not viewer from parent`` directly over ``owc_star_ttu.fga``
-is refused by the graph compiler (``zanzibar_utils_v1.py::_reject_object_wildcard_scope``,
+is refused by the graph compiler (``src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope``,
 blind-audit D4: the object-wildcard shape ``(folder, viewer)`` would be the TTU target of
 a derived relation). ``test_the_proposed_negated_consumer_is_refused`` pins that, so the
 next reader does not re-derive it. The negated consumers that DO compile are the three in
@@ -86,12 +86,12 @@ from pathlib import Path
 
 import pytest
 
-from index_v4.invariants import InvariantViolation
-from index_v4.wildcard import WildcardIndex
-from setengine import ALL_SETOPS
+from zanzibar.graphindex.invariants import InvariantViolation
+from zanzibar.graphindex.wildcard import WildcardIndex
+from zanzibar.setengine import ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from tests.test_matrix import GraphBackend, SetBackend
-from zanzibar_utils_v1 import UnsupportedByGraphIndex, parse_openfga_schema
+from zanzibar.schema import UnsupportedByGraphIndex, parse_openfga_schema
 
 
 def _owc_star_ttu() -> str:

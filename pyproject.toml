@@ -1,0 +1,31 @@
+# Packaging for the `zanzibar` library (TK120, 2026-10-06). The library is everything
+# under src/zanzibar/; tests/, formal/ (Lean proofs + conformance suite), benchmarks/,
+# scripts/ and docs/ are deliberately NOT part of it.
+#
+# The GATE does not depend on this file or on an install: pytest.ini sets
+# `pythonpath = src` and formal/verify.sh exports PYTHONPATH=<repo>/src, so every
+# checkout/worktree tests its OWN src/. `pip install -e .` is a convenience for
+# benchmarks, probes and ad-hoc scripts. requirements.txt stays the environment recipe
+# (it also lists the test tools).
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zanzibar"
+version = "0.1.0"
+description = "Zanzibar-style relationship/permission evaluation: a set engine and a materialized graph index with identical semantics."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "sqlmodel",
+    "pyroaring",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg2-binary"]
+test = ["pytest", "hypothesis"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

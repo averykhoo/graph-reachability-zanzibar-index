@@ -2,7 +2,7 @@
 id: TK102
 title: take the derived-userset corpus into test_conformance_enum._SHAPES (the combinatorial arm)
 brief: the one widening TK94 declined: _SHAPES is a fixed six-name dict, and its cost IS combinatorial
-pri: NEXT
+pri: NOW
 size: M
 deps: []
 related: [TK94]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-22d
-moved: 2026-10-04g
-updated: 2026-10-04g
+moved: 2026-10-06
+updated: 2026-10-06
 closed:
 ---
 

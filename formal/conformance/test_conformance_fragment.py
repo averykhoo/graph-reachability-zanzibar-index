@@ -20,14 +20,14 @@ What this module pins:
     `formal/probes/dw1_python_mirror_2026-09-23.py` run over the production AST
     (`docs/dw1-decidable-w4fragment-2026-09-23.md` §2), before the Lean decider existed. The
     two derivations share no code. Lean's `zcli` reads `encode.py`'s oracle-side encoding; the
-    mirror reads `zanzibar_utils_v1.parse_schema_ast`.
+    mirror reads `zanzibar.schema.parse_schema_ast`.
 (C) **Lean's `taintedKeys` equals Python's `compute_taint`** on every curated corpus. This is
     the `isDerived ≡ compute_taint` correspondence, which `CORRESPONDENCE.md` asserted in
     prose and which no test compared until now.
 
 Since `DW-1` step 3 (2026-09-23e) the module also pins the OPERATOR-FACING report:
 
-(D) **The production `zanzibar_utils_v1.py::w4_fragment_report` equals Lean's decider**,
+(D) **The production `src/zanzibar/schema/reports.py::w4_fragment_report` equals Lean's decider**,
     per field and on the tainted set, over every curated corpus plus every scope probe.
     The report is a hand-written mirror. This differential is the only thing that stops
     it from saying "covered" where the proof does not.
@@ -191,7 +191,7 @@ def test_lean_verdict_matches_the_independent_mirror(key):
 
 @pytest.mark.parametrize("key", sorted(REPORTED_INPUTS))
 def test_lean_taint_equals_python_compute_taint(key):
-    """(C) `isDerived` (Lean `taintedKeys`) == `zanzibar_utils_v1.compute_taint`.
+    """(C) `isDerived` (Lean `taintedKeys`) == `zanzibar.schema.compute_taint`.
 
     A `REFUSED_CORPORA` input is parsed UNCHECKED (`TK106`, 2026-09-26). Decision: keep it
     rather than exclude it. Taint equality is a claim about the ANALYSIS, and the
@@ -202,7 +202,7 @@ def test_lean_taint_equals_python_compute_taint(key):
     Curated corpora keep the checked parse, so the production parse path stays under test,
     and (K) pins that the refused ones really are refused, so the unchecked parse hides no
     accepted schema."""
-    from zanzibar_utils_v1 import _parse_schema_ast_unchecked, compute_taint, parse_schema_ast
+    from zanzibar.schema import _parse_schema_ast_unchecked, compute_taint, parse_schema_ast
 
     rep = _fragment_report(key)
     lean = {tuple(k) for k in rep["tainted"]}
@@ -217,7 +217,7 @@ def test_lean_taint_equals_python_compute_taint(key):
 # --------------------------------------------------------------------------- #
 # (D)-(G): the PRODUCTION report, `DW-1` step 3 (2026-09-23)
 # --------------------------------------------------------------------------- #
-# `zanzibar_utils_v1.py::w4_fragment_report` is the operator-facing twin of the Lean
+# `src/zanzibar/schema/reports.py::w4_fragment_report` is the operator-facing twin of the Lean
 # decider. It is a hand-written mirror, so it is held to Lean field for field. On a red,
 # fix the PYTHON. The two sides read different parsers (`encode.py` uses the oracle's;
 # the report uses the production `_parse_schema_ast_unchecked`), so attribute a red to
@@ -251,7 +251,7 @@ def test_production_field_list_is_the_lean_structure():
     parsed from `FullScope.lean`'s source are one list in one order. A field added to
     the Lean structure must reach the operator report as well as the scope pin."""
     from formal.conformance.test_w4fragment_scope_pin import _live_fields
-    from zanzibar_utils_v1 import W4_FRAGMENT_FIELDS
+    from zanzibar.schema import W4_FRAGMENT_FIELDS
 
     live = tuple(_live_fields())
     assert len(live) >= 10, f"parsed only {live} from FullScope.lean"
@@ -276,7 +276,7 @@ def test_scope_probes_are_not_vacuous():
 @pytest.mark.parametrize("key", sorted(DIFFERENTIAL_INPUTS))
 def test_production_report_equals_lean(key):
     """(D) The production report == Lean's decider, per field, plus the tainted set."""
-    from zanzibar_utils_v1 import w4_fragment_report
+    from zanzibar.schema import w4_fragment_report
 
     schema_text, tuples, obj_wild = DIFFERENTIAL_INPUTS[key]
     lean = _lean_report(schema_text, tuples, obj_wild)
@@ -285,7 +285,7 @@ def test_production_report_equals_lean(key):
         f"[{key}] production w4_fragment_report disagrees with Lean's w4FragmentB on "
         f"{sorted(f for f in W4_FIELDS if dict(py.fields)[f] != lean['fields'][f])}: "
         f"Python fails {list(py.failures)}, Lean fails {lean['failures']}. Fix the "
-        f"Python mirror (zanzibar_utils_v1.py, W4Fragment section); Lean is proved exact.")
+        f"Python mirror (src/zanzibar/schema/, W4Fragment section); Lean is proved exact.")
     assert list(py.failures) == lean["failures"]
     assert py.in_fragment == lean["inFragment"]
     assert py.tainted == {tuple(k) for k in lean["tainted"]}, f"[{key}] tainted sets differ"
@@ -295,7 +295,7 @@ def test_production_report_equals_lean(key):
 def test_scope_probe_verdict_matches_the_hand_derivation(label):
     """(E) Each re-created scope probe fails exactly the fields derived by hand from the
     Lean definitions (`w4_scope_probes.py`), by Lean AND by the production report."""
-    from zanzibar_utils_v1 import w4_fragment_report
+    from zanzibar.schema import w4_fragment_report
 
     schema_text, tuples, obj_wild, expected = SCOPE_PROBES[label]
     lean = _lean_report(schema_text, tuples, obj_wild)
@@ -309,7 +309,7 @@ def test_scope_probe_python_outcome_still_holds(label):
     """(F) The scope pin's LOUD/SILENT evidence, re-run: each schema-side probe is still
     ADMITTED or RAISED by the production compile exactly as the 2026-08-31 probe saw it.
     A change here means `W4FRAGMENT_SCOPE`'s classification needs re-adjudicating."""
-    from zanzibar_utils_v1 import UnsupportedByGraphIndex, parse_openfga_schema
+    from zanzibar.schema import UnsupportedByGraphIndex, parse_openfga_schema
 
     schema_text, _tuples, obj_wild, _exp = SCOPE_PROBES[label]
     try:
@@ -526,7 +526,7 @@ def _mirror_inputs() -> dict[str, tuple]:
     the self-consistency refusal. Since ASK-1 (2026-09-26) that refusal rejects every
     `matchDecl` / `ranked` probe; filtering on the checked parser would drop exactly the
     failing inputs and leave this differential comparing `()` with `()`."""
-    from zanzibar_utils_v1 import _parse_schema_ast_unchecked as parse_schema_ast
+    from zanzibar.schema import _parse_schema_ast_unchecked as parse_schema_ast
 
     out = {k: (s, t, ow) for k, (s, t, ow) in REPORTED_INPUTS.items()}
     for label, (s, ow, _) in GA_SCHEMA_PROBES.items():
@@ -564,7 +564,7 @@ def test_silent_field_mirror_equals_lean(key):
 # (K) ASK-1 (2026-09-26): `matchDecl` and `ranked` are REFUSED, not just reported
 # --------------------------------------------------------------------------- #
 # The user decided schemas must be self-consistent, so both parsers now refuse a dangling
-# reference or a reference cycle (`zanzibar_utils_v1.py::_validate_ast_consistency`,
+# reference or a reference cycle (`src/zanzibar/schema/parser.py::_validate_ast_consistency`,
 # `tests/oracle.py::_validate_consistency`). (J) makes the report equal Lean, so (K) makes
 # the refusal answer to Lean: an input that fails either field is refused by BOTH parsers.
 # The refusal is deliberately WIDER than the two fields (a dangling `[group#member]`, a
@@ -586,7 +586,7 @@ def test_reported_failures_are_refused_by_both_parsers(key):
     A `REFUSED_CORPORA` input (`TK106`, 2026-09-26) is refused by both, with the TK106
     message, whatever the report says."""
     from tests.oracle import parse_schema_ast as oracle_parse
-    from zanzibar_utils_v1 import parse_schema_ast as prod_parse
+    from zanzibar.schema import parse_schema_ast as prod_parse
 
     schema_text = _mirror_inputs()[key][0]
     fails = silent_admission_failures(schema_text)
@@ -619,7 +619,7 @@ def test_refusal_sweep_sees_both_fields_fail():
 # --------------------------------------------------------------------------- #
 # The user decided boolean tuplesets are refused, as OpenFGA refuses them: a relation used
 # as a TTU tupleset must be direct-only, else both parsers raise
-# (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+# (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`, oracle twin
 # `tests/oracle.py::_validate_tuplesets_direct`). That made `GraphAdmission.ttuDirect`
 # LOUD (`test_graphadmission_scope_pin.py`). (L) makes the refusal answer to LEAN, the
 # (K) idiom one field over: every sweep input Lean's decider says fails `ttuDirect` is
@@ -656,7 +656,7 @@ def test_lean_ttudirect_failures_are_refused_by_both_parsers(key):
 
     With either parser's refusal disabled outright, all three witnesses go red."""
     from tests.oracle import parse_schema_ast as oracle_parse
-    from zanzibar_utils_v1 import parse_schema_ast as prod_parse
+    from zanzibar.schema import parse_schema_ast as prod_parse
 
     schema_text, tuples, obj_wild = _mirror_inputs()[key]
     rep = _lean_report(schema_text, tuples, obj_wild)

@@ -16,7 +16,7 @@ updated: 2026-09-22b
 closed:
 ---
 
-`index_v4/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl`
+`src/zanzibar/graphindex/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl`
 
 **Measured (2026-08-17 motivating-measurement pass):** **4.51** `_db_node` point SELECTs per raw write, **17.7%** of a non-boolean build (context: **34.62 SQL statements per raw write** overall). The fix reuses the `node_map` batch-loaded three lines earlier.
 
@@ -33,7 +33,7 @@ closed:
 - [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §`### R6-9` — the entry, **including its verifier corrections**
 - the same file, §"Traps the numbers do not carry" — the round-wide traps. Read the section; it is short, and it is the only home for how many there are. (This line used to say "the five", attributed to the tree generator recounting them at generation time. That generator was deleted with `.scratch/tasktool/` on 2026-09-07, so the attribution named a mechanism that could not run — `TK61`, reworded 2026-09-07b. A bare "five" with no attribution would have been worse: that is an unsourced restated count.)
 - [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md) — verdicts, method, and the two honest limits (in-memory SQLite understates statement-count wins; cProfile depresses throughput)
-- `index_v4/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl` — the code
+- `src/zanzibar/graphindex/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl` — the code
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the fence and the reopening rule
 - `python scripts/task.py show R6` — the parent: round-wide order, traps and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
@@ -47,13 +47,13 @@ closed:
 
 MEASURED THIS SESSION: the instrument is mis-keyed, so landing this fix cannot move its own
 headline number. `benchmarks/profile_r6_write.py:198` keys the R6-9 verdict on
-`_find(rows, func='_db_node', file_frag='index_v4/core.py')` and prints
-"_db_node point SELECTs ... <- R6-9". But `index_v4/core.py::ReachabilityIndex._db_node`
+`_find(rows, func='_db_node', file_frag='src/zanzibar/graphindex/core.py')` and prints
+"_db_node point SELECTs ... <- R6-9". But `src/zanzibar/graphindex/core.py::ReachabilityIndex._db_node`
 (`:965`) resolves by (predicate, entity_type, entity_name, wildcard) -- it is the identity
 SELECT shared by `node` and `cached_concrete_node`. The two SELECTs this row deletes are an
-INLINE `select(NodeV4).where(NodeV4.store_id == ...).where(NodeV4.id == node_id)` in the write
+INLINE `select(Node).where(Node.store_id == ...).where(Node.id == node_id)` in the write
 tail of `::ReachabilityIndex._add_direct_edge_unsafe_impl` (`core.py:886-888`, dated
-2026-09-22). They are not `_db_node` calls. The per-table `node_v4` statement counter in the
+2026-09-22). They are not `_db_node` calls. The per-table `node` statement counter in the
 same printout is what drops ~2/write.
 
 ACTION: re-key the instrument BEFORE landing, and treat that as its own gated step per

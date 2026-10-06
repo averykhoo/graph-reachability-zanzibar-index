@@ -14,7 +14,7 @@ import ZanzibarProofs.GraphIndex.RemoveOccCount
 `HANDOFF.md` Phase 6 item 1. The conformance CLI needs to RUN the operational
 graph model — the very object `graph_correct` quantifies over — on a corpus of
 writes and answer `check` queries, so the Python harness can diff the Lean model
-against the real Python graph index (`index_v4`/`WildcardIndex`).
+against the real Python graph index (`zanzibar.graphindex`/`WildcardIndex`).
 
 This file is the driver plus its **honesty theorems**: the driver is not a second
 model, it is a fold of the CHAIN'S OWN constructors, and that is a theorem —
@@ -26,8 +26,8 @@ model, it is a fold of the CHAIN'S OWN constructors, and that is a theorem —
 * `cascadeLeg` — one fully-operational cascade leg, verbatim the `cascade`
   constructor's target (`runCascade2` over the state-derived `enumJobs2R1`/`R2`).
 * `graphRun` — write leg + cascade leg per input tuple (the synchronous v1
-  Python write path: `connectedstore/apply.py::advance_index` →
-  `index_v4/processor.py::DeltaProcessor.run_cascade` → `::DeltaProcessor._run_cascade`
+  Python write path: `src/zanzibar/connectedstore/apply.py::advance_index` →
+  `src/zanzibar/graphindex/processor.py::DeltaProcessor.run_cascade` → `::DeltaProcessor._run_cascade`
   in the same transaction, `tests/test_matrix.py` `GraphBackend.apply`). **Only the
   INTERLEAVED schedule** — under `ConnectedStore(sync=False)` / `build_index`,
   `advance_index` applies the whole batch before one cascade (`ZT-P4-2c`).
@@ -576,7 +576,7 @@ trips leave TWO leaked edges, so the residue grew without bound), `…_leak_read
 PUBLIC entry still denied), and `graphRunOps_leak_unfenced_grants` /
 `graphRunOps_leak_internal_ghost_grant` — which measured the sharper half: BELOW the
 `checkPublic` leaf fence, `GraphModel.check` (Python's
-`index_v4/wildcard.py::WildcardIndex._check_internal`) GRANTED at the leaked leaf name
+`src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_internal`) GRANTED at the leaked leaf name
 against an EMPTY store on a DRAINED, `ReachedBy`-certified state, where `sem` denies by
 `sem_nil_false`. The single load-bearing barrier was the fence.
 
@@ -597,7 +597,7 @@ unchanged — they say the extras are leaf-addressed, invisible at the public en
 `LeafScope` schema, and never a SOURCE of any edge. What R5 changed is that they no longer
 SURVIVE the matching retraction.
 
-**Python fidelity, re-verified 2026-09-05:** `connectedstore/apply.py::_apply_row` (`:62-66`)
+**Python fidelity, re-verified 2026-09-05:** `src/zanzibar/connectedstore/apply.py::_apply_row` (`:62-66`)
 selects `widx._add_tuple_trusted` / `::_remove_tuple_trusted` by `row.op` and then routes
 ONE `ruleset.apply(triple)` fan-out, and the conformance driver
 `formal/conformance/backends.py::GraphDriver._fan` has the same symmetric shape. The leak
@@ -832,7 +832,7 @@ break it — `W4WitnessDirect.Sd`/`Td`, whose `GraphAdmission` (`::admission`) a
 
 **(alpha) closes it**: `affectedKeys`' own-key branch now maps the leaf delta back to its
 PUBLIC key through `Leaf.lean::publicOfLeaf`, exactly as
-`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` does. The refutations are
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys` does. The refutations are
 DELETED because their statements are false, and the same fixtures are kept and INVERTED into
 `decide` pins — `graphRunOps_directArm_agrees`, `::_agrees_check`, `::_agrees_corpus`,
 `::graphRunOps_directArm_check_eq_sem`. Revert the branch and every one of them reddens at
@@ -1539,8 +1539,8 @@ still evaluate the RAW def and `evalE`'s `.direct` arm still reads the **store**
 
 The bridge is nonetheless real and unproved — as a **Lean↔Python** obligation, not a
 fragment one. Python's compiled plan does exactly what §8.1 assumed:
-`zanzibar_utils_v1.py::_compile_check_fn` sends a `PClosureLeaf` to
-`index_v4/processor.py::_EvalContext.leaf_check`, which probes the index **at the minted
+`src/zanzibar/schema/boolean.py::_compile_check_fn` sends a `PClosureLeaf` to
+`src/zanzibar/graphindex/processor.py::_EvalContext.leaf_check`, which probes the index **at the minted
 leaf name**. `CORRESPONDENCE.md` §7.3 records that whole layer as netted by the
 differential matrix and *"not by any theorem about the compiler"*. These pins are the first
 machine-checked evidence against that gap: at three allocations the leaf probe and the

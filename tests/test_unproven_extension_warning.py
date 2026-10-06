@@ -6,9 +6,9 @@ User decision 2026-09-26 (task `ASK-2`): the three extensions -- wildcard userse
 theorems' premise (`FullScope.lean::W4Fragment` fields `wsBare` / `bareStar` /
 `ttuStarFree`), so anyone using them must be told agreement rests on tests, not proof.
 
-The warning is raised in `zanzibar_utils_v1.py::derive_schema_info`, the one step every
+The warning is raised in `src/zanzibar/schema/compiler.py::derive_schema_info`, the one step every
 construction path shares (`parse_openfga_schema`, `SetEngine.__init__`,
-`connectedstore.schema_io`). `pytest.ini` IGNORES it suite-wide so the hundreds of
+`zanzibar.connectedstore.schema_io`). `pytest.ini` IGNORES it suite-wide so the hundreds of
 wildcard fixtures do not flood the warnings summary; `pytest.warns` / `catch_warnings`
 below install their own filter, so these pins are not blinded by that ignore.
 
@@ -21,8 +21,8 @@ import warnings
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from setengine import SetEngine
-from zanzibar_utils_v1 import UnprovenExtensionWarning, parse_openfga_schema
+from zanzibar.setengine import SetEngine
+from zanzibar.schema import UnprovenExtensionWarning, parse_openfga_schema
 
 PLAIN = """model
   schema 1.1

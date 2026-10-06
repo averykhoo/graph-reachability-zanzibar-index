@@ -19,7 +19,7 @@ runs the I9 fixpoint audit). Schemas the graph still refuses -- decision-15 scop
 cyclic derived dependencies -- degrade to 3-way, oracle + both set engines.
 
 Paranoia mode (spec §8.1) defaults ON: the graph store gets pre/post-commit invariant
-checking (index_v4.invariants.install_paranoia) plus the per-op I12 snapshots here.
+checking (zanzibar.graphindex.invariants.install_paranoia) plus the per-op I12 snapshots here.
 """
 
 from __future__ import annotations
@@ -30,10 +30,10 @@ from collections import Counter
 
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from index_v4.invariants import snapshot_rows
-from setengine import SetEngine, ALL_SETOPS
-from setengine.models import TupleV1
-from zanzibar_utils_v1 import (CyclicDerivedDependency, Entity, RelationalTriple,
+from zanzibar.graphindex.invariants import snapshot_rows
+from zanzibar.setengine import SetEngine, ALL_SETOPS
+from zanzibar.setengine.models import RelationTuple
+from zanzibar.schema import (CyclicDerivedDependency, Entity, RelationalTriple,
                                UnsupportedByGraphIndex, parse_openfga_schema,
                                parse_schema_ast, _iter_directs)
 from tests.oracle import Oracle, OracleTuple
@@ -65,11 +65,11 @@ class _GraphSide:
             ruleset.schema_info, store_id='pg', paranoia=paranoia)
         self.proc = None
         if ruleset.compiled is not None and ruleset.compiled.plans:
-            from index_v4.processor import DeltaProcessor
+            from zanzibar.graphindex.processor import DeltaProcessor
             self.proc = DeltaProcessor(self.widx, ruleset.compiled)
 
     def apply(self, raw: RawTuple, op: str) -> bool:
-        from index_v4.outbox import outbox_watermark
+        from zanzibar.graphindex.outbox import outbox_watermark
         sp = Ellipsis if raw[0] == '...' else raw[0]
         triple = RelationalTriple(Entity(raw[1], raw[2]), raw[3], Entity(raw[4], raw[5]), sp)
         fn = self.widx.add_tuple if op == 'add' else self.widx.remove_tuple
@@ -123,7 +123,7 @@ class _SetSide:
 
     def snapshot(self) -> Counter:
         rows = self.session.exec(
-            select(TupleV1).where(TupleV1.store_id == self.store_id)).all()
+            select(RelationTuple).where(RelationTuple.store_id == self.store_id)).all()
         return Counter(
             (r.subject_predicate, r.subject_type, r.subject_name,
              r.relation, r.object_type, r.object_name) for r in rows)
@@ -179,7 +179,7 @@ class ParityEngine:
         self.derived_families: frozenset[tuple[str, str]] = (
             self.graph.widx.schema_info.derived_families if self.graph else frozenset())
 
-        # The raw-tuple set IS the oracle's input (set semantics: TupleV1 is unique).
+        # The raw-tuple set IS the oracle's input (set semantics: RelationTuple is unique).
         self.present: set[RawTuple] = set()
         # Names seen per entity type, for universe-∪-ghosts-∪-'*' grid construction.
         self._names_by_type: dict[str, set[str]] = {}
@@ -222,7 +222,7 @@ class ParityEngine:
     def _apply(self, raw: RawTuple, op: str) -> bool:
         if op == 'add' and raw in self.present:
             # Zanzibar raw tuples are a SET: a duplicate add is an idempotent no-op
-            # (TupleV1's unique constraint already makes the set engine no-op it; the
+            # (RelationTuple's unique constraint already makes the set engine no-op it; the
             # graph core is deliberately ref-counted for REWRITTEN fan-in -- two
             # different raw tuples may derive the same edge -- so raw-level
             # idempotence lives here, at the tuple API boundary). Found by the P8

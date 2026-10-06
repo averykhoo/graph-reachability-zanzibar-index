@@ -4,10 +4,10 @@ operators (spec §3).
 
 This is a deliberately naive, memoized evaluator over ``(schema, list_of_input_tuples)``.
 It exists ONLY to serve as an independent ground truth for the materialized
-``WildcardIndex`` (``index_v4``) and the set engine (``setengine``).
+``WildcardIndex`` (``zanzibar.graphindex``) and the set engine (``zanzibar.setengine``).
 
 Independence contract (wildcard spec §4, restated):
-  * imports NOTHING from ``index_v4`` / ``setengine`` (no DB, no edges, no bridges);
+  * imports NOTHING from ``zanzibar.graphindex`` / ``zanzibar.setengine`` (no DB, no edges, no bridges);
   * shares no *evaluation* logic and no *parser* with the production code -- it parses
     the OpenFGA DSL itself (``parse_schema_ast`` below), so a bug in the production
     schema parser cannot silently corrupt both sides of the validation matrix.
@@ -345,14 +345,14 @@ def parse_schema_ast_unchecked(text: str) -> dict[tuple[str, str], object]:
     return ast
 
 
-#: Independent copy of the write identifier charset (`zanzibar_utils_v1.py::IDENTIFIER_CHARSET`),
+#: Independent copy of the write identifier charset (`src/zanzibar/schema/errors.py::IDENTIFIER_CHARSET`),
 #: NOT imported, by the independence contract above. Anchored with `\Z`, never `$`
 #: (`$` also matches before a trailing newline; ZT-P1-1 in production).
 _NAME_RE = re.compile(r'[A-Za-z0-9_./@+=-]{1,256}\Z')
 
 
 def _validate_declared_name(kind: str, name: str) -> None:
-    """Independent twin of `zanzibar_utils_v1.py::_validate_declared_name` (P23, 2026-10-03e)."""
+    """Independent twin of `src/zanzibar/schema/parser.py::_validate_declared_name` (P23, 2026-10-03e)."""
     # REFUSED SHAPE (P23): a declared type or relation name outside the write identifier
     # charset (`define *: ...`, `define can view: ...`, `type d#oc`). WHY: no write can land
     # on it, yet a computed or TTU arm can reach it, and there the backends split (a valid
@@ -375,7 +375,7 @@ def _oracle_nodes(expr):
 
 def _validate_consistency(ast) -> None:
     """Independent twin of the production self-consistency refusal (ASK-1, 2026-09-26).
-    NOT shared with ``zanzibar_utils_v1.py::_validate_ast_consistency`` (independence
+    NOT shared with ``src/zanzibar/schema/parser.py::_validate_ast_consistency`` (independence
     contract above). Refused: a computed ref or TTU tupleset naming an undeclared relation
     on its own type; a TTU target declared on none of the tupleset's restriction types (on
     no type at all, when it has none); a ``[T#P]`` restriction with no ``T#P``; and any
@@ -436,7 +436,7 @@ def _validate_consistency(ast) -> None:
 
 
 def _validate_tuplesets_direct(ast) -> None:
-    """Independent twin of ``zanzibar_utils_v1.py::_validate_tuplesets_direct`` (TK106,
+    """Independent twin of ``src/zanzibar/schema/parser.py::_validate_tuplesets_direct`` (TK106,
     2026-09-26), NOT shared with it (independence contract above). A relation named as a
     TTU tupleset must be only type restrictions, alone or joined by ``or``: ``from`` walks
     stored tuples, so any other arm would be silently ignored. OpenFGA refuses it too.
@@ -475,7 +475,7 @@ def _validate_tuplesets_direct(ast) -> None:
                                 f'but {typ}#{node.tupleset_rel} allows {r_type}#{r_pred}')
 
 def _validate_stratified_negation(ast) -> None:
-    """Independent twin of ``zanzibar_utils_v1.py::_validate_stratified_negation`` (TK114,
+    """Independent twin of ``src/zanzibar/schema/parser.py::_validate_stratified_negation`` (TK114,
     2026-10-04), NOT shared with it (independence contract above). Refuses any relation
     that reaches itself along a path with at least one step taken inside a ``but not``
     subtrahend. A step is a computed ref, a tupleset, a TTU target on a type the tupleset

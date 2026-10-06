@@ -10,8 +10,8 @@ the `ReachedBy` chain's sole base constructor is `empty`
 from `emptyState` by logged writes and cascades.
 
 `connectedstore.build_index` — the production bootstrap — does NOT build an
-index that way. Its default `bulk=True` (`connectedstore/build.py`) hands the
-tuple snapshot to `index_v4/bulk_build.py`, which routes every tuple once,
+index that way. Its default `bulk=True` (`src/zanzibar/connectedstore/build.py`) hands the
+tuple snapshot to `src/zanzibar/graphindex/bulk_build.py`, which routes every tuple once,
 computes closed-form path counts, runs the in-memory boolean backfill
 (`bulk_backfill.py`) and bulk-INSERTs the final rows. Nothing in the proof
 describes that constructor; and until this module, nothing in
@@ -31,7 +31,7 @@ corpus, `test_state_bulkbuild_vs_pythongraph`:
      MULTIPLICITY is compared exactly on the DERIVED arm too (Python's
      `_reconcile_subject` writes derived edges by presence diff, uniformly 1,
      and `bulk_backfill` must reproduce exactly that), plus the per-edge
-     `EdgeV4.derived` flag (I5) and every residue triple.
+     `Edge.derived` flag (I5) and every residue triple.
   2. **`diff_states(lean, bulk)` directly** — the same projections and the same
      P3 derived-arm drop as the existing gate, so the bulk state is ALSO pinned
      to the model without going through leg 1's anchor. Redundant if leg 1 and
@@ -93,7 +93,7 @@ What this does NOT cover, said plainly:
     clamping `indirect_edge_count` to `min(1, ...)`, or writing no
     pure-indirect row at all, leaves this module green (literal output in the
     test docstring). Those are pinned ONLY by `tests/test_bulk_build.py`
-    (`snapshot_rows` compares every `EdgeV4` column as a multiset), so this
+    (`snapshot_rows` compares every `Edge` column as a multiset), so this
     module pins the bulk-built DIRECT multigraph + derived flags + residues
     to the model-driven state — not the closure rows a `check` actually reads.
     (!) CORRECTION 2026-09-20 (TK91) -- "ONLY by `tests/test_bulk_build.py`"
@@ -255,7 +255,7 @@ def test_state_bulkbuild_vs_pythongraph(name):
         snapshot silently one tuple short) is refused before any comparison
         runs (`group_userset`)::
 
-            AssertionError: bulk_build_drive: 2 TupleV1 row(s) landed for a
+            AssertionError: bulk_build_drive: 2 RelationTuple row(s) landed for a
             corpus of 3 tuple(s) — the snapshot build_index will read is not
             the tuple list graphindex_drive replays (a duplicate the source
             deduplicated, or a rejected write). Refusing to compare two

@@ -16,7 +16,7 @@ This file assembles the **read half**:
   pass evaluates equals `sem` at every W3c-reachable state — through the W3a-admitted shadow
   (`checkFn` reads only the core; `checkFn_eq_sem_bs` on the shadow).
 * **The `W3cComplete` batch layer**: an admitted rule-routed base plus a batch of full-object
-  `reconcileStarsKey` jobs (one `index_v4/processor.py::DeltaProcessor._reconcile` per
+  `reconcileStarsKey` jobs (one `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` per
   derived key/object,
   audit-enumerating bare edge candidates, `neg` concretes, `upos` usersets). Coverage clauses
   are properties of the *enumeration*.
@@ -78,7 +78,7 @@ theorem reconcileStarsKey_edges_mono {σ : GraphState} (T : Store) (dt on R : St
 /-- A W3c reconcile job: settle one derived key/object with a full `reconcileStarsKey` pass
     (residue recompute over `wildcardShapes S`/`negCands`/`uposCands`, then the covered-guarded
     edge audit over `cands`). Faithful to
-    `index_v4/processor.py::DeltaProcessor._reconcile`. -/
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile`. -/
 structure W3cJob where
   dt : String
   on : String
@@ -145,7 +145,7 @@ theorem reconcileJobsC_edges_mono {S : Schema} {T : Store} :
 
 **`coveredFn σ0 sh = true → sh ∈ declaredWildcardShapes S`**: a `sem`-true BARE-star subject
 has a DECLARED wildcard shape — declared by a LITERAL restriction, i.e. pass 1 of
-`zanzibar_utils_v1.py::derive_schema_info`. This is what collapses the space rule: the master
+`src/zanzibar/schema/compiler.py::derive_schema_info`. This is what collapses the space rule: the master
 theorem pins `res.stars = (wildcardShapes S).filter (coveredFn σ0)`, so
 `res.stars.contains sh ↔ (sh ∈ declaredWildcardShapes S ∧ coveredFn σ0 sh)` — and the read
 correspondence needs it `↔ coveredFn σ0 sh` alone.
@@ -733,12 +733,12 @@ theorem w3c_row_char {S : Schema} {T : Store} {σ : GraphState}
 /-! ## Per-key job coverage — row existence and `neg`/`upos` completeness
 
 The residue is a WHOLESALE per-pass recompute
-(`index_v4/processor.py::DeltaProcessor._reconcile` steps (1)–(3) replace the whole
+(`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` steps (1)–(3) replace the whole
 row), so a `neg`/`upos` member survives the batch only if **every** job targeting its key
 enumerates it — an attack-first `#eval` this session confirmed a second same-key pass
 with an incomplete `negCands` DROPS the exclusion and breaks `check = sem` (necessity of
 the ∀-jobs form; scratch deleted). Faithful to Python: every
-`index_v4/processor.py::DeltaProcessor._reconcile` call re-derives
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` call re-derives
 the full audit enumeration (steps (2)/(2b): `::DeltaProcessor._leaf_concretes` ∪
 persisted `neg`/`upos` ids ∪ `::DeltaProcessor._incoming_concretes`),
 so any store-supported subject is in every call's enumeration. -/
@@ -972,7 +972,7 @@ theorem reconcileJobsC_upos_complete {S : Schema} {T : Store}
 /-! ## The W3c-complete state and the assembly `graph_correct_w3c` -/
 
 /-- The full derived read (`probeDerived`,
-    `index_v4/wildcard.py::WildcardIndex._check_derived`), unfolded on explicit
+    `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived`), unfolded on explicit
     components at a concrete object: star ⇒ `stars`; bare ⇒ edge ∨ (`stars` ∖ `neg`);
     userset ⇒ `upos` ∨ (`stars` ∖ `neg`) (with the `stars` gate). -/
 theorem probeDerived_eq (σ : GraphState) {st sn sp R dt on : String} (hon : on ≠ STAR) :
@@ -997,8 +997,8 @@ theorem probeDerived_eq (σ : GraphState) {st sn sp R dt on : String} (hon : on 
 
 /-- **`W3cComplete S T σ`** — an admitted rule-routed base plus a coverage-complete batch
     of full-object star reconcile jobs. Faithful to
-    `connectedstore/build.py::build_index` /
-    `index_v4/processor.py::DeltaProcessor._reconcile` (bootstrap sweep:
+    `src/zanzibar/connectedstore/build.py::build_index` /
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` (bootstrap sweep:
     `::DeltaProcessor.backfill`): the processor reconciles every derived key over every
     object, re-deriving the full audit enumeration each pass. Coverage clauses are
     properties of the *enumeration*:

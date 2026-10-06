@@ -1,6 +1,6 @@
 """R6-10: the stored-tuple enumeration memo, and the four things that make it exact.
 
-``index_v4/processor.py::DeltaProcessor._stored_cache_scope`` installs a memo over
+``src/zanzibar/graphindex/processor.py::DeltaProcessor._stored_cache_scope`` installs a memo over
 ``::DeltaProcessor._stored_tupleset_subjects`` and ``::DeltaProcessor.stored_userset_subjects``
 for the duration of one cascade / one reconcile. A memo is only ever as good as the
 argument that its inputs cannot change while it is installed, so what is pinned here is
@@ -11,7 +11,7 @@ NOT "the cache is fast" — it is the four properties that carry correctness:
      visible_to_the_next_cascade``, BOTH signs).
   2. **Placement.** A raw (non-processor) write must never execute while a scope is
      open — which is exactly why the scope is installed inside ``run_cascade`` and NOT
-     in ``connectedstore/apply.py::advance_index``, where the N15 node cache lives and
+     in ``src/zanzibar/connectedstore/apply.py::advance_index``, where the N15 node cache lives and
      spans the apply loop (``test_raw_writes_never_run_inside_a_stored_cache_scope``,
      plus the deliberately-degraded ``test_a_scope_spanning_a_raw_write_serves_a_stale_
      answer`` which shows what that placement would buy).
@@ -21,7 +21,7 @@ NOT "the cache is fast" — it is the four properties that carry correctness:
      its own caller (``test_stored_cache_scope_is_reentrant``).
   4. **Scope of the memo.** It stops at ``_stored_tupleset_subjects``. The RC2 star
      expansion above it (``::DeltaProcessor._expand_tupleset_parents`` ->
-     ``::DeltaProcessor._instances_of_type``) reads the GLOBAL NodeV4 table, which
+     ``::DeltaProcessor._instances_of_type``) reads the GLOBAL Node table, which
      legitimately changes mid-reconcile, and must stay live
      (``test_star_expansion_is_not_frozen_by_the_memo``).
 
@@ -227,12 +227,12 @@ thinly exercised; keep that in mind before widening it.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import ConnectedStore
-from index_v4.models import NodeV4
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
+from zanzibar.connectedstore import ConnectedStore
+from zanzibar.graphindex.models import Node
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
 from tests.wildcard_helpers import make_wildcard_index
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 
 
 # A tainted TTU whose tupleset (`parent`) is an ordinary STORAGE relation: the
@@ -368,7 +368,7 @@ def test_raw_writes_never_run_inside_a_stored_cache_scope(sync):
     that stored tuples on storage-leaf families are constant for the life of a scope;
     a raw write inside a scope violates that directly. It is the reason the scope is
     installed in ``DeltaProcessor.run_cascade`` and NOT in
-    ``connectedstore/apply.py::advance_index`` — ``advance_index`` installs the N15
+    ``src/zanzibar/connectedstore/apply.py::advance_index`` — ``advance_index`` installs the N15
     node cache around the WHOLE ``_apply_row`` loop, so a stored-tuple memo copied to
     that site would span the raw writes.
 
@@ -432,7 +432,7 @@ def test_a_scope_spanning_a_raw_write_serves_a_stale_answer():
     constructed here in the test rather than by editing the source.
 
     Opening the scope around a raw write — which is what installing it at
-    ``connectedstore/apply.py::advance_index`` would do — makes
+    ``src/zanzibar/connectedstore/apply.py::advance_index`` would do — makes
     ``_stored_tupleset_subjects`` serve the pre-write answer. Asserting the stale
     answer appears is the point: it proves the placement rule is load-bearing and not
     a stylistic preference, and it survives whoever next reads the comment.
@@ -550,7 +550,7 @@ def test_star_expansion_is_not_frozen_by_the_memo():
     interned MID-SCOPE is a parent immediately.
 
     ``_reconcile`` step 2a interns from-chain subjects with ``create_if_missing=True``
-    and step 5 ``_gc_subject_node`` deletes them, so the global NodeV4 table that
+    and step 5 ``_gc_subject_node`` deletes them, so the global Node table that
     ``_instances_of_type`` reads genuinely changes inside one reconcile. The memo
     therefore stops at ``_stored_tupleset_subjects``; widening it to
     ``tupleset_parents`` / ``derived_stored_parents`` freezes the expansion.
@@ -603,8 +603,8 @@ def test_star_expansion_is_not_frozen_by_the_memo():
 
         # exactly what `_reconcile` step 2a does mid-reconcile
         proc.idx.node('...', 'doc', 'd3', create_if_missing=True, implicit=False)
-        assert session.exec(select(NodeV4).where(NodeV4.type == 'doc')
-                            .where(NodeV4.name == 'd3')).first() is not None
+        assert session.exec(select(Node).where(Node.type == 'doc')
+                            .where(Node.name == 'd3')).first() is not None
 
         second = parents_by_every_route()
         for route, got in second.items():

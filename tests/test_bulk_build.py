@@ -22,10 +22,10 @@ from pathlib import Path
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import TupleSource, build_index, save_schema
-from index_v4.invariants import check_invariants, snapshot_rows
-from index_v4.models import DeltaOutboxV1, EdgeV4, NodeV4, ResidueV1
-from setengine.models import TupleV1
+from zanzibar.connectedstore import TupleSource, build_index, save_schema
+from zanzibar.graphindex.invariants import check_invariants, snapshot_rows
+from zanzibar.graphindex.models import DeltaOutbox, Edge, Node, Residue
+from zanzibar.setengine.models import RelationTuple
 from tests.oracle import Oracle, OracleTuple
 from tests.test_wildcard_property import OBJECT_WC, _query_grid
 from tests.test_matrix import _boolean_grid, _demorgan_pool
@@ -329,7 +329,7 @@ def _rc2_star_tupleset_grid() -> list[tuple]:
 #  (g) OBJECT-WILDCARD GRANT CARRIED BY A STAR TUPLESET INTO A TTU -- the `owc_star_ttu`
 #      corpus, added 2026-09-16 to close `P22`. It exists for ONE reason: it is the first
 #      corpus in this module whose `schema_info.crossable_shapes` is NON-EMPTY, i.e. the
-#      first that reaches the I14 crossable-middle loop in `index_v4/bulk_build.py`.
+#      first that reaches the I14 crossable-middle loop in `src/zanzibar/graphindex/bulk_build.py`.
 #
 #      ⚠ WHY IT HAD TO BE ADDED -- A GREEN SABOTAGE THAT STAYED GREEN FOR TEN DAYS.
 #      `P22` (filed 2026-09-06b by the `P17` sweep) deleted that loop OUTRIGHT and every
@@ -337,7 +337,7 @@ def _rc2_star_tupleset_grid() -> list[tuple]:
 #      test_conformance_bulk_state.py` over all 25 `GRAPH_FRAGMENT` corpora, and the
 #      validation matrix. The cause was corpus coverage, not a weak assertion -- every
 #      other `_CORPORA` entry has `crossable_shapes = frozenset()`, because
-#      `zanzibar_utils_v1.py::_reject_doubly_bridged_shapes` intersects only LITERAL
+#      `src/zanzibar/schema/compiler.py::_reject_doubly_bridged_shapes` intersects only LITERAL
 #      `T:*#p` shapes, while a star-tupleset THROUGH-shape makes the set non-empty on a
 #      schema the compiler admits.
 #
@@ -456,7 +456,7 @@ _CORPORA = [
 # --------------------------------------------------------------------------- #
 
 def _id_to_key(session: Session, store_id: str) -> tuple[dict, list]:
-    nodes = list(session.exec(select(NodeV4).where(NodeV4.store_id == store_id)).all())
+    nodes = list(session.exec(select(Node).where(Node.store_id == store_id)).all())
     return {n.id: (n.predicate, n.type, n.name, n.wildcard) for n in nodes}, nodes
 
 
@@ -468,7 +468,7 @@ def _nodes_proj(session: Session, store_id: str) -> dict:
 
 def _edges_proj(session: Session, store_id: str) -> dict:
     idmap, _ = _id_to_key(session, store_id)
-    edges = session.exec(select(EdgeV4).where(EdgeV4.store_id == store_id)).all()
+    edges = session.exec(select(Edge).where(Edge.store_id == store_id)).all()
     return {(idmap[e.subject_id], idmap[e.object_id]):
             (e.direct_edge_count, e.indirect_edge_count, e.derived) for e in edges}
 
@@ -476,7 +476,7 @@ def _edges_proj(session: Session, store_id: str) -> dict:
 def _residues_proj(session: Session, store_id: str) -> dict:
     idmap, _ = _id_to_key(session, store_id)
     out: dict = {}
-    for r in session.exec(select(ResidueV1).where(ResidueV1.store_id == store_id)).all():
+    for r in session.exec(select(Residue).where(Residue.store_id == store_id)).all():
         stars = frozenset(tuple(s) for s in json.loads(r.stars))
         neg = frozenset(idmap[i] for i in json.loads(r.neg))
         upos = frozenset(idmap[i] for i in json.loads(r.upos))
@@ -485,7 +485,7 @@ def _residues_proj(session: Session, store_id: str) -> dict:
 
 
 def _outbox_proj(session: Session, store_id: str) -> Counter:
-    rows = session.exec(select(DeltaOutboxV1).where(DeltaOutboxV1.store_id == store_id)).all()
+    rows = session.exec(select(DeltaOutbox).where(DeltaOutbox.store_id == store_id)).all()
     return Counter(
         ((r.subject_type, r.subject_name, r.subject_predicate),
          (r.object_type, r.object_name, r.object_predicate), r.action)
@@ -516,7 +516,7 @@ def session():
 def _seed_source(session: Session, store_id: str, schema: str, object_wc, tuples) -> list:
     """Write the tuple set through a TupleSource (admission-validated; dedup + any
     cycle-rejections handled by the source), commit, and return the RAW tuples that
-    actually landed (read back from TupleV1) so the oracle sees exactly the store."""
+    actually landed (read back from RelationTuple) so the oracle sees exactly the store."""
     save_schema(session, store_id, schema, object_wc)
     src = TupleSource(session, store_id)
     for raw in tuples:
@@ -528,7 +528,7 @@ def _seed_source(session: Session, store_id: str, schema: str, object_wc, tuples
             pass
     session.commit()
     rows = session.exec(
-        select(TupleV1).where(TupleV1.store_id == store_id).order_by(TupleV1.id)
+        select(RelationTuple).where(RelationTuple.store_id == store_id).order_by(RelationTuple.id)
     ).all()
     return [OracleTuple(r.subject_predicate, r.subject_type, r.subject_name,
                         r.relation, r.object_type, r.object_name) for r in rows]

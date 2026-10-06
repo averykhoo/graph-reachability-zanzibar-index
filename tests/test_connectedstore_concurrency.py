@@ -33,8 +33,8 @@ from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import Session, SQLModel, create_engine
 
-from connectedstore import ConnectedStore
-from index_v4.invariants import snapshot_rows
+from zanzibar.connectedstore import ConnectedStore
+from zanzibar.graphindex.invariants import snapshot_rows
 from tests.dbengine import rdbms_dsn, shared_engine
 from tests.oracle import Oracle, OracleTuple
 from tests.wildcard_helpers import assert_wildcard_invariants
@@ -165,7 +165,7 @@ def test_reader_session_sees_consistent_snapshots(tmp_path):
     to must see internally-consistent committed states, never torn ones.
 
     HOW this holds, and where it stops holding. ``cs.refresh()`` rebuilds the
-    in-memory evaluator from ``TupleV1`` and then the loop compares it against the
+    in-memory evaluator from ``RelationTuple`` and then the loop compares it against the
     graph index, which is read by SEPARATE statements. The two agree only if both
     observe the same committed state -- which is true on SQLite-WAL, where a
     transaction pins one snapshot from its first statement, and FALSE on PostgreSQL
@@ -249,7 +249,7 @@ def test_token_fallback_rebuilds_stale_evaluator(tmp_path):
     """The cross-session token contract: a write committed AFTER the reader opened
     must still be honored by a token-carrying read -- the reader's in-memory
     evaluator rebuilds on demand instead of serving its stale cache."""
-    from connectedstore import StaleRead
+    from zanzibar.connectedstore import StaleRead
 
     engine = _file_engine(tmp_path, 'token.db')
     with Session(engine) as boot:
@@ -280,7 +280,7 @@ def test_token_not_visible_in_pinned_snapshot_raises(tmp_path):
     """If the reader is pinned in a snapshot that predates the write, a tokened read
     must refuse loudly (StaleRead), never silently serve stale under an explicit
     freshness demand; refresh() + retry succeeds."""
-    from connectedstore import StaleRead
+    from zanzibar.connectedstore import StaleRead
 
     engine = _file_engine(tmp_path, 'pinned.db')
     with Session(engine) as boot:

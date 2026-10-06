@@ -8,9 +8,9 @@ persisted one (loud SchemaMismatch, never silent divergence).
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from connectedstore import (SchemaMismatch, SchemaV4, ensure_schema, load_schema,
+from zanzibar.connectedstore import (SchemaMismatch, SchemaRecord, ensure_schema, load_schema,
                             open_graph_index, open_set_engine, save_schema)
-from zanzibar_utils_v1 import parse_openfga_schema
+from zanzibar.schema import parse_openfga_schema
 
 _SCHEMA = '''
 type user
@@ -67,7 +67,7 @@ def test_schema_is_write_once(session):
 def test_invalid_schema_rejected_before_landing(session):
     with pytest.raises(ValueError):
         save_schema(session, 's1', 'type doc\n  relations\n    define a.b: [user]\n')
-    assert session.get(SchemaV4, 's1') is None
+    assert session.get(SchemaRecord, 's1') is None
 
 
 def test_load_missing_schema_raises(session):
@@ -111,9 +111,9 @@ def test_open_graph_index_self_describing(session):
     assert widx.schema_info is ruleset.schema_info
 
     # the store row was created; the index is usable
-    from index_v4.processor import DeltaProcessor
-    from index_v4.outbox import outbox_watermark
-    from zanzibar_utils_v1 import Entity, RelationalTriple
+    from zanzibar.graphindex.processor import DeltaProcessor
+    from zanzibar.graphindex.outbox import outbox_watermark
+    from zanzibar.schema import Entity, RelationalTriple
     proc = DeltaProcessor(widx, ruleset.compiled)
     wm = outbox_watermark(session, 's1')
     triple = RelationalTriple(Entity('user', '*'), 'public', Entity('doc', 'd1'), Ellipsis)

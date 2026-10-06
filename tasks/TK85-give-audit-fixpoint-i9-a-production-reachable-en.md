@@ -23,12 +23,12 @@ re-stated as `TK82`'s still-owed line in
 [`docs/tk82-cascade-fixpoint-tier-2026-09-19.md`](../docs/tk82-cascade-fixpoint-tier-2026-09-19.md).
 
 **The fact, READ first-hand this session (2026-09-19b).** `grep -rn audit_fixpoint` over
-`index_v4/ connectedstore/ setengine/ scripts/ tests/`: the only *definition* is
-`index_v4/processor.py::DeltaProcessor.audit_fixpoint` (`:1838`); the other four hits in
-`index_v4/` are DOCSTRING mentions (`invariants.py:61`, `:231`, `processor.py:1299`, `:1742`).
+`src/zanzibar/graphindex/ src/zanzibar/connectedstore/ src/zanzibar/setengine/ scripts/ tests/`: the only *definition* is
+`src/zanzibar/graphindex/processor.py::DeltaProcessor.audit_fixpoint` (`:1838`); the other four hits in
+`src/zanzibar/graphindex/` are DOCSTRING mentions (`invariants.py:61`, `:231`, `processor.py:1299`, `:1742`).
 **Every one of the ~40 call sites is under `tests/`** (`tests/parity.py:98` and
 `tests/test_matrix.py:81` are the per-op "paranoia dose"). Zero call sites in
-`connectedstore/`, zero in `scripts/`, and `invariants.py:231` says it is left out of
+`src/zanzibar/connectedstore/`, zero in `scripts/`, and `invariants.py:231` says it is left out of
 `install_paranoia` *by design*. So I9 -- the only detector for the SCHEDULING-side miss class
 -- is dead code in production.
 
@@ -50,7 +50,7 @@ shapes, none adjudicated yet:
   1. a `scripts/` operator command (`audit` + `--repair` calling `backfill()`), the cheapest
      and the one that matches the repair/diagnosis framing;
   2. a `ConnectedStore` method so the composed system exposes it (note the layering rule in
-     `CLAUDE.md`: `connectedstore/` may import both backends, never the reverse);
+     `CLAUDE.md`: `src/zanzibar/connectedstore/` may import both backends, never the reverse);
   3. a fifth paranoia level above `'fixpoint'` -- **probably wrong**: `TK82` sec 9.x showed the
      ladder is a TOTAL ORDER and placement decides blast radius, and an O(store) check on
      every commit is a different kind of thing from the four existing per-op tiers.
@@ -69,8 +69,8 @@ swallows the exception silently repairs and reports nothing. That is exactly the
 `TK73`/`TK82` shape ("when two candidate fixes both turn the witness green, the witness cannot
 choose between them").
 
-Anchors: `index_v4/processor.py::DeltaProcessor.audit_fixpoint` (`:1838`, dated 2026-09-19b),
-`index_v4/invariants.py::install_paranoia`, `docs/architecture/verification.md:87` (the I9 row
+Anchors: `src/zanzibar/graphindex/processor.py::DeltaProcessor.audit_fixpoint` (`:1838`, dated 2026-09-19b),
+`src/zanzibar/graphindex/invariants.py::install_paranoia`, `docs/architecture/verification.md:87` (the I9 row
 already says "run per-op by the matrix/parity graph backends -- **not** by `check_invariants`",
 which is accurate and should stay accurate if this ships).
 
@@ -79,9 +79,9 @@ which is accurate and should stay accurate if this ships).
 - [`docs/tk74-staleness-net-2026-09-18.md`](../docs/tk74-staleness-net-2026-09-18.md)
   sec 8.8 (the rider, round-1 design) and sec 9.9 AMENDMENT 1 (the demotion, and why a
   periodic sweep is worth =~0 as a detector for this class).
-- `index_v4/processor.py` -- `DeltaProcessor.audit_fixpoint` is the subject; read it as a
+- `src/zanzibar/graphindex/processor.py` -- `DeltaProcessor.audit_fixpoint` is the subject; read it as a
   REPAIRING mutator (it calls `reconcile` and raises after the repair has been written).
-- `index_v4/invariants.py` -- `install_paranoia` and this module's tier table, for why I9
+- `src/zanzibar/graphindex/invariants.py` -- `install_paranoia` and this module's tier table, for why I9
   is deliberately NOT among the paranoia checks.
 - [`docs/sabotage-procedure.md`](../docs/sabotage-procedure.md) -- mandatory before adding
   any check here; an entry point that cannot fire converts an acknowledged gap into a

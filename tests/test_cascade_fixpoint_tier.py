@@ -63,18 +63,18 @@ CONTROLS, and why each is here rather than assumed:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import ConnectedStore
-from index_v4.invariants import (InvariantViolation, PARANOIA_ENV_VAR,
+from zanzibar.connectedstore import ConnectedStore
+from zanzibar.graphindex.invariants import (InvariantViolation, PARANOIA_ENV_VAR,
                                  PARANOIA_FIXPOINT, PARANOIA_FULL,
                                  install_paranoia, paranoia_at_least)
-from index_v4.models import NodeV4
-from index_v4.outbox import outbox_watermark
+from zanzibar.graphindex.models import Node
+from zanzibar.graphindex.outbox import outbox_watermark
 from tests.oracle import Oracle, OracleTuple
 from tests.test_cascade_quiesce_gc import (LEFTOVER_KEY as GC_LEFTOVER_KEY,
                                            SCHEMA as GC_SCHEMA, WITNESS as GC_WITNESS)
 from tests.test_matrix import GraphBackend
 from tests.wildcard_helpers import make_wildcard_index
-from zanzibar_utils_v1 import parse_openfga_schema
+from zanzibar.schema import parse_openfga_schema
 
 SCHEMA = ('model\n'
           '  schema 1.1\n'
@@ -474,7 +474,7 @@ def test_fixpoint_tier_is_at_least_full():
     try:
         widx.add_tuple('...', 'user', 'u1', 'viewer', 'doc', 'd1')
         session.commit()
-        node = session.exec(select(NodeV4).where(NodeV4.store_id == 'g')).first()
+        node = session.exec(select(Node).where(Node.store_id == 'g')).first()
         assert node is not None, 'no node to corrupt -- the check below is vacuous'
         node.reference_count += 7
         session.add(node)
@@ -490,7 +490,7 @@ def test_the_env_var_arms_the_tier_end_to_end(monkeypatch):
     """``ZANZIBAR_PARANOIA=fixpoint`` must reach the CASCADE, not merely the guard.
 
     The tier is read out of the guard registry on the processor's own session
-    (``index_v4/invariants.py::paranoia_level``), and nothing else in this module proves
+    (``src/zanzibar/graphindex/invariants.py::paranoia_level``), and nothing else in this module proves
     that registry is the same one ``ConnectedStore`` writes to -- every other arm installs
     the guard by hand. §9.7 of TK74 is the reason this is a test and not an assumption: a
     tier knob that silently resolves to the wrong level is a failure mode this repo has

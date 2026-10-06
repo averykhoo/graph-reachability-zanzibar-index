@@ -7,6 +7,8 @@ as-of 2026-09-22. Live state is `python scripts/task.py show R6` and
 `python scripts/gate_status.py` — never this file. Corrections append **dated at the top**.
 Freeze it when `R6` closes.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 Provenance labels: **[M]** MEASURED by this session (probe named, literal output quoted),
 **[R]** first-hand READ by this session, **[A-R]** subagent-read and re-verified here,
 **[A-X]** subagent reasoning, NOT re-verified, **[U]** unverified. A subagent report is

@@ -48,9 +48,9 @@ from pathlib import Path
 import pytest
 from sqlmodel import select
 
-from index_v4.models import NodeV4, ResidueV1
+from zanzibar.graphindex.models import Node, Residue
 from tests.parity import ParityEngine
-from zanzibar_utils_v1 import (
+from zanzibar.schema import (
     Computed, Direct, Exclusion, Intersection, PIntersection, TTU, Union,
     parse_openfga_schema, parse_schema_ast,
 )
@@ -156,7 +156,7 @@ _CONCRETE_GRANT = ('...', 'user', 'alice', 'assigned', 'role', ISECT_OBJECT)
 
 
 def _residue_rows(eng) -> dict[tuple[str, str, str], dict]:
-    """Every ``ResidueV1`` row, joined to ``NodeV4``.
+    """Every ``Residue`` row, joined to ``Node``.
 
     Joined and complete, never a guessed subset: §9.5's G5 hypothesis was killed by
     dumping ALL rows, and a dump filtered to the key you expect can only confirm you.
@@ -164,9 +164,9 @@ def _residue_rows(eng) -> dict[tuple[str, str, str], dict]:
     session = eng.graph.widx.idx.session
     out = {}
     for res, node in session.exec(
-            select(ResidueV1, NodeV4)
-            .where(ResidueV1.object_node_id == NodeV4.id)
-            .where(ResidueV1.store_id == eng.graph.widx.idx.store_id)).all():
+            select(Residue, Node)
+            .where(Residue.object_node_id == Node.id)
+            .where(Residue.store_id == eng.graph.widx.idx.store_id)).all():
         out[(node.type, res.relation, node.name)] = {
             'stars': json.loads(res.stars),
             'neg': json.loads(res.neg),
@@ -362,7 +362,7 @@ def test_the_intersection_intersects_its_childrens_stars(half_starred):
     """★ THE FOLD ITSELF — added 2026-09-20g because the mutation sweep found this module
     BLIND to it, and the finding is worth more than the pin.
 
-    `zanzibar_utils_v1.py::_compile_stars_fn`'s `PIntersection` branch folds children with
+    `src/zanzibar/schema/boolean.py::_compile_stars_fn`'s `PIntersection` branch folds children with
     `frozenset.__and__`, one line below the `PUnion` branch that folds with `__or__`. Two
     plausible edits — the copy-paste (`&` -> `|`) and the "short-circuit" (`fns[0](ctx)`) —
     were swept, and **neither moved a single assertion in this module** on the main
@@ -382,7 +382,7 @@ def test_the_intersection_intersects_its_childrens_stars(half_starred):
         |            -> {('user','...')}    (the copy-paste)
         fns[0](ctx)  -> {('user','...')}    (the short-circuit)
 
-    An empty star set is not stored (`index_v4/models.py::ResidueV1`: "Empty residues are
+    An empty star set is not stored (`src/zanzibar/graphindex/models.py::Residue`: "Empty residues are
     deleted, never stored"), so the shipped fold leaves the intersection with no residue row
     at all. MEASURED on workload B, 2026-09-20g: rows exist at
     `('cond','user_missing_requirement','c1')`, `('doc','access','d2')` and
@@ -391,7 +391,7 @@ def test_the_intersection_intersects_its_childrens_stars(half_starred):
 
     ⚠ The first draft of this test asserted its ceiling against a leaf family's residue row
     and reddened immediately: a `PClosureLeaf`'s stars live in the materialised closure, not
-    in `ResidueV1`, which only carries DERIVED relations. The control was mis-aimed, and it
+    in `Residue`, which only carries DERIVED relations. The control was mis-aimed, and it
     said so rather than passing — recorded because that is the ceiling working.
     """
     eng, rows = half_starred

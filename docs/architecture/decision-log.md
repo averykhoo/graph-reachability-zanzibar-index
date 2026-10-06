@@ -26,7 +26,7 @@ Do not re-walk these without new evidence — the alternatives were considered.
 
 ## Set engine
 
-* **Raw tuples (`TupleV1`) are the ground truth**; all set state is in-memory,
+* **Raw tuples (`RelationTuple`) are the ground truth**; all set state is in-memory,
   rebuilt by replay on open. Bitmap snapshot persistence rejected (opaque, duplicates
   state).
 * **Reference-counted interner with recycled int32 ids**: `(type, name, predicate)`
@@ -87,12 +87,12 @@ Do not re-walk these without new evidence — the alternatives were considered.
 ## The connected store (round 2)
 
 * **Source-of-truth / materialized-view split** (Zanzibar/Leopard): tuples live in
-  `TupleV1` + a permanent log; the graph index is downstream and owns nothing.
+  `RelationTuple` + a permanent log; the graph index is downstream and owns nothing.
   "Reconstruct tuples from the index" was rejected — likely possible in principle
   (topo-order peeling with path-count subtraction) but it's the whole forward engine
   reimplemented in reverse, kept bug-for-bug in sync forever, to recover data one
   table keeps losslessly.
-* **Schemas are static, write-once, stored as SOURCE** (`SchemaV4`); compiled
+* **Schemas are static, write-once, stored as SOURCE** (`SchemaRecord`); compiled
   artifacts are cache (closures can't be persisted; stored compiled state is a
   drift surface — the `family`-column argument again). A new schema = a new
   store/index built from the tuples; no versioning, no migration.
@@ -116,7 +116,7 @@ Do not re-walk these without new evidence — the alternatives were considered.
 
 * **Multi-instance set engines via log tailing, not gossip.** Several
   `TupleSource`/`ConnectedStore` instances (one `Session` each) share a store; each
-  set engine is instance-local in-memory, resynced by tailing `TupleLogV1`
+  set engine is instance-local in-memory, resynced by tailing `TupleLog`
   (`SetEngine.apply_logged` per committed row — the O(delta) analog of `rebuild()`,
   which is O(store)). The DB log is the *only* inter-instance channel — instance
   gossip was rejected as a second, redundant consistency surface. Consequence:
@@ -129,7 +129,7 @@ Do not re-walk these without new evidence — the alternatives were considered.
   autoincrement log ids already totally-order a store's history and are the cursor
   domain; a global clock buys nothing until *cross-store* tokens are in scope (they
   are not — X6). The round-1 brainstorm's timestamp menu is closed.
-* **Source-lock write discipline** (`_lock_source`: `FOR UPDATE` on the `SchemaV4`
+* **Source-lock write discipline** (`_lock_source`: `FOR UPDATE` on the `SchemaRecord`
   row) over lock-free admission: a write is a check-then-act against instance-local
   memory (duplicate / remove-existence / cycle parity), sound only if no other
   instance can commit between the catch-up and this write's commit. Taking the lock
@@ -138,8 +138,8 @@ Do not re-walk these without new evidence — the alternatives were considered.
   append used to flush its autoincrement id *before* any lock, so concurrent writers
   on PostgreSQL could commit log ids out of order and a tailer (or `advance_index`'s
   cursor) could permanently skip a row. Ids now commit in id order per store.
-  Lock-ordering invariant: source lock (`SchemaV4`) before graph store lock
-  (`StoreV4`) — one global order, deadlock-free.
+  Lock-ordering invariant: source lock (`SchemaRecord`) before graph store lock
+  (`Store`) — one global order, deadlock-free.
 * **Correctness over per-write cost** in the degenerate single-writer case: the lock
   never contends and catch-up is one empty indexed SELECT, so the cost is one
   `FOR UPDATE` SELECT (no-op-rendered on SQLite) + one empty log SELECT per write —
@@ -157,7 +157,7 @@ Do not re-walk these without new evidence — the alternatives were considered.
   > as `check` (in-memory cursor, then a cursor refresh), and raise `LookupNotFresh`
   > when the index still lags. What stays excluded is the third rung, the set-engine
   > FALLBACK, and reason 1 below is why — with one addition the original entry missed:
-  > in the stale-index case the graph `NodeV4` rows for the un-applied tuples do not
+  > in the stale-index case the graph `Node` rows for the un-applied tuples do not
   > exist yet, so even a key-translation bridge is impossible in principle, not merely
   > expensive. `excluded_node_ids` (the derived `neg` channel) has no set-engine
   > counterpart either. The prerequisite in reason 1 is unchanged and still unbuilt.
@@ -196,9 +196,9 @@ Do not re-walk these without new evidence — the alternatives were considered.
   lower-bounding); cross-store tokens (X6 — store-local); instance gossip (the DB
   log is the channel); schema-version skew (schemas are write-once — a new schema
   is a new store). **Sharing tuples or state ACROSS stores** is out too, and stays
-  out until a design says what it means for three per-store things: `TupleLogV1`
+  out until a design says what it means for three per-store things: `TupleLog`
   (`store_id`-scoped, and every read filters on it), the watermark/cursor domain
-  (`source.py::log_watermark` is per store; `IndexCursorV1` is unique per index
+  (`source.py::log_watermark` is per store; `IndexCursor` is unique per index
   store), and `_lock_store`'s store-granularity serialization. ⚠ Log **ids are
   globally monotonic across stores** even though scoping is per-store, which is why
   `lag()` counts rows instead of subtracting ids — a sharing design that assumes
@@ -208,10 +208,10 @@ Do not re-walk these without new evidence — the alternatives were considered.
 
 * **An undeclared `(type, relation)` reads as constantly false on every surface, and
   never raises.** Enforced in three independent places, deliberately: the graph index
-  denies rather than raising (`index_v4/wildcard.py::WildcardIndex.check`, whose
+  denies rather than raising (`src/zanzibar/graphindex/wildcard.py::WildcardIndex.check`, whose
   docstring gives the reason — writes are already fenced by `RuleSet.apply` /
   `SetEngine.add_tuple`, so a read has nothing to protect); the set engine returns
-  `False` on a missing AST entry (`setengine/engine.py::SetEngine.check`); and the
+  `False` on a missing AST entry (`src/zanzibar/setengine/engine.py::SetEngine.check`); and the
   oracle does the same by the same construct (`tests/oracle.py::Oracle.check.sat`),
   which is what lets it stay an independent reference. Writes are the strict side —
   `validate_write_identifiers` polices the charset there.
@@ -231,7 +231,7 @@ Do not re-walk these without new evidence — the alternatives were considered.
   `x from parent`) and object wildcards (`object_wildcard_shapes`). Both backends
   implement them and the differential matrix pins their agreement, but the headline
   theorems exclude them (`W4Fragment.wsBare` / `.bareStar` / `.ttuStarFree`), so
-  `zanzibar_utils_v1.py::UnprovenExtensionWarning` tells callers. A bare `[T:*]` is
+  `src/zanzibar/schema/compiler.py::UnprovenExtensionWarning` tells callers. A bare `[T:*]` is
   stock OpenFGA and is not an extension.
 * **`*` is the supported way to say "every X"; the OpenFGA registry idiom is not**
   (2026-09-29). Rejected alternative: a registry / organization object that every X is
@@ -259,7 +259,7 @@ automatic outbox pruning; residue GC beyond empty-row deletion; lenient ∀⇒�
 query-time node interning.
 
 **Rejected outright, with no hook — OpenFGA conditions.** Listed apart because the
-heading above promises hooks, and this one has none: `zanzibar_utils_v1.py` raises on
+heading above promises hooks, and this one has none: `src/zanzibar/schema/` raises on
 a conditional type at parse time. The reason has never been written down and is not a
 matter of effort. **Conditions are evaluated at CHECK time; the graph index
 materializes the closure at WRITE time** — that is the whole basis of its O(1)

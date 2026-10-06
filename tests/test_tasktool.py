@@ -530,7 +530,7 @@ def test_roundtrip_is_byte_identical():
             u'## Traps\n\n'
             u'%s a trap paragraph.\n\n'
             u'## Read first\n\n'
-            u'- `index_v4/core.py::ReachabilityIndex`\n\n'
+            u'- `src/zanzibar/graphindex/core.py::ReachabilityIndex`\n\n'
             u'## Log\n\n'
             u'### 2026-08-21\n\n'
             u'first entry\n') % (WARN, WARN)

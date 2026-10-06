@@ -7,7 +7,7 @@ actually detected:
 * **ZT-P1-6 (read DoS)** -- a deep userset chain is accepted by the (iterative) write
   path and then made EVERY read on that subgraph raise ``RecursionError``, permanently;
   ``lookup`` worst of all since it sweeps every declared ``(type, relation)``.
-  ``check``/``expand`` now run on a heap stack (``setengine.engine._drive``), so the
+  ``check``/``expand`` now run on a heap stack (``zanzibar.setengine.engine._drive``), so the
   answers are the ORACLE's at depths far past ``sys.getrecursionlimit()``. NOTE: no
   admission cap was added -- nothing that used to be accepted is now rejected.
 * **ZT-P1-4 (no-op locks)** -- ``with_for_update()`` compiles to a plain SELECT on
@@ -31,13 +31,13 @@ from sqlalchemy import event
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, SQLModel, create_engine, select
 
-import connectedstore.apply as apply_mod
-import connectedstore.source as source_mod
-import index_v4.core as core_mod
-from connectedstore import (ConnectedStore, SchemaV4, TupleSource,
+import zanzibar.connectedstore.apply as apply_mod
+import zanzibar.connectedstore.source as source_mod
+import zanzibar.graphindex.core as core_mod
+from zanzibar.connectedstore import (ConnectedStore, SchemaRecord, TupleSource,
                             UnsafeIsolationLevel, WatermarkGap, log_watermark)
-from index_v4.core import WriteLockUnsafe, is_sqlite
-from setengine import SetEngine
+from zanzibar.graphindex.core import WriteLockUnsafe, is_sqlite
+from zanzibar.setengine import SetEngine
 from tests.oracle import Oracle, OracleTuple
 
 # --------------------------------------------------------------------------- #
@@ -349,7 +349,7 @@ def test_source_lock_is_a_real_write_lock_on_sqlite(tmp_path, monkeypatch):
         a._lock_source()                       # A holds the store's write lock
 
         # CONTROL: the pre-fix statement completes happily -- it locks nothing.
-        assert sb.exec(select(SchemaV4).where(SchemaV4.store_id == 's')
+        assert sb.exec(select(SchemaRecord).where(SchemaRecord.store_id == 's')
                        .with_for_update()).first() is not None
         sb.rollback()
 
@@ -547,7 +547,7 @@ def test_contiguous_path_unaffected_and_read_your_writes_holds(tmp_path):
 
 
 def test_no_false_gap_when_log_ids_interleave_across_stores(tmp_path):
-    """No false alarm: ``TupleLogV1.id`` is a GLOBAL autoincrement, so two stores in one
+    """No false alarm: ``TupleLog.id`` is a GLOBAL autoincrement, so two stores in one
     database produce per-store id sequences full of holes. Every write must still be
     accepted (this is the case the cheap contiguity fast path cannot take, so it
     exercises the real gap query)."""

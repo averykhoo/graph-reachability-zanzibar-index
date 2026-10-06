@@ -16,7 +16,7 @@ updated: 2026-09-10
 closed:
 ---
 
-`index_v4/bulk_build.py::bulk_build` — lead **A12** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:895`.
+`src/zanzibar/graphindex/bulk_build.py::bulk_build` — lead **A12** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:895`.
 
 On a boolean schema the backfill's `reach_out`/`reach_in` (full transitive reachability in both directions, as Python sets) stay referenced for the rest of the function even though only `derived_pairs`/`explicit`/`residues` are read afterwards — so ~2x closure sits in RAM while Phase P builds `pvec` (the closure again, as dict-of-dicts) and a third full-closure list `edge_pairs` is materialized. N18 already had to bound Phase-W row dicts because peaks hit ~3x the DP at 200k tuples; these two allocations are the same RSS class and are untouched. Sketch: drop `bf` before `pvec` exists, and iterate instead of materializing `edge_pairs`. Finder: space, filed impact medium, algorithm change no.
 
@@ -28,7 +28,7 @@ On a boolean schema the backfill's `reach_out`/`reach_in` (full transitive reach
 
 ⚠ **Read the audit's §"Traps the numbers do not carry" before taking this id.** Count the bullets there rather than trusting a number in prose: `migrate.py::R6_ROUND_WIDE_TRAPS` pins that count for the 14 GENERATED `R6-N` rows and refuses to build if it moves, but this row was filed by hand and rides no such refusal.
 
-⚠ **A cited symbol may have MOVED.** `R6-6`'s target did: `BL-2` split `index_v4/wildcard.py::WildcardIndex.check` into a public deny fence plus `::WildcardIndex._check_internal` on 2026-08-21, and the audit still names `::check`. `formal/conformance/anchor_check.py` cannot catch that class — it reads only `formal/CORRESPONDENCE.md`, and both symbol names exist anyway. Resolve the symbol by reading the code, not by trusting the doc.
+⚠ **A cited symbol may have MOVED.** `R6-6`'s target did: `BL-2` split `src/zanzibar/graphindex/wildcard.py::WildcardIndex.check` into a public deny fence plus `::WildcardIndex._check_internal` on 2026-08-21, and the audit still names `::check`. `formal/conformance/anchor_check.py` cannot catch that class — it reads only `formal/CORRESPONDENCE.md`, and both symbol names exist anyway. Resolve the symbol by reading the code, not by trusting the doc.
 
 ⚠ **Space, not time — so the profile will not show it.** `benchmarks/profile_r6*` measures wall time and statement counts; an RSS regression/improvement needs its own instrument. Decide how you will MEASURE this before deciding whether to land it, or the "win" is unfalsifiable.
 
@@ -38,7 +38,7 @@ On a boolean schema the backfill's `reach_out`/`reach_in` (full transitive reach
 - the same file, §"Appendix — the 16 UNVERIFIED lower-ranked leads" (`:754-761`) — what "unverified" means here, in the audit's own words
 - the same file, §"Traps the numbers do not carry" — the round-wide traps
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the P12c fence and the reopening rule (**every item still needs a motivating measurement**)
-- `index_v4/bulk_build.py::bulk_build` — the code
+- `src/zanzibar/graphindex/bulk_build.py::bulk_build` — the code
 - `python scripts/task.py show R6` — the parent: round-wide order, traps, and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
 ## Log

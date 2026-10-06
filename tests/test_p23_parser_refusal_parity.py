@@ -2,7 +2,7 @@
 
 Property guarded
 ----------------
-For every schema text, ``zanzibar_utils_v1.parse_schema_ast`` accepts it iff
+For every schema text, ``zanzibar.schema.parse_schema_ast`` accepts it iff
 ``tests.oracle.parse_schema_ast`` does, and when both accept they declare the same
 ``(type, relation)`` keys. The oracle is the independent referee. A schema only it accepts
 is one where it answers questions the system refuses to serve. A schema only it refuses is
@@ -48,9 +48,9 @@ import random
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from connectedstore import ConnectedStore
+from zanzibar.connectedstore import ConnectedStore
 from tests import oracle as oracle_mod
-from zanzibar_utils_v1 import parse_openfga_json, parse_schema_ast
+from zanzibar.schema import parse_openfga_json, parse_schema_ast
 
 _HEAD = ("model\n  schema 1.1\ntype user\ntype group\n  relations\n"
          "    define member: [user]\ntype doc\n  relations\n"
@@ -104,7 +104,7 @@ _ACCEPTED = {
 
 @pytest.mark.parametrize('label', sorted(_REFUSED))
 def test_production_parser_refuses(label):
-    """Sabotage P (2026-10-03e): `zanzibar_utils_v1.py::_validate_declared_name` made a
+    """Sabotage P (2026-10-03e): `src/zanzibar/schema/parser.py::_validate_declared_name` made a
     no-op -> `17 failed`: the nine `P23/*` cases here, the six JSON cases, the end-to-end
     test and the fuzz. Every oracle case stayed green."""
     with pytest.raises(ValueError):

@@ -704,7 +704,7 @@ namespace Zanzibar
 -- `via='computed'`, fragment-restricted), and `runCascade` reconciles the mapped keys
 -- then models Python's final quiescence check (the leftover `raise
 -- InvariantViolation` at the tail of
--- `index_v4/processor.py::DeltaProcessor._run_cascade`) as a reject branch. The
+-- `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`) as a reject branch. The
 -- interleaved closure `ReachedByW3d`
 -- admits writes AFTER cascades (the W3a–W3c chains could not). **T5, contentful and
 -- justified**: `runCascade_no_abort` — the reject branch never fires at one stratum
@@ -728,7 +728,7 @@ namespace Zanzibar
 -- `banned` add flips the derived guard down and the second cascade cannot retract the
 -- stale derived edge — `check = true ≠ sem = false` at a fully-drained state. Python
 -- retracts it (the `_write_derived(..., add=False)` arm of
--- `index_v4/processor.py::DeltaProcessor._reconcile_subject`). The W3d pass is now the
+-- `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject`). The W3d pass is now the
 -- diffing audit `reconcileStarsKeyD` (add when `want`, remove ALL copies of the pair
 -- when `¬want`); T5 above is re-earned over it. Removal is path-inert off the pass's
 -- terminal R-node (`nreaches_remove_terminal`), giving BOTH inertness directions —
@@ -759,7 +759,7 @@ namespace Zanzibar
 -- on plain edge targets (`reachedByW3d_edges_target_plain` — the fence the attack
 -- found load-bearing: an OUT-of-fragment object-star write flips probe 3 at every
 -- object while mapping no keys —
--- `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` dirties no derived
+-- `src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys` dirties no derived
 -- own-key from a star-named object end). Plus `cascadeKeys` write-leg
 -- monotonicity (dirty keys stay dirty until a cascade) and endpoint closure over the
 -- whole interleaved chain. Standard axioms only:
@@ -818,7 +818,7 @@ namespace Zanzibar
 -- **W3d-1b CLOSED — TARGETED RE-SETTLEMENT, THE INVARIANT, `graph_correct_w3d`
 -- (GraphIndex/CascadeSettle.lean, 2026-07-11h).** The coverage chain `ReachedByW3dC`
 -- carries, per cascade job, the audit-enumeration coverage clauses (`W3dJobCoverage`
--- — `index_v4/processor.py::DeltaProcessor._reconcile` steps (2)/(2b); the
+-- — `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` steps (2)/(2b); the
 -- edge-holder clause is attack-confirmed load-bearing:
 -- a pre-leg STALE edge holder missing from `cands` survives the diff audit and
 -- breaks `check = sem` at a fully-drained state). `settledComplete_cascade_targeted`:
@@ -866,7 +866,7 @@ namespace Zanzibar
 -- `upos ∩ neg = ∅` (`uposNegDisjoint`) — the two `Inv` clauses that read only the row,
 -- not the edges — with NO fragment hypotheses. `reconcileResidueKey` writes
 -- `neg = negCands.filter (stars.contains ∧ ¬checkFn)` and `upos = uposCands.filter
--- (¬stars.contains ∧ checkFn)` (`index_v4/processor.py::DeltaProcessor._reconcile`
+-- (¬stars.contains ∧ checkFn)` (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile`
 -- steps (2) and (2c)), so both clauses hold of every
 -- written row by construction; writes/pushes are residue-inert. This leaves only the
 -- two EDGE-referencing I6 clauses (`negEdgeFree`/`uposEdgeFree`, which need R-node
@@ -933,14 +933,14 @@ namespace Zanzibar
 -- `probeNonDerived` (`leaf_check` -> `widx._check_internal`, below the public
 -- leaf-name fence -- `BL-2`) and a derived key to `probeDerived`
 -- (`derived_check` -> `widx._check_derived`; `derived_stars` = residue stars pointwise)
--- -- `index_v4/processor.py::_EvalContext` and `::DeltaProcessor.member_check`.
+-- -- `src/zanzibar/graphindex/processor.py::_EvalContext` and `::DeltaProcessor.member_check`.
 -- Conservativity: on computed-only defs with
 -- untainted operands (the W3d-1 `hLU` fragment) the routed read IS the W3d read
 -- (`checkFnR_eq_checkFn`), and the routed diffing pass / logged batch collapse to
 -- their W3d counterparts (`reconcileStarsKeyDR_eq`, `reconcileJobsLR_eq`) -- W3d-1 is
 -- the single-stratum image of the routed scheduler. `checkFnR_evalEq`: the routed
 -- read consults exactly the `EvalEq` core (schema/edges/nodes/residue). `runCascade2`
--- models `index_v4/processor.py::DeltaProcessor._run_cascade` at
+-- models `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade` at
 -- `rounds = len(self.compiled.strata) = 2` (per-round frontier cursor,
 -- round 2 on round 1's emissions, final leftover reject); `ReachedByW3d2` is the
 -- two-stratum interleaved closure (C-style job batches, two-sided per-round
@@ -1173,7 +1173,7 @@ namespace Zanzibar
 #print axioms W4Witness.within_scope
 -- `TK68` (2026-09-13e): `GraphAdmission.usWild`, the SUBJECT-wildcard twin of `objWild`
 -- -- Python refuses a wildcard userset over a derived relation
--- (`zanzibar_utils_v1.py::_build_plan_tree:1881-1886` for a literal `[T:*#p]`;
+-- (`src/zanzibar/schema/boolean.py::_build_plan_tree:1881-1886` for a literal `[T:*#p]`;
 -- `::_reject_object_wildcard_scope:1484-1492` for a star-tupleset through-shape) and the
 -- Lean admission bundle did not, so it was strictly WEAKER than the shipped compiler.
 -- The four below are the field's evidence, and they are audited for the reason the
@@ -1580,7 +1580,7 @@ namespace Zanzibar
 -- star-freeness hole has TWO independent instances (`storedDirectSubjects` AND `edgeHolders`),
 -- so a filter alone cannot close it — the fix is a new fragment clause `DirectArmsConcrete`
 -- (a derived def's `Direct` arms carry no wildcard-flagged restriction) PLUS the faithfulness
--- star-filter on `storedDirectSubjects` (Python's `index_v4/processor.py:268`
+-- star-filter on `storedDirectSubjects` (Python's `src/zanzibar/graphindex/processor.py:268`
 -- `_incoming_concretes` `n.wildcard == ''`, and the `:670` upos `n.wildcard != ''` skip).
 -- ★ HONEST SCOPE CARRY: **Python ADMITS the shape `DirectArmsConcrete` excludes** —
 -- `define approver: [user, user:*] but not banned` compiles (1 stratum,
@@ -1835,7 +1835,7 @@ namespace Zanzibar
 
 -- LEG 7 STEP 4a (2026-08-09, REWORKED 2026-08-15) — the FORK, addressing half. Python does
 -- not fork its write path at all — `RuleSet.apply` does
--- `replace_relation(triple, f.rewrite_relation)` (`zanzibar_utils_v1.py::RuleSet.apply`)
+-- `replace_relation(triple, f.rewrite_relation)` (`src/zanzibar/schema/rules.py::RuleSet.apply`)
 -- once per matching storage filter and the ordinary `add_tuple` path runs per expanded
 -- triple. So `rawWriteTuples` re-addresses (a LIST since 2026-08-15 — the fan-out is
 -- measured, see the 4c-pre block below) and `writeDirect` is BYTE-IDENTICAL: definition pin
@@ -2021,7 +2021,7 @@ namespace Zanzibar
 
 -- ttuStarFree LIFT, PART (i) (2026-08-14) — the star-tupleset TTU through-shape folded into
 -- `Schema.isSubjectWildcardUserset`, so it is now the disjunction of BOTH loops of
--- `zanzibar_utils_v1.py::derive_schema_info`, as Python has always been. Before this, Lean's
+-- `src/zanzibar/schema/compiler.py::derive_schema_info`, as Python has always been. Before this, Lean's
 -- in-bridge test keyed on a LITERAL `[t:*#p]` restriction only, and its own docstring declared
 -- the through-shape out of scope — that declaration WAS the hole that makes `graph_correct`
 -- machine-checked FALSE without `W4Fragment.ttuStarFree`.
@@ -2153,8 +2153,8 @@ namespace Zanzibar
 -- by which a name reaches `rec` is closed against leaf names by a `GraphAdmission` field, so
 -- the tree took the REFUSAL route and `evalE`'s `.direct` arm still reads the STORE at the
 -- PUBLIC relation. The bridge survives as a Lean↔Python obligation instead: Python's compiled
--- plan really does probe the minted leaf name (`zanzibar_utils_v1.py::_compile_check_fn` →
--- `index_v4/processor.py::_EvalContext.leaf_check`), and `CORRESPONDENCE.md` §7.3 records that
+-- plan really does probe the minted leaf name (`src/zanzibar/schema/boolean.py::_compile_check_fn` →
+-- `src/zanzibar/graphindex/processor.py::_EvalContext.leaf_check`), and `CORRESPONDENCE.md` §7.3 records that
 -- whole layer as netted by the differential matrix and by no theorem at all.
 -- ★ NON-VACUITY IS IN THE STATEMENT: each tally pins `bothTrue`, the number of rows where BOTH
 -- sides answered `true`, so agreement-by-universal-denial cannot pass. TWO DISCRIMINATING

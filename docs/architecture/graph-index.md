@@ -1,12 +1,12 @@
-# The graph index (`index_v4/`)
+# The graph index (`src/zanzibar/graphindex/`)
 
 Full design: `docs/specs/wildcard-materialization-spec.md` (cited as `spec §N` in
-`index_v4/*`). This is the operational summary.
+`src/zanzibar/graphindex/*`). This is the operational summary.
 
 ## Closure core (`core.py`)
 
 `ReachabilityIndex` materialises the full transitive closure of a DAG as ref-counted
-edge rows. Per `EdgeV4` row:
+edge rows. Per `Edge` row:
 
 * `direct_edge_count` — how many direct (raw/bridge/derived) edges exist for the pair;
 * `indirect_edge_count` — the **path count** (number of distinct paths). Invariant I1:
@@ -20,8 +20,8 @@ same products — that is why removal is exact with no re-derivation. Consequenc
 * **Cycles are impossible to tolerate** (infinite path multiplicity): every add runs a
   reverse-reachability pre-check and raises `ValueError('...cycle...')`.
 * Reachability flips (0→positive = ADDED, →0 = REMOVED) are emitted as
-  **outbox rows** (`DeltaOutboxV1`, `_emit`) inside the writing transaction. No write
-  path returns delta lists; drain with `index_v4.outbox.drain_deltas(session, store,
+  **outbox rows** (`DeltaOutbox`, `_emit`) inside the writing transaction. No write
+  path returns delta lists; drain with `zanzibar.graphindex.outbox.drain_deltas(session, store,
   watermark)`. Outbox rows denormalize both endpoints (type/name/predicate) because
   implicit-node GC can delete a node row in the same transaction.
 

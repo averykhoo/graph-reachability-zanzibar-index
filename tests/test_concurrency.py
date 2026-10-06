@@ -29,7 +29,7 @@ from sqlalchemy import event
 from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlmodel import Session, SQLModel, create_engine
 
-from index_v4 import ReachabilityIndex, Store
+from zanzibar.graphindex import ReachabilityIndex, Store
 from tests.dbengine import shared_engine
 
 

@@ -3,9 +3,9 @@ import ZanzibarProofs.GraphIndex.ReconcileComplete
 /-!
 # The derived reconcile — userset subjects and the `upos` residue (ROADMAP W3b, write half)
 
-`SEMANTICS.md` §7.6; `index_v4/processor.py::DeltaProcessor._reconcile_subject`
+`SEMANTICS.md` §7.6; `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject`
 (userset branch), `::DeltaProcessor._reconcile` step (2c), `::DeltaProcessor._store_residue`;
-`index_v4/wildcard.py::WildcardIndex._check_derived` (its `s_pred != '...'` arm — the
+`src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived` (its `s_pred != '...'` arm — the
 edge-free userset read, blind-audit P4).
 
 *Divergence note (`ZT-P0-2`, 2026-07-26):* `_reconcile_subject`'s userset branch gained
@@ -26,13 +26,13 @@ branch go live:
   `c ∈ upos ⟺ check_fn(c)` — **edge-free** (a userset edge would leak through the
   closure to every member, defeating pointwise exclusion — P4). On star-free data
   `covered = false`, so `want_upos = should` and `want_neg = false`
-  (`index_v4/processor.py::DeltaProcessor._reconcile_subject`, userset branch).
+  (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject`, userset branch).
   Modelled as `reconcileUposKey`: a per-candidate
   insert/remove fold on the `upos` list via `putResidue`, leaving `stars`/`neg`
   empty and edges/nodes untouched.
 * **Read.** `probeDerived`'s userset branch consults `upos`
   (`GraphIndex/State.lean::GraphModel.probeDerived` =
-  `index_v4/wildcard.py::WildcardIndex._check_derived`'s `s_pred != '...'` arm).
+  `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived`'s `s_pred != '...'` arm).
   On a `upos`-only residue table the whole derived read
   collapses to: star subject ⇒ `false`, userset subject ⇒ `upos` membership, bare
   subject ⇒ the W3a edge probe (`probeDerived_uposOnly` below).
@@ -105,7 +105,7 @@ def GraphState.uposAt (σ : GraphState) (k : NodeKey) (R : String) : List Subjec
   ((σ.residue k R).getD Residue.empty).upos
 
 /-- **One userset reconcile-subject step**
-    (`index_v4/processor.py::DeltaProcessor._reconcile_subject`, userset branch).
+    (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject`, userset branch).
     On star-free data `covered = false`, so the candidate `c` is kept in `upos` iff
     `check_fn(c)` (`want_upos = should`), `neg` stays empty (`want_neg = false`), and no
     edge is ever written for a userset subject (P4). `_store_residue` upserts the row;
@@ -394,7 +394,7 @@ theorem reconcileUposKey_upos_mem {T : Store} {dt on R : String} {e : Expr}
     (`stars = neg = []`). The W3b analog of W3a's `ResidueEmpty`: on the star-free
     fragment the processor never stores star coverage or exclusions
     (`covered = false` ⇒ `want_neg = false`, in
-    `index_v4/processor.py::DeltaProcessor._reconcile_subject`'s userset branch), so the whole
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject`'s userset branch), so the whole
     residue table is `upos`-only. -/
 def ResidueUposOnly (σ : GraphState) : Prop :=
   ∀ k r res, σ.residue k r = some res → res.stars = [] ∧ res.neg = []
@@ -470,7 +470,7 @@ namespace GraphModel
 
 /-- **The W3b read collapse: the derived read on a `upos`-only residue table.** With
     `stars = neg = []` everywhere, `probeDerived`
-    (§7.6, `index_v4/wildcard.py::WildcardIndex._check_derived`)
+    (§7.6, `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived`)
     reduces to: object wildcard ⇒ `false` (decision-15); star subject ⇒ `false` (no
     coverage); **userset subject ⇒ `upos` membership** (the edge-free P4 read, now
     live); bare subject ⇒ the W3a bare edge probe (the `stars ∖ neg` fallback is

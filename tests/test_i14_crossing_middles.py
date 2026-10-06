@@ -1,6 +1,6 @@
 """I14 (crossing-middle completeness) -- the permanent sabotage tests.
 
-## The property (index_v4/invariants.py, next to I3)
+## The property (src/zanzibar/graphindex/invariants.py, next to I3)
 
 For every CROSSABLE shape ``(T, p)`` (``SchemaInfo.crossable_shapes`` -- bridged in
 AND out) and every entity name ``x`` such that the store holds at least one node
@@ -23,13 +23,13 @@ and only I14 fires. Observed on this tree, 2026-08-09:
 
 * checker sabotage (``test_i14_fires_when_middle_ensure_is_a_noop``)::
 
-      index_v4.invariants.InvariantViolation: I14: entity folder:f1 exists but its
+      zanzibar.graphindex.invariants.InvariantViolation: I14: entity folder:f1 exists but its
       crossing middle folder:f1#viewer for crossable shape ('folder', 'viewer') is
       missing
 
 * paranoia self-policing (``test_paranoia_aborts_first_write_without_middles``)::
 
-      index_v4.invariants.InvariantViolation: store='test' [pre-commit] I14: entity
+      zanzibar.graphindex.invariants.InvariantViolation: store='test' [pre-commit] I14: entity
       folder:f1 exists but its crossing middle folder:f1#viewer for crossable shape
       ('folder', 'viewer') is missing
 
@@ -56,12 +56,12 @@ from pathlib import Path
 
 import pytest
 
-from index_v4.invariants import InvariantViolation, check_invariants
-from index_v4.outbox import outbox_rows, outbox_watermark
-from index_v4.processor import DeltaProcessor
-from index_v4.wildcard import WildcardIndex
+from zanzibar.graphindex.invariants import InvariantViolation, check_invariants
+from zanzibar.graphindex.outbox import outbox_rows, outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
+from zanzibar.graphindex.wildcard import WildcardIndex
 from tests.wildcard_helpers import make_wildcard_index, snapshot
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 
 _SHAPES = frozenset({('folder', 'viewer'), ('doc', 'viewer')})
 _SCHEMA = (Path(__file__).parent / 'fga_schemas' / 'owc_star_ttu.fga').read_text()

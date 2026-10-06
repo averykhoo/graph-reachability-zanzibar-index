@@ -49,7 +49,7 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
         """, (), "CyclicDerivedDependency"),
     # Both `ttuDirect` probes are refused at PARSE time since TK106 (2026-09-26, user
     # decision: refuse boolean tuplesets, as OpenFGA does) by
-    # `zanzibar_utils_v1.py::_validate_tuplesets_direct`, message "tupleset must be direct".
+    # `src/zanzibar/schema/parser.py::_validate_tuplesets_direct`, message "tupleset must be direct".
     #
     # Was the LOUD half: an UNTAINTED tupleset with a computed arm. It raised
     # `UnsupportedByGraphIndex` from the graph compiler (`_validate_ttu_tuplesets`) until
@@ -78,7 +78,7 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
         """, (), "ValueError"),
     # A computed reference to an undeclared relation. ADMITTED until ASK-1 (2026-09-26),
     # when the user decided schemas must be self-consistent; now
-    # `zanzibar_utils_v1.py::_validate_ast_consistency` refuses it at parse time.
+    # `src/zanzibar/schema/parser.py::_validate_ast_consistency` refuses it at parse time.
     "matchDecl/undeclared-computed-ref": ("""
         type user
         type doc
@@ -229,7 +229,7 @@ STORE_PROBES: dict[str, tuple[str, object, str]] = {
 
 #: A MIXED field's SILENT half, and the `W4Fragment` field that nonetheless takes the input
 #: out of the joint premise. The claim is that the headline theorem never silently covers
-#: these inputs, because the other bundle fails too, and `zanzibar_utils_v1.py::
+#: these inputs, because the other bundle fails too, and `src/zanzibar/schema/::
 #: w4_fragment_report` (differential-pinned to Lean's decider) reports that field.
 #: REASONED as a general statement:
 #:   storeValid.derived -- a tuple matching a NON-bare restriction on a derived Direct arm
@@ -254,7 +254,7 @@ SHADOWED: dict[str, str] = {
 # known-answer controls only, from the 2026-09-24 sizing until then.
 # --------------------------------------------------------------------------- #
 def silent_admission_failures(schema_text: str) -> tuple[str, ...]:
-    """Which of `matchDecl` / `ranked` a schema fails (`zanzibar_utils_v1.py::
+    """Which of `matchDecl` / `ranked` a schema fails (`src/zanzibar/schema/::
     graph_admission_report`).
 
     `matchDecl` -- every untainted rule's match key is declared and untainted
@@ -262,5 +262,5 @@ def silent_admission_failures(schema_text: str) -> tuple[str, ...]:
     `ranked`    -- the untainted rule graph, match -> out, is acyclic
                   (`RulesSaturate.lean::RewriteRanked`).
     """
-    from zanzibar_utils_v1 import graph_admission_report
+    from zanzibar.schema import graph_admission_report
     return graph_admission_report(schema_text).failures

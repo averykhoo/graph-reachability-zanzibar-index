@@ -5,7 +5,7 @@ import ZanzibarProofs.GraphIndex.Write
 
 `SEMANTICS.md` §7.3–7.5; `wildcard-materialization-spec.md` §1.4, §3.4, §5, §7;
 ROADMAP "The staged T2 plan", sub-stage **W1b**;
-`index_v4/wildcard.py::WildcardIndex._ensure_bridges` /
+`src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_bridges` /
 `::WildcardIndex.add_tuple` → `::WildcardIndex._add_tuple_trusted`.
 
 ## Why W1b needs bridges (attack-first finding, machine-checked)
@@ -37,7 +37,7 @@ So W1b materializes the §3.4 composition `subject → w_all(S) → concrete →
 `w_all → concrete` out-bridge for every concrete node of a declared object-wildcard
 shape. This file is the faithful write model.
 
-## The model (`index_v4/wildcard.py::WildcardIndex._add_tuple_trusted`)
+## The model (`src/zanzibar/graphindex/wildcard.py::WildcardIndex._add_tuple_trusted`)
 
 `add_tuple` is **bridge-before-grant**: `_ensure_bridges(subject)` and
 `_ensure_bridges(obj)` first (creating `w_all` lazily and the out-bridge for a
@@ -59,14 +59,14 @@ namespace Zanzibar
 
 /-- `c` is a concrete node whose object-shape `(type, pred)` is a declared
     object-wildcard shape — the nodes that need a `w_all → c` out-bridge
-    (the `bridged_out_shapes` arm of `index_v4/wildcard.py::WildcardIndex._ensure_bridges`;
-    `zanzibar_utils_v1.py::SchemaInfo.bridged_out_shapes` = the declared object
+    (the `bridged_out_shapes` arm of `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_bridges`;
+    `src/zanzibar/schema/rules.py::SchemaInfo.bridged_out_shapes` = the declared object
     wildcards, §5). Only concretes are bridged. -/
 def GraphState.bridgedConcrete (σ : GraphState) (c : NodeKey) : Bool :=
   c.variant == Variant.plain && c.name != STAR && σ.schema.isObjectWildcard c.type c.pred
 
 /-- **Ensure the out-bridge for a concrete endpoint**
-    (`index_v4/wildcard.py::WildcardIndex._ensure_bridges`, `bridged_out_shapes` arm):
+    (`src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_bridges`, `bridged_out_shapes` arm):
     if `c` is a concrete node of a bridged shape, create the
     `w_all(c.type, c.pred)` node (lazily) and add the bridge edge `w_all → c`, under
     the same cycle-rejection guard the core edge-add uses. Idempotence at the
@@ -81,7 +81,7 @@ def GraphState.ensureBridges (σ : GraphState) (c : NodeKey) : GraphState :=
   else σ
 
 /-- **The bridge-materializing single-tuple write**
-    (`index_v4/wildcard.py::WildcardIndex.add_tuple` →
+    (`src/zanzibar/graphindex/wildcard.py::WildcardIndex.add_tuple` →
     `::WildcardIndex._add_tuple_trusted`): add both endpoint nodes, ensure the
     out-bridges of each
     concrete endpoint (bridge-before-grant), then add the grant edge

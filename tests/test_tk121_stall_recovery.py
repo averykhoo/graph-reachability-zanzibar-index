@@ -31,18 +31,18 @@ import pytest
 from sqlalchemy import func
 from sqlmodel import Session, SQLModel, create_engine, select
 
-import index_v4.core as core
-from connectedstore import (ConnectedStore, IndexStalled, TupleSource, build_index,
+import zanzibar.graphindex.core as core
+from zanzibar.connectedstore import (ConnectedStore, IndexStalled, TupleSource, build_index,
                             rebuild_index, save_schema)
-from connectedstore.models import IndexCursorV1
-from index_v4.models import DeltaOutboxV1, EdgeV4, NodeV4, ResidueRefV1, ResidueV1
-from setengine.models import TupleV1
+from zanzibar.connectedstore.models import IndexCursor
+from zanzibar.graphindex.models import DeltaOutbox, Edge, Node, ResidueRef, Residue
+from zanzibar.setengine.models import RelationTuple
 from tests import oracle as O
 from tests.test_bulk_build import (_BOOLEAN, _boolean_tuples, _edges_proj, _id_to_key,
                                    _nodes_proj, _residues_proj)
 from tests.test_tk111_path_count_bound import _grid
 from tests.test_tk111_stall_aware_freshness import DIAMOND, MALLORY, _diamond_writes
-from zanzibar_utils_v1 import PathCountExceeded
+from zanzibar.schema import PathCountExceeded
 
 # The K=31 diamond's one refused write (tests/test_tk111_path_count_bound.py pins it).
 POISON = ('member', 'group', 'B30', 'member', 'group', 'L31')
@@ -64,11 +64,11 @@ def session():
 def _counts(session, store_id='st'):
     return tuple(session.exec(select(func.count()).select_from(m)
                               .where(m.store_id == store_id)).one()
-                 for m in (NodeV4, EdgeV4, ResidueV1, ResidueRefV1, DeltaOutboxV1))
+                 for m in (Node, Edge, Residue, ResidueRef, DeltaOutbox))
 
 
 def _live(session, store_id='st'):
-    rows = session.exec(select(TupleV1).where(TupleV1.store_id == store_id)).all()
+    rows = session.exec(select(RelationTuple).where(RelationTuple.store_id == store_id)).all()
     return sorted(O.t(r.subject_predicate, r.subject_type, r.subject_name, r.relation,
                       r.object_type, r.object_name) for r in rows)
 
@@ -167,7 +167,7 @@ def test_rebuild_that_cannot_succeed_changes_nothing(session, bulk):
 def test_rebuild_refuses_concurrent_writes_and_changes_nothing(session, monkeypatch):
     """The watermark re-check is shared with build_index: a write that lands during
     the rebuild is refused, and the refusal is atomic like every other one."""
-    import connectedstore.build as build_mod
+    import zanzibar.connectedstore.build as build_mod
     cs = ConnectedStore(session, 'st', schema=DIAMOND, sync=False)
     _stall_on_poison(cs)
     cs.remove_tuple(*POISON)
@@ -191,7 +191,7 @@ def test_rebuild_refuses_concurrent_writes_and_changes_nothing(session, monkeypa
 
 def _refs_proj(session, store_id):
     idmap, _ = _id_to_key(session, store_id)
-    rows = session.exec(select(ResidueRefV1).where(ResidueRefV1.store_id == store_id)).all()
+    rows = session.exec(select(ResidueRef).where(ResidueRef.store_id == store_id)).all()
     return Counter((idmap[r.subject_node_id], idmap[r.object_node_id]) for r in rows)
 
 
@@ -216,26 +216,26 @@ def test_rebuilt_state_equals_a_fresh_build_on_a_boolean_schema(bulk):
         assert _counts(s)[2] > 0 and _counts(s)[3] > 0, 'corpus must carry residues + refs'
 
         # plant junk in every table the rebuild clears
-        a = NodeV4(store_id='st', predicate='junk', type='group', name='ja')
-        b = NodeV4(store_id='st', predicate='junk', type='group', name='jb')
+        a = Node(store_id='st', predicate='junk', type='group', name='ja')
+        b = Node(store_id='st', predicate='junk', type='group', name='jb')
         s.add_all([a, b])
         s.flush()
-        s.add(EdgeV4(store_id='st', subject_id=a.id, object_id=b.id,
+        s.add(Edge(store_id='st', subject_id=a.id, object_id=b.id,
                      direct_edge_count=1, indirect_edge_count=1))
-        s.add(ResidueV1(store_id='st', object_node_id=b.id, relation='junk',
+        s.add(Residue(store_id='st', object_node_id=b.id, relation='junk',
                         neg=f'[{a.id}]'))
-        s.add(ResidueRefV1(store_id='st', subject_node_id=a.id, object_node_id=b.id))
+        s.add(ResidueRef(store_id='st', subject_node_id=a.id, object_node_id=b.id))
         s.commit()
-        outbox_before = s.exec(select(DeltaOutboxV1.id).where(
-            DeltaOutboxV1.store_id == 'st').order_by(DeltaOutboxV1.id)).all()
+        outbox_before = s.exec(select(DeltaOutbox.id).where(
+            DeltaOutbox.store_id == 'st').order_by(DeltaOutbox.id)).all()
         live_state = _state(s, 'st')
 
         rebuild_index(s, 'st', bulk=bulk)
         rebuilt = _state(s, 'st')
         live = _live(s)
         # the outbox is kept, and the rebuild's own rows land ABOVE it (ids monotone)
-        outbox_after = s.exec(select(DeltaOutboxV1.id).where(
-            DeltaOutboxV1.store_id == 'st').order_by(DeltaOutboxV1.id)).all()
+        outbox_after = s.exec(select(DeltaOutbox.id).where(
+            DeltaOutbox.store_id == 'st').order_by(DeltaOutbox.id)).all()
         assert outbox_after[:len(outbox_before)] == outbox_before
         assert len(outbox_after) > len(outbox_before)
         assert min(outbox_after[len(outbox_before):]) > max(outbox_before)
@@ -269,7 +269,7 @@ def test_rebuild_requires_an_existing_index_and_a_clean_session(session):
         build_index(session, 'src')
     with pytest.raises(ValueError, match='materializes source'):
         rebuild_index(session, 'other', 'src')
-    session.add(TupleV1(store_id='x', subject_predicate='...', subject_type='user',
+    session.add(RelationTuple(store_id='x', subject_predicate='...', subject_type='user',
                         subject_name='a', relation='viewer', object_type='doc',
                         object_name='b'))
     with pytest.raises(ValueError, match='rebuild_index owns the transaction'):
@@ -279,7 +279,7 @@ def test_rebuild_requires_an_existing_index_and_a_clean_session(session):
     build_index(session, 'src', 'idx')
     report = rebuild_index(session, 'src', 'idx')
     assert report[1].check(*MALLORY) is True
-    assert session.exec(select(func.count()).select_from(IndexCursorV1)).one() == 2
+    assert session.exec(select(func.count()).select_from(IndexCursor)).one() == 2
 
 
 def test_replica_reader_sees_the_recovery_after_refresh(tmp_path, monkeypatch):

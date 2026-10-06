@@ -3,7 +3,7 @@ import ZanzibarProofs.GraphIndex.CascadeInv
 /-!
 # W3d-1c piece B — the audit enumeration + discharging `W3dJobCoverage` (ROADMAP W3d-1c)
 
-`index_v4/processor.py::DeltaProcessor._reconcile` steps (2)/(2b) — the per-pass audit
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` steps (2)/(2b) — the per-pass audit
 enumeration: every pass
 re-derives the store-supported concretes of every operand leaf
 (`::DeltaProcessor._leaf_concretes`), the
@@ -110,7 +110,7 @@ theorem checkFn_eq_coveredFn_of_no_extra_cd {σ : GraphState} {T : Store} {s : S
 
 /-! ## The state-derived leaf enumeration `leafConcretes`
 
-`index_v4/processor.py::DeltaProcessor._leaf_concretes` (driven from
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._leaf_concretes` (driven from
 `::DeltaProcessor._reconcile` steps (2)/(2b)): the pass enumerates the store-supported
 concrete subjects of every operand leaf — those reaching the leaf's object node or its
 `w_all` node. The model reads them straight off the state: every plain star-free node
@@ -314,7 +314,7 @@ theorem uposCands_complete {S : Schema} {T : Store} {σ : GraphState}
 
 /-! ## The edge-holder enumeration (clause (1), by construction)
 
-`index_v4/processor.py::DeltaProcessor._reconcile` step (2b) also re-enumerates the
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` step (2b) also re-enumerates the
 persisted incoming R-node concretes (`::DeltaProcessor._incoming_concretes`) — the
 attack-confirmed stale-holder clause. The model reads them straight off the edges: every
 source of an edge into the R-node, decoded. Clause (1) is then immediate — `nodeSubj`

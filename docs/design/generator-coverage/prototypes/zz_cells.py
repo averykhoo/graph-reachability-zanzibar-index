@@ -3,7 +3,7 @@ own source of truth, plus a feature extractor over (schema_text, owc).
 
 Nothing here is hand-written as a "what should exist" list: every feature name is minted
 from one of
-  * the `Expr` union members                       (zanzibar_utils_v1.Expr)
+  * the `Expr` union members                       (zanzibar.schema.Expr)
   * the `LeafSpec(..., '<kind>')` literals          (_plan_leaves source)
   * the `P*` plan-node dataclasses                  (module introspection)
   * the `DependentEdge(key, '<via>')` literals      (compile_ruleset source)
@@ -22,8 +22,8 @@ from dataclasses import fields, is_dataclass
 
 sys.path.insert(0, r'C:\Users\user\PycharmProjects\graph-reachability-zanzibar-index')
 
-import zanzibar_utils_v1 as Z
-from zanzibar_utils_v1 import (Computed, Direct, Exclusion, Intersection, Restriction,
+import zanzibar.schema as Z
+from zanzibar.schema import (Computed, Direct, Exclusion, Intersection, Restriction,
                                TTU, Union, parse_openfga_schema, parse_schema_ast)
 
 

@@ -237,6 +237,12 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   ⚠ **The Lean toolchain is the one that is not on `PATH`** — `lake`/`lean` live in
   `~/.elan/bin`, which `verify.sh:123` prepends for you. Building by hand needs
   `export PATH="$HOME/.elan/bin:$PATH"` first, or `lake` is simply not found.
+- **How the code is found (TK120).** `pytest.ini` sets `pythonpath = src`, `formal/verify.sh`
+  exports `PYTHONPATH=<repo>:<repo>/src`, and the repo-root `conftest.py` passes `src` on to
+  child interpreters and REFUSES to run if `import zanzibar` resolves outside this checkout's
+  `src/` (pinned with its sabotage by `tests/test_tk120_package_layout.py`). So every checkout
+  and worktree tests its own code with nothing installed. `pip install -e . --no-deps
+  --no-build-isolation` into the env is only for benchmarks, probes and ad-hoc scripts.
 - The full suite is the gate (`tests/` + `formal/conformance/`; more in `tests/` with a
   PostgreSQL DSN configured). These counts ARE enforced — `verify.sh` carries `-ge` floors
   on both (`MIN_TESTS_ALL` / `MIN_CONF_ALL`), so adding tests is always free and losing
@@ -279,19 +285,27 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   refuses to start (`tests/conftest.py`), and so does `verify.sh`'s preflight.
 
 ## Layout / mental model
-- **`index_v4/`** — the graph index. `ReachabilityIndex` (core.py) materializes the full
+- **The library is ONE package, `src/zanzibar/` (`TK120`, 2026-10-06), distribution name
+  `zanzibar` (`pyproject.toml`).** `tests/`, `formal/` (Lean + conformance), `benchmarks/`,
+  `scripts/`, `docs/` sit OUTSIDE it on purpose: Lean is the evidence, not the library, and
+  `tests/oracle.py` must import nothing from it. Before TK120 the code lived at the root under
+  versioned names (`zanzibar_utils_v1.py`, `index_v4/`, `setengine/`, `connectedstore/`,
+  `legacy/`) with versioned classes and tables (`NodeV4` / `node_v4`, `TupleV1`, ...). FROZEN
+  and ACTIVE-PLAN docs and closed task rows still use those names on purpose; the old -> new
+  key is `docs/architecture/overview.md` § "Renamed in TK120". No compatibility shims exist.
+- **`src/zanzibar/graphindex/`** — the graph index. `ReachabilityIndex` (core.py) materializes the full
   transitive closure as ref-counted edges, so `check` is O(1); `WildcardIndex`
   (wildcard.py) is the wildcard-aware façade adding materialized `*` bridges and the
   derived-relation read path (edge probe + residue). **Boolean operators are supported
   as derived predicates**: `processor.py` (the delta processor: reconcile + per-stratum
-  cascade over the outbox), `outbox.py` (transactional `DeltaOutboxV1` stream +
+  cascade over the outbox), `outbox.py` (transactional `DeltaOutbox` stream +
   watermark/drain helpers — write paths return None, deltas are rows), `invariants.py`
   (I1–I12 checker, paranoia mode wiring, §8.3 delta-scoped verifier), `models.py`
-  (adds `EdgeV4.derived`, `ResidueV1` symbolic `(stars, neg)` state). **Offline bulk
+  (adds `Edge.derived`, `Residue` symbolic `(stars, neg)` state). **Offline bulk
   bootstrap for `build_index`**: `bulk_build.py` (P13/N18 bulk closure builder —
   direct in-memory closure construction) with `bulk_backfill.py` (R4-BF in-memory
   boolean Phase-D backfill).
-- **`setengine/`** — the set engine. Stores only raw tuples (`TupleV1`), builds no
+- **`src/zanzibar/setengine/`** — the set engine. Stores only raw tuples (`RelationTuple`), builds no
   closure, computes memberships on the fly with bitmap algebra, and **supports `and` /
   `but not`**.
   - `setops.py` — the pluggable `SetOps` seam: `RoaringSets` (default) / `PySets`. Never
@@ -299,8 +313,10 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   - `memberset.py` — the star-closed `MemberSet` (`pos` / `stars` / `neg`) algebra.
   - `engine.py` — `SetEngine`: a reference-counted `Interner` (recycled int32 ids),
     `NodeSets`, `member_of`, `check` / `expand` / `lookup`, and `rebuild()` (replay from
-    `TupleV1`).
-- **`zanzibar_utils_v1.py`** — shared schema layer. Recursive-descent parser →
+    `RelationTuple`).
+- **`src/zanzibar/schema/`** — shared schema layer, a package of `errors` / `syntax` (the AST) /
+  `rules` / `parser` / `boolean` / `compiler` / `unparse` / `json_frontend` / `reports`
+  (leaf first; `__init__` re-exports the public names). Recursive-descent parser →
   `SchemaAST` (`Direct` / `Computed` / `TTU` / `Union` / `Intersection` / `Exclusion`);
   `compile_ruleset` produces the graph index's Filters/Rules **plus, for boolean
   (tainted) relations, the AOT derived-predicate artifacts** (`RuleSet.compiled`:
@@ -317,11 +333,11 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
 - **`tests/oracle.py`** — independent reference oracle (pointwise, boolean-aware).
   **Independence contract:** it imports nothing from the backends and parses the DSL
   itself, so one parser bug can't corrupt both sides of the validation matrix.
-- **`connectedstore/`** — the composed system (Zanzibar/Leopard split): `TupleV1` +
-  permanent `TupleLogV1` = source of truth, graph index = materialized view.
+- **`src/zanzibar/connectedstore/`** — the composed system (Zanzibar/Leopard split): `RelationTuple` +
+  permanent `TupleLog` = source of truth, graph index = materialized view.
   `TupleSource` (admission-validated writes returning log-id freshness tokens),
   `advance_index` (THE apply step — sync inlines it, async loops it via
-  `ConnectedStore.catch_up`), `build_index` (offline bootstrap), `SchemaV4`
+  `ConnectedStore.catch_up`), `build_index` (offline bootstrap), `SchemaRecord`
   (write-once schema source; compiled artifacts are cache). Composition layer only:
   it imports both backends, they never import it. Schemas are static — a new schema
   means a new store/index.
@@ -331,8 +347,8 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
 - **Docs**: start at `docs/architecture/overview.md` (module map + pointers; the other
   architecture files cover the graph index, derived predicates, verification, and the
   decision log). Full design specs live in `docs/specs/` — code comments cite them by
-  section: bare "spec §N" in `index_v4/*` → wildcard-materialization-spec.md, in
-  `setengine/*` → set-engine-spec.md; "boolean spec §N" → graph-boolean-ivm-spec.md.
+  section: bare "spec §N" in `src/zanzibar/graphindex/*` → wildcard-materialization-spec.md, in
+  `src/zanzibar/setengine/*` → set-engine-spec.md; "boolean spec §N" → graph-boolean-ivm-spec.md.
   Implementation divergences: `docs/spec-deviations.md`. Where a spec and the code
   disagree on a name, the code wins.
 
@@ -384,7 +400,7 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
 - **Schemas must be self-consistent (user decision 2026-09-26, `ASK-1`).** Both parsers
   refuse a dangling relation reference (computed ref, TTU tupleset, TTU target,
   `[T#P]`) and any cycle of computed / TTU-tupleset references
-  (`zanzibar_utils_v1.py::_validate_ast_consistency`, oracle twin
+  (`src/zanzibar/schema/parser.py::_validate_ast_consistency`, oracle twin
   `tests/oracle.py::_validate_consistency`). Recursion through stored tuples (nested
   groups, `x from parent`) stays legal; bare restriction types are not checked. A test
   that needs "graph refuses, set engine accepts" uses a derived cycle through a TTU
@@ -395,7 +411,7 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
 - **A `from`-tupleset must be DIRECT-ONLY (user decision 2026-09-26, `TK106`), as in
   OpenFGA.** The relation after `from` may only be Directs or a union of Directs (wildcards
   allowed); both parsers refuse the rest at parse time, tainted or not
-  (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+  (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`, oracle twin
   `tests/oracle.py::_validate_tuplesets_direct`). `from` walks STORED tuples, so a boolean or
   computed arm there was silently ignored. The rewrite is `parent_link: [<types>]`, used by
   the `from`. Consequence: a tupleset is never tainted. `TK107` (2026-10-05) deleted the code
@@ -421,7 +437,7 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   a name may be `*` (wildcard sentinel), a subject predicate may be `...` (bare). Reads are
   lenient (an out-of-charset name just never matches). **Declared names are held to the same
   charset at PARSE time (`P23`, 2026-10-03e)**, in both parsers and the JSON front end
-  (`zanzibar_utils_v1.py::_validate_declared_name`, oracle twin of the same name). A relation
+  (`src/zanzibar/schema/parser.py::_validate_declared_name`, oracle twin of the same name). A relation
   name additionally may not contain `.`. The two checked parsers must accept exactly the same
   schema texts; `tests/test_p23_parser_refusal_parity.py` fuzzes that, so a new refusal in
   one parser without its twin in the other is red.
@@ -429,7 +445,7 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   `parse_openfga_schema` / `SetEngine`.
 - **Wildcard extensions beyond OpenFGA warn** (`ASK-2`, user decision 2026-09-26: kept, but
   unproven). Wildcard usersets `[T:*#p]`, star tuplesets and object wildcards are outside
-  `W4Fragment`, so `zanzibar_utils_v1.py::derive_schema_info` emits
+  `W4Fragment`, so `src/zanzibar/schema/compiler.py::derive_schema_info` emits
   `UnprovenExtensionWarning` on every construction path; a bare `[T:*]` stays silent.
   `pytest.ini` ignores it suite-wide; `tests/test_unproven_extension_warning.py` pins it.
   **Do not propose the OpenFGA registry idiom to close that gap** (user decision
@@ -437,7 +453,7 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   is missed, and is not supported as a substitute. Why:
   `docs/architecture/decision-log.md` § "Wildcards beyond OpenFGA".
 - **Set-engine ids** are recycled int32 (roaring is uint32); the `(type, name, predicate)`
-  key is the stable surrogate. State is in-memory — `rebuild()` replays from `TupleV1`.
+  key is the stable surrogate. State is in-memory — `rebuild()` replays from `RelationTuple`.
 - **Operational knobs added 2026-07-27** (all default to today's behaviour):
   `ZANZIBAR_PARANOIA=residue` — recommended in production, the runtime detector for the
   `ZT-P0-1` escalation class, ~+5% on writes. `ZANZIBAR_MAX_CLOSURE_FANOUT` (default
@@ -453,14 +469,14 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   `build_index` run inside `ReachabilityIndex.fanout_cap_suspended`: those rows are
   already committed, so an over-cap row is applied with a warning instead of stalling the
   index. Why: `docs/tk111-stall-aware-freshness-2026-10-02.md` sec 7. **Path counts are
-  bounded too (`TK111`, 2026-10-03b)**: an add that would push `EdgeV4.indirect_edge_count`
-  past `index_v4/core.py::MAX_PATH_COUNT` (the int4 ceiling, both dialects) is refused
+  bounded too (`TK111`, 2026-10-03b)**: an add that would push `Edge.indirect_edge_count`
+  past `src/zanzibar/graphindex/core.py::MAX_PATH_COUNT` (the int4 ceiling, both dialects) is refused
   with `PathCountExceeded`. That bound is never suspended. On async the logged row
   therefore still stalls the index, and since 2026-10-02b a stalled index is not SERVED:
-  `catch_up` records the stall (`IndexCursorV1.stalled_after`), and untokened reads fall
+  `catch_up` records the stall (`IndexCursor.stalled_after`), and untokened reads fall
   back to the set engine (`check`) or refuse with `IndexStalled` (lookups). It is an
   availability loss, not a stale ALLOW. `ZANZIBAR_PARANOIA=residue` also does not catch an
-  I14 regression; only `full`/`fixpoint` do (`TK118`). `index_v4.outbox.prune_outbox` — manual
+  I14 regression; only `full`/`fixpoint` do (`TK118`). `zanzibar.graphindex.outbox.prune_outbox` — manual
   retention, never auto-called, and it keeps the head row so SQLite cannot recycle
   outbox ids under a held cursor. `SetEngine.log_governed` — set by `TupleSource`, makes
   a direct `add_tuple` on a logged store raise `UnloggedWriteRefused` instead of
@@ -475,15 +491,15 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   accepted isolation level** — `TupleSource`/`ConnectedStore` raise
   `UnsafeIsolationLevel` at construction for anything else, SERIALIZABLE included.
   The dialect-specific surface is deliberately tiny and must stay that way:
-  `index_v4/core.py::is_sqlite` + `take_row_write_lock`, and
-  `connectedstore/source.py::assert_read_isolation`. New dialect branching goes
+  `src/zanzibar/graphindex/core.py::is_sqlite` + `take_row_write_lock`, and
+  `src/zanzibar/connectedstore/source.py::assert_read_isolation`. New dialect branching goes
   *there*, not sprinkled through call sites or prose.
 - **Concurrency**: `ReachabilityIndex._lock_store` (a `FOR UPDATE` store-row lock)
   serializes writers per store on PostgreSQL; it's a no-op on SQLite, which
   serializes writers itself (concurrent SQLite writers need retry on `SQLITE_BUSY` /
   node-creation `IntegrityError`). Use one `Session` per thread — never share one.
   **Multi-instance (HA):** writers take the source lock (`TupleSource._lock_source`,
-  the `SchemaV4` row) BEFORE the graph store lock (lock ordering), and
+  the `SchemaRecord` row) BEFORE the graph store lock (lock ordering), and
   `TupleSource.add/remove` catch the evaluator up under the lock (validate against
   current committed state; log ids commit in id order per store); replica readers
   tail via `catch_up_evaluator` (O(delta)).

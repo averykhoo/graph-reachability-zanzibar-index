@@ -119,9 +119,9 @@ from hypothesis import HealthCheck, assume, given, settings, strategies as st
 # hunt under HYPOTHESIS_PROFILE=deep, a cheap safety net otherwise.
 _GATE_MAX_EXAMPLES = 30 if os.environ.get('HYPOTHESIS_PROFILE') == 'deep' else 6
 
-from setengine import ALL_SETOPS, SetEngine
-from setengine.memberset import MemberSet
-from zanzibar_utils_v1 import (Direct, TTU, Union, Intersection, Exclusion,
+from zanzibar.setengine import ALL_SETOPS, SetEngine
+from zanzibar.setengine.memberset import MemberSet
+from zanzibar.schema import (Direct, TTU, Union, Intersection, Exclusion,
                                parse_openfga_schema, parse_schema_ast,
                                derive_schema_info, unparse_schema_ast,
                                UnsupportedByGraphIndex, CyclicDerivedDependency,
@@ -1457,7 +1457,7 @@ def test_reg10_multihop_star_bridge_cycle_accept_reject_parity():
     `folder:y#admin` carries an IN-bridge to `w_any(folder,admin)`, closing
     `folder:c#viewer -> folder:y#admin ->[in-bridge] w_any(folder,admin) ->
     folder:c#viewer`. The graph REJECTS W2 as a cycle; the set engine's flow graph is
-    now bridge-aware (mirrors index_v4/wildcard.py `_ensure_bridges`) so it rejects it
+    now bridge-aware (mirrors src/zanzibar/graphindex/wildcard.py `_ensure_bridges`) so it rejects it
     too. Pins accept/reject parity (no ParityEngine): both backends reject W2 after W1,
     and an acyclic control (W1 present, a DIFFERENT viewer subject that never returns to
     the loop) is accepted by both."""
@@ -1742,7 +1742,7 @@ def test_reg12_ghost_hop_never_fires_on_legal_star_bridges():
 #
 # Adjudication: the set engine's rejection is correct (OpenFGA rejects a tuple matching
 # no type restriction; the answer -- no grant -- is what both backends already agreed
-# on). The graph should reject too. Fix (zanzibar_utils_v1.py `RuleSet.apply`): the
+# on). The graph should reject too. Fix (src/zanzibar/schema/ `RuleSet.apply`): the
 # pure-union no-match branch RAISES ValueError for schema-derived rulesets (schema_info
 # is not None), mirroring the set engine; hand-built rulesets keep silent-drop filter
 # semantics. See docs/spec-deviations.md 2026-07-17.

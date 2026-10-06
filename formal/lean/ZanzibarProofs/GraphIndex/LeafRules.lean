@@ -26,7 +26,7 @@ import ZanzibarProofs.GraphIndex.UsStarWrite
 
 `RulesWrite.lean::schemaRewrites` routes every **derived** key OFF the rewrite fanout
 entirely (its taint filter, `!(isDerived S d.1)`), faithfully mirroring
-`zanzibar_utils_v1.py::compile_ruleset`'s `if key not in tainted: _emit_expr(...)` loop.
+`src/zanzibar/schema/compiler.py::compile_ruleset`'s `if key not in tainted: _emit_expr(...)` loop.
 That is only *half* of what Python does with a derived key. The other half is
 `_build_plan_tree` → `_emit_leaf_expr`, which compiles each of the key's **closure
 leaves** into ordinary `Rule`s whose target is the minted leaf name:
@@ -51,7 +51,7 @@ arm produced the copy* — provenance `rewriteClosure` does not carry. For
 **shape-identical tuples**, yet Python routes them to `viewer.0` and `viewer.1`
 respectively. **No re-addressing function of the tuple alone can produce Python's leaf
 edges.** Python bakes the target into the compiled rule
-(`zanzibar_utils_v1.py::_emit_leaf_expr` → `_rewrite_rule(expr, object_type, leaf)`);
+(`src/zanzibar/schema/boolean.py::_emit_leaf_expr` → `_rewrite_rule(expr, object_type, leaf)`);
 the faithful model does the same, which is what `leafRewrites` below is.
 
 ## ★ The recompile cone is ZERO, and scope doc §11.6 over-estimated it
@@ -71,7 +71,7 @@ re-point `writeLoggedOne` / `writeRules` at; today it has no consumer, exactly a
 
 ## The composition it models — `RuleSet.apply`, read literally
 
-`zanzibar_utils_v1.py::RuleSet.apply` is two stages, and the model must be too:
+`src/zanzibar/schema/rules.py::RuleSet.apply` is two stages, and the model must be too:
 
 1. **Seeds.** On a derived family, *every* matching `RewriteFilter` fires and the triple
    is re-addressed onto that filter's leaf, deduped — `Leaf.lean::rawWriteTuples`.
@@ -324,7 +324,7 @@ theorem mem_rawWriteTuples_self {S : Schema} {t : Tuple}
 
     ★ **`P6` step 3b RE-POINT #2 LANDED 2026-09-14.** This fold was `acc.writeDirect u`
     until this edit; it is now `acc.writeBridgedOne u`, i.e. Python's bridge-before-grant
-    prologue (`index_v4/wildcard.py::_maybe_add_bridges` ahead of the per-triple grant)
+    prologue (`src/zanzibar/graphindex/wildcard.py::_maybe_add_bridges` ahead of the per-triple grant)
     runs on the LEAF-ROUTED write path. `writeBridgedOne` has the same arity and
     explicitness as `writeDirect` (`UsStarWrite.lean` vs `Write.lean::GraphState.writeDirect`),
     so this is a two-token change at the definition and every `∀ (ts : List Tuple)` fold
@@ -489,7 +489,7 @@ On the premises of the payoff theorem:
 * `hon` — a `STAR`-named object routes `objNode` to its `w_all` variant, which
   `LeafNode` deliberately excludes (it models the target of a raw leaf-routed write,
   and object wildcards on derived relations are scope-rejected,
-  `zanzibar_utils_v1.py::UnsupportedByGraphIndex`). -/
+  `src/zanzibar/schema/errors.py::UnsupportedByGraphIndex`). -/
 
 /-- A rule can only produce `some` by matching, and it keeps the object: the four
     facts every consumer of `applyRRule` re-derives, extracted once.

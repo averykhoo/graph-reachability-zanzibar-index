@@ -3,7 +3,7 @@ import ZanzibarProofs.GraphIndex.CascadeStrataResettle
 /-!
 # W3d-2 E-chain tail — piece 1: the derived-leaf concrete decomposition (ROADMAP W3d-2)
 
-`index_v4/processor.py::DeltaProcessor._reconcile`'s per-pass audit enumeration
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile`'s per-pass audit enumeration
 (steps (2)/(2b)) at a
 STRATUM-2 key reads DERIVED operand leaves — so, beyond the store-supported reach
 concretes (`::DeltaProcessor._leaf_concretes`, W3d-1's `leafConcretes`), it must also
@@ -33,7 +33,7 @@ namespace Zanzibar
 open GraphModel
 
 /-- `graphRecR` at a DERIVED operand leaf is `probeDerived` (the routed recursion
-    routes a derived key to the residue read; `index_v4/processor.py::_EvalContext`
+    routes a derived key to the residue read; `src/zanzibar/graphindex/processor.py::_EvalContext`
     and `::DeltaProcessor.member_check`). -/
 theorem graphRecR_derived (σ : GraphState) (s : SubjectRef) {dt on r' : String}
     (h : isDerived σ.schema (dt, r') = true) :
@@ -229,8 +229,8 @@ def enum2Base (σ : GraphState) (dt on : String) (e : Expr) : List SubjectRef :=
     `uposCands` (the residue-named `neg`/`upos` now included via `enum2Base`).
 
     `cands` is a SET (`List.eraseDups`, first occurrence kept) since 2026-09-05b —
-    mirroring `index_v4/processor.py::DeltaProcessor._reconcile`'s `candidates`, a
-    `dict[int, NodeV4]` keyed on node id, at the whole list rather than only at the
+    mirroring `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile`'s `candidates`, a
+    `dict[int, Node]` keyed on node id, at the whole list rather than only at the
     Direct-arm contribution (`freshDirectCands`). Without it every duplicate node in
     `σ.nodes` and every stacked in-edge at the R-node is a SEPARATE candidate, and
     `reconcileKeyDR` — which has no presence diff (`CORRESPONDENCE.md` §7.2 item 6) —
@@ -514,9 +514,9 @@ theorem evalE_star_bareArms {rec1 rec2 : Rec} {T : Store} {q1 q2 : Query} {s : S
     enumeration must add.
 
     The `s.name != STAR` filter is the exact mirror of Python's own audit-enumeration
-    wildcard filtering: `index_v4/processor.py:268` (`_incoming_concretes` ends
+    wildcard filtering: `src/zanzibar/graphindex/processor.py:268` (`_incoming_concretes` ends
     `return [n for n in nodes if n.wildcard == '']`) and the `upos` loop's
-    `n.wildcard != ''` skip at `index_v4/processor.py:670` — every candidate/audit source
+    `n.wildcard != ''` skip at `src/zanzibar/graphindex/processor.py:670` — every candidate/audit source
     Python builds is wildcard-free by construction. Lean already mirrored this at
     `CascadeEnum.lean::leafConcretes` (`u.name != STAR`); `storedDirectSubjects` was the
     outlier. Under `DirectArmsConcrete` the filter is provably a no-op (no wildcard-flagged
@@ -609,8 +609,8 @@ def enum2BaseD (σ : GraphState) (T : Store) (dt on R : String) (e : Expr) : Lis
     landed: one write gave `enumJob2D.cands = [alice, alice]` and 3 edges at the R-node against
     the baseline's `[alice]` and 2 (Leg-0 probe D.1, `history/PROOF_STATUS.md` 2026-07-28).
 
-    **Faithful to Python**: `index_v4/processor.py::DeltaProcessor._reconcile` builds its
-    `candidates` as a `dict[int, NodeV4]` keyed on node id, so contributing a node that is
+    **Faithful to Python**: `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` builds its
+    `candidates` as a `dict[int, Node]` keyed on node id, so contributing a node that is
     already a candidate is a no-op. This mirrors THAT, at the candidate level.
 
     **Not** the fix for the baseline `n ↦ 2n` derived-arm stacking, which is a separate,

@@ -7,7 +7,7 @@ Lean residue at `(doc:d1, admin)` as `stars := []`, `neg := []`,
 phantom `folder:f9#viewer` and the AGREEING control `folder:f1#viewer` share the shape
 `("folder","viewer")`, so `stars` could not have separated them and `upos` did.
 
-Reading `index_v4/wildcard.py::WildcardIndex._check_derived`'s userset arm (`:773-781`)
+Reading `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived`'s userset arm (`:773-781`)
 says Python's logic is structurally the SAME as Lean's `State.lean::GraphModel.probeDerived`:
 
     stars, neg, upos = self._residue_state(relation, o_type, o_name)
@@ -43,7 +43,7 @@ where they do. Control `(5)` shows `banned` has EMPTY stars, so this is falsifia
 
 Chased to ground in `formal/probes/p6_partiv_shapes_gap_2026-09-14.lean`: the Lean
 enumeration `ReconcileStars.lean:97::wildcardShapes` implements only the first of the two
-passes that build `SchemaInfo.subject_wildcard_shapes` (`zanzibar_utils_v1.py:993-1008`).
+passes that build `SchemaInfo.subject_wildcard_shapes` (`src/zanzibar/schema/`).
 
 RAN 2026-09-14g, VERBATIM stdout:
 

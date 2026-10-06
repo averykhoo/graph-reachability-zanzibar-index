@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from tests.oracle import Oracle, OracleTuple
 from tests.test_wildcard_property import _candidate_raw_tuples, _query_grid, OBJECT_WC
-from setengine import SetEngine, ALL_SETOPS
+from zanzibar.setengine import SetEngine, ALL_SETOPS
 
 
 def _fresh_session() -> Session:

@@ -8,6 +8,8 @@ reconciled first-hand against the live tree. Live state is the task row
 Corrections append **dated at the top**, never edited into the body. Freeze it when `P6`
 closes.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 Each claim carries its provenance: **READ** (verified first-hand this session, with
 `file:line` or `file::symbol`), **KERNEL/PROBE** (produced by a run whose literal output is
 in a tracked file), **AGENT** (a subagent's report, reconciled but not re-derived), or

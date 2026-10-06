@@ -42,7 +42,7 @@ namespace Zanzibar
 /-- Node variant: an ordinary concrete/userset node, the ∃-wildcard node `w_any`
     (concretes bridge **in**, wildcard-*subject* grants leave), or the ∀-wildcard
     node `w_all` (wildcard-*object* grants arrive, bridges leave) — `SEMANTICS.md`
-    §7.4; the `wildcard` column of `index_v4/models.py::NodeV4`. -/
+    §7.4; the `wildcard` column of `src/zanzibar/graphindex/models.py::Node`. -/
 inductive Variant where
   | plain | wAny | wAll
 deriving DecidableEq, Repr, Inhabited
@@ -59,8 +59,8 @@ deriving DecidableEq, Repr, Inhabited
 
 /-! ## §7.6 — residues -/
 
-/-- A persisted residue `ResidueV1` for a derived `(object node, relation)`
-    (§7.6, `index_v4/models.py::ResidueV1` — whose `version` column has NO Lean
+/-- A persisted residue `Residue` for a derived `(object node, relation)`
+    (§7.6, `src/zanzibar/graphindex/models.py::Residue` — whose `version` column has NO Lean
     counterpart, `CORRESPONDENCE.md` §7.2): the star-covered shapes, the concrete subjects that
     are star-covered-but-excluded (`neg`), and the edge-free userset members
     (`upos`). Membership is `edges ∪ upos ∪ (⋃_{σ∈stars} pop(σ) ∖ neg)`. -/
@@ -73,13 +73,13 @@ deriving DecidableEq, Repr, Inhabited
 /-- The empty residue (default for a node with no persisted residue). -/
 def Residue.empty : Residue := ⟨[], [], []⟩
 
-/-- A delta-outbox row (§7.8, `index_v4/models.py::DeltaOutboxV1`, read through
-    `index_v4/outbox.py::outbox_rows` / `::outbox_watermark`) — an id plus the
+/-- A delta-outbox row (§7.8, `src/zanzibar/graphindex/models.py::DeltaOutbox`, read through
+    `src/zanzibar/graphindex/outbox.py::outbox_rows` / `::outbox_watermark`) — an id plus the
     `(node, relation)` it
     dirties. Enough structure to state outbox-drain quiescence (I10).
 
     `leaf` records the row's provenance = Python's LeafFamily-vs-DerivedFamily split
-    (`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys`): a `true` row is a RAW
+    (`src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys`): a `true` row is a RAW
     leaf-routed write/remove on a storage leaf (that function's
     `isinstance(fam, LeafFamily)` own-key branch dirties
     its OWN derived key); a `false` row is a reconcile emission
@@ -561,7 +561,7 @@ theorem reach_iff_nreaches {σ : GraphState}
 namespace GraphModel
 
 /-- Non-derived read: the ≤4 candidate probes (§7.5, the untainted arm of
-    `index_v4/wildcard.py::WildcardIndex.check`, whose nested `::WildcardIndex.check.key`
+    `src/zanzibar/graphindex/wildcard.py::WildcardIndex.check`, whose nested `::WildcardIndex.check.key`
     collects them into one row-value `IN`).
     `(s,o)`, `(w_any(shape s), o)`, `(s, w_all(o.type,R))`, `(w_any, w_all)`,
     each `p>0`, OR-combined. A literal `'*'` endpoint IS its own variant node and so
@@ -578,7 +578,7 @@ def probeNonDerived (σ : GraphState) (q : Query) : Bool :=
   || (o.name != STAR && σ.reach sN (wAllNode o.type R))
   || (s.name != STAR && o.name != STAR && σ.reach (wAnyNode s.shape) (wAllNode o.type R))
 
-/-- Derived read: the residue path (§7.6, `index_v4/wildcard.py::WildcardIndex._check_derived`,
+/-- Derived read: the residue path (§7.6, `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived`,
     reading `::WildcardIndex._residue_state`). An object wildcard
     on a derived relation is rejected (decision-15) ⇒ `False`. A `'*'` subject checks
     shape-star coverage. A userset subject is edge-free: in `upos` ⇒ True, else
@@ -660,7 +660,7 @@ def exprTtus : Expr → List (String × String)
 
     ⚠ **Only (1) and (2) are backed by a compile-time rejection.** Those two raise
     `UnsupportedByGraphIndex` (CLAUDE.md, "the two scope rejections"). **(3) is not:**
-    `zanzibar_utils_v1.py::_validate_ttu_tuplesets` exempts *tainted* tuplesets
+    `src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets` exempts *tainted* tuplesets
     deliberately, so a TTU over a derived tupleset COMPILES and gets its own
     `derived-tupleset-ttu` plan leaf. Measured 2026-08-14: `parse_openfga_schema`
     accepts `parent: [folder] but not detached` under a TTU and reports leaf kinds
@@ -679,7 +679,7 @@ def GraphAccepts (S : Schema) : Prop :=
 /-! ## §7.8 — cascade quiescence -/
 
 /-- **`Quiescent σ`** (I9 / §7.8): the outbox is fully drained — no delta sits above
-    the watermark, i.e. `index_v4/processor.py::DeltaProcessor._run_cascade` has
+    the watermark, i.e. `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade` has
     advanced the frontier past every dirtied
     row. This is the in-transaction fixpoint condition the model bakes into each
     write; the full "a second reconcile changes nothing" characterization is the
@@ -690,7 +690,7 @@ def Quiescent (σ : GraphState) : Prop :=
 /-! ## §7.7 — the state invariant `Inv` -/
 
 /-- **`Inv S σ`** — the concretely-expressible core of the I-series (§7.7,
-    `index_v4/invariants.py::check_invariants` + `::_check_derived_invariants` +
+    `src/zanzibar/graphindex/invariants.py::check_invariants` + `::_check_derived_invariants` +
     `::_check_residue_rows`). Named clauses so a proof can use exactly the piece it
     needs:
 

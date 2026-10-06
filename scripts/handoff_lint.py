@@ -279,8 +279,7 @@ _MD_MENTION = re.compile(r'`([A-Za-z0-9_.\-/]+\.md)`')
 #     ran, which is the other way an unbelievable check dies: not silence, but noise.
 # Guessing a base directory would trade real coverage for false positives; this check is
 # aimed at renames of a PATH.
-MENTION_ROOTS = ('docs/', 'formal/', 'tests/', 'scripts/', 'benchmarks/',
-                 'index_v4/', 'setengine/', 'connectedstore/', 'legacy/')
+MENTION_ROOTS = ('docs/', 'formal/', 'tests/', 'scripts/', 'benchmarks/', 'src/')
 _ROOT_ENTRY = re.compile(r'^## (\d{4}-\d\d-\d\d[a-z]?) ')
 _FORMAL_ENTRY = re.compile(r'^## Session (\d{4}-\d\d-\d\d[a-z]?)\b')
 _ROWS_LINE = re.compile(r'^rows:\s*(.+)$')

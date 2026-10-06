@@ -5,7 +5,7 @@
   this mechanism:
 
   > `GraphIndex/State.lean::GraphModel.check` resolves a derived key through materialised
-  > edges, so it needs a node where `index_v4/wildcard.py::WildcardIndex._check_derived`
+  > edges, so it needs a node where `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived`
   > needs none — Python's userset arm answers from the residue's `stars`/`neg`/`upos`
   > symbolically […]
 

@@ -11,9 +11,9 @@ chain (`ReachedByW3d2E`, `CascadeStrataAssemble.lean`). This file is the W4 asse
 
 * **`ReachedBy`** — THE operational write-closure, by name. `:= ReachedByW3d2E`
   (logged writes + the state-derived two-round cascade). This is the model of the
-  Python write path: `connectedstore/source.py::TupleSource` admission →
-  `connectedstore/apply.py::advance_index` →
-  `index_v4/processor.py::DeltaProcessor.run_cascade` (a thin node-cache-scope wrapper
+  Python write path: `src/zanzibar/connectedstore/source.py::TupleSource` admission →
+  `src/zanzibar/connectedstore/apply.py::advance_index` →
+  `src/zanzibar/graphindex/processor.py::DeltaProcessor.run_cascade` (a thin node-cache-scope wrapper
   over `::DeltaProcessor._run_cascade`, which is the modeled body). **Scope note
   (`ZT-P4-2c`):** only the SYNCHRONOUS/interleaved schedule is modeled — under
   `ConnectedStore(sync=False)` / `build_index`, `advance_index` applies the WHOLE batch
@@ -67,7 +67,7 @@ theorem-specific carry. History: probe D.3 (2026-07-28) machine-checked `Inv.neg
 FALSE on the `_d` fragment because a Direct-arm write landed on the public R-node carrying
 the `neg` row; leg 7's flip (2026-09-05) made
 `GraphIndex/Cascade.lean::GraphState.writeLoggedRules` route that write onto the leaf
-family exactly as `zanzibar_utils_v1.py::RuleSet.apply` does, which removed the mechanism;
+family exactly as `src/zanzibar/schema/rules.py::RuleSet.apply` does, which removed the mechanism;
 and `P5` did the owed proof work — the T2a chain in `CascadeStrataEdge.lean` now runs on
 the `_d` fragment end to end, every narrow lemma swapped for its existing `_d` twin.
 Witnesses: `W4WitnessDirect.reached_inv_applies` (scope — the theorem applies at the store
@@ -86,8 +86,8 @@ namespace Zanzibar
     (`writeLoggedRules`) interleaved with cascade legs that run the state-derived
     enumerated rounds (`runCascade2` over `enumJobs2R1`/`enumJobs2R2` — no
     chain-side hypotheses). Mirrors the Python synchronous write path
-    (`connectedstore/apply.py::advance_index` →
-    `index_v4/processor.py::DeltaProcessor.run_cascade` →
+    (`src/zanzibar/connectedstore/apply.py::advance_index` →
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor.run_cascade` →
     `::DeltaProcessor._run_cascade`), in its INTERLEAVED (sync) schedule only. -/
 abbrev ReachedBy : GraphState → Schema → Store → Prop := ReachedByW3d2E
 
@@ -108,10 +108,10 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
     per field against the real Python: LOUD 10, MIXED 2 (`ttuDirect`, `storeValid`, whose
     silent halves also fail a `W4Fragment` field), SILENT 2 (`matchDecl`, `ranked`).
     **2026-09-26 (`ASK-1`, user decision): SILENT is now 0.** Both Python parsers refuse a
-    dangling reference and a reference cycle (`zanzibar_utils_v1.py::_validate_ast_consistency`),
+    dangling reference and a reference cycle (`src/zanzibar/schema/parser.py::_validate_ast_consistency`),
     so `matchDecl` and `ranked` are LOUD: LOUD 12, MIXED 2.
     **2026-09-26 (`TK106`, user decision): `ttuDirect` is LOUD too.** Both parsers refuse
-    every non-direct tupleset (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle
+    every non-direct tupleset (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`, oracle
     twin `tests/oracle.py::_validate_tuplesets_direct`): LOUD 13, MIXED 1 (`storeValid`),
     SILENT 0.
     The classification, its probes and its sabotage are
@@ -126,7 +126,7 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
     * `ttuDirect` — ⚠ **stronger than the mechanism it cites** (corrected 2026-08-14;
       this line used to read "an untainted TTU tupleset relation must be direct-only",
       which describes the Python check and NOT the predicate it annotates).
-      `zanzibar_utils_v1.py::_validate_ttu_tuplesets` carries a `ts_key not in tainted`
+      `src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets` carries a `ts_key not in tainted`
       guard, so it constrains only UNTAINTED tuplesets and deliberately exempts derived
       ones (their stored tuples live on dedicated storage leaves). `TtuTuplesetsDirect`
       has no such guard, so it additionally excludes derived tuplesets — a shape Python
@@ -134,7 +134,7 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
       `wsBare` and `directArmsConcrete` state theirs.
       **SUPERSEDED 2026-09-26 (`TK106`):** the predicate and the Python now coincide. A
       tupleset must be direct-only, tainted or not, and both parsers refuse the rest at
-      PARSE time (`zanzibar_utils_v1.py::_validate_tuplesets_direct`), as OpenFGA does.
+      PARSE time (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`), as OpenFGA does.
       `from` walks stored tuples, so a derived tupleset's boolean arm was silently ignored;
       the tainted exemption above is gone, and `_validate_ttu_tuplesets`' own directs-only
       branch is unreachable from a checked parse.
@@ -150,7 +150,7 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
       (`a: [user] or b`, `b: [user] or a`) on purpose (`Spec/Stratify.lean`'s header:
       "untainted relations may be positively recursive"), and it is outside this field.
     * `objWild` — object-wildcard shapes never target a derived relation
-      (`zanzibar_utils_v1.py::_reject_object_wildcard_scope`, first loop).
+      (`src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope`, first loop).
     * `usWild` — **the SUBJECT-wildcard twin of `objWild`, added 2026-09-13e (`TK68`).**
       A derived key is never a subject-wildcard *userset* shape, i.e. never carries an
       in-bridge. `UnsupportedByGraphIndex` survives for exactly TWO scope rejections
@@ -159,13 +159,13 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
       shipped compiler. Python refuses both disjuncts of
       `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset` over a tainted key:
       - disjunct (a), a literal `[T:*#p]` restriction with `(T, p)` derived —
-        `zanzibar_utils_v1.py::_build_plan_tree` (`:1879-1886`, *"wildcard userset
+        `src/zanzibar/schema/boolean.py::_build_plan_tree` (`:1879-1886`, *"wildcard userset
         restriction … over the derived relation … needs symbolic composition through
         residues"*). No untainted container can escape it: `::_mentions` (`:1677-1678`)
         counts a userset restriction as a reference, so `::compute_taint` taints the
         container and the plan builder runs on it.
       - disjunct (b), a star-tupleset TTU through-shape landing on a derived target —
-        `zanzibar_utils_v1.py::_reject_object_wildcard_scope` (`:1484-1492`, the
+        `src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope` (`:1484-1492`, the
         `restr.wildcard and restr.predicate == '...'` branch). Its loop ranges over
         tainted keys only; an UNTAINTED container whose TTU targets a derived predicate
         name is refused one check earlier, by `::_validate_ttu_tuplesets` (`:1132-1145`).
@@ -187,7 +187,7 @@ abbrev Drained (S : Schema) (σ : GraphState) : Prop := cascadeKeys S σ = []
       (`W4WitnessDirect.outside_old_admission` machine-checks it), which is why the
       headline theorems used to be VACUOUS on the canonical Zanzibar boolean shape.
     * `ttuNotLeaf` — a TTU arm's target is a *referenced* relation name, and
-      `'.'` is refused in one (`zanzibar_utils_v1.py::_validate_ast_references`, the
+      `'.'` is refused in one (`src/zanzibar/schema/parser.py::_validate_ast_references`, the
       `'.' in name and name != '...'` dot-lock). Added by 4c-ii step 9.
     * `directRestrNotLeaf` — likewise for the predicate component of a `Direct`
       restriction, which is either the bare sentinel or a referenced relation name
@@ -228,7 +228,7 @@ structure GraphAdmission (S : Schema) (T : Store) : Prop where
       is the kernel refutation: a derived arm's TTU target compiles into `leafRewrites`,
       which none of those fields ranges over.
 
-      **Honest as a Python-side scope claim.** `zanzibar_utils_v1.py::_validate_ast_references`
+      **Honest as a Python-side scope claim.** `src/zanzibar/schema/parser.py::_validate_ast_references`
       (`:908-940`) walks EVERY arm (`Union`/`Intersection` children, `Exclusion` base and
       subtract) and its TTU branch (`:930-932`) raises on a `'.'` in `target_rel` or
       `tupleset_rel` — so no compiled rule, untainted layer or leaf layer, can mint a dotted
@@ -254,7 +254,7 @@ structure GraphAdmission (S : Schema) (T : Store) : Prop where
       empty name (`define : viewer`) was reachable through a valid write on `viewer`, where the
       set engine answered `check = true` and the graph answered `false` (untainted) or refused
       the write in `DeltaProcessor._write_derived` (boolean). The parse-time refusal is now
-      `zanzibar_utils_v1.py::parse_schema_ast`'s empty-name lock (the `if not relation_name`
+      `src/zanzibar/schema/parser.py::parse_schema_ast`'s empty-name lock (the `if not relation_name`
       raise beside the `'.'` lock) and, independently, `tests/oracle.py::parse_schema_ast`'s;
       pinned by `tests/test_reg_empty_relation_name.py`, whose docstring carries the pre-fix
       probe output and both single-parser sabotages. -/
@@ -327,14 +327,14 @@ theorem GraphAdmission.noBridgedDerived {S : Schema} {T : Store} (hA : GraphAdmi
       `CascadeStrata.lean`). Python handles arbitrary strata.
     * `wsBare` — every declared wildcard restriction is bare (`[T:*]`). Python
       rejects wildcard USERSETS (`[T:*#p]`) only over derived relations
-      (the `r.wildcard` raise in `zanzibar_utils_v1.py::_build_plan_tree.build`'s
+      (the `r.wildcard` raise in `src/zanzibar/schema/boolean.py::_build_plan_tree.build`'s
       `Direct` arm, plus the derived-through-shape form in
       `::_reject_object_wildcard_scope`); over untainted ones they are admitted
       (W1c covered their tuples on the pure-direct fragment only).
       ⚠ **2026-09-14h — this field is stated over `declaredWildcardShapes`, which is
       PASS 1 ONLY, and that is deliberate.** When
       `GraphIndex/ReconcileStars.lean::wildcardShapes` was corrected to model both of
-      `zanzibar_utils_v1.py::derive_schema_info`'s passes, stating `wsBare` over the
+      `src/zanzibar/schema/compiler.py::derive_schema_info`'s passes, stating `wsBare` over the
       combined list would have SHRUNK the fragment: a star-tupleset TTU through-shape
       has a non-`BARE` predicate, so `wsBare` over the full list is FALSE at every
       schema part (iv) exists to admit — machine-checked at `W4Witness.SxThruDerived`
@@ -492,7 +492,7 @@ theorem graph_correct {S : Schema} {T : Store} {σ : GraphState} (q : Query)
     spec, with NO leaf-name guard on the caller.**
 
     `graph_correct` above is stated over `GraphModel.check`, which models
-    `index_v4/wildcard.py::WildcardIndex._check_internal` — the probe BELOW the `BL-2`
+    `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_internal` — the probe BELOW the `BL-2`
     fence. This theorem is stated over `GraphModel.checkPublic`, which models the public
     `::WildcardIndex.check`, and it is the one that should be read as "the graph index
     computes the spec".
@@ -825,7 +825,7 @@ nothing, and all seven `by decide` discharges would still go through.
 
 The pair below varies **exactly one bit**: the `wildcard` flag of one `Direct`
 restriction. That is not a stylistic choice — it is the bit Python itself branches on.
-`zanzibar_utils_v1.py::_build_plan_tree` (`:1879-1889`) walks the tainted userset
+`src/zanzibar/schema/boolean.py::_build_plan_tree` (`:1879-1889`) walks the tainted userset
 restrictions of a derived def and sends them two ways: `if r.wildcard` raises
 `UnsupportedByGraphIndex`, and the `else` builds a `PDerivedUserset` node and COMPILES.
 So `SxUsPlain` is a schema Python accepts and `SxUsWild` is one it refuses, differing in
@@ -839,7 +839,7 @@ axes at once. The fresh `doc#c` depends on `r` and nothing depends on `c`, so th
 dependency graph stays acyclic and only this field moves. -/
 
 /-- `Sx` plus `doc#c := [doc:*#r]` — a **wildcard** userset restriction over the derived
-    relation `doc#r`. `zanzibar_utils_v1.py::_build_plan_tree:1881-1886` refuses it. -/
+    relation `doc#r`. `src/zanzibar/schema/boolean.py::_build_plan_tree:1881-1886` refuses it. -/
 def SxUsWild : Schema :=
   ⟨[(("doc", "a"), .direct [("user", BARE, false)]),
     (("doc", "b"), .direct [("user", BARE, false)]),
@@ -847,7 +847,7 @@ def SxUsWild : Schema :=
     (("doc", "c"), .direct [("doc", "r", true)])], []⟩
 
 /-- **THE CONTROL — one bit away.** `Sx` plus `doc#c := [doc#r]`, the *concrete* userset
-    over the same derived relation. `zanzibar_utils_v1.py::_build_plan_tree:1887-1889`
+    over the same derived relation. `src/zanzibar/schema/boolean.py::_build_plan_tree:1887-1889`
     compiles it to a `PDerivedUserset`, so Python ACCEPTS this one. -/
 def SxUsPlain : Schema :=
   ⟨[(("doc", "a"), .direct [("user", BARE, false)]),
@@ -931,7 +931,7 @@ added disjunct (b) precisely because the through-shape was the hole that machine
     (a **bare** star tupleset — `wsBare`-legal) · `doc#viewer := viewer from parent`. The
     TTU rewrites `folder:* parent doc:d` into subject shape `(folder, viewer)`, so
     `(folder, viewer)` is a bridged-in through-shape AND derived.
-    `zanzibar_utils_v1.py::_reject_object_wildcard_scope:1484-1492` refuses it. -/
+    `src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope:1484-1492` refuses it. -/
 def SxThruDerived : Schema :=
   ⟨[(("folder", "banned"), .direct [("user", BARE, false)]),
     (("folder", "viewer"), .excl (.direct [("user", BARE, false)]) (.computed "banned")),
@@ -1111,7 +1111,7 @@ theorem sxThruDerived_not_admitted : ¬ GraphAdmission SxThruDerived [] := by
 
 /-- **CONTROL — the bundle ACCEPTS the one-bit-away schema.** `doc#c := [doc#r]`, the
     concrete userset over the same derived relation, which
-    `zanzibar_utils_v1.py::_build_plan_tree:1887-1889` compiles. -/
+    `src/zanzibar/schema/boolean.py::_build_plan_tree:1887-1889` compiles. -/
 theorem sxUsPlain_admitted : GraphAdmission SxUsPlain [] where
   ttuNotLeaf := ttuTargetsSat_notLeafName_of_noLeafSubjects (by decide)
   noLeafSubjects := by decide

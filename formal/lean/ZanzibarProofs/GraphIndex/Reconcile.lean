@@ -3,7 +3,7 @@ import ZanzibarProofs.GraphIndex.RulesComplete
 /-!
 # The derived reconcile — the residue path (ROADMAP W3)
 
-`SEMANTICS.md` §7.6, §7.8; `index_v4/processor.py::DeltaProcessor._reconcile` /
+`SEMANTICS.md` §7.6, §7.8; `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` /
 `::DeltaProcessor._reconcile_subject`.
 W1 widened the write model to wildcard bridges; W2 to untainted rule routing. **W3
 widens it to DERIVED relations** — `and` / `but not` (the `.inter` / `.excl` nodes) —

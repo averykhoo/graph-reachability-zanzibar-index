@@ -54,7 +54,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from setengine import PySets, RoaringSets
+from zanzibar.setengine import PySets, RoaringSets
 
 from benchmarks._harness import rss_mb, timed, build_set, build_graph
 

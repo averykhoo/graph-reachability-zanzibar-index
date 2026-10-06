@@ -8,7 +8,7 @@ repo's existing `scale_bench` / `bulk_scale_bench` division rather than growing 
   paranoia     R6-7   share of commit time in _check_outbox_sanity, and the GROWTH curve
                       that decides its O(N^2) claim (early-quartile vs late-quartile cost)
                R6-8   share in verify_outbox_deltas; BFS count vs distinct sources
-  graph-write  R6-9   node_v4 SELECTs per write (the write-tail re-SELECT)
+  graph-write  R6-9   node SELECTs per write (the write-tail re-SELECT)
                R6-16  outbox rows emitted on a schema with NO derived relations, and
                       their share of write statements
   cascade      R6-10  _stored_tupleset_subjects calls + cum time per boolean write
@@ -89,13 +89,13 @@ def target_paranoia(scale, commit_every):
     rows = _rows(stats)
     wall = max(ct for (_n, _t, ct) in rows.values()) if rows else 0.0
 
-    ob_n, ob_t, ob_c = _find(rows, func='_check_outbox_sanity', file_frag='index_v4/invariants.py')
-    vf_n, vf_t, vf_c = _find(rows, func='verify_outbox_deltas', file_frag='index_v4/invariants.py')
-    ci_n, ci_t, ci_c = _find(rows, func='check_invariants', file_frag='index_v4/invariants.py')
+    ob_n, ob_t, ob_c = _find(rows, func='_check_outbox_sanity', file_frag='src/zanzibar/graphindex/invariants.py')
+    vf_n, vf_t, vf_c = _find(rows, func='verify_outbox_deltas', file_frag='src/zanzibar/graphindex/invariants.py')
+    ci_n, ci_t, ci_c = _find(rows, func='check_invariants', file_frag='src/zanzibar/graphindex/invariants.py')
 
-    from index_v4.models import DeltaOutboxV1
-    nob = len(widx.idx.session.exec(select(DeltaOutboxV1).where(
-        DeltaOutboxV1.store_id == widx.idx.store_id)).all())
+    from zanzibar.graphindex.models import DeltaOutbox
+    nob = len(widx.idx.session.exec(select(DeltaOutbox).where(
+        DeltaOutbox.store_id == widx.idx.store_id)).all())
 
     print(f'\n  wall (profiled)       : {wall:.2f} s')
     print(f'  outbox rows at end    : {nob:,}')
@@ -108,7 +108,7 @@ def target_paranoia(scale, commit_every):
     # comparing early calls against late ones, so it must not be in the measurement)
     print('  GROWTH — per-commit wall time as the outbox accumulates')
     session2, widx2 = _fresh_paranoid_graph(spec)
-    from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
+    from zanzibar.schema import parse_openfga_schema, Entity, RelationalTriple
     ruleset = parse_openfga_schema(spec['schema'], object_wildcard_shapes=spec['shapes'])
     per = []
     n = 0
@@ -151,7 +151,7 @@ def target_paranoia(scale, commit_every):
 
 def _fresh_paranoid_graph(spec):
     from tests.wildcard_helpers import make_wildcard_index
-    from zanzibar_utils_v1 import parse_openfga_schema
+    from zanzibar.schema import parse_openfga_schema
     ruleset = parse_openfga_schema(spec['schema'], object_wildcard_shapes=spec['shapes'])
     return make_wildcard_index(ruleset.schema_info, store_id='par', paranoia=True)
 
@@ -166,7 +166,7 @@ def target_graph_write(scale):
     tuples = list(spec['gen'](scale))
 
     from tests.wildcard_helpers import make_wildcard_index
-    from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
+    from zanzibar.schema import parse_openfga_schema, Entity, RelationalTriple
     ruleset = parse_openfga_schema(spec['schema'], object_wildcard_shapes=spec['shapes'])
     session, widx = make_wildcard_index(ruleset.schema_info, store_id='gw', paranoia=False)
     print(f'  dataset: {len(tuples):,} raw tuples;  compiled boolean plans: '
@@ -191,12 +191,12 @@ def target_graph_write(scale):
     rows = _rows(stats)
     wall = max(ct for (_n, _t, ct) in rows.values()) if rows else 0.0
 
-    from index_v4.models import DeltaOutboxV1, EdgeV4
-    nob = len(session.exec(select(DeltaOutboxV1).where(DeltaOutboxV1.store_id == 'gw')).all())
-    nedge = len(session.exec(select(EdgeV4).where(EdgeV4.store_id == 'gw')).all())
+    from zanzibar.graphindex.models import DeltaOutbox, Edge
+    nob = len(session.exec(select(DeltaOutbox).where(DeltaOutbox.store_id == 'gw')).all())
+    nedge = len(session.exec(select(Edge).where(Edge.store_id == 'gw')).all())
 
-    db_n, db_t, db_c = _find(rows, func='_db_node', file_frag='index_v4/core.py')
-    ln_n, ln_t, ln_c = _find(rows, func='_load_nodes', file_frag='index_v4/core.py')
+    db_n, db_t, db_c = _find(rows, func='_db_node', file_frag='src/zanzibar/graphindex/core.py')
+    ln_n, ln_t, ln_c = _find(rows, func='_load_nodes', file_frag='src/zanzibar/graphindex/core.py')
 
     print(f'\n  raw writes            : {nwrites:,}  in {wall:.2f} s profiled')
     print(f'  SQL statements        : {ctr.total:,}  ({ctr.total / nwrites:,.2f} per raw write)')
@@ -205,7 +205,7 @@ def target_graph_write(scale):
     print(f'  _db_node point SELECTs: {db_n:,}  ({db_n / nwrites:,.2f} per write, '
           f'{_pct(db_c, wall)})   <- R6-9')
     print(f'  _load_nodes batches   : {ln_n:,}  ({_pct(ln_c, wall)})')
-    print(f'  edge_v4 rows          : {nedge:,}')
+    print(f'  edge rows          : {nedge:,}')
     print(f'  OUTBOX rows emitted   : {nob:,}  on a schema with NO derived relations  <- R6-16')
     print(f'      -> outbox rows per closure edge: {nob / max(nedge, 1):,.2f}')
     print('\n' + table)
@@ -234,8 +234,8 @@ def _cascade_fixture(spec, scale, incr):
     same workload on independent stores (a second pass over the first pass's store
     would be measuring a different, larger graph).
     """
-    from index_v4.processor import DeltaProcessor
-    from zanzibar_utils_v1 import parse_openfga_schema
+    from zanzibar.graphindex.processor import DeltaProcessor
+    from zanzibar.schema import parse_openfga_schema
     tuples = list(spec['gen'](scale))
     widx, _ntup = build_graph(spec['schema'], spec['shapes'], tuples)
     ruleset = parse_openfga_schema(spec['schema'], object_wildcard_shapes=spec['shapes'])
@@ -247,8 +247,8 @@ def _cascade_fixture(spec, scale, incr):
 def _cascade_cycles(widx, ruleset, proc, extra, on_cascade=None):
     """`incr` write + run_cascade + commit cycles — the path
     `tests/test_matrix.py::GraphBackend.apply` uses (synchronous v1)."""
-    from index_v4.outbox import outbox_watermark
-    from zanzibar_utils_v1 import Entity, RelationalTriple
+    from zanzibar.graphindex.outbox import outbox_watermark
+    from zanzibar.schema import Entity, RelationalTriple
     session = widx.idx.session
     n = 0
     for raw in extra:
@@ -341,7 +341,7 @@ def target_cascade(scale, incr):
             f'write+cascade cycles (boolean)   [R6-10, R6-11, R6-12]')
     spec = sb.WORKLOADS['demorgans']
 
-    from index_v4.processor import DeltaProcessor
+    from zanzibar.graphindex.processor import DeltaProcessor
     tuples, widx, ruleset, proc, extra = _cascade_fixture(spec, scale, incr)
     session = widx.idx.session
     print(f'  dataset: {len(tuples):,} raw tuples (bootstrap, unprofiled)')
@@ -383,9 +383,9 @@ def target_cascade(scale, incr):
     rows = _rows(stats)
     wall = max(ct for (_n, _t, ct) in rows.values()) if rows else 0.0
 
-    sts_n, sts_t, sts_c = _find(rows, func='_stored_tupleset_subjects', file_frag='index_v4/processor.py')
-    rcs_raw, rcs_t, rcs_c = _find(rows, func='_residue_cache_scope', file_frag='index_v4/processor.py')
-    scs_raw, scs_t, scs_c = _find(rows, func='_stored_cache_scope', file_frag='index_v4/processor.py')
+    sts_n, sts_t, sts_c = _find(rows, func='_stored_tupleset_subjects', file_frag='src/zanzibar/graphindex/processor.py')
+    rcs_raw, rcs_t, rcs_c = _find(rows, func='_residue_cache_scope', file_frag='src/zanzibar/graphindex/processor.py')
+    scs_raw, scs_t, scs_c = _find(rows, func='_stored_cache_scope', file_frag='src/zanzibar/graphindex/processor.py')
     # ⚠ cProfile counts a @contextmanager TWICE per `with` (once entering, once
     # resuming the generator to exhaustion on exit), so its ncalls is 2x the number
     # of scopes actually entered. Reporting it raw is how `R6-11` acquired a "torn
@@ -394,10 +394,10 @@ def target_cascade(scale, incr):
     # Halve HERE, in the instrument, so the number cannot be re-derived wrong.
     rcs_n = _ctxmgr_entries(rcs_raw, '_residue_cache_scope')
     scs_n = _ctxmgr_entries(scs_raw, '_stored_cache_scope')
-    di_n, di_t, di_c = _find(rows, func='_direct_incoming', file_frag='index_v4/processor.py')
-    nb_n, nb_t, nb_c = _find(rows, func='_nodes_by_ids', file_frag='index_v4/processor.py')
-    ins_n, ins_t, ins_c = _find(rows, func='_instances_of_type', file_frag='index_v4/processor.py')
-    tp_n, _tp_t, _tp_c = _find(rows, func='tupleset_parents', file_frag='index_v4/processor.py')
+    di_n, di_t, di_c = _find(rows, func='_direct_incoming', file_frag='src/zanzibar/graphindex/processor.py')
+    nb_n, nb_t, nb_c = _find(rows, func='_nodes_by_ids', file_frag='src/zanzibar/graphindex/processor.py')
+    ins_n, ins_t, ins_c = _find(rows, func='_instances_of_type', file_frag='src/zanzibar/graphindex/processor.py')
+    tp_n, _tp_t, _tp_c = _find(rows, func='tupleset_parents', file_frag='src/zanzibar/graphindex/processor.py')
     # R6-12 is about ONE cascade re-reconciling ONE key several times. Aggregating
     # across cycles would report the same key touched by successive WRITES as
     # duplication, which it is not -- so sum the per-cycle figures instead.
@@ -462,8 +462,8 @@ def target_cascade(scale, incr):
     for k, v in sorted(ctr.counts.items(), key=lambda kv: -kv[1]):
         print(f'      {k:<12} {v:>9,}  ({v / nwrites:,.1f} per cycle)')
     print(f'  _stored_tupleset_subj : {sts_n:,} calls, {sts_c:.2f} s cum  ({_pct(sts_c, wall)})  <- R6-10')
-    print(f'      _direct_incoming  : {di_n:,} calls, {di_c:.2f} s cum  ({_pct(di_c, wall)})   (the EdgeV4 SELECT)')
-    print(f'      _nodes_by_ids     : {nb_n:,} calls, {nb_c:.2f} s cum  ({_pct(nb_c, wall)})   (the NodeV4 IN SELECT)')
+    print(f'      _direct_incoming  : {di_n:,} calls, {di_c:.2f} s cum  ({_pct(di_c, wall)})   (the Edge SELECT)')
+    print(f'      _nodes_by_ids     : {nb_n:,} calls, {nb_c:.2f} s cum  ({_pct(nb_c, wall)})   (the Node IN SELECT)')
     print(f'      tupleset_parents  : {tp_n:,} calls')
     print(f'      _instances_of_type: {ins_n:,} calls   (RC2 star arm — demorgans stores no `T:*` '
           f'tupleset parent, so 0 is EXPECTED and means this arm is unmeasured here)')
@@ -527,7 +527,7 @@ def target_cascade(scale, incr):
 # ---------------------------------------------------------------------------
 
 def target_bulk(scale):
-    """R6-13/14/15 live in `index_v4/bulk_build.py` + `bulk_backfill.py`, which are
+    """R6-13/14/15 live in `src/zanzibar/graphindex/bulk_build.py` + `bulk_backfill.py`, which are
     reached ONLY through `connectedstore.build_index(..., bulk=True)`.
 
     ⚠ `benchmarks._harness.build_graph` does NOT reach them — it replays every routed
@@ -535,7 +535,7 @@ def target_bulk(scale):
     `DeltaProcessor.backfill()`. Profiling that would have reported 0 calls for both
     counters and produced a confident INCONCLUSIVE about code that never ran (the same
     error this file's `cascade` target already made once). So this target seeds a
-    TupleV1 store exactly as `bulk_scale_bench` does and drives the real bulk path.
+    RelationTuple store exactly as `bulk_scale_bench` does and drives the real bulk path.
     """
     _banner(f'bulk — demorgans_law_2 via build_index(bulk=True), scale={scale}   '
             f'[R6-13, R6-14, R6-15]')
@@ -543,14 +543,14 @@ def target_bulk(scale):
     tuples = list(spec['gen'](scale))
 
     from sqlmodel import Session, SQLModel, create_engine
-    from connectedstore import build_index
+    from zanzibar.connectedstore import build_index
     from benchmarks.bulk_scale_bench import seed_tuples
 
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
     nrows = seed_tuples(session, 'src', spec['schema'], spec['shapes'], tuples)
-    print(f'  dataset: {len(tuples):,} raw tuples -> {nrows:,} deduped TupleV1 rows')
+    print(f'  dataset: {len(tuples):,} raw tuples -> {nrows:,} deduped RelationTuple rows')
 
     def work():
         _cur, widx, _rs = build_index(session, 'src', 'idx', bulk=True)
@@ -560,11 +560,11 @@ def target_bulk(scale):
     rows = _rows(stats)
     wall = max(ct for (_n, _t, ct) in rows.values()) if rows else 0.0
 
-    inst_n, inst_t, inst_c = _find(rows, func='_instances_of_type', file_frag='index_v4/bulk_backfill.py')
-    sts_n, sts_t, sts_c = _find(rows, func='_stored_tupleset_subjects', file_frag='index_v4/bulk_backfill.py')
-    rse_n, rse_t, rse_c = _find(rows, func='_reconcile_subject_edge', file_frag='index_v4/bulk_backfill.py')
-    bf_n, bf_t, bf_c = _find(rows, func='backfill', file_frag='index_v4/processor.py')
-    topo_n, topo_t, topo_c = _find(rows, func='_topo_order', file_frag='index_v4/bulk_build.py')
+    inst_n, inst_t, inst_c = _find(rows, func='_instances_of_type', file_frag='src/zanzibar/graphindex/bulk_backfill.py')
+    sts_n, sts_t, sts_c = _find(rows, func='_stored_tupleset_subjects', file_frag='src/zanzibar/graphindex/bulk_backfill.py')
+    rse_n, rse_t, rse_c = _find(rows, func='_reconcile_subject_edge', file_frag='src/zanzibar/graphindex/bulk_backfill.py')
+    bf_n, bf_t, bf_c = _find(rows, func='backfill', file_frag='src/zanzibar/graphindex/processor.py')
+    topo_n, topo_t, topo_c = _find(rows, func='_topo_order', file_frag='src/zanzibar/graphindex/bulk_build.py')
 
     print(f'\n  wall (profiled)       : {wall:.2f} s')
     print(f'  backfill              : {bf_n:,} calls, {bf_c:.2f} s cum  ({_pct(bf_c, wall)})')
@@ -600,13 +600,13 @@ def target_bulk(scale):
 def target_space(rows_n):
     """Direct A/B of the two physical layouts, on real file-backed SQLite.
 
-    R6-18 claims EdgeV4's surrogate PK costs "one whole B-tree off the biggest table".
+    R6-18 claims Edge's surrogate PK costs "one whole B-tree off the biggest table".
     That is a property of the LAYOUT, not of this project's code, so it can be measured
     exactly without touching production models: build both layouts, insert identical
     rows, VACUUM, compare bytes. This is the CEILING of the fix — the real change would
     also have to carry a hand migration for persistent PostgreSQL and has no alembic.
     """
-    _banner(f'space — EdgeV4 layout A/B, {rows_n:,} rows   [R6-18]')
+    _banner(f'space — Edge layout A/B, {rows_n:,} rows   [R6-18]')
 
     ddl_a = ('CREATE TABLE edge_a ('
              ' id INTEGER PRIMARY KEY,'
@@ -650,7 +650,7 @@ def target_space(rows_n):
           f'({100.0 * saved / a:.1f}% of the table)')
 
     _verdict('R6-18',
-             'EdgeV4 carries a dead surrogate PK; a WITHOUT ROWID composite PK drops '
+             'Edge carries a dead surrogate PK; a WITHOUT ROWID composite PK drops '
              'one whole B-tree off the biggest table',
              f'{100.0 * saved / a:.1f}% smaller on disk at {rows_n:,} rows '
              f'({a / rows_n:.1f} -> {b / rows_n:.1f} bytes/row)',

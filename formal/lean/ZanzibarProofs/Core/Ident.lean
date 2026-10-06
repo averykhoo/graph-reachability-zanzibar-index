@@ -10,7 +10,7 @@ hypotheses (`StarFreeStore`, `BareStarStore`, …), never by a validity predicat
 
 **No identifier-validity predicate (since 2026-09-06).** This file used to declare
 `opaque ValidIdent : String → Prop` — the charset+length validity of
-`zanzibar_utils_v1.py::validate_write_identifiers` — which entered the theorems only
+`src/zanzibar/schema/errors.py::validate_write_identifiers` — which entered the theorems only
 through `AllValid` (`SetEngine/Correct.lean`), a hypothesis of T1/T3/T6a that no
 proof ever used and that, being built on an opaque, could not be discharged for any
 non-empty concrete store; it was the sole reason the headline `backend_equivalence`

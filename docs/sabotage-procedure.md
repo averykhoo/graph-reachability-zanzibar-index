@@ -182,8 +182,8 @@ is worse, because the sentence is what the next person edits against.
 A close cousin of the inert change: the sabotage fires on nothing because **no test ever
 reaches the branch you broke**, and the reason is an ordering nobody chose deliberately.
 
-**Worked example — the `ResidueRefV1` reverse index (2026-08-14).** The fix replaced a full
-`ResidueV1` scan with an indexed seek, maintained beside the residue row. Skipping index
+**Worked example — the `ResidueRef` reverse index (2026-08-14).** The fix replaced a full
+`Residue` scan with an indexed seek, maintained beside the residue row. Skipping index
 maintenance on the residue-**DELETE** branch alone left the whole new test file **green**
 (`11 passed`); only the paranoia-driven matrix caught it. The reason is structural: an orphan
 is observable only when the indexed row goes from ref-bearing straight to deleted in ONE
@@ -618,7 +618,7 @@ having watched the test fail, **while the repo's own ledger already said it woul
 
 **Worked example — `R6-10`'s star-expansion premise.** The `R6-10` memo is unsound if it
 freezes `tupleset_parents`, because that fans a star parent through `_instances_of_type`,
-which reads the global `NodeV4` table — and `_reconcile` mutates that table mid-cascade
+which reads the global `Node` table — and `_reconcile` mutates that table mid-cascade
 (step 2a interns, step 5 GCs). **No benchmark can catch the mistake**: `R6-3`/`R6-13`
 measured 0 calls, so no benchmarked workload has an `RC2` star-tupleset shape at all. The
 item's recon therefore named `tests/test_ttu_tupleset_parent_types.py` as *the only net*.

@@ -3,7 +3,7 @@
 **UPDATE 2026-09-26 (TK106): `ttuDirect` is LOUD. LOUD 13, MIXED 1, SILENT 0.** The user
 decided boolean tuplesets are refused, as OpenFGA refuses them: a relation used as a TTU
 tupleset must be direct-only, and both parsers refuse anything else at parse time
-(`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+(`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`, oracle twin
 `tests/oracle.py::_validate_tuplesets_direct`). Both `ttuDirect` probes now raise
 `ValueError` ("tupleset must be direct"), including the formerly SILENT derived-tupleset
 half and the untainted computed-arm half that used to raise `UnsupportedByGraphIndex` from
@@ -13,7 +13,7 @@ row left. The ASK-1 paragraph below and the 2026-09-24 finding are as-written.
 
 **UPDATE 2026-09-26 (ASK-1): SILENT is now 0. LOUD 12, MIXED 2.** The user decided schemas
 must be self-consistent, so both parsers refuse a dangling reference and a reference cycle
-(`zanzibar_utils_v1.py::_validate_ast_consistency`, oracle twin
+(`src/zanzibar/schema/parser.py::_validate_ast_consistency`, oracle twin
 `tests/oracle.py::_validate_consistency`). That made `matchDecl` and `ranked` LOUD, and the
 finding below is as-written on 2026-09-24. `test_conformance_fragment.py` (K) checks that
 every input the Lean-pinned report says fails either field is refused by both parsers. The
@@ -41,7 +41,7 @@ as its evidence:
   ADMITTED, and a MIXED row needs one of each. Re-classifying a row without new evidence is
   a red test, and so is a Python refusal that quietly goes away.
 * **A MIXED row names the `W4Fragment` field that shadows its SILENT half** (`shadowed_by`),
-  and that claim is checked on the probes through `zanzibar_utils_v1.py::w4_fragment_report`,
+  and that claim is checked on the probes through `src/zanzibar/schema/reports.py::w4_fragment_report`,
   which is differential-pinned to Lean's decider. So "SILENT here, but the joint premise
   still excludes it" is a measurement, not a comment.
 
@@ -57,7 +57,7 @@ gap is narrow and named:
 * The two SILENT rows are the whole of the unreported surface of the premise:
   - `matchDecl` -- a DANGLING reference (a computed ref, or a TTU tupleset, naming an
     undeclared relation). Python checks only the '.' lock on referenced names
-    (`zanzibar_utils_v1.py::_validate_ast_references`), never declared-ness.
+    (`src/zanzibar/schema/parser.py::_validate_ast_references`), never declared-ness.
   - `ranked` -- an UNTAINTED computed CYCLE (`a: [user] or b`, `b: [user] or a`).
     `Spec/Stratify.lean`'s header says Python allows it on purpose: *"untainted relations
     may be positively recursive; the closure handles them"*. TTU recursion (nested
@@ -110,6 +110,24 @@ from __future__ import annotations
 import re
 
 import pytest
+
+
+def _resolve_reported_by(reported_by: str):
+    """`reported_by` (`<file>::<symbol>`) -> the callable it names, resolved FROM THAT FILE.
+
+    TK120 (2026-10-06): this used to compare the path to a literal and then look the symbol
+    up on the schema package, so after the module split into `src/zanzibar/schema/` a row
+    naming the WRONG submodule would still have passed (the package re-exports every
+    report). Now the path is imported as a module and the symbol must be DEFINED there."""
+    import importlib
+    path, _, symbol = reported_by.partition("::")
+    assert path.startswith("src/zanzibar/") and path.endswith(".py") and symbol, reported_by
+    mod_name = path[len("src/"):-len(".py")].replace("/", ".").removesuffix(".__init__")
+    mod = importlib.import_module(mod_name)
+    fn = getattr(mod, symbol, None)
+    assert callable(fn) and fn.__module__ == mod_name, (
+        f"reported_by {reported_by!r}: {symbol!r} is not a callable DEFINED in {path}")
+    return fn
 from sqlmodel import Session, SQLModel, create_engine
 
 from formal.conformance.graphadmission_scope_probes import (
@@ -155,13 +173,13 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
     "wf": {
         "demands": "No declared relation name contains '.', the reserved leaf namespace.",
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::parse_schema_ast",
+        "evidence": "src/zanzibar/schema/parser.py::parse_schema_ast",
         "note": "The '.' lock beside the empty-name lock; every declared name passes it.",
     },
     "nodup": {
         "demands": "At most one definition per (object type, relation) key.",
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::parse_schema_ast",
+        "evidence": "src/zanzibar/schema/parser.py::parse_schema_ast",
         "note": "'duplicate relation definition'; duplicate TYPE blocks raise too.",
     },
     "strat": {
@@ -170,7 +188,7 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
             "succeeds (`Spec/Stratify.lean::Stratifiable`)."
         ),
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::_stratify",
+        "evidence": "src/zanzibar/schema/boolean.py::_stratify",
         "note": "Raises `CyclicDerivedDependency`, a `ValueError` subclass.",
     },
     "ttuDirect": {
@@ -179,7 +197,7 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
             "defined by direct restrictions only -- derived tuplesets included."
         ),
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::_validate_tuplesets_direct",
+        "evidence": "src/zanzibar/schema/parser.py::_validate_tuplesets_direct",
         "note": (
             "MIXED until TK106 (2026-09-26, shadowed by `computedOrDirect`): an untainted "
             "tupleset with a computed/TTU arm raised `UnsupportedByGraphIndex` from "
@@ -197,7 +215,7 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
             "undeclared relation."
         ),
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::_validate_ast_consistency",
+        "evidence": "src/zanzibar/schema/parser.py::_validate_ast_consistency",
         "note": (
             "SILENT until ASK-1 (2026-09-26): only the '.' lock was checked, so "
             "`define viewer: [user] or editor` with no `editor` compiled. The user decided "
@@ -214,7 +232,7 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
             "untainted computed cycle such as `a: [user] or b`, `b: [user] or a`."
         ),
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::_validate_ast_consistency",
+        "evidence": "src/zanzibar/schema/parser.py::_validate_ast_consistency",
         "note": (
             "SILENT until ASK-1 (2026-09-26): Python admitted positively recursive "
             "untainted relations on purpose. OpenFGA refuses them (`ErrCycle`), and both "
@@ -226,7 +244,7 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
     "objWild": {
         "demands": "No declared object-wildcard shape targets a derived relation.",
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::_reject_object_wildcard_scope",
+        "evidence": "src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope",
         "note": "The first loop of that function.",
     },
     "usWild": {
@@ -236,9 +254,9 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
             "through-shape landing on a derived target."
         ),
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::_reject_object_wildcard_scope",
+        "evidence": "src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope",
         "note": (
-            "Disjunct (a) raises in `zanzibar_utils_v1.py::_build_plan_tree`, disjunct (b) "
+            "Disjunct (a) raises in `src/zanzibar/schema/boolean.py::_build_plan_tree`, disjunct (b) "
             "in `_reject_object_wildcard_scope`; one probe each. `TK68` added this field "
             "precisely because the Lean predicate was weaker than the compiler."
         ),
@@ -251,12 +269,12 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
         ),
         "classification": "MIXED",
         "shadowed_by": "directArmsBare",
-        "evidence": "zanzibar_utils_v1.py::RuleSet.apply",
+        "evidence": "src/zanzibar/schema/rules.py::RuleSet.apply",
         "note": (
             "LOUD sub-case: an untainted relation's write must match a strict Filter, else "
             "`AdmissionRejected`. Two gates in series refuse it: `RuleSet.apply` fires first "
             "on BOTH backends (the set engine calls it from `_derived_pairs`), and "
-            "`setengine/engine.py::SetEngine._validate` re-checks the same Filters. Disabling "
+            "`src/zanzibar/setengine/engine.py::SetEngine._validate` re-checks the same Filters. Disabling "
             "either one alone changes no probe outcome (sweep M5/M5b, INERT by design); "
             "disabling both does. SILENT sub-case: on a "
             "derived Direct arm that carries a userset restriction, Python admits both the "
@@ -267,19 +285,19 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
     "ttuNotLeaf": {
         "demands": "Every untainted TTU target is the bare sentinel or dot-free.",
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::_validate_ast_references",
+        "evidence": "src/zanzibar/schema/parser.py::_validate_ast_references",
         "note": "The '.' lock on referenced names (`check_name`), TTU branch.",
     },
     "directRestrNotLeaf": {
         "demands": "Every direct restriction's predicate is the bare sentinel or dot-free.",
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::_validate_ast_references",
+        "evidence": "src/zanzibar/schema/parser.py::_validate_ast_references",
         "note": "The '.' lock on referenced names (`check_name`), Direct branch.",
     },
     "computedRefsNotLeaf": {
         "demands": "Every computed reference is the bare sentinel or dot-free.",
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::_validate_ast_references",
+        "evidence": "src/zanzibar/schema/parser.py::_validate_ast_references",
         "note": "The '.' lock on referenced names (`check_name`), Computed branch.",
     },
     "noLeafSubjects": {
@@ -288,13 +306,13 @@ GRAPHADMISSION_SCOPE: dict[str, dict[str, str]] = {
             "TTU target, derived arms included."
         ),
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::_validate_ast_references",
+        "evidence": "src/zanzibar/schema/parser.py::_validate_ast_references",
         "note": "The same walk visits every arm of every definition, derived ones too.",
     },
     "keysNonempty": {
         "demands": "No declared relation name is empty.",
         "classification": "LOUD",
-        "evidence": "zanzibar_utils_v1.py::parse_schema_ast",
+        "evidence": "src/zanzibar/schema/parser.py::parse_schema_ast",
         "note": "The `TK55` empty-name lock (2026-09-06).",
     },
 }
@@ -319,7 +337,7 @@ def _session() -> Session:
 
 
 def _schema_outcome(label: str) -> str:
-    from zanzibar_utils_v1 import parse_openfga_schema
+    from zanzibar.schema import parse_openfga_schema
     schema, obj_wild, _exp = SCHEMA_PROBES[label]
     try:
         parse_openfga_schema(schema, object_wildcard_shapes=frozenset(obj_wild))
@@ -329,8 +347,8 @@ def _schema_outcome(label: str) -> str:
 
 
 def _store_outcomes(label: str) -> tuple[str, str]:
-    from connectedstore import ConnectedStore
-    from setengine.engine import SetEngine
+    from zanzibar.connectedstore import ConnectedStore
+    from zanzibar.setengine.engine import SetEngine
     schema, tup, _exp = STORE_PROBES[label]
     out = []
     for make in (lambda s: ConnectedStore(s, "cs", schema=schema),
@@ -410,13 +428,9 @@ def test_every_scope_row_is_well_formed(field):
         # TK104 (2026-09-25): a SILENT row is the unreported premise surface, so it must
         # name the production report that now surfaces it, and that report must emit it.
         # Its verdict is pinned to Lean in test_conformance_fragment.py section (J).
-        import zanzibar_utils_v1
-        path, _, symbol = row.get("reported_by", "").partition("::")
-        assert path == "zanzibar_utils_v1.py" and callable(
-            getattr(zanzibar_utils_v1, symbol, None)), (
-            f"{field} is SILENT but `reported_by` {row.get('reported_by')!r} does not "
-            f"resolve to a callable in zanzibar_utils_v1.py")
-        assert field in zanzibar_utils_v1.GRAPH_ADMISSION_REPORTED_FIELDS, (
+        import zanzibar.schema
+        _resolve_reported_by(row.get("reported_by", ""))
+        assert field in zanzibar.schema.GRAPH_ADMISSION_REPORTED_FIELDS, (
             f"{field}: the report named by reported_by does not emit this field")
     else:
         assert "reported_by" not in row, f"{field}: only a SILENT row carries `reported_by`"
@@ -475,7 +489,7 @@ _TTU_DIRECT_PROBES = ("ttuDirect.untainted/tupleset-with-computed-arm",
 @pytest.mark.parametrize("label", _TTU_DIRECT_PROBES)
 def test_ttudirect_probe_is_refused_by_the_graph_compiler_on_the_unchecked_ast(label):
     """`ttuDirect` (a tupleset def is direct-only) holds in the GRAPH COMPILER, not only in
-    the parsers: `zanzibar_utils_v1.py::_validate_ttu_tuplesets` refuses a non-direct
+    the parsers: `src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets` refuses a non-direct
     tupleset, tainted or not, when handed the UNCHECKED AST (`TK107`, 2026-10-05).
 
     Both parsers refuse these probes first (`test_schema_probe_outcome_still_holds`), so
@@ -494,7 +508,7 @@ def test_ttudirect_probe_is_refused_by_the_graph_compiler_on_the_unchecked_ast(l
     With this test, the untainted row goes red (literal output in the TK107 plan doc,
     `docs/tk107-tainted-tupleset-removal-2026-10-05.md` sec 3).
     """
-    from zanzibar_utils_v1 import (
+    from zanzibar.schema import (
         UnsupportedByGraphIndex, _parse_schema_ast_unchecked, compile_ruleset,
         compute_taint, derive_schema_info)
 
@@ -530,7 +544,7 @@ def test_store_probe_outcome_still_holds(label):
 def test_mixed_silent_half_is_shadowed_by_w4fragment(label):
     """Each SILENT-half probe of a MIXED row fails the `W4Fragment` field its row names, by
     the production report (which is differential-pinned to Lean's decider)."""
-    from zanzibar_utils_v1 import w4_fragment_report
+    from zanzibar.schema import w4_fragment_report
     field = _field_of(label)
     assert GRAPHADMISSION_SCOPE[field]["classification"] == "MIXED"
     assert SHADOWED[label] == GRAPHADMISSION_SCOPE[field]["shadowed_by"]
@@ -555,7 +569,7 @@ def test_every_mixed_row_has_a_shadowed_probe():
 
 # --------------------------------------------------------------------------- #
 # The report of the two SILENT fields, and the corpus sweep it enables. Since 2026-09-25
-# `silent_admission_failures` delegates to `zanzibar_utils_v1.py::graph_admission_report`,
+# `silent_admission_failures` delegates to `src/zanzibar/schema/reports.py::graph_admission_report`,
 # whose verdict test_conformance_fragment.py (J) pins to Lean; until then it was a
 # REASONED hand mirror and the known answers below were its only control.
 # --------------------------------------------------------------------------- #

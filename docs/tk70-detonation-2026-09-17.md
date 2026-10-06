@@ -4,6 +4,8 @@
 state is `python scripts/task.py show TK70` and `python scripts/gate_status.py`, never this
 file. Corrections append **dated at the top**. Freeze it when `TK70` closes.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 Companion to [`docs/tk69-admission-parity-2026-09-16.md`](tk69-admission-parity-2026-09-16.md),
 which is the map for family F1 and states the F1/F2 split. This file is F2 only.
 

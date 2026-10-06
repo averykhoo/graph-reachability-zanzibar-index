@@ -15,7 +15,7 @@ import pytest
 def _require_both_setops() -> None:
     """`pyroaring` missing degrades the whole validation matrix, silently.
 
-    `setengine/setops.py` sets ``RoaringSets = None`` on ImportError and
+    `src/zanzibar/setengine/setops.py` sets ``RoaringSets = None`` on ImportError and
     ``ALL_SETOPS`` shrinks to ``[PySets]``; ``tests/test_matrix.py`` then builds
     its backend list as ``... + ([roaring] if RoaringSets else [])``.  The
     matrix's headline contract -- "compared over a full query grid, under BOTH
@@ -26,7 +26,7 @@ def _require_both_setops() -> None:
     pyroaring is a declared dependency (`requirements.txt`), so this is never a
     legitimate configuration -- it is a broken environment, and a broken
     environment must fail loudly rather than quietly test half as much."""
-    from setengine.setops import ALL_SETOPS, RoaringSets
+    from zanzibar.setengine.setops import ALL_SETOPS, RoaringSets
     if RoaringSets is None or len(ALL_SETOPS) < 2:
         raise pytest.UsageError(
             'pyroaring is not importable, so the set engine silently falls back '

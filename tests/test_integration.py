@@ -1,7 +1,7 @@
 import pytest
 from sqlmodel import SQLModel
 
-from zanzibar_utils_v1 import (
+from zanzibar.schema import (
     Entity,
     RelationalTriple,
     parse_openfga_schema,
@@ -33,9 +33,9 @@ class Backend:
         pass
 
 
-class V4Backend(Backend):
+class GraphIndexBackend(Backend):
     def __init__(self):
-        from index_v4 import ReachabilityIndex, Store
+        from zanzibar.graphindex import ReachabilityIndex, Store
         from sqlmodel import Session, create_engine
 
         self._engine = create_engine('sqlite:///:memory:')
@@ -69,12 +69,12 @@ class V4Backend(Backend):
         self._session.close()
 
 
-class V4WildcardBackend(Backend):
+class WildcardIndexBackend(Backend):
     """Wildcard-aware backend over WildcardIndex (v4 only). add_edge/remove_edge map to
     add_tuple/remove_tuple; check_reachable runs the O(1) probe set."""
 
     def __init__(self, schema_info):
-        from index_v4 import ReachabilityIndex, Store, WildcardIndex
+        from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
         from sqlmodel import Session, create_engine
 
         self._engine = create_engine('sqlite:///:memory:')
@@ -117,7 +117,7 @@ class V4WildcardBackend(Backend):
 def backend() -> Backend:
     """Provides a fresh graph-index backend for each test.  It was parameterized over
     the legacy v3 index too, until legacy/ was deleted (TK120, 2026-10-06)."""
-    be = V4Backend()
+    be = GraphIndexBackend()
     yield be
     be.teardown()
 
@@ -413,7 +413,7 @@ def test_integration_wildcard_public_doc():
         define viewer: [user, user:*]
     '''
     ruleset = parse_openfga_schema(schema)
-    backend = V4WildcardBackend(ruleset.schema_info)
+    backend = WildcardIndexBackend(ruleset.schema_info)
 
     # public grant: any user can view doc1
     ingest_triple(backend, ruleset, RelationalTriple(Entity('user', '*'), 'viewer', Entity('document', 'doc1'), Ellipsis))
@@ -447,7 +447,7 @@ def test_integration_wildcard_two_hop_hierarchy():
     # + object-wildcard on the same shape) -- now compile-rejected as F1/F2
     # (docs/spec-deviations.md 2026-07-17).
     ruleset = parse_openfga_schema(schema)
-    backend = V4WildcardBackend(ruleset.schema_info)
+    backend = WildcardIndexBackend(ruleset.schema_info)
 
     # user:* views folder xyz; folder:* is the parent of doc1 -> everyone views doc1
     ingest_triple(backend, ruleset, RelationalTriple(Entity('user', '*'), 'viewer', Entity('folder', 'xyz'), Ellipsis))
@@ -477,7 +477,7 @@ def test_integration_wildcard_object_all_folders():
     '''
     ruleset = parse_openfga_schema(schema,
                                    object_wildcard_shapes={('folder', 'viewer'), ('document', 'viewer')})
-    backend = V4WildcardBackend(ruleset.schema_info)
+    backend = WildcardIndexBackend(ruleset.schema_info)
 
     # alice views ALL folders (object wildcard); f1 is parent of d -> alice views d
     ingest_triple(backend, ruleset, RelationalTriple(Entity('user', 'alice'), 'viewer', Entity('folder', '*'), Ellipsis))

@@ -5,8 +5,8 @@ import ZanzibarProofs.GraphIndex.LeafRules
 /-!
 # Fan-out completeness — write-leg operand stability off the mapped keys (ROADMAP W3d-1b)
 
-`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` +
-`index_v4/core.py::ReachabilityIndex._emit`: a write
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys` +
+`src/zanzibar/graphindex/core.py::ReachabilityIndex._emit`: a write
 transaction's outbox rows must dirty EVERY derived key whose reconciled representation
 its edges can have changed — the cross-key re-reconcile hazard as a theorem, in
 contrapositive form: **if a derived key `(dt, R, on)` is NOT in `cascadeKeys` after a
@@ -31,7 +31,7 @@ states), and cross-key `excl`-operand writes. **OUT-of-fragment REFUTATION confi
 live**: an object-star write `member@doc:*` flips probe 3 (`reach (subjNode s)
 (wAllNode doc member)`) at EVERY object of the type while mapping NO keys — the routed
 edge's head is the `wAll` node, whose name is `STAR`, which
-`index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` maps to no derived own-key
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys` maps to no derived own-key
 (an UNTAINTED head matches no compiled family at all; a DERIVED head with `o_name ==
 '*'` is not skipped but `raise InvariantViolation` — the leaked decision-15 shape,
 hardened from a bare `assert` by `ZT-P1-2`, 2026-07-26). The Python system is immune because its closure
@@ -134,7 +134,7 @@ theorem writeLoggedRules_edges_mono (σ : GraphState) (S : Schema) (t : Tuple) :
 /-- **New edges carry frontier rows.** Every edge of a logged write leg is an old
     edge, or has an emitted outbox row with an id strictly above the (unchanged)
     watermark, denormalized at the edge's own head — the model-level content of
-    `index_v4/core.py::ReachabilityIndex._emit`: a flip stages its row (perf N16) and
+    `src/zanzibar/graphindex/core.py::ReachabilityIndex._emit`: a flip stages its row (perf N16) and
     `::ReachabilityIndex._flush_outbox` inserts it inside the same transaction. -/
 theorem writeLoggedRules_edge_delta (σ : GraphState) (S : Schema) (t : Tuple) :
     ∀ ab ∈ (σ.writeLoggedRules S t).edges,
@@ -327,7 +327,7 @@ theorem reachedByW3d_edgesClosed {σ : GraphState} {S : Schema} {T : Store}
     object is the job's concrete `on`, and a write's bridge target is a `wAny`. This is the
     fence the attack found load-bearing: a `wAll`-targeted edge would flip probe 3 at every
     object of the type while `affectedKeys` skips the star-named head (Python's
-    `index_v4/processor.py::DeltaProcessor._map_deltas_to_keys` never dirties a derived
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._map_deltas_to_keys` never dirties a derived
     own-key from one, and rejects the derived-head case outright). The store
     hypothesis is taken at the chain's own store and weakens along the prefix.
 
@@ -618,7 +618,7 @@ def DerNode (S : Schema) (k : NodeKey) : Prop :=
 
 /-- **A bridge node** — the `w_any (ty, p)` node that an in-bridge points AT, for a shape the
     schema declares a subject-wildcard userset (`UsStarWrite.lean::
-    Schema.isSubjectWildcardUserset`, = `zanzibar_utils_v1.py::SchemaInfo.bridged_in_shapes`).
+    Schema.isSubjectWildcardUserset`, = `src/zanzibar/schema/rules.py::SchemaInfo.bridged_in_shapes`).
 
     **This is the THIRD extras disjunct of the shadow** (`P6` step 3b step 8): once the write
     leg folds `GraphState.writeBridgedOne`, a W3d state carries edges the
@@ -738,7 +738,7 @@ abbrev UntaintedShadow (S : Schema) (σ σ0 : GraphState) : Prop :=
 premise is FALSE, and this session measured it.** `PROOF_STATUS.md:933-943` calls step 7
 `ComputedRefsDeclared`, and `PROOF_STATUS.md:2074-2082` proposes it as a `WF` clause
 `∀ p ∈ S.defs, ∀ r ∈ computedRefs p.2, relNameOK r`. Python enforces neither.
-`zanzibar_utils_v1.py::_validate_ast_references` (`:910-940`) enforces a **DOT-LOCK** on
+`src/zanzibar/schema/parser.py::_validate_ast_references` (`:910-940`) enforces a **DOT-LOCK** on
 *referenced* names — `check_name` (`:915-919`) raises iff `'.' in name and name != '...'`,
 applied to `Direct` restriction predicates (`:926-927`), `Computed.relation` (`:929`) and
 both TTU names (`:930-932`). Declared-ness is enforced nowhere. Literal observed output:
@@ -1123,7 +1123,7 @@ is PINNED by the restriction that admitted the tuple: `Spec/Semantics.lean::
 restrictionMatches`' second conjunct is literally `tup.subject.predicate == r.2.1`. So
 *"no stored subject is a leaf name"* reduces to *"no declared restriction NAMES a leaf
 name"*, a schema fact, and that is exactly what Python enforces —
-`zanzibar_utils_v1.py::_validate_ast_references` (`:916-919`) refuses `'.'` in any
+`src/zanzibar/schema/parser.py::_validate_ast_references` (`:916-919`) refuses `'.'` in any
 referenced relation name, and a restriction's predicate component is either `BARE` or such
 a name. It is step 7's dot-lock (`ComputedRefsNotLeaf`) read at the OTHER syntactic
 position, which is why this is faithful modelling and not a new scope restriction.
@@ -4768,7 +4768,7 @@ corrected here (2026-09-05, first-hand).** It read: "Either a new `GraphAdmissio
 (OUT OF SCOPE for this session by instruction — and it would be a real Python-side scope
 claim, since Python's `check_name` does not forbid a dot inside a TTU target either) …".
 
-1. **The Python claim is FALSE.** `zanzibar_utils_v1.py::_validate_ast_references`'s
+1. **The Python claim is FALSE.** `src/zanzibar/schema/parser.py::_validate_ast_references`'s
    `check_name` (`:915-919`) raises iff `'.' in name and name != '...'`, and the TTU arm of
    its `walk` applies it to BOTH TTU components: `check_name(e.target_rel, where)` and
    `check_name(e.tupleset_rel, where)` (`:931-932`). So a dot in a TTU target IS rejected at

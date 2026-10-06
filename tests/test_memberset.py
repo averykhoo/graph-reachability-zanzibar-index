@@ -16,9 +16,9 @@ import random
 
 import pytest
 
-from setengine.setops import ALL_SETOPS
-from setengine import memberset as ms
-from setengine.memberset import MemberSet
+from zanzibar.setengine.setops import ALL_SETOPS
+from zanzibar.setengine import memberset as ms
+from zanzibar.setengine.memberset import MemberSet
 
 
 # --- tiny universe: each id belongs to exactly one shape's population ---

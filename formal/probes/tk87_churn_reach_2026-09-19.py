@@ -11,8 +11,8 @@ THE PREMISE, MEASURED 2026-09-19f, first-hand, before any edit::
 
 ``_sync/raw`` **0** is the sharper number: the module did not merely fail to reach the
 crossing on a removal, it never executed a removal at all. Every caller of
-``index_v4/wildcard.py::_sync_entity_middles`` is a removal path (``::remove_edge``,
-``::remove_node``, and ``index_v4/processor.py``'s reconcile-time GC), and
+``src/zanzibar/graphindex/wildcard.py::_sync_entity_middles`` is a removal path (``::remove_edge``,
+``::remove_node``, and ``src/zanzibar/graphindex/processor.py``'s reconcile-time GC), and
 ``tests/genswarm.py::Diff`` exposed ``add`` and ``sweep`` only.
 
 WHAT THIS PROBE ANSWERS
@@ -48,8 +48,8 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 import tests.genswarm as G                                          # noqa: E402
-import index_v4.wildcard as W                                       # noqa: E402
-from zanzibar_utils_v1 import (                                     # noqa: E402
+import zanzibar.graphindex.wildcard as W                                       # noqa: E402
+from zanzibar.schema import (                                     # noqa: E402
     parse_openfga_schema, unparse_schema_ast)
 
 DRIVE_K = 2                     # must track tests/test_generator_coverage.py::DRIVE_K

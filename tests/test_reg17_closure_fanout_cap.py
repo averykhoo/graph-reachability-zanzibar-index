@@ -28,14 +28,14 @@ write stalls every other writer on the store for its whole duration.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, func, select
 
-from index_v4 import ReachabilityIndex, Store
-from index_v4.core import (DEFAULT_MAX_CLOSURE_FANOUT, MAX_CLOSURE_FANOUT_ENV,
+from zanzibar.graphindex import ReachabilityIndex, Store
+from zanzibar.graphindex.core import (DEFAULT_MAX_CLOSURE_FANOUT, MAX_CLOSURE_FANOUT_ENV,
                            resolve_max_closure_fanout)
-from index_v4.invariants import check_invariants, snapshot_rows
-from index_v4.models import DeltaOutboxV1, EdgeV4, NodeV4
-from connectedstore import ConnectedStore
-from index_v4.invariants import InvariantViolation
-from zanzibar_utils_v1 import AdmissionRejected, ClosureFanoutExceeded
+from zanzibar.graphindex.invariants import check_invariants, snapshot_rows
+from zanzibar.graphindex.models import DeltaOutbox, Edge, Node
+from zanzibar.connectedstore import ConnectedStore
+from zanzibar.graphindex.invariants import InvariantViolation
+from zanzibar.schema import AdmissionRejected, ClosureFanoutExceeded
 
 # Largest single-write closure expansion the existing suite produces, measured
 # 2026-07-27 by instrumenting the expansion path and running both suites to
@@ -70,9 +70,9 @@ def _hub(idx, n_anc: int, n_desc: int):
 
 
 def _counts(session):
-    return (session.exec(select(func.count()).select_from(EdgeV4)).one(),
-            session.exec(select(func.count()).select_from(NodeV4)).one(),
-            session.exec(select(func.count()).select_from(DeltaOutboxV1)).one())
+    return (session.exec(select(func.count()).select_from(Edge)).one(),
+            session.exec(select(func.count()).select_from(Node)).one(),
+            session.exec(select(func.count()).select_from(DeltaOutbox)).one())
 
 
 # --------------------------------------------------------------------------- #
@@ -163,8 +163,8 @@ def test_node_removal_is_never_capped():
     tight = ReachabilityIndex(session, store_id='s', max_closure_fanout=1)
     tight.remove_node('p', 't', 's')
     session.commit()
-    assert session.exec(select(func.count()).select_from(NodeV4)
-                        .where(NodeV4.name == 's')).one() == 0
+    assert session.exec(select(func.count()).select_from(Node)
+                        .where(Node.name == 's')).one() == 0
     check_invariants(session, 's')
     session.close()
 
@@ -247,7 +247,7 @@ def test_default_admits_a_region_far_larger_than_any_test_writes():
 def test_cap_through_connectedstore_is_a_refusal_not_a_corruption_report():
     """A cap refusal on the REPLAY path must not be reported as corruption.
 
-    `AdmissionRejected` subclasses `ValueError`, and `connectedstore.apply._apply_row`
+    `AdmissionRejected` subclasses `ValueError`, and `zanzibar.connectedstore.apply._apply_row`
     promotes every `ValueError` to `InvariantViolation('... the log is
     admission-validated, so this is corruption or a validity-parity bug ...')`. That
     promotion is right for every other refusal family — those are properties of the
@@ -260,11 +260,11 @@ def test_cap_through_connectedstore_is_a_refusal_not_a_corruption_report():
     So a cap refusal during replay is neither corruption nor a parity bug.
 
     Observed BEFORE the fix (cap tuned to 119 on the 240-tuple hub, via ConnectedStore):
-        index_v4.invariants.InvariantViolation: log row 121 (ADD) was rejected by the
+        zanzibar.graphindex.invariants.InvariantViolation: log row 121 (ADD) was rejected by the
         index -- the log is admission-validated, so this is corruption or a
         validity-parity bug: closure fan-out cap exceeded: this edge would materialise
         120 closure rows ...
-    i.e. the exact opposite of what `index_v4/core.py`'s own raise-site comment says
+    i.e. the exact opposite of what `src/zanzibar/graphindex/core.py`'s own raise-site comment says
     ("not an InvariantViolation, because nothing is corrupt"). It did not bite at the
     100,000 default, which is why nothing caught it; it bites the moment anyone follows
     the cap's own error message and tunes it down.

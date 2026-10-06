@@ -3,7 +3,7 @@
 Property guarded
 ----------------
 A schema in which a relation depends on itself through a ``but not`` subtrahend is refused
-by ``zanzibar_utils_v1.py::parse_schema_ast`` (and the JSON front end) and, independently,
+by ``src/zanzibar/schema/parser.py::parse_schema_ast`` (and the JSON front end) and, independently,
 by ``tests/oracle.py::parse_schema_ast``. Positive recursion stays legal. The dependency
 steps are a computed ref, a TTU tupleset, a TTU target on a type the tupleset admits, and a
 userset restriction ``[T#p]``; a step is negative anywhere inside a subtrahend, at any depth
@@ -41,10 +41,10 @@ from __future__ import annotations
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from setengine import SetEngine
+from zanzibar.setengine import SetEngine
 from tests import oracle as oracle_mod
 from tests.parity import ParityEngine
-from zanzibar_utils_v1 import parse_openfga_json, parse_schema_ast
+from zanzibar.schema import parse_openfga_json, parse_schema_ast
 
 _DOC = 'model\n  schema 1.1\ntype user\ntype doc\n  relations\n    define parent: [doc]\n'
 _GROUP = 'model\n  schema 1.1\ntype user\ntype group\n  relations\n'
@@ -97,7 +97,7 @@ _ACCEPTED = {
 
 @pytest.mark.parametrize('label', sorted(_REFUSED))
 def test_production_parser_refuses(label):
-    """Sabotage S1 (2026-10-04): `zanzibar_utils_v1.py::_validate_stratified_negation`
+    """Sabotage S1 (2026-10-04): `src/zanzibar/schema/parser.py::_validate_stratified_negation`
     made a no-op -> every case here went red, and every oracle case stayed green
     (literal table: map sec 4)."""
     with pytest.raises(ValueError, match='recursion through negation'):

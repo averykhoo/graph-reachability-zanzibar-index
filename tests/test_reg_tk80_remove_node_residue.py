@@ -50,13 +50,13 @@ branch, an UNREFERENCED node removes and commits clean:
 control, kept as a permanent test: a guard that refused every ``remove_node`` on a
 boolean store would pass every other test in this file.
 
-Scope: the refusal is in the FACADE (``index_v4/wildcard.py``) only. ``index_v4/core.py``
+Scope: the refusal is in the FACADE (``src/zanzibar/graphindex/wildcard.py``) only. ``src/zanzibar/graphindex/core.py``
 is untouched, so every ``formal/CORRESPONDENCE.md`` anchor still resolves and no modelled
 algorithm changed; the placement is BEFORE ``_strip_bridges``, which can implicit-GC the
 node and take the early ``return`` (a check after it is reached too late).
 
 SABOTAGE EVIDENCE -- literal observed output, 2026-09-20, each mutation applied to
-``index_v4/wildcard.py`` by bytes and the exact original bytes restored (never
+``src/zanzibar/graphindex/wildcard.py`` by bytes and the exact original bytes restored (never
 ``git checkout``). The whole module passes 9/9 unsabotaged.
 
   (S1) delete the refusal entirely -- i.e. the pre-fix facade:
@@ -66,7 +66,7 @@ SABOTAGE EVIDENCE -- literal observed output, 2026-09-20, each mutation applied 
        is correct -- they do not test the refusal.)
 
   (S2) drop the OWNER clause from ``_residue_records_node``, keeping only the
-       ``ResidueRefV1`` clause -- the "the reverse index already answers this"
+       ``ResidueRef`` clause -- the "the reverse index already answers this"
        simplification. This is the one that proves the clause is EXERCISED:
            2 failed, 7 passed in 1.71s
            AssertionError: guard disagrees with the processor on node 3
@@ -96,7 +96,7 @@ rather than scope-honest inerts. The two tests at the bottom of this file were
 written for them; re-applied by bytes against the restored file, each is now RED:
 
   (M2) drop the liveness filter in the reverse-index loop --
-       ``if s.get(NodeV4, r.object_node_id) is not None: return True`` becomes an
+       ``if s.get(Node, r.object_node_id) is not None: return True`` becomes an
        unconditional ``return True``:
            was 9 passed -- now  1 failed, 10 passed in 1.28s
            FAILED ::test_a_dangling_residue_ref_does_not_count_as_a_recording
@@ -114,16 +114,16 @@ written for them; re-applied by bytes against the restored file, each is now RED
            was 9 passed -- now  1 failed, 10 passed in 1.35s
            FAILED ::test_the_guard_is_scoped_to_its_own_store
            AssertionError: store tk80_xstore's guard sees store tk80's reverse-index
-           rows -- the ResidueRefV1 query lost its store_id filter
+           rows -- the ResidueRef query lost its store_id filter
        Each clause is pinned SEPARATELY, so neither half rides on the other:
-           M10a (``ResidueV1.store_id`` only):   1 failed, 10 passed in 1.27s
+           M10a (``Residue.store_id`` only):   1 failed, 10 passed in 1.27s
                AssertionError: store tk80_xstore's guard sees store tk80's residue
-               ROWS -- the ResidueV1 query lost its store_id filter
-           M10b (``ResidueRefV1.store_id`` only): 1 failed, 10 passed in 1.26s
+               ROWS -- the Residue query lost its store_id filter
+           M10b (``ResidueRef.store_id`` only): 1 failed, 10 passed in 1.26s
 
 SCOPE -- adjudicated 2026-09-20, and it is a DEFENSIBLE BOUNDARY, not a gap this
-module should close. The guard reads the DERIVED ``ResidueRefV1`` index, not the
-``ResidueV1.neg``/``upos`` JSON that is the source of truth, so if a reverse-index
+module should close. The guard reads the DERIVED ``ResidueRef`` index, not the
+``Residue.neg``/``upos`` JSON that is the source of truth, so if a reverse-index
 row is ever missing while the JSON still records the node, ``remove_node`` allows the
 removal and the original I6 corruption returns verbatim (probed: ``remove_node +
 commit: SUCCEEDED``, then ``I6: residue neg holds a dead node id 8``). The boundary
@@ -131,10 +131,10 @@ holds for two reasons. First, ``DeltaProcessor._keys_referencing`` -- THE node-r
 guard, the one whose elision caused ZT-P0-1 -- reads the same index under the same
 liveness rule, so a guard that read the JSON instead would answer differently from the
 processor, breaking the agreement this module pins and making the facade's rule a
-second, divergent definition of "referenced". Second, a ``ResidueRefV1`` row out of
-sync with its ``ResidueV1`` JSON is ALREADY an invariant violation that an existing
+second, divergent definition of "referenced". Second, a ``ResidueRef`` row out of
+sync with its ``Residue`` JSON is ALREADY an invariant violation that an existing
 check owns, in both directions, and that check does not read ``processor.py`` at all:
-``index_v4/invariants.py::_check_residue_rows`` (fed by ``::_load_residue_refs`` from
+``src/zanzibar/graphindex/invariants.py::_check_residue_rows`` (fed by ``::_load_residue_refs`` from
 BOTH ``::check_invariants`` and ``::check_residue_hygiene``) decodes ``neg``/``upos``
 straight from the JSON and fails on any disagreement. Verified first-hand on exactly
 the stale-index state above, BEFORE any removal:
@@ -155,13 +155,13 @@ import json
 import pytest
 from sqlmodel import Session, select
 
-from index_v4 import ReachabilityIndex, Store, WildcardIndex
-from index_v4.invariants import check_invariants, check_residue_hygiene
-from index_v4.models import NodeV4, ResidueRefV1, ResidueV1
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
+from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
+from zanzibar.graphindex.invariants import check_invariants, check_residue_hygiene
+from zanzibar.graphindex.models import Node, ResidueRef, Residue
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
 from tests.wildcard_helpers import make_wildcard_index, snapshot
-from zanzibar_utils_v1 import (AdmissionRejected, Entity, RelationalTriple,
+from zanzibar.schema import (AdmissionRejected, Entity, RelationalTriple,
                                parse_openfga_schema)
 
 # Verbatim from ``tests/test_residue_ref_index.py::SCHEMA`` / ``::SETUP`` -- the only
@@ -235,7 +235,7 @@ BRIDGED_STORE = 'tk80_bridged'
 
 # A THIRD store id, co-tenant with STORE on ONE session, for the store-scoping pin
 # (`test_the_guard_is_scoped_to_its_own_store`). It needs the same engine, not just
-# the same schema: `NodeV4.id` is a global primary key, so only a shared table can
+# the same schema: `Node.id` is a global primary key, so only a shared table can
 # hand one store's facade an id that belongs to another store.
 XSTORE = 'tk80_xstore'
 
@@ -261,7 +261,7 @@ class _Harness:
                 self.rs.schema_info, store_id=store_id, paranoia=paranoia)
         else:
             # CO-TENANT mode: a second store on an EXISTING session, i.e. the same
-            # engine and the same `NodeV4` table, drawing ids from one sequence.
+            # engine and the same `Node` table, drawing ids from one sequence.
             # `make_wildcard_index` cannot do this -- it builds its own in-memory
             # engine per call, and two isolated databases would prove nothing about
             # `store_id` scoping. Nothing is installed in `session.info`, which is the
@@ -311,8 +311,8 @@ class _Harness:
 
     def residue_rows(self, session=None):
         s = self.session if session is None else session
-        return s.exec(select(ResidueV1)
-                      .where(ResidueV1.store_id == self.store_id)).all()
+        return s.exec(select(Residue)
+                      .where(Residue.store_id == self.store_id)).all()
 
     def residue_state(self, session=None):
         """``{object_node_id: (stars, sorted(neg), sorted(upos))}`` from the JSON."""
@@ -323,11 +323,11 @@ class _Harness:
     def ref_index(self, session=None):
         s = self.session if session is None else session
         return sorted((r.object_node_id, r.subject_node_id) for r in s.exec(
-            select(ResidueRefV1).where(ResidueRefV1.store_id == self.store_id)).all())
+            select(ResidueRef).where(ResidueRef.store_id == self.store_id)).all())
 
     def node_ids(self):
         return sorted(n.id for n in self.session.exec(
-            select(NodeV4).where(NodeV4.store_id == self.store_id)).all())
+            select(Node).where(Node.store_id == self.store_id)).all())
 
     def committed_check(self):
         """Run BOTH invariant tiers against COMMITTED state in a FRESH session.
@@ -340,7 +340,7 @@ class _Harness:
             check_residue_hygiene(fresh, self.store_id, self.rs.schema_info)
             check_invariants(fresh, self.store_id, self.rs.schema_info)
             return {n.id for n in fresh.exec(
-                select(NodeV4).where(NodeV4.store_id == self.store_id)).all()}
+                select(Node).where(Node.store_id == self.store_id)).all()}
         finally:
             fresh.close()
 
@@ -403,7 +403,7 @@ def test_a_upos_recorded_node_cannot_be_removed():
     """The second witness: a ``upos`` subject that is EXPLICIT with a non-zero
     reference count (``implicit=False``, ``reference_count=3`` when observed), so
     neither an implicit-only nor a refcount-based guard would have caught it. The
-    guard keys on the residue REFERENCE, which is what ``ResidueRefV1`` indexes."""
+    guard keys on the residue REFERENCE, which is what ``ResidueRef`` indexes."""
     g = _Harness().seed()
     try:
         victim = g.node(*UPOS_VICTIM)
@@ -419,7 +419,7 @@ def test_a_upos_recorded_node_cannot_be_removed():
 
 
 def test_removing_the_node_that_owns_a_residue_row_is_refused():
-    """The OWNER clause of the guard (``ResidueV1.object_node_id``), which covers a
+    """The OWNER clause of the guard (``Residue.object_node_id``), which covers a
     different I6 clause than the reverse-index clause: ``residue row 1 references a
     missing node 3``, observed pre-fix on committed state.
 
@@ -434,7 +434,7 @@ def test_removing_the_node_that_owns_a_residue_row_is_refused():
     g = _Harness().seed()
     try:
         row = g.residue_rows()[0]
-        owner = g.session.get(NodeV4, row.object_node_id)
+        owner = g.session.get(Node, row.object_node_id)
         assert owner is not None and (owner.type, owner.predicate) in \
             g.rs.schema_info.derived_families
 
@@ -449,7 +449,7 @@ def test_removing_the_node_that_owns_a_residue_row_is_refused():
                 g.widx.remove_node(owner.predicate, owner.type, owner.name)
         finally:
             g.widx.processor_writes = False
-        assert g.session.get(NodeV4, owner.id) is not None
+        assert g.session.get(Node, owner.id) is not None
     finally:
         g.session.rollback()
         g.close()
@@ -541,7 +541,7 @@ def test_the_sanctioned_path_removes_the_recording_then_the_node():
         assert victim_id not in recorded, \
             'the cascade did not prune the recording -- the sanctioned path is broken'
 
-        still_there = g.session.get(NodeV4, victim_id)
+        still_there = g.session.get(Node, victim_id)
         assert still_there is not None, \
             'the reconcile GC already collected the node; this arm needs it alive'
         g.widx.remove_node(*UPOS_VICTIM)
@@ -606,7 +606,7 @@ def test_the_guard_agrees_with_the_processor_on_every_node():
     guard (which would break ordinary removals) is caught as well as an
     under-reporting one (which would re-open the corruption).
 
-    ``owns`` is computed straight from ``ResidueV1.object_node_id`` here, not from the
+    ``owns`` is computed straight from ``Residue.object_node_id`` here, not from the
     guard, so the two sides are independent.
     """
     g = _Harness().seed()
@@ -640,8 +640,8 @@ def test_the_guard_agrees_with_the_processor_on_every_node():
 
 def test_a_dangling_residue_ref_does_not_count_as_a_recording():
     """⚠ THE LIVENESS FILTER (sweep M2). ``_residue_records_node``'s second clause
-    keeps a ``ResidueRefV1`` row only if the RECORDING OBJECT node still exists, and
-    deleting that filter -- ``if s.get(NodeV4, r.object_node_id) is not None`` ->
+    keeps a ``ResidueRef`` row only if the RECORDING OBJECT node still exists, and
+    deleting that filter -- ``if s.get(Node, r.object_node_id) is not None`` ->
     an unconditional ``return True`` -- left this module GREEN at ``9 passed``.
 
     The agreement pinned by ``test_the_guard_agrees_with_the_processor_on_every_node``
@@ -663,9 +663,9 @@ def test_a_dangling_residue_ref_does_not_count_as_a_recording():
         victim = g.node(*UPOS_VICTIM)
         assert victim is not None
         rows = g.session.exec(
-            select(ResidueRefV1)
-            .where(ResidueRefV1.store_id == g.store_id)
-            .where(ResidueRefV1.subject_node_id == victim.id)).all()
+            select(ResidueRef)
+            .where(ResidueRef.store_id == g.store_id)
+            .where(ResidueRef.subject_node_id == victim.id)).all()
         assert rows, 'the victim holds no reverse-index row -- nothing to dangle'
         # The answers MOVE (True -> False) across the corruption below. Without this,
         # a fixture that stopped recording the victim would satisfy the assertions at
@@ -680,17 +680,17 @@ def test_a_dangling_residue_ref_does_not_count_as_a_recording():
         # if the reverse-index rows went with the nodes, nothing dangles and every
         # assertion below is vacuous.
         for r in rows:
-            obj = g.session.get(NodeV4, r.object_node_id)
+            obj = g.session.get(Node, r.object_node_id)
             assert obj is not None, 'the recording object node is already gone'
             g.session.delete(obj)
         g.session.flush()
         dangling = g.session.exec(
-            select(ResidueRefV1)
-            .where(ResidueRefV1.store_id == g.store_id)
-            .where(ResidueRefV1.subject_node_id == victim.id)).all()
+            select(ResidueRef)
+            .where(ResidueRef.store_id == g.store_id)
+            .where(ResidueRef.subject_node_id == victim.id)).all()
         assert dangling, \
             'the reverse-index rows went with the node rows -- nothing dangles'
-        assert all(g.session.get(NodeV4, r.object_node_id) is None for r in dangling), \
+        assert all(g.session.get(Node, r.object_node_id) is None for r in dangling), \
             ('a recording object node survived -- those rows are still LIVE and the '
              'liveness filter is not being exercised')
 
@@ -703,7 +703,7 @@ def test_a_dangling_residue_ref_does_not_count_as_a_recording():
 
         # Behaviour, not only the predicate: the removal is legal and must go through.
         g.widx.remove_node(*UPOS_VICTIM)
-        assert g.session.get(NodeV4, victim.id) is None
+        assert g.session.get(Node, victim.id) is None
     finally:
         g.session.rollback()
         g.close()
@@ -715,13 +715,13 @@ def test_the_guard_is_scoped_to_its_own_store():
     this module GREEN at ``9 passed``, because a single-store fixture cannot tell a
     scoped query from an unscoped one.
 
-    Latent is not harmless. ``NodeV4.id`` is a GLOBAL primary key backed by a plain
+    Latent is not harmless. ``Node.id`` is a GLOBAL primary key backed by a plain
     SQLite rowid, so ids are recycled -- the very ZT-P0-1 hazard this refusal exists
     for. An unscoped guard hands one store's answer to another, and the direction is
     fail-closed: a legal ``remove_node`` refused because an unrelated store's residue
     happens to name the same integer.
 
-    The fixture is two stores CO-TENANT on one session (one engine, one ``NodeV4``
+    The fixture is two stores CO-TENANT on one session (one engine, one ``Node``
     table, one id sequence), seeded identically, with the premises asserted
     mechanically: the sessions are the same object, the id sets are disjoint, each
     victim id resolves to a node of the store that owns it, and each store's guard
@@ -744,8 +744,8 @@ def test_the_guard_is_scoped_to_its_own_store():
         b_victim = b.node(*UPOS_VICTIM)
         assert a_victim is not None and b_victim is not None
         assert a_victim.id != b_victim.id
-        assert a.session.get(NodeV4, a_victim.id).store_id == a.store_id
-        assert a.session.get(NodeV4, b_victim.id).store_id == b.store_id
+        assert a.session.get(Node, a_victim.id).store_id == a.store_id
+        assert a.session.get(Node, b_victim.id).store_id == b.store_id
 
         a_owner = a.residue_rows()[0].object_node_id
         b_owner = b.residue_rows()[0].object_node_id
@@ -759,12 +759,12 @@ def test_the_guard_is_scoped_to_its_own_store():
 
         # THE PINS -- both clauses, both directions.
         assert b.widx._residue_records_node(a_victim.id) is False, \
-            ("store %s's guard sees store %s's reverse-index rows -- the ResidueRefV1 "
+            ("store %s's guard sees store %s's reverse-index rows -- the ResidueRef "
              'query lost its store_id filter' % (b.store_id, a.store_id))
         assert a.widx._residue_records_node(b_victim.id) is False, \
             'the reverse-index query is unscoped in the other direction too'
         assert b.widx._residue_records_node(a_owner) is False, \
-            ("store %s's guard sees store %s's residue ROWS -- the ResidueV1 query "
+            ("store %s's guard sees store %s's residue ROWS -- the Residue query "
              'lost its store_id filter' % (b.store_id, a.store_id))
         assert a.widx._residue_records_node(b_owner) is False, \
             'the residue-row query is unscoped in the other direction too'

@@ -23,7 +23,7 @@ re-introduces masking.
   Run:  PYTHONPATH=. <env-python> formal/probes/bulk_i14_crossable_middle_2026-09-16.py
 
 `P22` was filed 2026-09-06b as a GREEN SABOTAGE: deleting the I14 crossable-middle loop
-at `index_v4/bulk_build.py` (the `crossable_shapes` loop) left every `build_index` caller
+at `src/zanzibar/graphindex/bulk_build.py` (the `crossable_shapes` loop) left every `build_index` caller
 GREEN -- `tests/test_bulk_build.py`, `formal/conformance/test_conformance_bulk_state.py`
 (bulk vs incremental over all 25 `GRAPH_FRAGMENT` corpora) and the validation matrix. A
 loop no sabotage can reach is unverified code on the DEFAULT constructor, and the row
@@ -44,12 +44,12 @@ WHAT IT MEASURES, in two parts:
       rather than the assurance gap `P22` is about.
 
   (B) SABOTAGE. Neuter the loop's only guard by monkeypatching
-      `zanzibar_utils_v1.SchemaInfo.crossable_shapes` to the empty set, rebuild with
+      `zanzibar.schema.SchemaInfo.crossable_shapes` to the empty set, rebuild with
       `bulk=True`, and re-ask the grid. If an answer now disagrees with the oracle, this
       corpus REACHES the loop and is exactly the missing pin.
 
 WHY NO EXISTING CORPUS REACHES IT: every entry of `tests/test_bulk_build.py::_CORPORA`
-has an empty `crossable_shapes`, because `zanzibar_utils_v1.py::
+has an empty `crossable_shapes`, because `src/zanzibar/schema/::
 _reject_doubly_bridged_shapes` intersects only LITERAL `T:*#p` shapes, while a
 star-tupleset THROUGH-shape (here `folder:* parent doc:d1` feeding `viewer from parent`)
 makes the set non-empty on a schema the compiler admits. That is the gap the corpus never
@@ -100,8 +100,8 @@ before the claim may be acted on.)
 """
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import TupleSource, build_index, save_schema
-from setengine.models import TupleV1
+from zanzibar.connectedstore import TupleSource, build_index, save_schema
+from zanzibar.setengine.models import RelationTuple
 from tests.oracle import Oracle, OracleTuple
 
 SCHEMA = '''
@@ -155,7 +155,7 @@ def seed(session, store_id):
             print(f'  ADMISSION REFUSED in {store_id}: {raw} -> {e}')
     session.commit()
     rows = session.exec(
-        select(TupleV1).where(TupleV1.store_id == store_id).order_by(TupleV1.id)).all()
+        select(RelationTuple).where(RelationTuple.store_id == store_id).order_by(RelationTuple.id)).all()
     return [OracleTuple(r.subject_predicate, r.subject_type, r.subject_name,
                         r.relation, r.object_type, r.object_name) for r in rows]
 
@@ -189,7 +189,7 @@ def main():
         # Neuter the loop's only guard (schema_info.crossable_shapes) and rebuild bulk.
         # If the answer flips vs oracle, the corpus REACHES the loop => it is the
         # missing pin P22 asks for (outcome 1).
-        import zanzibar_utils_v1 as Z
+        import zanzibar.schema as Z
         landed_sab = seed(s, 'src_sab')
         assert landed_sab == [OracleTuple(*t) for t in TUPLES], landed_sab
         orig_prop = Z.SchemaInfo.crossable_shapes

@@ -17,11 +17,11 @@ running the touched modules in the gate before anything here is relied on.
 - Both files: CRLF on every line (test_hypothesis.py 2224/2224, test_lookup_oracle.py 1799/1799), git-clean at start.
 - collect-only BEFORE: `tests/test_hypothesis.py` -> `31 tests collected`; `tests/test_lookup_oracle.py` -> `45 tests collected`.
 - Probe `.scratch/tk106/hyp_probe_union.py` (READ, 2026-09-26): `_ts_probe_schema(kind)` through both checked parsers:
-  intersection / negonly-multitype / negonly-star -> REFUSED by zanzibar_utils_v1.parse_schema_ast AND tests/oracle.parse_schema_ast, message contains `tupleset must be direct`; plain / multitype / wildcard / multitype-wildcard / union -> ok on both. Triage §3 claim CONFIRMED.
+  intersection / negonly-multitype / negonly-star -> REFUSED by zanzibar.schema.parse_schema_ast AND tests/oracle.parse_schema_ast, message contains `tupleset must be direct`; plain / multitype / wildcard / multitype-wildcard / union -> ok on both. Triage §3 claim CONFIRMED.
 - Probe `.scratch/tk106/hyp_probe_union2.py` (READ): `parent: [doc] or [folder]` -> `compute_taint` = [] and CompiledBooleans.plans = [] (same as `[doc, folder]` and `[doc]`). The 'union' comment ("tainted ... DERIVED predicate with storage leaves") is STALE. Triage side finding CONFIRMED.
 
 ## Step 1-3 -- edits to tests/test_hypothesis.py (first-hand; CRLF preserved, checked with grep -c $'\r$' == wc -l)
-- `::_TUPLESET_BODIES`: removed 'intersection', 'negonly-multitype', 'negonly-star'. Remaining 5: multitype, multitype-wildcard, plain, union, wildcard. Dated TK106 note above the table (parse refusal via `zanzibar_utils_v1.py::_validate_tuplesets_direct` + oracle twin; refusal pinned in `tests/genswarm.py::REJECTION_WITNESSES`). Pre-TK106 "NEG-ONLY TRAP" comment replaced by that note. 'union' comment rewritten: compiles UNTAINTED (probe above). Header comment "Booleans ... are all drawn" corrected.
+- `::_TUPLESET_BODIES`: removed 'intersection', 'negonly-multitype', 'negonly-star'. Remaining 5: multitype, multitype-wildcard, plain, union, wildcard. Dated TK106 note above the table (parse refusal via `src/zanzibar/schema/parser.py::_validate_tuplesets_direct` + oracle twin; refusal pinned in `tests/genswarm.py::REJECTION_WITNESSES`). Pre-TK106 "NEG-ONLY TRAP" comment replaced by that note. 'union' comment rewritten: compiles UNTAINTED (probe above). Header comment "Booleans ... are all drawn" corrected.
 - `::schema_asts` docstring: "boolean and neg-only-arm tuplesets" -> dated TK106 note.
 - `::test_negonly_tupleset_bodies_really_have_a_type_only_in_the_negative_arm`: DELETED; dated comment left in its place.
 - `::test_every_tupleset_kind_is_reachable_and_the_grid_queries_it`: floor `>= 8` -> `>= 5`, dated provenance comment.
@@ -39,7 +39,7 @@ running the touched modules in the gate before anything here is relied on.
 - **S2** `_schema_ast`: literal pre-2026-08-10 line `ast = {('doc', 'parent'): Direct((Restriction('doc', '...', False),))}` (log `sab2.log`, `1 failed in 0.76s`): `AssertionError: 180 draws realised only 1 of the 5 tupleset bodies; missing ['multitype', 'multitype-wildcard', 'union', 'wildcard'] -- the TTU tupleset is hardcoded again`
 - **S3** `_op_pool`: untyped fallback `names = ['*'] if r.wildcard else (USERS if r.type == 'user' else DOCS)` (log `sab3.log`, `1 failed in 1.26s`): `AssertionError: tupleset kind 'multitype': 4/14 candidates write to entities the check grid never queries, so they are admitted and inert: [('...', 'folder', 'd1', 'parent', 'doc', 'd1'), ('...', 'folder', 'd1', 'parent', 'doc', 'd2'), ('...', 'folder', 'd2', 'parent', 'doc', 'd1'), ('...', 'folder', 'd2', 'parent', 'doc', 'd2')]`
 - **S4 (GREEN -- a finding)** RC2 re-introduced at its live processor fix site, IN-PROCESS monkeypatch (`.scratch/tk106/hyp_sab_rc2.py`; processor.py is out of my edit scope and another session runs tests): `DeltaProcessor._expand_tupleset_parents(self, concretes, star_types)` -> ignores `star_types`. test_every_tupleset_kind_is_driven_against_the_oracle: control `1 passed in 10.74s`, sabotage `1 passed in 12.91s`. REASONED: every remaining probe cell has an UNTAINTED tupleset AND an untainted TTU target (`r0: [user]`), so the TTU leaf is a rule-routed leaf (star bridge), never `PDerivedTTU`/`ttu_check`; the RC2 processor branch is reached only by a derived TTU target. After TK106 this test no longer guards the RC2 processor site (it did pre-TK106 only via `negonly-star`, a DERIVED tupleset). All 10 cells are DRIVEN (none skipped as out-of-fragment): probe `.scratch/tk106/hyp_cells.py`.
-- **S5 (RED)** graph-only, IN-PROCESS (`.scratch/tk106/hyp_sab_through.py`): `zanzibar_utils_v1.derive_schema_info` (module global, read by `parse_openfga_schema`; setengine's own import untouched) returns SchemaInfo minus the star-tupleset through-shapes (`(S, target_rel)` for `[S:*]` on a tupleset). `1 failed in 10.75s`:
+- **S5 (RED)** graph-only, IN-PROCESS (`.scratch/tk106/hyp_sab_through.py`): `zanzibar.schema.derive_schema_info` (module global, read by `parse_openfga_schema`; setengine's own import untouched) returns SchemaInfo minus the star-tupleset through-shapes (`(S, target_rel)` for `[S:*]` on a tupleset). `1 failed in 10.75s`:
   `AssertionError: the generated tupleset grammar DRIVES a backend divergence on [('multitype-wildcard', 'negated TTU'), ('multitype-wildcard', 'positive TTU'), ('wildcard', 'negated TTU'), ('wildcard', 'positive TTU')]:` each `accept/reject disagreement on add ('...', 'doc', '*', 'parent', 'doc', 'd1'): {'graph': False, 'set:py': True, 'set:roaring': True}`. 6 cells stay green (multitype, plain, union x both polarities).
 - Side finding (REASONED, not sabotaged): the driven-test probe grants `r0` only on `doc:d1`, so a stored `folder:f1 parent doc:d1` parent yields `r1 = False` on every backend whether or not the graph walks it. A graph that dropped the `folder` type from a tupleset's parent types would stay GREEN here; the folder arm of `multitype` / `multitype-wildcard` / `union` is admitted and driven but not discriminating in this test.
 
@@ -151,7 +151,7 @@ the graph compiler's UnsupportedByGraphIndex can fire.
   (no SILENT half left); comment records why. storeValid's two SHADOWED probes remain, so
   `test_every_mixed_row_has_a_shadowed_probe` holds.
 - `test_graphadmission_scope_pin.py::GRAPHADMISSION_SCOPE['ttuDirect']`: MIXED -> LOUD, `shadowed_by` removed,
-  evidence `zanzibar_utils_v1.py::_validate_ttu_tuplesets` -> `zanzibar_utils_v1.py::_validate_tuplesets_direct`,
+  evidence `src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets` -> `src/zanzibar/schema/parser.py::_validate_tuplesets_direct`,
   note rewritten (dated). Module docstring: new dated UPDATE paragraph "LOUD 13, MIXED 1, SILENT 0".
 - `test_the_classification_ratio_is_the_finding`: asserts `{"LOUD": 13, "MIXED": 1, "SILENT": 0}` (measured by the
   green run: the test counts the table, and `test_classification_agrees_with_its_probes` ties ttuDirect LOUD to both
@@ -174,7 +174,7 @@ Targets: nary floor/carrier/three-way-refusal, fragment (K) and (L), pin schema-
     both_noop_inject     -> 11 failed, 107 passed   (instrument control: carrier injected into TTU_USERSET_SCHEMAS)
     prod_derived_exempt  -> 8 failed, 108 passed    (narrowest weakening = pre-TK106 rule; untainted witnesses stay green)
 Literal key lines:
-    prod_derived_exempt: AssertionError: `derived-tupleset-ttu`'s carrier REFUSED_TUPLESET_SCHEMAS['derived_tupleset_ttu'] is ACCEPTED by ['zanzibar_utils_v1.parse_openfga_schema', 'zanzibar_utils_v1.parse_schema_ast']. The TK106 refusal relaxed, ...
+    prod_derived_exempt: AssertionError: `derived-tupleset-ttu`'s carrier REFUSED_TUPLESET_SCHEMAS['derived_tupleset_ttu'] is ACCEPTED by ['zanzibar.schema.parse_openfga_schema', 'zanzibar.schema.parse_schema_ast']. The TK106 refusal relaxed, ...
     prod_derived_exempt: AssertionError: [derived_tupleset_ttu/py] backends disagree on a refused shape: {'oracle': 'REFUSED', 'setengine': 'ACCEPTED', 'graph': 'ACCEPTED'}
     oracle_noop:         AssertionError: [derived_tupleset_ttu/py] backends disagree on a refused shape: {'oracle': 'ACCEPTED', 'setengine': 'REFUSED', 'graph': 'REFUSED'}
     both_noop_inject:    AssertionError: `derived-tupleset-ttu` is excluded from the coverage floor as unreachable since TK106 (2026-09-26), but ACCEPTED corpora reach it: ['TTU_USERSET_SCHEMAS:derived_tupleset_ttu']. The exclusion is stale: ...
@@ -201,7 +201,7 @@ Lean doc comments:
 - `formal/lean/ZanzibarProofs/FullScope.lean` GraphAdmission docstring (~:107-112): "LOUD 12, MIXED 2" -> now LOUD 13,
   MIXED 1 (ttuDirect LOUD). The `ttuDirect` bullet (~:122-129) says Python ACCEPTS derived tuplesets and cites
   `_validate_ttu_tuplesets`'s tainted exemption as "Proof scope, not a mirrored refusal" -- false since TK106:
-  `zanzibar_utils_v1.py::_validate_tuplesets_direct` refuses every non-direct tupleset at parse time.
+  `src/zanzibar/schema/parser.py::_validate_tuplesets_direct` refuses every non-direct tupleset at parse time.
 - `formal/lean/ZanzibarProofs/GraphIndex/AdmissionDecide.lean` module doc (~:16-20): "two MIXED but shadowed by
   W4Fragment" -- now one (storeValid). (`refutes_ttuDirect` itself is fine.)
 formal/*.md:

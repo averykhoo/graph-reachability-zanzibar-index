@@ -3219,7 +3219,7 @@ def check_read_first(store, fail, state):
     rename (the observable is identical: the pointer names a symbol the file lacks)::
 
         FAIL: .../tasks/TK50-....md:35: read-first pointer
-        'index_v4/processor.py::DeltaProcessor._run_cascade_stratum' resolves to a file,
+        'src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade_stratum' resolves to a file,
         but '_run_cascade_stratum' does not appear in it. ...
 
     (3) THE FLOOR CAN FIRE -- raised to 5000 against the live tree, which is also how the

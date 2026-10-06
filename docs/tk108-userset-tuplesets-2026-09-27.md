@@ -5,6 +5,8 @@ are appended dated at the top. FROZEN when `TK108` closes. Live state is
 `python scripts/task.py show TK108`, never this file. Figures were measured on `2026-09-27`
 against HEAD `7ac21c6` plus this session's working-tree diff.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 Provenance labels: **READ** (first-hand, this session), **REASONED**, **MEASURED** (a run
 whose output is quoted), **UNVERIFIED**, **SUBAGENT** (an agent's report, not re-run by the
 session). Two subagents were used, both for § 4: a read-only census of the refusal sites,

@@ -9,11 +9,11 @@ import json
 import pytest
 from sqlmodel import select
 
-from index_v4 import EdgeV4
-from index_v4.invariants import InvariantViolation, check_invariants, snapshot_rows
-from index_v4.models import DeltaOutboxV1, ResidueV1
-from index_v4.processor import DeltaProcessor
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.graphindex import Edge
+from zanzibar.graphindex.invariants import InvariantViolation, check_invariants, snapshot_rows
+from zanzibar.graphindex.models import DeltaOutbox, Residue
+from zanzibar.graphindex.processor import DeltaProcessor
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 from tests.test_processor import build
 from tests.wildcard_helpers import make_wildcard_index
 
@@ -53,7 +53,7 @@ def test_i4_leaf_predicate_outside_namespace():
 
 def test_i5_missing_derived_flag():
     session, widx, proc, write = _populated()
-    flagged = [e for e in session.exec(select(EdgeV4)).all() if e.derived]
+    flagged = [e for e in session.exec(select(Edge)).all() if e.derived]
     assert flagged, 'populated store must hold a derived edge (bob->d2.viewer)'
     flagged[0].derived = False
     session.add(flagged[0])
@@ -66,7 +66,7 @@ def test_i5_missing_derived_flag():
 
 def test_i5_flag_on_ordinary_edge():
     session, widx, proc, write = _populated()
-    plain = [e for e in session.exec(select(EdgeV4)).all()
+    plain = [e for e in session.exec(select(Edge)).all()
              if not e.derived and e.direct_edge_count > 0]
     plain[0].derived = True
     session.add(plain[0])
@@ -79,7 +79,7 @@ def test_i5_flag_on_ordinary_edge():
 
 def test_i6_stars_outside_declared_shapes():
     session, widx, proc, write = _populated()
-    row = session.exec(select(ResidueV1)).first()
+    row = session.exec(select(Residue)).first()
     row.stars = json.dumps([['martian', '...']])
     session.add(row)
     session.flush()
@@ -94,7 +94,7 @@ def test_i6_neg_overlaps_edge_holders():
     # bob holds a derived edge on d2; force him into d2's neg as well
     bob = widx.idx.node('...', 'user', 'bob', create_if_missing=False)
     d2 = widx.idx.node('viewer', 'doc', 'd2', create_if_missing=False)
-    session.add(ResidueV1(store_id='test', object_node_id=d2.id, relation='viewer',
+    session.add(Residue(store_id='test', object_node_id=d2.id, relation='viewer',
                           stars=json.dumps([['user', '...']]),
                           neg=json.dumps([bob.id]), version=1))
     session.flush()
@@ -107,7 +107,7 @@ def test_i6_neg_overlaps_edge_holders():
 def test_i6_empty_residue_row():
     session, widx, proc, write = _populated()
     d2 = widx.idx.node('viewer', 'doc', 'd2', create_if_missing=False)
-    session.add(ResidueV1(store_id='test', object_node_id=d2.id, relation='viewer',
+    session.add(Residue(store_id='test', object_node_id=d2.id, relation='viewer',
                           stars='[]', neg='[]', version=1))
     session.flush()
     with pytest.raises(InvariantViolation, match='I6'):
@@ -125,7 +125,7 @@ def test_i6_upos_userset_implicit_bites():
     d2 = widx.idx.node('viewer', 'doc', 'd2', create_if_missing=False)
     # a userset-shaped node (doc:d1#editor), forced implicit
     us = widx.idx.node('editor', 'doc', 'd1', create_if_missing=True, implicit=True)
-    session.add(ResidueV1(store_id='test', object_node_id=d2.id, relation='viewer',
+    session.add(Residue(store_id='test', object_node_id=d2.id, relation='viewer',
                           stars=json.dumps([['user', '...']]),
                           neg='[]', upos=json.dumps([us.id]), version=1))
     session.flush()
@@ -137,7 +137,7 @@ def test_i6_upos_userset_implicit_bites():
 
 def test_i7_version_regression():
     session, widx, proc, write = _populated()
-    row = session.exec(select(ResidueV1)).first()
+    row = session.exec(select(Residue)).first()
     # an in-place regression to a version > 1 (version 1 is the lineage-restart
     # allowance -- see test_i7_reused_rowid_recreate_is_not_flagged)
     row.version = 3
@@ -156,7 +156,7 @@ def test_i7_reused_rowid_recreate_is_not_flagged():
     That must NOT trip I7 (it would be a false-positive commit abort, not a masked
     regression)."""
     session, widx, proc, write = _populated()
-    row = session.exec(select(ResidueV1)).first()
+    row = session.exec(select(Residue)).first()
     row.version = 1                                 # a recreate always starts at 1
     session.add(row)
     session.flush()
@@ -171,7 +171,7 @@ def test_i7_recreated_row_restarts_lineage():
     """Delete-then-recreate is legitimate (empty rows are deleted): a fresh row id
     restarts at version 1 without tripping I7."""
     session, widx, proc, write = _populated()
-    row = session.exec(select(ResidueV1)).first()
+    row = session.exec(select(Residue)).first()
     versions = {(row.id + 999, row.object_node_id): 7}   # a long-gone row's lineage
     check_invariants(session, 'test', widx.schema_info, residue_versions=versions)
     assert (row.id + 999, row.object_node_id) not in versions   # pruned
@@ -181,7 +181,7 @@ def test_i7_recreated_row_restarts_lineage():
 
 def test_i10_malformed_outbox_action():
     session, widx, proc, write = _populated()
-    session.add(DeltaOutboxV1(store_id='test', subject_node_id=1, object_node_id=2,
+    session.add(DeltaOutbox(store_id='test', subject_node_id=1, object_node_id=2,
                               action='EXPLODED', subject_type='user', subject_name='x',
                               subject_predicate='...', object_type='doc', object_name='y',
                               object_predicate='viewer'))
@@ -207,7 +207,7 @@ _OPS = [
 
 def _residue_state(session, widx):
     out = {}
-    for r in session.exec(select(ResidueV1)).all():
+    for r in session.exec(select(Residue)).all():
         node = widx._node_by_id(r.object_node_id)
         neg_names = frozenset(
             (n.predicate, n.type, n.name)
@@ -258,7 +258,7 @@ def test_backfill_recovers_corrupted_residue():
     """I9 finds the inconsistency; backfill() repairs it (§5.5 recovery path)."""
     session, widx, proc, write = _populated()
 
-    row = session.exec(select(ResidueV1)).first()
+    row = session.exec(select(Residue)).first()
     good_stars = row.stars
     row.stars = '[]'
     row.neg = json.dumps([widx.idx.node('...', 'user', 'alice', create_if_missing=False).id])
@@ -271,7 +271,7 @@ def test_backfill_recovers_corrupted_residue():
     proc.backfill()
     session.commit()
     proc.audit_fixpoint()                                  # clean again
-    fixed = session.exec(select(ResidueV1)).first()
+    fixed = session.exec(select(Residue)).first()
     assert fixed.stars == good_stars
     assert widx.check('...', 'user', 'ghost', 'viewer', 'doc', 'd1') is True
     assert widx.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is False

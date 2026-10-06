@@ -336,7 +336,7 @@ board are the two blocks below, verbatim.**
 >
 > * **The `storedDirectSubjects` half** — closed unconditionally by the faithfulness
 >   star-filter (`CascadeStrataEnum.lean::storedDirectSubjects`, mirroring
->   `index_v4/processor.py`'s `_incoming_concretes` wildcard filter), giving
+>   `src/zanzibar/graphindex/processor.py`'s `_incoming_concretes` wildcard filter), giving
 >   `storedDirectSubjects_name_ne_star` with no fragment premise at all.
 > * **The `edgeHolders` half** — discharged at the call sites by
 >   `CascadeStrataSettle.lean::reachedByW3d2_Rnode_source_name_ne_star_d`, under the new
@@ -401,7 +401,7 @@ board are the two blocks below, verbatim.**
 > **CLOSED 2026-07-28** by `TTU_USERSET_SCHEMAS['derived_tupleset_ttu']`, together
 > with the other zero-coverage hole (wildcard usersets `[T:*#p]`,
 > `TTU_USERSET_SCHEMAS['wildcard_userset']`). The floor now names EVERY kind
-> `zanzibar_utils_v1._plan_leaves` can emit, and
+> `zanzibar.schema._plan_leaves` can emit, and
 > `test_required_leaf_kinds_are_exactly_the_compilers_kinds` reads those kinds out
 > of the compiler's own source so the list cannot go stale. Conformance 450 → 464.
 > Two reachability corrections worth carrying: a wildcard userset over a DERIVED
@@ -458,7 +458,7 @@ unchanged. The write-leg-only flip was kernel-refuted first, so branch (α) and 
 in the same commit (`untOccCount` restated over the L closure at
 `CascadeStrata.lean:687`, `:716::count_removeLoggedRules`). `GraphAdmission` gained
 `noLeafSubjects` and `keysNonempty`, both honest Python-side scope claims mirroring
-`zanzibar_utils_v1.py::_validate_ast_references`; the second is an accepted scope narrowing
+`src/zanzibar/schema/parser.py::_validate_ast_references`; the second is an accepted scope narrowing
 flagged to the user. **Step 7 co-landed: projection P6 is retired** (the 2026-08-16c block's
 discharged criterion above). The tree is sorry-free, statement pin 49/49, definition pin
 regenerated 232 → 250 after a control run on the old pins.
@@ -498,7 +498,7 @@ ten, and the one narrowing accepted on that ground (`P20`) is the exception. Clo
 seven is repo board row `DW-1`; making the classification measured rather than argued needs
 a fourth `zcli` mode, row `P21`.
 **2026-09-23d:** `W4Fragment` is now DECIDED (`GraphIndex/FragmentDecide.lean::w4FragmentB_iff`, exact in both directions), and `zcli mode="fragment"` reports the verdict per field. `test_conformance_fragment.py` machine-checks the `W4Fragment` half of every `_THEOREM_BACKED` corpus, which was prose before. The Python side is still SILENT: the production mirror plus its differential is `DW-1` step 3 (`docs/dw1-decidable-w4fragment-2026-09-23.md`).
-**2026-09-25 (`TK104`):** `GraphAdmission` is DECIDED too (`GraphIndex/AdmissionDecide.lean::graphAdmissionB_iff`), and so is the whole headline premise (`headlinePremiseB_iff`). `RewriteRanked`, the one existential field, is decided by a canonical longest-walk rank (`rankCheck_rkF_iff`). `zcli mode="fragment"` emits `"admission"` and `"inPremise"`; the Python report of the two SILENT fields is `zanzibar_utils_v1.py::graph_admission_report`. Map: `docs/tk104-graphadmission-scope-2026-09-24.md`.
+**2026-09-25 (`TK104`):** `GraphAdmission` is DECIDED too (`GraphIndex/AdmissionDecide.lean::graphAdmissionB_iff`), and so is the whole headline premise (`headlinePremiseB_iff`). `RewriteRanked`, the one existential field, is decided by a canonical longest-walk rank (`rankCheck_rkF_iff`). `zcli mode="fragment"` emits `"admission"` and `"inPremise"`; the Python report of the two SILENT fields is `src/zanzibar/schema/reports.py::graph_admission_report`. Map: `docs/tk104-graphadmission-scope-2026-09-24.md`.
 
 **The T2a scope carry — CLOSED 2026-09-23 (`P5`)**; see the T2a note at the top of this
 file. The pre-work measurements that sat here (the Sd/Td probe, `graph_reached_inv`'s zero

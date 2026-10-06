@@ -42,9 +42,9 @@ violation. On ``tests/fga_schemas/owc_star_ttu.fga`` with ``object_wildcard_shap
 
 The oracle answers q True both before and after t (t is irrelevant to q), but the
 graph flips False -> True: t interns a node of shape ``(folder, viewer)``, which is
-the witness ``index_v4/wildcard.py::_ensure_bridges`` was missing (root cause measured
+the witness ``src/zanzibar/graphindex/wildcard.py::_ensure_bridges`` was missing (root cause measured
 in ``docs/spec-deviations.md`` 2026-08-09; the set engine's analogue is the star-parent
-cross, ``setengine/engine.py:1476-1480``). One user's access depends on an unrelated
+cross, ``src/zanzibar/setengine/engine.py:1476-1480``). One user's access depends on an unrelated
 grant to another user. ``tests/test_owc_star_parent_cross.py`` pins the per-state
 parity divergence; this module pins the cross-state flip.
 

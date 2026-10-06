@@ -10,7 +10,7 @@ above the refusing ``raise`` (or the ``if`` guarding it), in every parser that r
 
 A later refusal in the same function may say ``WHY/INSTEAD: see above``.
 `CLAUDE.md` § Gotchas carries the rule; the worked example is
-`zanzibar_utils_v1.py::_validate_tuplesets_direct`.
+`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`.
 
 What this module enforces, and its limit:
 
@@ -28,24 +28,24 @@ convention (e.g. inside ``_parse_schema_ast_unchecked``) is caught by nothing he
 reviewer. The 2026-09-27 census (`docs/tk108-userset-tuplesets-2026-09-27.md` § 4) listed
 the parse-level refusals that live there, and each carries a block today.
 
-SABOTAGE (2026-09-27, literal output; each on `zanzibar_utils_v1.py`, anchor asserted,
+SABOTAGE (2026-09-27, literal output; each on `src/zanzibar/schema/`, anchor asserted,
 file restored byte-for-byte and sha256-checked):
 
 - S1, the TK108 block loses its ``INSTEAD`` line::
 
-      FAILED ...::test_every_refused_shape_block_says_why_and_instead[zanzibar_utils_v1.py]
+      FAILED ...::test_every_refused_shape_block_says_why_and_instead[src/zanzibar/schema/]
       1 failed, 8 passed
 
 - S2, the ASK-1 undeclared-tupleset block deleted whole (3 comment lines). Rule 1 does NOT
   see this (another header sits above it in the same function); the floor does, which is
   why the floor exists::
 
-      FAILED ...::test_refused_shape_blocks_meet_the_floor[zanzibar_utils_v1.py]
+      FAILED ...::test_refused_shape_blocks_meet_the_floor[src/zanzibar/schema/]
       1 failed, 8 passed
 
 - S3, a new ``_validate_new_shape`` that raises with no comment::
 
-      FAILED ...::test_every_in_scope_refusal_has_a_refused_shape_comment[zanzibar_utils_v1.py]
+      FAILED ...::test_every_in_scope_refusal_has_a_refused_shape_comment[src/zanzibar/schema/]
       1 failed, 8 passed
 """
 from __future__ import annotations
@@ -56,7 +56,24 @@ import pathlib
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-FILES = ('zanzibar_utils_v1.py', 'tests/oracle.py', 'setengine/engine.py')
+LIB = 'src/zanzibar/schema/'
+
+
+def _schema_files() -> tuple[str, ...]:
+    """EVERY module of the schema package, globbed (TK120, 2026-10-06). This was a fixed
+    entry naming the one-file schema module; after its split into `src/zanzibar/schema/` a
+    refusal in a new or renamed submodule would have escaped the scan with the gate green.
+
+    Scope is unchanged by the glob: the schema layer, plus the two fixed files below. A glob
+    over the WHOLE library was tried and rejected: it pulls in
+    `graphindex/wildcard.py::_reject_star_self_edge` / `_reject_latent_star_cycle`, which
+    refuse WRITES that would close a data cycle (explained in their docstrings), not schema
+    shapes, so the user rule this file enforces does not apply to them."""
+    return tuple(sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / LIB).rglob('*.py')
+                        if '__pycache__' not in p.parts))
+
+
+FILES = _schema_files() + ('tests/oracle.py', 'src/zanzibar/setengine/engine.py')
 SHAPE_EXCEPTIONS = frozenset({'UnsupportedByGraphIndex', 'CyclicDerivedDependency'})
 SHAPE_FUNCTION_PREFIXES = ('_validate_', '_reject_')
 HEADER = 'REFUSED SHAPE'
@@ -70,7 +87,19 @@ HEADER = 'REFUSED SHAPE'
 #: Re-measured 2026-10-04 after TK115 (+3 product, JSON front end only -- the oracle has no
 #: JSON front end: `_reject_duplicate_json_keys`, `_validate_json_wildcard`,
 #: `_validate_json_round_trip`): 37 / 16 / 1.
-MIN_HEADERS = {'zanzibar_utils_v1.py': 37, 'tests/oracle.py': 16, 'setengine/engine.py': 1}
+#: Re-keyed 2026-10-06 (TK120): the schema module's floor is now per PACKAGE, because it
+#: was split into submodules and a per-submodule floor would only track where code happens
+#: to sit. Same count as before the split (37, `header_blocks` summed over the glob).
+MIN_HEADERS = {LIB: 37, 'tests/oracle.py': 16, 'src/zanzibar/setengine/engine.py': 1}
+#: In-scope raises the scope rule must keep seeing (anti-vacuity, replacing the per-file
+#: "no in-scope raise found" assert, which cannot hold per SUBMODULE). Measured 2026-10-06
+#: with `in_scope_raises`: 25 over the schema package (boolean 2, compiler 11,
+#: json_frontend 3, parser 9); the oracle keeps its old per-file >= 1.
+MIN_IN_SCOPE_RAISES = {LIB: 25, 'tests/oracle.py': 1}
+
+
+def _group(rel: str) -> str:
+    return LIB if rel.startswith(LIB) else rel
 
 
 def _source(rel: str) -> tuple[str, list[str]]:
@@ -142,10 +171,15 @@ def _incomplete_blocks(rel: str) -> list[str]:
     return out
 
 
+def test_the_scope_rule_still_sees_refusals():
+    for group, floor in MIN_IN_SCOPE_RAISES.items():
+        n = sum(len(list(in_scope_raises(f))) for f in FILES if _group(f) == group)
+        assert n >= floor, (f'{group}: {n} in-scope raises, floor {floor} -- the scope rule '
+                            f'no longer sees the refusals it is meant to police')
+
+
 @pytest.mark.parametrize('rel', FILES)
 def test_every_in_scope_refusal_has_a_refused_shape_comment(rel):
-    assert list(in_scope_raises(rel)) or rel == 'setengine/engine.py', \
-        f'{rel}: no in-scope raise found -- the scope rule no longer sees this file'
     missing = _missing_headers(rel)
     assert not missing, ('refusal(s) with no "# REFUSED SHAPE ... WHY ... INSTEAD" comment '
                          '(user rule 2026-09-27, CLAUDE.md sec Gotchas):\n  '
@@ -158,9 +192,9 @@ def test_every_refused_shape_block_says_why_and_instead(rel):
     assert not bad, 'REFUSED SHAPE block(s) missing WHY or INSTEAD:\n  ' + '\n  '.join(bad)
 
 
-@pytest.mark.parametrize('rel', FILES)
-def test_refused_shape_blocks_meet_the_floor(rel):
-    n = sum(1 for _ in header_blocks(rel))
-    assert n >= MIN_HEADERS[rel], (
-        f'{rel}: {n} REFUSED SHAPE blocks, floor {MIN_HEADERS[rel]} -- a refusal lost its '
+@pytest.mark.parametrize('group', sorted(MIN_HEADERS))
+def test_refused_shape_blocks_meet_the_floor(group):
+    n = sum(1 for f in FILES if _group(f) == group for _ in header_blocks(f))
+    assert n >= MIN_HEADERS[group], (
+        f'{group}: {n} REFUSED SHAPE blocks, floor {MIN_HEADERS[group]} -- a refusal lost its '
         f'explanation. If the refusal itself was removed, lower the floor deliberately.')

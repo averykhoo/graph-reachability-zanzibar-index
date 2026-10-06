@@ -110,7 +110,7 @@ theorem reachedByW3d2_Rnode_source_name_ne_star {σ : GraphState} {S : Schema}
 star-freeness clauses need: every persisted `neg`/`upos` member is star-free. True
 structurally — the only residue writer is the routed wholesale recompute, whose
 `neg`/`upos` are filters of the job's `negCands`/`uposCands`, star-free by
-`W3cJobValid` (`index_v4/processor.py::DeltaProcessor._reconcile` steps (2)/(2c) filter
+`W3cJobValid` (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` steps (2)/(2c) filter
 the audit-enumerated candidates into `neg`/`upos`, and
 enumeration sources — leaf reach, persisted residue ids, R-node edges — are
 star-free by I6/write admission). -/
@@ -408,7 +408,7 @@ theorem enumJobs2At_valid {S : Schema} {T : Store} {σe : GraphState}
 
 /-- The ROUND-1 enumerated jobs: the frontier keys above the stored watermark,
     enumerated at the leg-start state (round 1 of
-    `index_v4/processor.py::DeltaProcessor._run_cascade`'s `for _ in range(rounds)`
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`'s `for _ in range(rounds)`
     loop). -/
 def enumJobs2R1 (S : Schema) (T : Store) (σ : GraphState) : List W3cJob :=
   enumJobs2At S T σ (cascadeKeysAbove S σ σ.watermark)
@@ -439,7 +439,7 @@ inductive ReachedByW3d2E : GraphState → Schema → Store → Prop where
       (hprev : ReachedByW3d2E σ S T) :
       ReachedByW3d2E (σ.removeLoggedRules S t) S (T.erase t)
   -- hSVT/hBST/hTST/htermT: the pre-remove store T was validly built. FAITHFUL — Python's
-  -- TupleSource.remove (connectedstore/source.py) only retracts admission-validated tuples
+  -- TupleSource.remove (src/zanzibar/connectedstore/source.py) only retracts admission-validated tuples
   -- (validate_write_identifiers + matching Direct arm = StoreValidRules); the star/ttu/term
   -- conditions are the W4Fragment carries graph_correct already assumes about the store.
   -- hdrain: Python drains the view between applied log rows (cascadeKeys non-monotone under

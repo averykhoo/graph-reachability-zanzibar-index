@@ -8,8 +8,8 @@ bridge was six `by decide` witness pins (`Exec.lean::P4Bridge`) at three fixed s
 This file states and proves it at every schema and store the headline theorems cover.
 
 **What is bridged.** Python's compiled `check_fn` reads a boolean relation's `Direct`
-arms off the index: `zanzibar_utils_v1.py::_compile_check_fn` compiles a `PClosureLeaf` to
-`ctx.leaf_check(pred, s)`, and `index_v4/processor.py::_EvalContext.leaf_check` probes the
+arms off the index: `src/zanzibar/schema/boolean.py::_compile_check_fn` compiles a `PClosureLeaf` to
+`ctx.leaf_check(pred, s)`, and `src/zanzibar/graphindex/processor.py::_EvalContext.leaf_check` probes the
 INDEX at the minted leaf name `<R>.<i>`. The spec reads the same arm off the STORE:
 `Spec/Semantics.lean::directLeaf` at the public relation `R`. `leaf_probe_bridge` says the
 two agree. The left side is the graph model's probe at the leaf node
@@ -604,8 +604,8 @@ theorem no_userset_leaf_in_fragment {S : Schema} {T : Store} (hF : W4Fragment S 
     graph's probe at a storage leaf's minted node equals the spec's `directLeaf` over that
     leaf's merged restrictions, read at the PUBLIC relation. This holds for every subject
     (star and userset included), every `rec`, every `q`, and with no drain. This is the
-    statement behind `zanzibar_utils_v1.py::_compile_check_fn`'s `PClosureLeaf` →
-    `index_v4/processor.py::_EvalContext.leaf_check`, the clause `CORRESPONDENCE.md` §7.3
+    statement behind `src/zanzibar/schema/boolean.py::_compile_check_fn`'s `PClosureLeaf` →
+    `src/zanzibar/graphindex/processor.py::_EvalContext.leaf_check`, the clause `CORRESPONDENCE.md` §7.3
     used to record as netted by the differential matrix only.
 
     The `Exec.lean::P4Bridge` pins are its instances at three fixed schemas, and they stay:

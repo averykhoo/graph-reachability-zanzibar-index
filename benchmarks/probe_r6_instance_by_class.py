@@ -6,7 +6,7 @@ sqlalchemy `loading.py:208(chunks)` for all of them.
 
 SQLAlchemy fires an InstanceEvents.load per ORM instance materialised, per
 mapped class. That answers the actual question -- how many of the 22,410 are
-ResidueV1 rows (R6-4's full scan) versus NodeV4/EdgeV4 rows (R6-5's surface) --
+Residue rows (R6-4's full scan) versus Node/Edge rows (R6-5's surface) --
 without touching the code under measurement.
 
 Run ALONE. Deterministic: same scale/calls as R6_PROFILE_2026-08-17.md's
@@ -30,12 +30,12 @@ LOADED = Counter()
 
 def _install_counters():
     """Register a per-class load counter on every mapped model we ship."""
-    import index_v4.models as m4
+    import zanzibar.graphindex.models as m4
     from sqlmodel import SQLModel
 
-    # DEDUPE BY CLASS IDENTITY. index_v4.models exposes several mapped classes
+    # DEDUPE BY CLASS IDENTITY. zanzibar.graphindex.models exposes several mapped classes
     # under two names, so a dir()-driven list registers TWO load listeners on
-    # NodeV4/EdgeV4/StoreV4 and silently doubles their counts. The first run of
+    # Node/Edge/Store and silently doubles their counts. The first run of
     # this probe did exactly that and reported 38,820 constructions against the
     # profile's 22,410 -- the instrument, not the subject, was wrong.
     seen = set()
@@ -69,10 +69,10 @@ def main():
     widx, ntup = build_graph(spec['schema'], spec['shapes'], spec['gen'](SCALE))
     subs = spec['lookups'](SCALE, CALLS)
 
-    from index_v4.models import ResidueV1
+    from zanzibar.graphindex.models import Residue
     from sqlmodel import select
-    nres = len(widx.idx.session.exec(select(ResidueV1).where(
-        ResidueV1.store_id == widx.idx.store_id)).all())
+    nres = len(widx.idx.session.exec(select(Residue).where(
+        Residue.store_id == widx.idx.store_id)).all())
 
     LOADED.clear()          # discard build-phase loads; measure the lookups only
     n = 0
@@ -87,12 +87,12 @@ def main():
     print('\nby mapped class:')
     for name, cnt in LOADED.most_common():
         share = cnt / total * 100 if total else 0.0
-        owner = {'ResidueV1': 'R6-4', 'ResidueRefV1': 'R6-4',
-                 'NodeV4': 'R6-5', 'EdgeV4': 'R6-5'}.get(name, '?')
+        owner = {'Residue': 'R6-4', 'ResidueRef': 'R6-4',
+                 'Node': 'R6-5', 'Edge': 'R6-5'}.get(name, '?')
         print(f'  {cnt:8,}  ({share:5.1f}%)  {name:16} <- {owner}')
 
-    r64 = LOADED['ResidueV1'] + LOADED['ResidueRefV1']
-    r65 = LOADED['NodeV4'] + LOADED['EdgeV4']
+    r64 = LOADED['Residue'] + LOADED['ResidueRef']
+    r65 = LOADED['Node'] + LOADED['Edge']
     print(f'\nR6-4 (residue rows)     : {r64:,}  '
           f'({r64 / total * 100:.1f}% of ORM constructions)')
     print(f'R6-5 (node/edge rows)   : {r65:,}  '

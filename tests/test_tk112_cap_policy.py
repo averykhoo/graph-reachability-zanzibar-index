@@ -24,10 +24,10 @@ The three witnesses are the P10 scout's, PROBED at cap 20 (sec 6 of the doc abov
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from connectedstore import ConnectedStore, TupleSource, build_index, save_schema
-from index_v4.core import MAX_CLOSURE_FANOUT_ENV
+from zanzibar.connectedstore import ConnectedStore, TupleSource, build_index, save_schema
+from zanzibar.graphindex.core import MAX_CLOSURE_FANOUT_ENV
 from tests import oracle as O
-from zanzibar_utils_v1 import ClosureFanoutExceeded
+from zanzibar.schema import ClosureFanoutExceeded
 
 SCHEMA = '''
 type user
@@ -131,7 +131,7 @@ def test_async_apply_is_never_capped(session, case, caplog):
         _do(cs, o, w)
     want = _oracle(setup + [(op, t)]).check(*probe)
 
-    with caplog.at_level('WARNING', logger='index_v4.core'):
+    with caplog.at_level('WARNING', logger='zanzibar.graphindex.core'):
         cs.catch_up()
     assert cs.lag() == 0 and not cs.index_stalled
     assert any('materialised anyway' in r.getMessage() for r in caplog.records)

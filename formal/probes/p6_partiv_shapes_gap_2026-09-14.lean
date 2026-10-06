@@ -18,7 +18,7 @@
   A `filter` cannot produce a shape its input list never contained. So if the test says
   `true` and `stars` is empty, `("folder","viewer")` was never in `shapes`.
 
-  THE ROOT CAUSE (READ). `zanzibar_utils_v1.py` builds `SchemaInfo.subject_wildcard_shapes`
+  THE ROOT CAUSE (READ). `src/zanzibar/schema/` builds `SchemaInfo.subject_wildcard_shapes`
   in TWO passes — declared wildcard restrictions (`:993-995`), **plus** a star-tupleset
   through-shape pass (`:1001-1008`): for each TTU, if its tupleset relation carries a bare
   wildcard restriction, add `(r.type, ttu.target_rel)`. Its own comment says why — *"that
@@ -162,7 +162,7 @@ def Sc : Schema :=
 
 /-! ## §2 The shipped second pass, transcribed into Lean
 
-Mirrors `zanzibar_utils_v1.py:1001-1008`: for every TTU in every def, look up the TTU's
+Mirrors `src/zanzibar/schema/`: for every TTU in every def, look up the TTU's
 TUPLESET relation on the SAME object type; if that relation carries a wildcard restriction
 whose predicate is bare, contribute `(restriction type, ttu target relation)`. -/
 

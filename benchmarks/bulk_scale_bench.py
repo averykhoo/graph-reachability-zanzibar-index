@@ -19,10 +19,10 @@ its ``rebuild()`` cost, RSS, and the same read surfaces. Run ONE backend per pro
 ``--json`` appends one record to results/<out> (default graph_scale_2026-07-15.jsonl).
 
 Seeding: the deterministic scale_bench generators (reused verbatim) are bulk-inserted
-as ``TupleV1`` rows (dedup'd; the data is acyclic + admission-valid by construction,
+as ``RelationTuple`` rows (dedup'd; the data is acyclic + admission-valid by construction,
 so bypassing per-tuple ``TupleSource`` admission is safe and fast). The graph is then
 built from that snapshot via ``build_index``; the set engine via ``rebuild()``. Both
-share ONE in-memory SQLite, so both RSS figures include the ``TupleV1`` rows -- an
+share ONE in-memory SQLite, so both RSS figures include the ``RelationTuple`` rows -- an
 artifact of the shared-DB harness. In production the graph is DB-resident (RAM-bounded
 by cache, not data size) while the set engine MUST hold all state in RAM; so this
 harness UNDERSTATES the graph's memory advantage. Reads are time-boxed like scale_bench.
@@ -41,10 +41,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlmodel import Session, SQLModel, create_engine
 
-from setengine import PySets, RoaringSets
-from setengine.models import TupleV1
-from connectedstore import build_index, save_schema
-from connectedstore.schema_io import open_set_engine
+from zanzibar.setengine import PySets, RoaringSets
+from zanzibar.setengine.models import RelationTuple
+from zanzibar.connectedstore import build_index, save_schema
+from zanzibar.connectedstore.schema_io import open_set_engine
 
 from benchmarks._harness import rss_mb, timed
 from benchmarks.scale_bench import WORKLOADS, _rsz
@@ -57,7 +57,7 @@ def fresh_session() -> Session:
 
 
 def seed_tuples(session: Session, store_id: str, schema: str, shapes, tuples) -> int:
-    """Persist the schema and bulk-insert dedup'd raw tuples as TupleV1 rows."""
+    """Persist the schema and bulk-insert dedup'd raw tuples as RelationTuple rows."""
     save_schema(session, store_id, schema, shapes)
     seen: set = set()
     rows = []
@@ -65,7 +65,7 @@ def seed_tuples(session: Session, store_id: str, schema: str, shapes, tuples) ->
         if t in seen:
             continue
         seen.add(t)
-        rows.append(TupleV1(store_id=store_id, subject_predicate=t[0], subject_type=t[1],
+        rows.append(RelationTuple(store_id=store_id, subject_predicate=t[0], subject_type=t[1],
                             subject_name=t[2], relation=t[3], object_type=t[4],
                             object_name=t[5]))
     session.add_all(rows)
@@ -102,7 +102,7 @@ def run(workload: str, scale: int, backend: str, ops_name: str, checks: int,
     else:
         ops = RoaringSets if (ops_name == 'roaring' and RoaringSets) else PySets
         # constructor replays once; time an explicit rebuild() as the canonical
-        # set-engine "open a store" cost (reset + O(N) replay from TupleV1).
+        # set-engine "open a store" cost (reset + O(N) replay from RelationTuple).
         be = open_set_engine(session, src, ops=ops)
         t0 = time.perf_counter()
         be.rebuild()

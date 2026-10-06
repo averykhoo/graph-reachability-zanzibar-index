@@ -30,40 +30,51 @@ reference oracle and a validation matrix.
 
 Same questions, same answers, opposite place to spend the work:
 
-* **Graph index** (`index_v4/`) — memoizes *everything at write time*: the full
+* **Graph index** (`src/zanzibar/graphindex/`) — memoizes *everything at write time*: the full
   transitive closure as ref-counted edges. `check` is O(1) point reads; writes pay
   O(closure delta), and boolean relations pay the delta-processor cascade on top.
-* **Set engine** (`setengine/`) — memoizes *nothing across queries*: stores raw tuples
-  (`TupleV1`, the repo's ground-truth table), evaluates memberships on demand with
+* **Set engine** (`src/zanzibar/setengine/`) — memoizes *nothing across queries*: stores raw tuples
+  (`RelationTuple`, the repo's ground-truth table), evaluates memberships on demand with
   bitmap algebra (`MemberSet`), O(1) writes.
 
 ## Module map (live code)
 
+The library is the one package `src/zanzibar/` (distribution `zanzibar`,
+`pyproject.toml`); `tests/`, `formal/`, `benchmarks/` and `scripts/` are outside it.
+
 ```
-zanzibar_utils_v1.py     shared schema layer: DSL parser -> SchemaAST; compile_ruleset ->
-                         Filters/Rules (+ boolean artifacts in RuleSet.compiled);
-                         SchemaInfo; identifier validation; unparse_schema_ast
-index_v4/
+src/zanzibar/schema/     shared schema layer (a package; __init__ re-exports the API)
+  errors.py              identifier validation, AdmissionRejected & the shared errors
+  syntax.py              SchemaAST: Direct/Computed/TTU/Union/Intersection/Exclusion
+  rules.py               Entity/RelationalTriple/Filter/Rule, SchemaInfo, RuleSet
+  parser.py              DSL tokenizer + parser, parse-time refusals
+  boolean.py             boolean derived-predicate compilation (plans, taint, strata)
+  compiler.py            compile_ruleset, wildcard scope refusals, parse_openfga_schema
+  unparse.py             unparse_schema_ast
+  json_frontend.py       OpenFGA JSON front end
+  reports.py             w4_fragment_report / graph_admission_report (opt-in)
+src/zanzibar/graphindex/
   core.py                ReachabilityIndex: ref-counted closure, cycle pre-check,
                          _lock_store writer serialization, outbox emission (_emit)
   wildcard.py            WildcardIndex facade: bridges, ≤4-probe check (one SQL stmt),
                          derived read path (edge + residue), lookups
   processor.py           DeltaProcessor: stratified IVM cascade for boolean relations
-  outbox.py              DeltaOutboxV1 helpers: watermark / rows / drain_deltas
+  outbox.py              DeltaOutbox helpers: watermark / rows / drain_deltas
   invariants.py          I1-I13 checker, paranoia mode, delta-scoped verifier
-  models.py              StoreV4 / NodeV4 / EdgeV4(.derived) / ResidueV1 / DeltaOutboxV1
+  models.py              Store / Node / Edge(.derived) / Residue / DeltaOutbox
   bulk_build.py          P13/N18 bulk closure builder for build_index (offline
                          bootstrap fast path): direct in-memory closure construction
   bulk_backfill.py       R4-BF in-memory Phase-D boolean backfill used by bulk_build
-setengine/
+  multiset.py            MultiSet (Counter refusing negative counts), from legacy v1
+src/zanzibar/setengine/
   engine.py              SetEngine: interner (ref-counted, recycled int32 ids),
-                         NodeSets, check/expand/lookup, rebuild() from TupleV1
+                         NodeSets, check/expand/lookup, rebuild() from RelationTuple
   memberset.py           star-closed MemberSet (pos/stars/neg) algebra -- the pinned
                          star×boolean table lives here
   setops.py              pluggable SetOps seam: RoaringSets (default) / PySets
-connectedstore/          the composed system (imports both backends, never imported
-                         by them): SchemaV4 (write-once schema source), TupleLogV1
-                         (permanent tuple log = tokens), IndexCursorV1, TupleSource
+src/zanzibar/connectedstore/          the composed system (imports both backends, never imported
+                         by them): SchemaRecord (write-once schema source), TupleLog
+                         (permanent tuple log = tokens), IndexCursor, TupleSource
                          (validated source-of-truth writes), advance_index (THE
                          apply step), ConnectedStore (sync/async schedules,
                          freshness-gated reads, refresh(), catch_up()),
@@ -75,6 +86,31 @@ tests/
   test_matrix.py         THE validation matrix (4-way, boolean stores included)
   snapshots/             compiled-RuleSet goldens (byte-identity gate)
 ```
+
+## Renamed in TK120 (2026-10-06)
+
+The key for FROZEN / ACTIVE-PLAN docs, closed task rows and history files, which keep the
+old names on purpose. There are no compatibility shims: the old names do not import.
+
+| before | after |
+|---|---|
+| `zanzibar_utils_v1.py` / `zanzibar_utils_v1` | `src/zanzibar/schema/` / `zanzibar.schema` (split into submodules, see the map above) |
+| `index_v4/` / `index_v4` | `src/zanzibar/graphindex/` / `zanzibar.graphindex` |
+| `setengine/`, `connectedstore/` | `src/zanzibar/setengine/`, `src/zanzibar/connectedstore/` |
+| `legacy/` (v1-v3 indexes) | deleted; `MultiSet` -> `zanzibar.graphindex.multiset` |
+| `StoreV4` / `NodeV4` / `EdgeV4` (table `store_v4` / `node_v4` / `edge_v4`) | `Store` / `Node` / `Edge` (`store` / `node` / `edge`) |
+| `ResidueV1` / `ResidueRefV1` (`residue_v1` / `residue_ref_v1`) | `Residue` / `ResidueRef` (`residue` / `residue_ref`) |
+| `DeltaOutboxV1` (`delta_outbox_v1`) | `DeltaOutbox` (`delta_outbox`) |
+| `TupleV1` (`tuple_v1`) | `RelationTuple` (`relation_tuple`) |
+| `SchemaV4` (`schema_v4`) | `SchemaRecord` (`schema_record`) |
+| `TupleLogV1` / `IndexCursorV1` (`tuple_log_v1` / `index_cursor_v1`) | `TupleLog` / `IndexCursor` (`tuple_log` / `index_cursor`) |
+| `NodeV2` | deleted (dead code) |
+| `tests/test_index_v4{,_core,_models}.py`, `tests/test_zanzibar_utils.py` | `tests/test_graphindex{,_core,_models}.py`, `tests/test_schema.py` |
+
+Constraint and index names follow their tables (`node_v4_unique_constraint` ->
+`node_unique_constraint`). A dated `file::symbol` cite into the old schema module maps by
+symbol: the plan doc `docs/tk120-repo-restructure-2026-10-05.md` records which submodule
+each top-level name went to.
 
 ## Key semantics (pinned -- see decision-log.md for why)
 
@@ -98,9 +134,9 @@ tests/
 
 Three spec series are cited by section number; all live in `docs/specs/`:
 
-* `spec §N` in `index_v4/{core,wildcard,models}.py` and wildcard tests →
+* `spec §N` in `src/zanzibar/graphindex/{core,wildcard,models}.py` and wildcard tests →
   `wildcard-materialization-spec.md`
-* `spec §N` in `setengine/*` and set-engine/matrix/oracle tests →
+* `spec §N` in `src/zanzibar/setengine/*` and set-engine/matrix/oracle tests →
   `set-engine-spec.md`
 * `boolean spec §N` anywhere → `graph-boolean-ivm-spec.md`
 
@@ -121,6 +157,10 @@ exceeds the ~10-min agent command cap; run it cap-safe per
 ```
 "C:/Users/user/anaconda3/envs/graph-reachability-zanzibar-index/python.exe" -m pytest -q
 ```
+
+Nothing needs installing for that: `pytest.ini` puts `src` on the path and the repo-root
+`conftest.py` refuses a `zanzibar` imported from anywhere but this checkout. For scripts
+outside pytest, `pip install -e . --no-deps --no-build-isolation` into the env.
 
 ### Supported database backends
 
@@ -143,9 +183,9 @@ as harmless colour (a wrong InnoDB claim was half the justification for acceptin
   missing DSN into a hard error. `tests/test_concurrency.py` and the multi-instance
   modules also re-run against the DSN when one is set.
 * **The dialect-specific surface is deliberately tiny** — everything else is
-  flavour-agnostic SQLModel/SQLAlchemy. It is exactly `index_v4/core.py::is_sqlite`,
-  `index_v4/core.py::take_row_write_lock`, and
-  `connectedstore/source.py::assert_read_isolation`. Put new dialect branching in those
+  flavour-agnostic SQLModel/SQLAlchemy. It is exactly `src/zanzibar/graphindex/core.py::is_sqlite`,
+  `src/zanzibar/graphindex/core.py::take_row_write_lock`, and
+  `src/zanzibar/connectedstore/source.py::assert_read_isolation`. Put new dialect branching in those
   three places; do not spread it through call sites or documentation.
 
 Deps: `sqlmodel`, `pytest`, `pyroaring`, `hypothesis` (+ `psycopg2-binary` for the

@@ -75,7 +75,7 @@ def _plus_r1_owc(sw):
 
 def mode_owc(kmax: int) -> None:
     import genswarm as G
-    from zanzibar_utils_v1 import (derive_schema_info, parse_openfga_schema,
+    from zanzibar.schema import (derive_schema_info, parse_openfga_schema,
                                    unparse_schema_ast)
     configs = G.enumerate_configs(kmax)
     variants = (('live', _live_owc), ('guarded', _guarded_owc), ('plus_r1', _plus_r1_owc))
@@ -113,7 +113,7 @@ def mode_reweight(draws: int, seed: int) -> None:
     from hypothesis import strategies as st
 
     import tests.test_hypothesis as H
-    from zanzibar_utils_v1 import parse_openfga_schema
+    from zanzibar.schema import parse_openfga_schema
 
     def make(variant):
         @st.composite

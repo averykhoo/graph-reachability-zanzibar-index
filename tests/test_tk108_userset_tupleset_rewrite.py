@@ -1,7 +1,7 @@
 """TK108 (user decision 2026-09-27): a tupleset may not restrict to a userset.
 
 ``define parent: [folder#member]`` used by ``viewer from parent`` is refused at PARSE time
-by both parsers (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+by both parsers (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`, oracle twin
 `tests/oracle.py::_validate_tuplesets_direct`), as OpenFGA refuses it. ``from`` takes a
 stored parent's type and name and ignores its predicate, so the ``#member`` was silently
 dropped; the graph refused the schema while the set engine and the oracle answered.
@@ -31,7 +31,7 @@ SABOTAGE (2026-09-27, literal output, each on a throwaway copy / restored file):
       1 failed, 6 passed
 
 - S2, disable the product refusal (``if r.predicate != '...':`` -> ``if False:`` in
-  `zanzibar_utils_v1.py::_validate_tuplesets_direct`)::
+  `src/zanzibar/schema/parser.py::_validate_tuplesets_direct`)::
 
       FAILED ...::test_refused_shape_is_refused_by_both_parsers[bare-beside-userset]
       FAILED ...::test_refused_shape_is_refused_by_both_parsers[userset]
@@ -48,7 +48,7 @@ import itertools
 
 import pytest
 
-import zanzibar_utils_v1 as Z
+import zanzibar.schema as Z
 from tests import oracle as O
 from tests.parity import ParityEngine
 

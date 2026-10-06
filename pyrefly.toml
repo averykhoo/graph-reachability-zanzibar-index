@@ -2,3 +2,7 @@ site-package-path = ["C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-
 python-platform = "windows"
 python-version = "3.13"
 python-interpreter-path = "C:/Users/avery/anaconda3/envs/graph-reachability-zanzibar-index/python.exe"
+
+# TK120 (2026-10-06): the library is the src/zanzibar/ package; the repo root keeps the
+# `tests` / `formal` packages importable.
+search-path = ["src", "."]

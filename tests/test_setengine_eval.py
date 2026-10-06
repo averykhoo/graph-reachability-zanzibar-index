@@ -4,7 +4,7 @@ P4 tests (spec §6.3-6.5): expand/lookup correctness and open-replay equivalence
   * expand ≡ check: for every entity/star grid subject, MemberSet membership agrees
     with pointwise check (which is already validated against the oracle);
   * open-replay equivalence: check answers over a grid are identical after discarding
-    the engine and rebuilding from the TupleV1 table (§6.5);
+    the engine and rebuilding from the RelationTuple table (§6.5);
   * lookup / lookup_reverse hand-computed scenarios.
 """
 
@@ -14,8 +14,8 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from tests.test_wildcard_property import _candidate_raw_tuples, _query_grid, OBJECT_WC
-from setengine import SetEngine, ALL_SETOPS
-from setengine.setops import PySets
+from zanzibar.setengine import SetEngine, ALL_SETOPS
+from zanzibar.setengine.setops import PySets
 
 
 def _fresh_session() -> Session:
@@ -103,7 +103,7 @@ def test_open_replay_equivalence_answers(load_fga_schema, seed):
             session.rollback()
 
     before = {q: se.check(*q) for q in grid}
-    se.rebuild()                              # discard state, replay from TupleV1
+    se.rebuild()                              # discard state, replay from RelationTuple
     after = {q: se.check(*q) for q in grid}
     assert before == after
     session.close()

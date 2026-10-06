@@ -12,7 +12,7 @@ i.e. every backend refuses the cycle-closing write and the stores no longer fork
 header's `graph=False set:py=True set:roaring=True` line was true on 2026-09-15 and is the
 record of the defect, which is why it is not edited.
 
-The fix: `setengine/engine.py::SetEngine._flow_reaches` now steps
+The fix: `src/zanzibar/setengine/engine.py::SetEngine._flow_reaches` now steps
 `w_all(T,p) -> w_any(T,p)` on a CROSSABLE shape when an entity of type `T` exists -- the
 I14 crossing middle added virtually, gated on entity existence. Ledger:
 `docs/spec-deviations.md` 2026-09-16. Map: `docs/tk69-admission-parity-2026-09-16.md`.
@@ -45,8 +45,8 @@ WHAT IT MEASURES, in three parts:
       so `doc:d1#viewer` depends on itself. The GRAPH refuses (it materialises a
       transitive closure; `Inv.acyclic` / I2 is load-bearing). The SET ENGINE accepts on
       BOTH `SetOps` backends -- its cycle check walks a flow graph whose nodes are created
-      per incident EDGE (`setengine/engine.py::SetEngine._shape_node_ref`), while the
-      graph's entity middles exist per ENTITY (`index_v4/wildcard.py::
+      per incident EDGE (`src/zanzibar/setengine/engine.py::SetEngine._shape_node_ref`), while the
+      graph's entity middles exist per ENTITY (`src/zanzibar/graphindex/wildcard.py::
       WildcardIndex._ensure_entity_middles`), so the set engine cannot see the crossing.
 
   (B) THE FORK. After (A) the two backends hold DIFFERENT STORES -- the graph rolled write
@@ -63,7 +63,7 @@ WHAT IT MEASURES, in three parts:
 
 NOT CLAIMED HERE: the downstream severity. Whether this wedges a multi-instance async
 cursor (the audit's REASONED claim, via the ValueError -> InvariantViolation promotion in
-`connectedstore/apply.py::_apply_row`) is a SEPARATE measurement and is not made by this
+`src/zanzibar/connectedstore/apply.py::_apply_row`) is a SEPARATE measurement and is not made by this
 file. Do not cite this probe for it.
 
 -- THE RESULT ---------------------------------------------------------------------------
@@ -121,7 +121,7 @@ that preserves both backends' existing guarantees.
        the two backends disagree about which stores may exist, and each
        then serves its own store correctly.
 """
-from setengine.setops import ALL_SETOPS
+from zanzibar.setengine.setops import ALL_SETOPS
 from tests.oracle import Oracle, t as otuple
 from tests.test_matrix import GraphBackend, SetBackend
 

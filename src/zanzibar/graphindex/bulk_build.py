@@ -1,0 +1,400 @@
+"""P13 -- the bulk closure builder for ``build_index`` (design: docs/architecture/p13-bulk-build-design.md).
+
+Constructs the graph index's final pre-backfill state DIRECTLY -- one in-memory pass
+over the tuple snapshot plus bulk writes -- instead of replaying every routed triple
+through the incremental ``WildcardIndex.add_tuple`` machinery (which pays an
+O(ancestors x descendants) closure-region update per triple).
+
+**Correctness bar (design):** the state this builds is byte-IDENTICAL to what the
+incremental add-only load produces, modulo auto-assigned row ids. It is pinned by the
+differential identity gate in ``tests/test_bulk_build.py``; no new proof obligation
+arises, since the incremental path (which stays the default online apply step) carries
+the entire verification story and this is merely an alternative constructor of the same
+modeled state (T4's closed-form path counts, computed directly).
+
+Phases (design "Bulk algorithm"):
+  R  route each ``RelationTuple`` through ``RuleSet.apply``; apply the position rule of
+     ``WildcardIndex._resolve`` to each derived triple to get natural-key endpoints;
+     accumulate the direct-multigraph multiplicity ``m(s, o)`` (rewrite fan-in adds the
+     same pair more than once -- deliberate multigraph semantics).
+  B  bridge edges from the declared bridged shapes (concrete->w_any / w_all->concrete),
+     multiplicity 1, existence-checked (mirrors ``_ensure_bridges``), plus -- for every
+     CROSSABLE shape (bridged in AND out) -- the entity-tracking crossing middles with
+     their bridges (I14; mirrors ``_ensure_entity_middles``).
+  C  topological sort of the direct graph; a cycle is a corruption signal.
+  P  sparse integer DP in reverse topo order: ``P(a, b) = m(a, b) + sum_v m(a, v)*P(v, b)``
+     -- the total weighted path count (== incremental ``indirect_edge_count``).
+  D  (R4-BF, boolean schemas only) in-memory boolean backfill: compute the FINAL derived
+     state (derived edges, residues, from-chain nodes and their closure/refcount effects)
+     over ``m``, byte-identical to running ``DeltaProcessor.backfill()`` per object -- see
+     ``zanzibar.graphindex.bulk_backfill``.
+  W  bulk-INSERT nodes (implicit unless processor-pinned explicit, reference_count = sum of
+     incident direct multiplicities), edges (direct=m, indirect=P, derived flag from the
+     processor-written pairs), residues, and one outbox ADDED row per final pair.
+
+On a non-boolean schema Phase D is skipped and this is exactly the P13 pre-backfill build;
+``connectedstore.build_index``'s bulk branch no longer runs ``DeltaProcessor.backfill()``.
+"""
+
+from __future__ import annotations
+
+import json
+from collections import defaultdict
+from typing import TYPE_CHECKING
+
+from sqlalchemy import insert
+from sqlmodel import Session, select
+
+from zanzibar.setengine.models import RelationTuple
+from zanzibar.schema import (Entity, PathCountExceeded, RelationalTriple, RuleSet,
+                               norm_pred)
+
+from .bulk_backfill import _BulkBackfill
+from .invariants import InvariantViolation
+from .models import DeltaOutbox, Edge, Node, ResidueRef, Residue
+
+if TYPE_CHECKING:
+    from zanzibar.schema import SchemaInfo
+
+# A node's natural key: (predicate, type, name, wildcard). Mirrors the identity
+# ``ReachabilityIndex.node`` dedupes on, so it is id-independent by construction.
+NodeKey = tuple[str, str, str, str]
+
+# N18 (RAM ceiling): the Phase-W writes generate + execute + free their row dicts in
+# bounded chunks instead of materializing full per-row-dict lists (which peaked ~3x the
+# DP at 200k tuples). ``_WRITE_CHUNK`` rows per ``session.execute(insert(...), rows)``;
+# ``_ROW_STREAM_BATCH`` rows per Phase-R fetch. Same rows, same insertion order.
+_WRITE_CHUNK = 50_000
+_ROW_STREAM_BATCH = 10_000
+
+
+def _subject_key(subject_predicate, s_type: str, s_name: str,
+                 schema_info: 'SchemaInfo') -> NodeKey:
+    """Position rule for a subject endpoint (``WildcardIndex._resolve`` subject branch).
+
+    subject ``'*'`` -> ``w_any(type, predicate)`` and the shape must be a declared
+    subject-wildcard shape; otherwise a concrete node. Predicate normalized via
+    ``norm_pred`` (Ellipsis/None -> ``'...'``)."""
+    pred = norm_pred(subject_predicate)
+    if s_name == '*':
+        shape = (s_type, pred)
+        if shape not in schema_info.subject_wildcard_shapes:
+            raise ValueError(
+                f"subject wildcard {s_type}:* (predicate {pred!r}) is not a declared "
+                f"subject-wildcard shape {shape}")
+        return (pred, s_type, '*', 'any')
+    return (pred, s_type, s_name, '')
+
+
+def _object_key(relation: str, o_type: str, o_name: str,
+                schema_info: 'SchemaInfo') -> NodeKey:
+    """Position rule for an object endpoint (``WildcardIndex._resolve`` object branch).
+
+    object ``'*'`` -> ``w_all(type, relation)`` and the shape must be a declared
+    object-wildcard shape; otherwise a concrete node. The object node's *predicate* is
+    the relation."""
+    pred = norm_pred(relation)
+    if o_name == '*':
+        shape = (o_type, pred)
+        if shape not in schema_info.object_wildcard_shapes:
+            raise ValueError(
+                f"object wildcard {o_type}:* (relation {pred!r}) is not a declared "
+                f"object-wildcard shape {shape}")
+        return (pred, o_type, '*', 'all')
+    return (pred, o_type, o_name, '')
+
+
+def _topo_order(nodes: set[NodeKey],
+                succ: dict[NodeKey, list[tuple[NodeKey, int]]]) -> list[NodeKey]:
+    """Kahn topological sort of the direct graph. A leftover (a cycle) is a corruption
+    signal -- the tuple log is admission-validated acyclic, mirroring ``_apply_row``'s
+    stance and the core's cycle assertions."""
+    indeg: dict[NodeKey, int] = {n: 0 for n in nodes}
+    for a in succ:
+        for (b, _mult) in succ[a]:
+            indeg[b] += 1
+    # Deterministic order (sorted) so the build is reproducible run to run.
+    queue = sorted(n for n in nodes if indeg[n] == 0)
+    order: list[NodeKey] = []
+    while queue:
+        a = queue.pop()
+        order.append(a)
+        newly: list[NodeKey] = []
+        for (b, _mult) in succ.get(a, ()):
+            indeg[b] -= 1
+            if indeg[b] == 0:
+                newly.append(b)
+        if newly:
+            # keep the frontier sorted for a stable order
+            queue.extend(newly)
+            queue.sort()
+    if len(order) != len(nodes):
+        raise InvariantViolation(
+            'bulk_build: the routed direct graph is cyclic -- the tuple log is '
+            'admission-validated acyclic, so this is corruption')
+    return order
+
+
+def bulk_build(session: Session, source_store_id: str, index_store_id: str,
+               ruleset: RuleSet, schema_info: 'SchemaInfo') -> None:
+    """Build the graph index's pre-backfill state for ``index_store_id`` directly from
+    the ``RelationTuple`` snapshot of ``source_store_id``. Writes nodes/edges/outbox into the
+    caller's (uncommitted) transaction; the caller runs ``backfill()`` and commits.
+
+    Identical in effect to routing every snapshot tuple through
+    ``WildcardIndex.add_tuple`` (the ``build_index(..., bulk=False)`` reference path),
+    modulo row ids."""
+    store_id = index_store_id
+
+    # -- Phase R: route -> direct-multigraph multiplicities m(skey, okey). --------
+    # N18: stream the snapshot in id order instead of ``.all()`` -- select only the
+    # six routed columns (no ORM entities, so ~200k RelationTuple instances never enter the
+    # identity map) and ``yield_per`` so the driver fetches in bounded batches. Same
+    # rows, same ``.order_by(RelationTuple.id)`` order as the incremental reference path.
+    m: dict[tuple[NodeKey, NodeKey], int] = defaultdict(int)
+    row_stream = session.exec(
+        select(RelationTuple.subject_predicate, RelationTuple.subject_type, RelationTuple.subject_name,
+               RelationTuple.relation, RelationTuple.object_type, RelationTuple.object_name)
+        .where(RelationTuple.store_id == source_store_id)
+        .order_by(RelationTuple.id)  # type: ignore[arg-type]
+        .execution_options(yield_per=_ROW_STREAM_BATCH)
+    )
+    for (subject_predicate, subject_type, subject_name,
+         relation, object_type, object_name) in row_stream:
+        sp = Ellipsis if subject_predicate == '...' else subject_predicate
+        triple = RelationalTriple(Entity(subject_type, subject_name), relation,
+                                  Entity(object_type, object_name), sp)
+        for d in ruleset.apply(triple):
+            skey = _subject_key(d.subject_predicate, d.subject.type, d.subject.name,
+                                schema_info)
+            okey = _object_key(d.relation, d.object.type, d.object.name, schema_info)
+            if skey == okey:
+                # subject node IS object node: the trivial cycle. The core rejects this
+                # (ValueError -> InvariantViolation on the admission-validated log path).
+                raise InvariantViolation(
+                    f'bulk_build: self-referential edge {skey} would create a cycle')
+            m[(skey, okey)] += 1
+
+    # -- Phase B: bridges (concrete->w_any, w_all->concrete), multiplicity 1. ------
+    # Every concrete node that appears as a routed endpoint is bridged for its shape,
+    # exactly as ``_ensure_bridges`` bridges the subject and object of every triple.
+    # Bridge pairs provably never collide with routed pairs (a routed object is never
+    # w_any; a routed subject is never w_all), so "add once" == the incremental
+    # existence-checked ``add_edge_by_id``.
+    concretes: set[NodeKey] = set()
+    for (skey, okey) in m:
+        if skey[3] == '':
+            concretes.add(skey)
+        if okey[3] == '':
+            concretes.add(okey)
+    for key in concretes:
+        pred, typ, name, _wild = key
+        shape = (typ, pred)
+        if shape in schema_info.bridged_in_shapes:
+            bridge = (key, (pred, typ, '*', 'any'))
+            if bridge not in m:
+                m[bridge] = 1
+        if shape in schema_info.bridged_out_shapes:
+            bridge = ((pred, typ, '*', 'all'), key)
+            if bridge not in m:
+                m[bridge] = 1
+    # I14 mirror (WildcardIndex._ensure_entity_middles): on a CROSSABLE shape (T, p)
+    # -- bridged in AND out -- the w_all -> concrete -> w_any crossing must have its
+    # concrete middle for every ENTITY of type T, not merely for entities that happen
+    # to intern a node of shape (T, p). The incremental path interns the middle (with
+    # both bridges, multiplicity 1, existence-checked) for both endpoints of every
+    # add; the load-phase equivalent is every concrete routed endpoint's entity.
+    crossable = schema_info.crossable_shapes
+    if crossable:
+        entity_names: dict[str, set[str]] = defaultdict(set)
+        for (_pred, typ, name, _wild) in concretes:
+            entity_names[typ].add(name)
+        for (typ, p) in sorted(crossable):
+            w_any_key = (p, typ, '*', 'any')
+            w_all_key = (p, typ, '*', 'all')
+            for name in sorted(entity_names.get(typ, ())):
+                mid = (p, typ, name, '')
+                bridge = (mid, w_any_key)
+                if bridge not in m:
+                    m[bridge] = 1
+                bridge = (w_all_key, mid)
+                if bridge not in m:
+                    m[bridge] = 1
+
+    # -- Seed node set (routed-triple + bridge endpoints). -------------------------
+    nodes: set[NodeKey] = set()
+    for (a, b) in m:
+        nodes.add(a)
+        nodes.add(b)
+
+    if not nodes:
+        return   # empty snapshot: nothing to build (backfill will also find nothing)
+
+    # -- Phase D: in-memory boolean backfill (R4-BF). ------------------------------
+    # On a boolean schema, compute the FINAL derived state (derived edges, residues,
+    # from-chain nodes) in memory -- byte-identical to running DeltaProcessor.backfill()
+    # per object afterwards -- so Phase W writes the union of load + derived state.
+    # ``bf`` mutates ``m`` (adds derived edges + mid-backfill bridges, mult 1) and
+    # ``nodes`` (interns public / from-chain / w nodes, including edge-free ones) in
+    # place. On a non-boolean schema this is skipped and the build is exactly P13.
+    compiled = ruleset.compiled
+    derived_pairs: set[tuple[NodeKey, NodeKey]] = set()
+    explicit: set[NodeKey] = set()
+    residues: dict[tuple[str, str, str], object] = {}
+    if compiled is not None and compiled.plans:
+        bf = _BulkBackfill(m, nodes, schema_info, compiled)
+        bf.run()
+        derived_pairs = bf.derived_pairs
+        explicit = bf.explicit
+        residues = bf.residues
+
+    # -- Reference counts + successor lists over the FINAL direct multigraph. -------
+    # reference_count = sum of incident direct multiplicities (derived + bridge edges
+    # included). Isolated interned nodes (residue-only publics, edge-free from-chain
+    # nodes) carry rc 0 and appear in ``nodes`` but not ``m``.
+    ref_count: dict[NodeKey, int] = defaultdict(int)
+    succ: dict[NodeKey, list[tuple[NodeKey, int]]] = defaultdict(list)
+    for (a, b), mult in m.items():
+        ref_count[a] += mult
+        ref_count[b] += mult
+        succ[a].append((b, mult))
+
+    # -- Phase C: topological sort (cycle => InvariantViolation). ------------------
+    order = _topo_order(nodes, succ)
+
+    # -- Phase P: sparse integer path counts in reverse topo order. ----------------
+    # P(a, b) = m(a, b) + sum_v m(a, v)*P(v, b). Processing sinks first means every
+    # successor's vector is complete before its predecessor consumes it.
+    pvec: dict[NodeKey, dict[NodeKey, int]] = {}
+    for a in reversed(order):
+        pa: dict[NodeKey, int] = defaultdict(int)
+        for (v, mult) in succ.get(a, ()):
+            pa[v] += mult                       # the direct edge a->v (length-1 path)
+            for b, cnt in pvec[v].items():
+                pa[b] += mult * cnt
+        pvec[a] = pa
+
+    # -- Phase W: bulk writes. -----------------------------------------------------
+    # (1) nodes: implicit unless the processor pinned the key explicit (residue anchor /
+    #     derived-edge public node / recorded from-chain node -- core.node sticky rule);
+    #     reference_count computed above; ORM add + one flush so the auto-increment ids
+    #     are available for the edge/outbox/residue foreign keys.
+    node_objs: dict[NodeKey, Node] = {}
+    for key in sorted(nodes):
+        pred, typ, name, wild = key
+        node_objs[key] = Node(
+            store_id=store_id, predicate=pred, type=typ, name=name, wildcard=wild,
+            implicit=key not in explicit, reference_count=ref_count[key])
+    session.add_all(node_objs.values())
+    session.flush()
+    node_id = {key: n.id for key, n in node_objs.items()}
+    # N18: the INSERT is flushed and every id is captured in ``node_id``; nothing
+    # downstream (Phase W below, or the caller in ``src/zanzibar/connectedstore/build.py`` -- which
+    # re-reads all graph state via fresh queries) touches the live instances again.
+    # Expunge them so ~165k Node objects do not sit in the identity map for the rest
+    # of the build; drop the dict too.
+    for n in node_objs.values():
+        session.expunge(n)
+    node_objs.clear()
+
+    # Final edge pairs, sorted by (subject_key, object_key) so edge and outbox writes
+    # share one deterministic order (the outbox order is provably inert -- design
+    # section 5 -- and the identity gate compares content as a multiset).
+    edge_pairs = sorted(
+        (a, b) for a in order for b in pvec[a] if pvec[a][b] > 0)
+
+    # TK111 (2026-10-03b): the incremental path refuses a closure row past
+    # ``core.MAX_PATH_COUNT`` with ``PathCountExceeded``; the bulk constructor must refuse
+    # the same snapshot the same way, not die in the driver at INSERT (a raw DataError on
+    # PostgreSQL). Read at call time so the two constructors cannot disagree on the bound.
+    from . import core as _core
+    for (a, b) in edge_pairs:
+        if pvec[a][b] > _core.MAX_PATH_COUNT:
+            raise PathCountExceeded(
+                f'path count bound exceeded: the bulk build would give closure row '
+                f'{a!r} -> {b!r} {pvec[a][b]} distinct derivation paths, over the storage '
+                f'limit of {_core.MAX_PATH_COUNT} for store {store_id!r}')
+
+    # (2) edges: executemany INSERT, chunked (N18). direct=m (0 for pure-indirect pairs),
+    #     indirect=P. derived=True exactly on pairs holding a processor-written direct edge
+    #     (I5); every other pair -- including pure-indirect pairs created THROUGH derived
+    #     edges -- False. Row dicts are generated per chunk (slice of the sorted
+    #     ``edge_pairs``) and freed before the next chunk, never accumulated into one list,
+    #     so peak RSS is bounded by ``_WRITE_CHUNK`` rows, not the whole closure. Chunks run
+    #     in ``edge_pairs`` order, so per-table auto-increment ids are assigned in the exact
+    #     same order as the old single INSERT.
+    for start in range(0, len(edge_pairs), _WRITE_CHUNK):
+        chunk = [
+            {
+                'store_id': store_id,
+                'subject_id': node_id[a],
+                'object_id': node_id[b],
+                'direct_edge_count': m.get((a, b), 0),
+                'indirect_edge_count': pvec[a][b],
+                'derived': (a, b) in derived_pairs,
+            }
+            for (a, b) in edge_pairs[start:start + _WRITE_CHUNK]
+        ]
+        session.execute(insert(Edge), chunk)
+
+    # (2b) residues: one row per non-empty derived residue (R4-BF), chunked (N18). version=1
+    #      on a fresh build unless a step-4 neg bump raised it; stars sorted JSON, neg/upos
+    #      node keys translated to the just-flushed ids. Empty residues were never recorded.
+    #      ``residues.items()`` iteration order (== the old single-INSERT order) is preserved.
+    residue_items = list(residues.items())
+    for start in range(0, len(residue_items), _WRITE_CHUNK):
+        chunk = [
+            {
+                'store_id': store_id,
+                'object_node_id': node_id[(rel, o_type, o_name, '')],
+                'relation': rel,
+                'stars': json.dumps(sorted([list(s) for s in res.stars])),
+                'neg': json.dumps(sorted(node_id[k] for k in res.neg)),
+                'upos': json.dumps(sorted(node_id[k] for k in res.upos)),
+                'version': res.version,
+            }
+            for (o_type, rel, o_name), res in residue_items[start:start + _WRITE_CHUNK]
+        ]
+        session.execute(insert(Residue), chunk)
+
+    # (2c) residue reverse index: one row per (residue object, recorded subject id),
+    #      i.e. exactly the union `neg | upos` written above, chunked the same way.
+    #      This path bypasses ``DeltaProcessor._store_residue``, so it must populate
+    #      the index itself -- a bulk build that skipped it would produce a store whose
+    #      node-release paths believe NOTHING is referenced, which is the ZT-P0-1
+    #      escalation class. Pinned by the I6 agreement clause (invariants.py), which
+    #      the bulk differential gate runs over every built store.
+    ref_rows = [
+        {
+            'store_id': store_id,
+            'subject_node_id': node_id[k],
+            'object_node_id': node_id[(rel, o_type, o_name, '')],
+        }
+        for (o_type, rel, o_name), res in residue_items
+        for k in sorted(set(res.neg) | set(res.upos))
+    ]
+    for start in range(0, len(ref_rows), _WRITE_CHUNK):
+        session.execute(insert(ResidueRef), ref_rows[start:start + _WRITE_CHUNK])
+
+    # (3) outbox: one ADDED row per final pair, chunked (N18), endpoint identities
+    #     denormalized from the node keys (== what ``_emit`` captures from the live node
+    #     rows). An add-only load flips each closure pair 0->positive exactly once, so
+    #     exactly one ADDED per pair and no REMOVED (design section 5). Same ``edge_pairs``
+    #     order as the edge INSERTs; the outbox order is provably inert regardless.
+    for start in range(0, len(edge_pairs), _WRITE_CHUNK):
+        chunk = [
+            {
+                'store_id': store_id,
+                'subject_node_id': node_id[a],
+                'object_node_id': node_id[b],
+                'action': 'ADDED',
+                'subject_type': a[1],
+                'subject_name': a[2],
+                'subject_predicate': a[0],
+                'object_type': b[1],
+                'object_name': b[2],
+                'object_predicate': b[0],
+            }
+            for (a, b) in edge_pairs[start:start + _WRITE_CHUNK]
+        ]
+        session.execute(insert(DeltaOutbox), chunk)

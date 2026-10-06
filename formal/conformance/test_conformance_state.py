@@ -4,7 +4,7 @@
 MATERIALIZED STATE: per corpus, the Lean operational graph model's edges +
 residues (zcli mode `"graph-state"` — the same `graphRun` fold of the
 `ReachedBy` chain's own constructors, same rc 2/3 admission/drain gates) must
-equal the real Python graph index's final SQL state (`EdgeV4`/`ResidueV1` rows
+equal the real Python graph index's final SQL state (`Edge`/`Residue` rows
 after the synchronous v1 write path), at the representation-neutral canonical
 form of `extractor.py`:
 
@@ -50,7 +50,7 @@ properties that make them meaningful.
 
 This paragraph used to restate the figures, and it is *why* the ledger exists: the
 2026-07-27 measurement (21 corpora — 447 raw rows, 231 by P1, 62 by P6, 154
-compared, 235 `NodeV4`, 11 residue rows over 5 corpora) was still being quoted on
+compared, 235 `Node`, 11 residue rows over 5 corpora) was still being quoted on
 2026-08-05 against a 23-corpus set whose real figures were then 477 / 233 / 73 /
 171 / 266 / 13-over-6. Every number in the old paragraph except the P2 zero had drifted,
 and the recipe for re-deriving them existed only as an English description of a
@@ -159,7 +159,7 @@ def test_projection_ledger_is_not_vacuous():
 # Anti-vacuity floor for the P6-retirement pin below. MEASURED 2026-09-05 with
 # `extractor.graph_fragment_ledger()` over all 25 in-fragment corpora, on the tree
 # that retired P6: `{'corpora': 25, 'raw': 498, 'P1': 233, 'P2': 0,
-# 'compared': 265}`. Of the **78** leaf-TARGET `EdgeV4` rows the selector below
+# 'compared': 265}`. Of the **78** leaf-TARGET `Edge` rows the selector below
 # sees (`_MIN_LEAF_ROWS`, same predicate, one test down), **76** reach the compare
 # arm and the other **2** are closure-only rows P1 drops first — 76 = 78 - 2, and
 # those 76 are exactly the rows P6 used to drop. Set AT measured reality per the
@@ -192,7 +192,7 @@ def test_leaf_rows_reach_the_compare_arm():
          (provenance in that constant's comment), so a filter that drops only
          SOME leaf rows is caught too.
 
-    Deliberately runs the RAW `EdgeV4` rows through `_edge_projection` itself,
+    Deliberately runs the RAW `Edge` rows through `_edge_projection` itself,
     not through `projection_ledger`'s aggregate: the ledger no longer has a key
     that would move if leaf rows started being dropped again (they would simply
     vanish from `compared` into a new bucket), which is exactly the blind spot
@@ -202,7 +202,7 @@ def test_leaf_rows_reach_the_compare_arm():
 
     from formal.conformance.backends import graphindex_drive
     from formal.conformance.extractor import _edge_projection
-    from index_v4.models import EdgeV4, NodeV4
+    from zanzibar.graphindex.models import Edge, Node
 
     dotted = compared = 0
     filtered: list[str] = []
@@ -214,10 +214,10 @@ def test_leaf_rows_reach_the_compare_arm():
             nodes = {
                 n.id: (n.type, n.name, n.predicate, n.wildcard)
                 for n in session.exec(
-                    select(NodeV4).where(NodeV4.store_id == store_id)).all()
+                    select(Node).where(Node.store_id == store_id)).all()
             }
             for e in session.exec(
-                    select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
+                    select(Edge).where(Edge.store_id == store_id)).all():
                 obj = nodes[e.object_id]
                 if "." not in obj[2] or obj[2] == "...":
                     continue                            # not a leaf-family row
@@ -249,7 +249,7 @@ def test_leaf_rows_reach_the_compare_arm():
 # Anti-vacuity floor for the leaf-row structural pin below. Measured 2026-08-09
 # over all 25 in-fragment corpora (`GRAPH_FRAGMENT` had just grown 23 -> 25 with
 # `reconvergent_diamond` / `reconvergent_derived`; the 2026-08-08 measurement of
-# the 23-corpus set was 75 = 73 + 2): **78** leaf-TARGET `EdgeV4` rows — 76 of
+# the 23-corpus set was 75 = 73 + 2): **78** leaf-TARGET `Edge` rows — 76 of
 # them surviving P1 (and hence, while P6 was live, P6-dropped), the other 2
 # closure-only rows P1 drops first. Set AT measured reality per the repo's floor
 # discipline.
@@ -259,15 +259,15 @@ def test_leaf_rows_reach_the_compare_arm():
 #   from sqlmodel import select
 #   from formal.conformance.corpus import SCHEMAS, GRAPH_FRAGMENT
 #   from formal.conformance.backends import graphindex_drive
-#   from index_v4.models import EdgeV4, NodeV4
+#   from zanzibar.graphindex.models import Edge, Node
 #   n = 0
 #   for name in sorted(GRAPH_FRAGMENT):
 #       sch, tup, ow = SCHEMAS[name]
 #       s, _w, sid = graphindex_drive(sch, tup, ow)
 #       preds = {x.id: x.predicate
-#                for x in s.exec(select(NodeV4).where(NodeV4.store_id == sid))}
+#                for x in s.exec(select(Node).where(Node.store_id == sid))}
 #       n += sum('.' in preds[e.object_id] and preds[e.object_id] != '...'
-#                for e in s.exec(select(EdgeV4).where(EdgeV4.store_id == sid)))
+#                for e in s.exec(select(Edge).where(Edge.store_id == sid)))
 #       s.close()
 #   print(n)"
 # ★ SABOTAGE (2026-08-09, at floor 78): adding `if e.direct_edge_count <= 0:
@@ -288,7 +288,7 @@ def test_leaf_rows_are_structurally_untainted():
     retired 2026-09-05).
 
     This pins the claim that `extractor._classify_edges` actually depends on: that
-    schema taint and `EdgeV4.derived` cannot disagree on a `<rel>.<n>` leaf row.
+    schema taint and `Edge.derived` cannot disagree on a `<rel>.<n>` leaf row.
     Until 2026-08-08 that function justified the agreement with "leaf families
     which P6 already dropped" — an explanation that is false as reasoning (the
     agreement holds for reasons unrelated to P6) and that would have SILENTLY
@@ -296,7 +296,7 @@ def test_leaf_rows_are_structurally_untainted():
     paragraph converted into a refusal, because the next person will not read
     the paragraph.
 
-    Note the deliberate scope: it runs against the RAW `EdgeV4` rows, upstream of
+    Note the deliberate scope: it runs against the RAW `Edge` rows, upstream of
     `_edge_projection`, so it kept testing exactly the same property when P6 was
     deleted. That was the point — it is the check that made retiring P6 safe
     (`formal/history/leaf-family-split-scope-2026-08-05.md` §7 step 2), so it must
@@ -350,7 +350,7 @@ def test_leaf_rows_are_structurally_untainted():
     from sqlmodel import select
 
     from formal.conformance.backends import graphindex_drive
-    from index_v4.models import EdgeV4, NodeV4
+    from zanzibar.graphindex.models import Edge, Node
 
     inspected = 0
     flagged_derived: list[str] = []
@@ -364,10 +364,10 @@ def test_leaf_rows_are_structurally_untainted():
             nodes = {
                 n.id: (n.type, n.name, n.predicate, n.wildcard)
                 for n in session.exec(
-                    select(NodeV4).where(NodeV4.store_id == store_id)).all()
+                    select(Node).where(Node.store_id == store_id)).all()
             }
             for e in session.exec(
-                    select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
+                    select(Edge).where(Edge.store_id == store_id)).all():
                 obj = nodes[e.object_id]
                 if "." not in obj[2] or obj[2] == "...":
                     continue                            # not a leaf-family row
@@ -475,7 +475,7 @@ def test_state_leangraph_vs_pythongraph(name):
         `lean=1 python=3`
       * `derived_relations` returns `frozenset()` (exemption boundary lost) =>
         `AssertionError: P3 edge classification disagreement (schema taint vs
-         EdgeV4.derived)`
+         Edge.derived)`
     """
     schema_text, tuples, obj_wild = SCHEMAS[name]
     try:
@@ -717,7 +717,7 @@ def test_residue_rich_corpus_is_really_rich():
 
 @pytest.mark.parametrize("name", sorted(GRAPH_FRAGMENT))
 def test_python_nodes_are_all_justified(name):
-    """No orphan `NodeV4` rows: every node is an endpoint of some `EdgeV4` row or
+    """No orphan `Node` rows: every node is an endpoint of some `Edge` row or
     is referenced by a residue (as the row's object node, or inside `neg`/`upos`).
 
     HONESTY (read this before citing it): this is **not** a Lean comparison and
@@ -726,10 +726,10 @@ def test_python_nodes_are_all_justified(name):
     (`Cli.lean::stateJson`), and (ii) the model NEVER removes a node while Python
     GCs implicit nodes at refcount 0 and the processor GCs derived-public
     anchors — so raw node-set equality is FALSE BY DESIGN, which is why P5
-    exists. Nor is there any comparable node PROPERTY: `NodeV4.implicit` and
-    `NodeV4.reference_count` have no counterpart in Lean's `NodeKey` at all.
+    exists. Nor is there any comparable node PROPERTY: `Node.implicit` and
+    `Node.reference_count` have no counterpart in Lean's `NodeKey` at all.
     Measured 2026-07-27, across the corpora then in the fragment: of 235
-    `NodeV4` rows, 194 were edge/residue endpoints of the COMPARED state and
+    `Node` rows, 194 were edge/residue endpoints of the COMPARED state and
     thus pinned
     implicitly by the edge+residue equality above; the other **41 are invisible
     to the gate entirely** — they exist only to carry P1-dropped closure rows.
@@ -742,7 +742,7 @@ def test_python_nodes_are_all_justified(name):
     2026-07-27 across every corpus then in the fragment: 0 orphans."""
     from sqlmodel import select
     import json as _json
-    from index_v4.models import EdgeV4, NodeV4, ResidueV1
+    from zanzibar.graphindex.models import Edge, Node, Residue
     from formal.conformance.backends import graphindex_drive
 
     schema_text, tuples, obj_wild = SCHEMAS[name]
@@ -750,14 +750,14 @@ def test_python_nodes_are_all_justified(name):
     try:
         nodes = {n.id: (n.type, n.name, n.predicate, n.wildcard)
                  for n in session.exec(
-                     select(NodeV4).where(NodeV4.store_id == store_id)).all()}
+                     select(Node).where(Node.store_id == store_id)).all()}
         justified = set()
         for e in session.exec(
-                select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
+                select(Edge).where(Edge.store_id == store_id)).all():
             justified.add(e.subject_id)
             justified.add(e.object_id)
         for r in session.exec(
-                select(ResidueV1).where(ResidueV1.store_id == store_id)).all():
+                select(Residue).where(Residue.store_id == store_id)).all():
             justified.add(r.object_node_id)
             justified |= set(_json.loads(r.neg)) | set(_json.loads(r.upos))
     finally:
@@ -765,11 +765,11 @@ def test_python_nodes_are_all_justified(name):
 
     # ANTI-VACUITY: a store with no nodes would pass the orphan check trivially.
     assert nodes, (
-        f"[{name}] ANTI-VACUITY: the index produced ZERO NodeV4 rows — the "
+        f"[{name}] ANTI-VACUITY: the index produced ZERO Node rows — the "
         f"orphan check below would pass having examined nothing")
     orphans = sorted(nodes[i] for i in nodes if i not in justified)
     assert not orphans, (
-        f"[{name}] {len(orphans)} orphan NodeV4 row(s) — nodes with no edge and "
+        f"[{name}] {len(orphans)} orphan Node row(s) — nodes with no edge and "
         f"no residue reference. P5 drops nodes from the Lean/Python state "
         f"comparison, so a GC leak here is invisible to that gate:\n"
         + "\n".join(f"    {o}" for o in orphans))
@@ -781,7 +781,7 @@ def test_no_corpus_nests_a_pure_union_inside_an_impure_one():
     `Core/Schema.lean`'s header models n-ary `or`/`and` as left folds of the binary
     node, justified by associativity+commutativity. That is true of `sem` and **false
     of the leaf ALLOCATION** `GraphIndex/Leaf.lean::persistedLeaves` models, because
-    `zanzibar_utils_v1.py::_build_plan_tree` merges a union only when the WHOLE n-ary
+    `src/zanzibar/schema/boolean.py::_build_plan_tree` merges a union only when the WHOLE n-ary
     node is `_is_pure`. Measured 2026-08-16 on live compiles:
 
         r: a or b or safe      ->  2 leaves   (a@0, b@1; `safe` derived, no index)
@@ -810,7 +810,7 @@ def test_no_corpus_nests_a_pure_union_inside_an_impure_one():
     The anti-vacuity floor was ALSO sabotage-tested, by accident and usefully: its first
     draft carried an estimated `>= 18` and went red at the live 8.
     """
-    from zanzibar_utils_v1 import (Union, Intersection, Exclusion, Direct, Computed,
+    from zanzibar.schema import (Union, Intersection, Exclusion, Direct, Computed,
                                    TTU, compute_taint, parse_schema_ast, _member_types)
 
     def is_pure(e, ot, tainted, ast):

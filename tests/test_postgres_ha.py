@@ -38,15 +38,15 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
-import connectedstore.apply as apply_mod
-import connectedstore.source as source_mod
-from connectedstore import (ConnectedStore, StaleRead, TupleSource, UnsafeIsolationLevel,
+import zanzibar.connectedstore.apply as apply_mod
+import zanzibar.connectedstore.source as source_mod
+from zanzibar.connectedstore import (ConnectedStore, StaleRead, TupleSource, UnsafeIsolationLevel,
                             WatermarkGap, advance_index, assert_read_isolation, log_gap,
                             log_rows, log_watermark)
-from connectedstore.models import SchemaV4, TupleLogV1
-from index_v4.invariants import snapshot_rows
-from index_v4.models import StoreV4
-from setengine import TupleV1
+from zanzibar.connectedstore.models import SchemaRecord, TupleLog
+from zanzibar.graphindex.invariants import snapshot_rows
+from zanzibar.graphindex.models import Store
+from zanzibar.setengine import RelationTuple
 from tests.dbengine import requires_rdbms, server_engine, shared_engine
 from tests.oracle import Oracle, OracleTuple
 
@@ -115,13 +115,13 @@ def _await_blocked_backend(engine, deadline_s=20.0) -> bool:
 
 
 def _raw_log_row(session, name):
-    """Append a TupleLogV1 row DIRECTLY, bypassing TupleSource -- i.e. bypassing the
+    """Append a TupleLog row DIRECTLY, bypassing TupleSource -- i.e. bypassing the
     per-store critical section. That is the point: the hazard log_gap guards is
     "two writers whose log ids commit out of order", and the lock discipline makes
     that unreachable through the supported write path (proved positively by
     ``test_lock_discipline_keeps_log_commits_in_id_order``). To test the GUARD we
     have to construct the state the guard exists for."""
-    row = TupleLogV1(store_id='s', op='ADD', subject_predicate='...',
+    row = TupleLog(store_id='s', op='ADD', subject_predicate='...',
                      subject_type='user', subject_name=name, relation='editor',
                      object_type='doc', object_name='d1')
     session.add(row)
@@ -138,7 +138,7 @@ def _raw_log_row(session, name):
 def test_for_update_source_lock_really_blocks_a_second_writer(tmp_path):
     """``TupleSource._lock_source``'s FOR UPDATE arm has never executed in this
     repo's history. Prove three things about it at once: it BLOCKS (not "passes
-    through"), it blocks on the ``SchemaV4`` row of THIS store only, and it releases
+    through"), it blocks on the ``SchemaRecord`` row of THIS store only, and it releases
     on commit."""
     engine = _bootstrap(tmp_path, 's', 'other')
     with Session(engine) as sa, Session(engine) as sb, Session(engine) as sc:
@@ -157,11 +157,11 @@ def test_for_update_source_lock_really_blocks_a_second_writer(tmp_path):
         assert waited >= BLOCK_MS / 1000 * 0.8, f'returned too fast to have blocked: {waited}s'
         sb.rollback()
 
-        # Granularity: the lock is the store's SchemaV4 ROW, so another store's row is
+        # Granularity: the lock is the store's SchemaRecord ROW, so another store's row is
         # free. Without this the test would also pass if we locked the whole table.
         _statement_timeout(sc)
         t1 = time.monotonic()
-        other = sc.exec(select(SchemaV4).where(SchemaV4.store_id == 'other')
+        other = sc.exec(select(SchemaRecord).where(SchemaRecord.store_id == 'other')
                         .with_for_update()).first()
         assert other is not None and other.store_id == 'other'
         assert time.monotonic() - t1 < FAST_S, 'a different store blocked -> not row-level'
@@ -180,14 +180,14 @@ def test_lock_ordering_source_lock_is_held_before_the_store_lock(tmp_path):
     """The documented LOCK ORDERING invariant (``source.py:_lock_source`` docstring:
     source lock BEFORE the graph store lock) is what makes the two-lock protocol
     deadlock-free, and it has never been observed. Observe it: hold the graph
-    ``StoreV4`` row, let a writer run, and show that while the writer is queued on
-    THAT lock it is already holding the ``SchemaV4`` one."""
+    ``Store`` row, let a writer run, and show that while the writer is queued on
+    THAT lock it is already holding the ``SchemaRecord`` one."""
     engine = _bootstrap(tmp_path, 's')
     done: list = []
     errors: list = []
 
     with Session(engine) as holder:
-        holder.exec(select(StoreV4).where(StoreV4.id == 's').with_for_update()).first()
+        holder.exec(select(Store).where(Store.id == 's').with_for_update()).first()
 
         def writer():
             try:
@@ -206,7 +206,7 @@ def test_lock_ordering_source_lock_is_held_before_the_store_lock(tmp_path):
                 _statement_timeout(probe)
                 t0 = time.monotonic()
                 with pytest.raises(OperationalError) as exc:
-                    probe.exec(select(SchemaV4).where(SchemaV4.store_id == 's')
+                    probe.exec(select(SchemaRecord).where(SchemaRecord.store_id == 's')
                                .with_for_update()).first()
                 # The writer is stuck on the SECOND lock while still holding the FIRST:
                 # that IS the ordering claim, observed rather than reasoned.
@@ -299,7 +299,7 @@ def test_concurrent_writers_log_integrity_and_index_equals_replay(tmp_path):
         assert checked == len(GRID) > 0
 
         # And the source of truth holds exactly the accepted set, no duplicates.
-        tuples = session.exec(select(TupleV1).where(TupleV1.store_id == 's')).all()
+        tuples = session.exec(select(RelationTuple).where(RelationTuple.store_id == 's')).all()
         assert len(tuples) == len(accepted)
 
 
@@ -588,7 +588,7 @@ def test_open_instance_races_a_concurrent_commit(tmp_path, monkeypatch):
 
     WAS A STRICT XFAIL until 2026-07-27; the bug is real and was reproduced here
     before it was fixed. ``TupleSource.__init__`` read ``log_watermark(...)`` and THEN
-    rebuilt the evaluator from ``TupleV1`` -- two statements. Under SQLite-WAL both run
+    rebuilt the evaluator from ``RelationTuple`` -- two statements. Under SQLite-WAL both run
     in one pinned snapshot, so the pair is atomic by accident; at PostgreSQL READ
     COMMITTED (the only level ``assert_read_isolation`` admits, precisely BECAUSE every
     statement re-snapshots) a write committed between them lands in the rebuild but not
@@ -763,10 +763,10 @@ def test_read_committed_gives_a_reader_no_stable_snapshot(tmp_path):
     deterministically here rather than left as a flaky assertion elsewhere."""
     engine = _bootstrap(tmp_path, 's')
     with Session(engine) as sr:
-        before = len(sr.exec(select(TupleLogV1).where(TupleLogV1.store_id == 's')).all())
+        before = len(sr.exec(select(TupleLog).where(TupleLog.store_id == 's')).all())
         with Session(engine) as sw:
             ConnectedStore(sw, 's').add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
-        after = len(sr.exec(select(TupleLogV1).where(TupleLogV1.store_id == 's')).all())
+        after = len(sr.exec(select(TupleLog).where(TupleLog.store_id == 's')).all())
         # SAME transaction, two statements, different answers.
         assert (before, after) == (0, 1)
         assert sr.in_transaction()

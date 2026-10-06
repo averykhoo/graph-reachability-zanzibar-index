@@ -33,7 +33,7 @@ structure Tuple where
 deriving DecidableEq, Repr, Inhabited
 
 /-- A shape `(type, predicate)`: bare `(T, BARE)` or userset `(T, P)`.
-    See the `Shape` alias in `setengine/memberset.py`,
+    See the `Shape` alias in `src/zanzibar/setengine/memberset.py`,
     `wildcard-materialization-spec.md §1.1`. -/
 abbrev Shape := String × String
 

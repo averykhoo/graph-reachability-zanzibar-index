@@ -34,7 +34,7 @@ variable {Id : Type} [DecidableEq Id]
 
 /-- Well-formedness of a member set relative to a population: `pos` avoids the star
     population and `neg` lives inside it (the normal form established by
-    `setengine/memberset.py::_normalize`). -/
+    `src/zanzibar/setengine/memberset.py::_normalize`). -/
 def WFp (pop : Shape → Finset Id) (m : MemberSet Id) : Prop :=
   Disjoint m.pos (starpop pop m.stars) ∧ m.neg ⊆ starpop pop m.stars
 

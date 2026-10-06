@@ -4,7 +4,7 @@ the leaf that produced it -- and losing it is a live authorization FAIL-OPEN.
 
 WHAT IS PINNED
 --------------
-``index_v4/processor.py::DeltaProcessor._live_keys_of`` opens with
+``src/zanzibar/graphindex/processor.py::DeltaProcessor._live_keys_of`` opens with
 
     preds = [rel] + [spec.predicate for spec in plan.leaves
                      if spec.positive and spec.kind in ('closure', 'derived-userset')]
@@ -27,7 +27,7 @@ edit, whole-module re-runs) left all of these green:
 The mechanism was measured twice over, not guessed: (i) over 26 conformance corpora x 5
 seeds the mutated line returns a BYTE-IDENTICAL key set on every key reached (dumped and
 ``diff``ed, 18 distinct ``(arm, type, rel)`` keys, 536 enumerated names, both runs); and
-(ii) the bulk arm never executes this copy at all -- ``index_v4/bulk_backfill.py`` carries
+(ii) the bulk arm never executes this copy at all -- ``src/zanzibar/graphindex/bulk_backfill.py`` carries
 its own mirror. Those corpora are all driven through a path that cascades in the same
 transaction, so the store is never inconsistent and there is nothing to see.
 ``tests/test_backfill_enumeration.py``'s docstring reports the same result and hands the
@@ -87,7 +87,7 @@ cannot be corrupted by the mutation it is being used to catch.
 (``connectedstore.build_index(bulk=True)``) as a second, independent reference.
 
 SABOTAGE (``docs/sabotage-procedure.md``), 2026-09-20, byte-level edit of
-``index_v4/processor.py``, original bytes saved and restored, ``git status --porcelain``
+``src/zanzibar/graphindex/processor.py``, original bytes saved and restored, ``git status --porcelain``
 clean afterwards. Baseline is this module unmutated::
 
     BASELINE                                                   5 passed
@@ -117,13 +117,13 @@ reads the plan rather than the enumerator and is correctly indifferent to it. S2
 the instrument fails when it should.
 
 (!) THE DUPLICATE IS PINNED ELSEWHERE, AND THE HYPOTHESIS THIS PARAGRAPH USED TO CARRY
-IS REFUTED. ``index_v4/bulk_backfill.py:811`` carries its own ``preds = [rel] + [...]``
+IS REFUTED. ``src/zanzibar/graphindex/bulk_backfill.py:811`` carries its own ``preds = [rel] + [...]``
 mirror. Measured first-hand 2026-09-20: the same byte-level deletion applied to the MIRROR
 leaves this module plus ``tests/test_backfill_enumeration.py``,
 ``tests/test_bulk_build.py`` and ``tests/test_invariants_derived.py`` at ``29 passed``.
 
 This file used to explain that green with a REASONED, explicitly UNVERIFIED guess: that
-because ``connectedstore/build.py::build_index`` "refuses to run on an index that already
+because ``src/zanzibar/connectedstore/build.py::build_index`` "refuses to run on an index that already
 has state", the bulk path's ``[rel]`` term had no inconsistent store to repair and might be
 **unreachable by construction**. **``TK92`` REFUTED IT on 2026-09-21.** The defence is
 about inconsistent stores and says nothing about the other way the public family gets a
@@ -145,13 +145,13 @@ import json
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import TupleSource, build_index, save_schema
-from index_v4.invariants import InvariantViolation, snapshot_rows
-from index_v4.models import NodeV4, ResidueV1
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
+from zanzibar.connectedstore import TupleSource, build_index, save_schema
+from zanzibar.graphindex.invariants import InvariantViolation, snapshot_rows
+from zanzibar.graphindex.models import Node, Residue
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
 from tests.wildcard_helpers import make_wildcard_index
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 
 # `viewer` has exactly one positive leaf and it is a *storage* leaf, so after the victim
 # tuple is retracted `d1` has no positive-leaf row at all -- see the module docstring.
@@ -190,7 +190,7 @@ def _route(rs, widx, raw, op='add'):
 
 def _residues_by_name(session, widx):
     out = {}
-    for r in session.exec(select(ResidueV1)).all():
+    for r in session.exec(select(Residue)).all():
         node = widx._node_by_id(r.object_node_id)
         neg = frozenset((n.predicate, n.type, n.name)
                         for n in (widx._node_by_id(i) for i in json.loads(r.neg))
@@ -260,7 +260,7 @@ def _stale_store(rs):
 def _preds_without_rel(proc, object_type, rel) -> set:
     """The half of ``_live_keys_of``'s ``preds`` that is NOT the leading ``rel``.
 
-    Kept in lockstep with ``index_v4/processor.py::DeltaProcessor._live_keys_of``.
+    Kept in lockstep with ``src/zanzibar/graphindex/processor.py::DeltaProcessor._live_keys_of``.
     """
     plan = proc.compiled.plans[(object_type, rel)]
     preds = [spec.predicate for spec in plan.leaves
@@ -268,9 +268,9 @@ def _preds_without_rel(proc, object_type, rel) -> set:
     names = set()
     for pred in preds:
         rows = proc.session.exec(
-            select(NodeV4).where(NodeV4.store_id == proc.store_id)
-            .where(NodeV4.type == object_type).where(NodeV4.predicate == pred)
-            .where(NodeV4.wildcard == '')
+            select(Node).where(Node.store_id == proc.store_id)
+            .where(Node.type == object_type).where(Node.predicate == pred)
+            .where(Node.wildcard == '')
         ).all()
         names.update(n.name for n in rows)
     return names
@@ -392,7 +392,7 @@ def test_repaired_state_equals_a_fresh_bulk_build():
     """Second, independent reference: the production OFFLINE bootstrap
     (``connectedstore.build_index(bulk=True)``) over the surviving tuples.
 
-    ``index_v4/bulk_backfill.py`` carries its own mirror of ``_live_keys_of``, so this
+    ``src/zanzibar/graphindex/bulk_backfill.py`` carries its own mirror of ``_live_keys_of``, so this
     arm crosses the two copies; on a consistent store both agree, which is what makes
     the bulk build usable as a reference for a repair of an INCONSISTENT one.
     """

@@ -56,13 +56,13 @@ from dataclasses import dataclass, field, fields, is_dataclass
 
 from hypothesis import strategies as st
 
-import zanzibar_utils_v1 as Z
-from zanzibar_utils_v1 import (Computed, CyclicDerivedDependency, Direct,
+import zanzibar.schema as Z
+from zanzibar.schema import (Computed, CyclicDerivedDependency, Direct,
                                DoublyBridgedShapeError, Exclusion, Intersection,
                                Restriction, TTU, Union, UnsupportedByGraphIndex,
                                parse_openfga_schema, parse_schema_ast,
                                unparse_schema_ast, _iter_directs)
-from setengine import ALL_SETOPS
+from zanzibar.setengine import ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from tests.parity import _GraphSide, _SetSide
 
@@ -115,9 +115,21 @@ def derive_plan_node_classes() -> tuple[str, ...]:
     return tuple(sorted(names))
 
 
+def _schema_source() -> str:
+    """The source of EVERY module of the schema package. It was one file until TK120
+    (2026-10-06); `inspect.getsource(Z)` would now read only the re-exporting
+    `__init__`, and the derivations below would find nothing (loudly, via their
+    ANTI-VACUITY asserts) -- or, worse, only what happens to sit in one submodule."""
+    import pkgutil
+    import importlib
+    mods = [importlib.import_module(f"{Z.__name__}.{m.name}") for m in pkgutil.iter_modules(Z.__path__)]
+    assert len(mods) >= 9, mods
+    return "\n".join(inspect.getsource(m) for m in [Z, *mods])
+
+
 def derive_via_kinds() -> tuple[str, ...]:
     """Site 4 — the ``DependentEdge(key, '<via>')`` literals: the fan-out kinds."""
-    src = inspect.getsource(Z)
+    src = _schema_source()
     vias = set(re.findall(r"DependentEdge\([^,()]+,\s*'([a-z][a-z-]*)'", src))
     assert vias, 'ANTI-VACUITY: no DependentEdge via literal found in the compiler'
     return tuple(sorted(vias))
@@ -125,7 +137,7 @@ def derive_via_kinds() -> tuple[str, ...]:
 
 def derive_family_kinds() -> tuple[str, ...]:
     """Site 5 — the single ``LeafFamily(... kind=(a if ... else b))`` construction."""
-    src = inspect.getsource(Z)
+    src = _schema_source()
     m = re.search(r"LeafFamily\((?:[^()]|\([^()]*\))*?kind=\(\s*'([a-z-]+)'"
                   r"[^)]*?else\s*'([a-z-]+)'\)", src, re.S)
     assert m, 'ANTI-VACUITY: no LeafFamily kind literal found'
@@ -624,7 +636,7 @@ def witness(sw) -> tuple[dict, frozenset]:
     if 'owc' in sw:
         owc.add(('doc', 'parent'))                     # the `ttu.ts:owc` feature
         # TK77 (2026-09-19e): ALSO object-wildcard the TTU's TARGET. `crossable_shapes` is
-        # `bridged_in & bridged_out` (zanzibar_utils_v1.py::SchemaInfo), and the star
+        # `bridged_in & bridged_out` (src/zanzibar/schema/rules.py::SchemaInfo), and the star
         # tupleset's through-shape is ('doc', 'r1') -- `derive_schema_info` folds
         # (restriction_type, ttu.target_rel) in, never the tupleset relation itself. So
         # declaring ('doc','parent') ALONE made the two sets disjoint BY CONSTRUCTION and no
@@ -674,7 +686,7 @@ class Rejection:
 _REJ_HEAD = 'type user\ntype folder\n  relations\n    define r0: [user]\n'
 
 #: The TK106 parse refusal's stable message substring
-#: (`zanzibar_utils_v1.py::_validate_tuplesets_direct`).
+#: (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`).
 TUPLESET_MUST_BE_DIRECT = 'tupleset must be direct'
 
 #: The TK108 parse refusal's stable message substring (same function): a tupleset may

@@ -33,13 +33,13 @@ import json
 import pytest
 from sqlmodel import select
 
-from index_v4.invariants import check_invariants
-from index_v4.models import NodeV4, ResidueV1
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
+from zanzibar.graphindex.invariants import check_invariants
+from zanzibar.graphindex.models import Node, Residue
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
 from tests.oracle import Oracle, t as ot
 from tests.wildcard_helpers import make_wildcard_index
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 
 # All leaves of this schema are 'closure' -- the whitelist's own worst case, and the
 # proof that the root cause is the 'closure' entry and not the 2026-07-17 Fix A lift
@@ -93,16 +93,16 @@ class _Harness:
 
     def dangling_residue_ids(self):
         """Every (relation, object, field, id) where a residue records a node id with
-        no matching ``NodeV4`` row. Must always be empty."""
+        no matching ``Node`` row. Must always be empty."""
         live = {n.id for n in self.session.exec(
-            select(NodeV4).where(NodeV4.store_id == 'reg14')).all()}
+            select(Node).where(Node.store_id == 'reg14')).all()}
         bad = []
         for r in self.session.exec(
-                select(ResidueV1).where(ResidueV1.store_id == 'reg14')).all():
+                select(Residue).where(Residue.store_id == 'reg14')).all():
             for field in ('neg', 'upos'):
                 for nid in json.loads(getattr(r, field)):
                     if nid not in live:
-                        obj = self.session.get(NodeV4, r.object_node_id)
+                        obj = self.session.get(Node, r.object_node_id)
                         bad.append((
                             r.relation,
                             (obj.type, obj.name) if obj is not None else r.object_node_id,
@@ -187,8 +187,8 @@ def test_reg14_keys_referencing_finds_closure_leaf_recordings():
         recorded_on = {
             (obj.type, r.relation, obj.name)
             for r in g.session.exec(
-                select(ResidueV1).where(ResidueV1.store_id == 'reg14')).all()
-            for obj in [g.session.get(NodeV4, r.object_node_id)]
+                select(Residue).where(Residue.store_id == 'reg14')).all()
+            for obj in [g.session.get(Node, r.object_node_id)]
             if chain_node.id in json.loads(r.upos) or chain_node.id in json.loads(r.neg)
         }
         assert recorded_on == {('doc', 'a', 'x'), ('doc', 'a', 'y')}, \

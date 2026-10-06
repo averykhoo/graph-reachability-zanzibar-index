@@ -30,17 +30,17 @@ import pytest
 from hypothesis import HealthCheck, Phase, assume, example, given, settings, strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, initialize, invariant, rule
 
-from index_v4.invariants import snapshot_rows
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
-from index_v4.wildcard import WildcardIndex
-from zanzibar_utils_v1 import (Computed, CyclicDerivedDependency, Direct,
+from zanzibar.graphindex.invariants import snapshot_rows
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
+from zanzibar.graphindex.wildcard import WildcardIndex
+from zanzibar.schema import (Computed, CyclicDerivedDependency, Direct,
                                DoublyBridgedShapeError, Exclusion,
                                Intersection, Restriction, TTU, Union,
                                UnsupportedByGraphIndex,
                                parse_openfga_schema, parse_schema_ast,
                                unparse_schema_ast, wildcard_userset_restriction_shapes)
-from setengine import ALL_SETOPS, SetEngine
+from zanzibar.setengine import ALL_SETOPS, SetEngine
 from tests.parity import ParityEngine, _fresh_session
 from tests.test_processor import build
 
@@ -110,7 +110,7 @@ _R_DOC_STAR = Restriction('doc', '...', True)
 # (``Exclusion(Direct([doc:*]), Direct([folder]))``, RC2's shape). A relation used as a TTU
 # tupleset must now be DIRECT-ONLY (a Direct, or a Union of Directs), and both checked
 # parsers refuse the rest with ``tupleset must be direct``
-# (`zanzibar_utils_v1.py::_validate_tuplesets_direct`, oracle twin
+# (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`, oracle twin
 # `tests/oracle.py::_validate_tuplesets_direct`) -- so ``SetEngine``, ``parse_openfga_schema``
 # and ``ParityEngine`` refuse them too, and drawing them would only measure the refusal. The
 # refusal itself is pinned elsewhere (`tests/genswarm.py::REJECTION_WITNESSES`, message
@@ -243,7 +243,7 @@ def schema_asts(draw, allow_usersets: bool = True, tupleset_kind: str | None = N
     ``allow_usersets`` (G2) offers a CONCRETE userset leaf ``[doc#r_k]``. It is ON by
     default: when ``r_k`` is tainted the userset makes a schema carry userset-shaped
     subjects (``doc:X#r_k``) over a derived relation, exercising the edge-free-userset
-    (``ResidueV1.upos``) + ``_find_leaf_node`` reconcile paths and the full X4/D2/upos
+    (``Residue.upos``) + ``_find_leaf_node`` reconcile paths and the full X4/D2/upos
     userset-subject-through-derived family. Until 2026-07-17 this leaf was OPT-IN (default
     OFF) because it tripped three then-open graph behaviours the deep hunt surfaced; ALL
     THREE are now FIXED (the ``processor._leaf_concretes`` upos lift for the derived-computed
@@ -284,7 +284,7 @@ def _schema_ast(ch, allow_usersets: bool = True, tupleset_kind: str | None = Non
             # G2 (deviations 2026-07-17): a CONCRETE userset restriction over an
             # EARLIER (possibly tainted) relation -- `[doc#r_k]`. When r_k is derived
             # this compiles to a PDerivedUserset and drives the edge-free-userset
-            # (`ResidueV1.upos`) + `_find_leaf_node` reconcile paths, which twice had
+            # (`Residue.upos`) + `_find_leaf_node` reconcile paths, which twice had
             # CRITICAL bugs found by review not fuzzing (deviations 2026-07-08 D2;
             # 2026-07-08 review-2 #1). Offered at modest probability so the existing
             # example distribution is not washed out.
@@ -410,7 +410,7 @@ def _ts_probe_schema(kind: str, negated: bool = False) -> str:
 # was DELETED here. It was the anti-vacuity guard for the ``negonly-*`` tupleset bodies (some
 # type occurs only in the subtrahend -- RC1's shape -- and is writable as a stored parent).
 # Its subject no longer exists: a boolean tupleset is refused at parse time
-# (`zanzibar_utils_v1.py::_validate_tuplesets_direct`), both ``negonly-*`` bodies left
+# (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`), both ``negonly-*`` bodies left
 # ``_TUPLESET_BODIES``, and the test would only have asserted that the cell is gone. Its
 # 2026-08-10 sabotage record (``negonly-multitype`` -> ``Exclusion(Direct([doc, folder]),
 # Direct([doc]))`` fired ``tupleset body 'negonly-multitype' has NO type that occurs only in
@@ -566,7 +566,7 @@ def test_every_tupleset_kind_is_driven_against_the_oracle():
     Re-observed sabotages, 2026-09-26, both applied IN-PROCESS by monkeypatch (the subjects
     live in files outside this change):
 
-    * RED -- graph-only: ``zanzibar_utils_v1.derive_schema_info`` (the module global
+    * RED -- graph-only: ``zanzibar.schema.derive_schema_info`` (the module global
       ``parse_openfga_schema`` reads; the set engine's own import untouched) returns its
       ``SchemaInfo`` minus the star-tupleset through-shapes (``(S, target_rel)`` for an
       ``[S:*]`` on a tupleset) -- ``1 failed``:
@@ -695,7 +695,7 @@ def test_schema_asts_draws_the_whole_tupleset_grammar():
     # drawn' (any Union/Intersection/Exclusion body in ``seen``) and 'no NEG-ONLY tupleset
     # body was drawn' (an Exclusion whose subtrahend has a type absent from its base). A
     # boolean or neg-only tupleset is now refused at parse time
-    # (`zanzibar_utils_v1.py::_validate_tuplesets_direct`), so the NEG-ONLY assert would be
+    # (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`), so the NEG-ONLY assert would be
     # unsatisfiable, and the BOOLEAN one's intent (a TAINTED tupleset was drawn) is gone:
     # the one remaining ``Union`` body, 'union', compiles untainted. The derived ``missing``
     # check above still covers every body the table holds.
@@ -834,9 +834,9 @@ def test_metamorphic_pairs(pair, ops):
 def _residues_by_name(session, widx):
     import json
     from sqlmodel import select
-    from index_v4.models import ResidueV1
+    from zanzibar.graphindex.models import Residue
     out = {}
-    for r in session.exec(select(ResidueV1)).all():
+    for r in session.exec(select(Residue)).all():
         node = widx._node_by_id(r.object_node_id)
         neg = frozenset((n.predicate, n.type, n.name)
                         for n in (widx._node_by_id(i) for i in json.loads(r.neg))
@@ -944,7 +944,7 @@ def test_cascade_replay_from_zero(ast, data):
         except ValueError:
             live_session.rollback()
 
-    from zanzibar_utils_v1 import Entity, RelationalTriple
+    from zanzibar.schema import Entity, RelationalTriple
     rs = parse_openfga_schema(schema)
     from tests.wildcard_helpers import make_wildcard_index
     bulk_session, bulk_widx = make_wildcard_index(rs.schema_info, store_id='test')
@@ -982,7 +982,7 @@ def test_pderived_userset_self_ref_cascade_replay_drift():
     The promote-on-record fix (both paths now pin every userset-shaped RECORDED subject
     explicit) makes the flag state-functional, so the two builds converge EXACTLY. This
     pins that convergence (state equality below) plus the standing answer-benignity."""
-    from zanzibar_utils_v1 import Entity, RelationalTriple
+    from zanzibar.schema import Entity, RelationalTriple
     from tests.wildcard_helpers import make_wildcard_index
     from tests.oracle import Oracle, OracleTuple
     schema = ('type user\n'
@@ -1632,7 +1632,7 @@ def test_star_bridge_crossing_middle_remove_deterministic_pin():
 
     ⚠ WHAT THIS PIN DOES **NOT** CATCH, from that sweep's ``N5``: dropping
     ``remove_edge``'s OBJECT-endpoint ``_sync_entity_middles`` call
-    (``index_v4/wildcard.py``) leaves this test GREEN -- the surviving subject-side call
+    (``src/zanzibar/graphindex/wildcard.py``) leaves this test GREEN -- the surviving subject-side call
     and the bridge GC still collect the middles for this sequence, so the round trip and
     the effective count both hold. That call site is pinned by
     ``tests/test_wildcard_property.py::test_middle_sync_record_excludes_the_wildcard_entity``
@@ -1739,7 +1739,7 @@ class StarBridgeParityMachine(RuleBasedStateMachine):
 
     @rule(data=st.data())
     def rebuild_sets(self, data):
-        """G5 (deviations 2026-07-17): rebuild each set engine from its TupleV1 log
+        """G5 (deviations 2026-07-17): rebuild each set engine from its RelationTuple log
         (spec §6.5 replay) and assert the check grid is unchanged. Low frequency."""
         if self.pe is None or data.draw(st.integers(min_value=0, max_value=3)) != 0:
             return

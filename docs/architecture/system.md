@@ -13,20 +13,20 @@ compose into one Zanzibar-shaped system.
    ┌─────────────────────┐   log rows > cursor  ┌──────────────────┐
    │  TUPLE STORE        │ ───────────────────> │  GRAPH INDEX     │
    │  (source of truth)  │    advance_index     │  (materialized   │
-   │  TupleV1 (snapshot) │    [the apply step]  │   view: closure  │
-   │  TupleLogV1 (log)   │                      │   + booleans)    │
-   │  SetEngine (online  │ <─── freshness ───── │  IndexCursorV1   │
+   │  RelationTuple (snapshot) │    [the apply step]  │   view: closure  │
+   │  TupleLog (log)   │                      │   + booleans)    │
+   │  SetEngine (online  │ <─── freshness ───── │  IndexCursor   │
    │   evaluator)        │      fallback        └──────────────────┘
    └─────────────────────┘
 ```
 
-* **Tuple store = source of truth** (the Zanzibar half). `TupleV1` is the current
-  snapshot; `TupleLogV1` is the permanent, append-only history (audit log + replay
+* **Tuple store = source of truth** (the Zanzibar half). `RelationTuple` is the current
+  snapshot; `TupleLog` is the permanent, append-only history (audit log + replay
   source + token domain — never cleared; compaction is a hook). The set engine is
   its always-fresh online evaluator.
 * **Graph index = materialized view** (the Leopard half). Maximal materialization;
   nothing is ever reconstructed from it; a schema change means building a new one.
-* **`IndexCursorV1`** is the entire index state bookkeeping: "index X reflects
+* **`IndexCursor`** is the entire index state bookkeeping: "index X reflects
   source Y through log row N."
 
 ## One apply step, two schedules
@@ -68,7 +68,7 @@ point is that an enumeration surface must be *able to be asked* for freshness: w
 a token, a revoked principal stayed listable with no API to object, and list-users is
 exactly what a revocation UI reads. See `decision-log.md` for the full revision.
 
-Tokens are **store-local**: the domain is the store's own `TupleLogV1` id sequence
+Tokens are **store-local**: the domain is the store's own `TupleLog` id sequence
 (a per-database autoincrement, not a global clock). A token minted against one store
 means nothing to another; cross-store consistency needs an external ordering.
 
@@ -85,19 +85,19 @@ retry) rather than silently serving stale under an explicit freshness demand.
 
 **Multi-instance (HA).** Several `TupleSource`/`ConnectedStore` instances (one
 `Session` each) may share a store; each set engine is instance-local in-memory,
-synced from `TupleLogV1`. Every instance's state is the fold of an exact *prefix* of
+synced from `TupleLog`. Every instance's state is the fold of an exact *prefix* of
 the store's log — **prefix consistency**: instances differ only in recency, never
 sideways. Un-tokened replica reads are **bounded-stale** (only by the reader's tail
 cadence via `refresh()`/`catch_up_evaluator`); read-your-writes / causal reads use
 the existing log-id tokens (`at_least`). Multi-writer admission is correct because
 each write runs a per-store **critical section**: `_lock_source` (a `FOR UPDATE`
-lock on the store's `SchemaV4` row) → `catch_up_evaluator` → validate → append,
+lock on the store's `SchemaRecord` row) → `catch_up_evaluator` → validate → append,
 inside one transaction. Under the lock no new commit can appear, so duplicate
 detection / remove-existence / cycle parity validate against current committed
 state, and the log append lands inside the section — so **log ids commit in id
 order per store** and `id > watermark` tailing (this tailer and `advance_index`'s
-cursor alike) can never skip a row. **Lock ordering**: the source lock (`SchemaV4`
-row) is always taken *before* the graph store lock (`StoreV4` row, taken inside
+cursor alike) can never skip a row. **Lock ordering**: the source lock (`SchemaRecord`
+row) is always taken *before* the graph store lock (`Store` row, taken inside
 `advance_index`) — one global order, deadlock-free. A single-writer deployment
 degrades to one no-op-rendered `FOR UPDATE` (SQLite) plus one empty indexed SELECT
 per write: correctness-over-perf, deliberately.
@@ -105,9 +105,9 @@ per write: correctness-over-perf, deliberately.
 ## Bootstrap and schema changes
 
 `build_index(session, source, index_id=None)` — the offline builder: capture the log
-watermark, bulk-load the `TupleV1` snapshot through the rewrite fan-out,
+watermark, bulk-load the `RelationTuple` snapshot through the rewrite fan-out,
 `DeltaProcessor.backfill()`, set the cursor to the watermark. The worker then
-streams the tail. Schemas are **static and write-once** (`SchemaV4`; compiled
+streams the tail. Schemas are **static and write-once** (`SchemaRecord`; compiled
 artifacts are cache, recompiled on open): a new schema = a new store/index built
 from the tuples, not a migration.
 
@@ -148,7 +148,7 @@ the pysqlite caveats).
 One AST, two front-ends; conditions and unknown operators are rejected loudly.
 Since 2026-10-04 (`TK115`) the JSON front end also refuses duplicate JSON keys, any
 `wildcard` value other than `{}` / `null`, and any model whose rendered DSL does not
-parse back to the same AST (`zanzibar_utils_v1.py::_validate_json_round_trip`), so the
+parse back to the same AST (`src/zanzibar/schema/json_frontend.py::_validate_json_round_trip`), so the
 persisted DSL is the schema the JSON declared.
 
 ## What the matrix pins

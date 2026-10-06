@@ -3,8 +3,8 @@ Python at a schema the compiler admits.
 
 WHY THIS EXISTS. Stage 1 (2026-09-14h) landed `ReconcileStars.lean::wildcardShapes` as
 `declaredWildcardShapes ++ (throughShapes).filter (not already declared)`, and recorded two
-deliberate divergences from `zanzibar_utils_v1.py::derive_schema_info`, whose result is a
-`frozenset` rendered `sorted(...)` at `index_v4/processor.py::DeltaProcessor.__init__:237`:
+deliberate divergences from `src/zanzibar/schema/compiler.py::derive_schema_info`, whose result is a
+`frozenset` rendered `sorted(...)` at `src/zanzibar/graphindex/processor.py::DeltaProcessor.__init__:237`:
 
   (a) MULTIPLICITY — a shape produced twice appears twice in Lean, once in Python;
   (b) ORDER        — Lean is pass-1-then-pass-2, Python is sorted.
@@ -60,7 +60,7 @@ theorems are the authority. If they are edited, this file is stale and the `SAME
 the check that notices.
 """
 
-from zanzibar_utils_v1 import (
+from zanzibar.schema import (
     derive_schema_info,
     parse_schema_ast,
     parse_openfga_schema,

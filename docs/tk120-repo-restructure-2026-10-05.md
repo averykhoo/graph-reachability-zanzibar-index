@@ -1,15 +1,17 @@
 # TK120 -- repo restructure: drop version suffixes and re-lay-out the code (2026-10-05b)
 
-**ACTIVE-PLAN** (`docs/README.md` §3). Corrections are appended **dated at the top** of the
-corrections section; FROZEN when `TK120` closes. Row: `python scripts/task.py show TK120`.
-
-**STATUS 2026-10-06b: plan in §5 APPROVED by the user; execution in progress (see the row for the step reached).** Previous status, 2026-10-05b: **SCOUTING ONLY. No target layout is chosen, no name map exists, and no
-file may move until the user approves a plan** (the row's own condition). This doc is the
-measurement the plan is built on, so the planning session starts from a census instead of
-re-running one. It answers the row's one UNVERIFIED item (goldens: §1.1).
+**FROZEN 2026-10-06 (`TK120` closed).** Was an ACTIVE-PLAN (`docs/README.md` §3), opened
+2026-10-05b. Live state is `python scripts/task.py show TK120`, never this file. §1-§4 are the
+pre-move census and cite the OLD names and line numbers on purpose; §5 is the approved plan;
+§6 is what was executed, including where it departed from §5. Corrections are appended dated
+at the top, never edited into the body.
 
 ## Corrections (newest first)
 
+- **2026-10-06c:** executed; see §6. Two departures from §5: (1) the user asked for ONE
+  commit for steps B-D with a single full gate at the end (A was committed on its own,
+  `86e3298`); (2) the refused-shape scanner was globbed over the SCHEMA package, not the whole
+  library (§6.4).
 - **2026-10-06b:** §5 rewritten. The 2026-10-06 draft (flat layout, tables kept) was superseded by user decisions before anything moved: one `src/zanzibar/` package, tables renamed, `legacy/` deleted.
 
 ## 1. First-hand checks by the session (READ 2026-10-05b)
@@ -739,5 +741,120 @@ The exact symbol -> module table is generated from the AST at split time and rec
 
 Each of B and C ends with a `git grep` for the old names outside the excluded paths. The
 expected result is zero hits.
+
+## 6. Executed (2026-10-06c; first-hand unless marked)
+
+**Commits.** A = `86e3298` (legacy/ deleted; full ten-phase gate green before it). B+C+D =
+the commit that closes `TK120` (one commit at the user's request, 2026-10-06; full gate once,
+before it).
+
+### 6.1 The rename (B), by a byte-preserving script
+
+The script (`scripts/tk120_rename.py` while the item ran; deleted at close, so this section is
+its record) applied the §5.2 map to 444 tracked text files, skipping the FROZEN / ACTIVE-PLAN
+docs, the history dirs, `docs/specs/`, closed task rows, `benchmarks/results/` and this doc,
+and rewriting only the `## Read first` section of the `TK120` row. Path forms were applied before dotted forms.
+`setengine`/`connectedstore` were rewritten only as paths, `from`/`import` targets,
+`<pkg>.<submodule>` and backticked names, because the census showed both are also backend
+LABELS in strings (`_fmt(mism, 'oracle', 'setengine')`) and part of a doc filename
+(`tk116-oracle-only-setengine-...`). Dry-run counts, 2026-10-06: 286 files changed; e.g.
+`index_v4/` path 767, `zanzibar_utils_v1.py` path 418, `NodeV4` 395, `EdgeV4` 283, table
+`node_v4` 35. The only residue hit afterwards is a provenance sentence in
+`src/zanzibar/graphindex/multiset.py`.
+
+Hand fixes after the script: the `Node = NodeV4` alias lines and duplicate import / `__all__`
+names in `graphindex/{models,__init__,core}.py`; `handoff_lint.py::MENTION_ROOTS` -> `src/`;
+SQL filters word-bounded in `tests/test_reads.py::_mentions_table` and
+`benchmarks/profile_r6.py` (a bare `'node'` substring would also match `object_node_id`; the
+tests already assert `== 1` on positive cases, so a filter matching nothing is red);
+`verify.sh` exports `PYTHONPATH=<repo>:<repo>/src`; `pytest.ini pythonpath = src`; new
+repo-root `conftest.py`; `pyproject.toml`; `pyrefly.toml search-path`.
+
+**Pin laundering check (§4 silent item 1).** Before any re-pin, every one of the 486
+CORRESPONDENCE anchors had its claim_rot body snapshotted. After B, each new body was compared to
+its old body with the full rename rules applied (classes, tables, paths, modules): `compared 486
+anchors: 0 problem(s), 0 new`. Only then `claim_rot.py --generate`.
+
+### 6.2 New pins, each sabotaged (literal output)
+
+- `tests/test_tk120_package_layout.py::test_a_foreign_zanzibar_is_refused` -- the root
+  `conftest.py` guard. Sabotage: the `_require_this_checkouts_library()` call deleted ->
+  `FAILED ...::test_a_foreign_zanzibar_is_refused`, `1 failed, 3 deselected`; restored ->
+  `1 passed`. Limit: `test_children_import_this_checkouts_src` cannot go red in a checkout
+  whose editable install points at itself; it guards the no-install / foreign-install cases.
+- Scope pins (`test_w4fragment_scope_pin.py` / `test_graphadmission_scope_pin.py`
+  `::_resolve_reported_by`) now import the module NAMED by `reported_by` and require the symbol
+  to be DEFINED there (Fable review F4). Sabotage: one row pointed at
+  `src/zanzibar/schema/__init__.py::w4_fragment_report` (which re-exports it) -> `AssertionError:
+  ... is not a callable DEFINED in src/zanzibar/schema/__init__.py`, `1 failed, 9 passed`.
+
+### 6.3 The split (C)
+
+`src/zanzibar/schema.py` -> 9 submodules, code moved VERBATIM by a tool that asserted the
+chunks tile the source exactly and refused any import cycle. Both §3 F2 cycles dissolved:
+`_iter_directs`/`_iter_ttus`/`_directs_only` -> `syntax`; `_restriction_pattern`/
+`_rewrite_rule` -> `rules`; `_assert_ttu_parent_types_cover_admission` -> `boolean` (it
+isinstance-checks `LeafFamily`/`PDerivedTTU`, so it could not go to `rules`). `RuleSet`'s
+`'CompiledBooleans'` is a string annotation only and imports nothing. Sibling imports, leaf
+first: errors, syntax <- rules <- parser, boolean <- compiler; unparse <- json_frontend;
+reports <- parser, boolean. `__init__` re-exports the 64 public names plus the 4 private
+helpers the suites import (`_iter_directs`, `_member_types`, `_parse_schema_ast_unchecked`,
+`_plan_leaves`). No module-level state, `global` or undefined name (AST check).
+
+Anchors: 350 `schema.py::Sym` cites re-homed by symbol, 60 plain mentions -> `src/zanzibar/schema/`.
+Twelve bare `::Sym` anchors in CORRESPONDENCE.md then inherited the wrong submodule; the anchor
+check went red on all twelve and each was made explicit. Pin check in split mode: 484 of 486
+bodies identical; the 2 that differ are test fixtures whose only change is path strings
+(read first-hand), then re-pinned. Two cites name symbols that no longer exist anywhere, and
+did before this item (`PDerivedTuplesetTTU`, deleted by `TK107`, in
+`docs/tk106-triage-2026-09-26.md`; `_split_pure` in a `GraphIndex/Leaf.lean` comment): left
+as found.
+
+`tests/genswarm.py::_schema_source` reads every submodule; its two derivations equal the
+pre-split ones (`('computed', 'ttu', 'userset')`, `('closure', 'userset-storage')`).
+
+Symbol -> submodule (the key for any old `zanzibar_utils_v1.py::Sym` cite):
+
+| module | top-level names |
+|---|---|
+| `errors` | `_IDENTIFIER_RE`, `_require`, `AdmissionRejected`, `ClosureFanoutExceeded`, `CyclicDerivedDependency`, `DoublyBridgedShapeError`, `IDENTIFIER_CHARSET`, `IndexResourceLimit`, `is_valid_identifier`, `PathCountExceeded`, `UnsupportedByGraphIndex`, `validate_node_identifiers`, `validate_write_identifiers` |
+| `syntax` | `_directs_only`, `_iter_directs`, `_iter_ttus`, `_RESERVED`, `Computed`, `Direct`, `Exclusion`, `Expr`, `Intersection`, `Restriction`, `SchemaAST`, `TTU`, `Union` |
+| `rules` | `_restriction_pattern`, `_rewrite_rule`, `Entity`, `EntityPattern`, `Filter`, `norm_pred`, `parse_relation_rule`, `RelationalTriple`, `RelationalTriplePattern`, `replace_relation`, `RewriteFilter`, `Rule`, `RuleSet`, `SchemaInfo` |
+| `parser` | `_iter_refs`, `_parse_schema_ast_unchecked`, `_RelationParser`, `_tokenize_relation_body`, `_validate_ast_consistency`, `_validate_ast_references`, `_validate_declared_name`, `_validate_stratified_negation`, `_validate_tuplesets_direct`, `parse_schema_ast` |
+| `boolean` | `_assert_ttu_parent_types_cover_admission`, `_build_plan_tree`, `_compile_check_fn`, `_compile_stars_fn`, `_contains_boolean`, `_emit_leaf_expr`, `_is_pure`, `_member_types`, `_mentions`, `_plan_deps_and_fanout`, `_plan_leaves`, `_stratify`, `compile_boolean_schema`, `CompiledBooleans`, `compute_taint`, `DependentEdge`, `DerivedFamily`, `LeafFamily`, `LeafSpec`, `PClosureLeaf`, `PDerivedComputed`, `PDerivedTTU`, `PDerivedUserset`, `PExclusion`, `PIntersection`, `Plan`, `PUnion` |
+| `compiler` | `_emit_expr`, `_expand_object_wildcard_shapes`, `_node_removal_fence`, `_reject_doubly_bridged_shapes`, `_reject_object_wildcard_scope`, `_restriction_filter`, `_validate_ttu_tuplesets`, `_warn_unproven_extensions`, `compile_ruleset`, `derive_schema_info`, `parse_openfga_schema`, `schema_filters`, `unproven_extensions`, `UnprovenExtensionWarning`, `wildcard_userset_restriction_shapes` |
+| `unparse` | `unparse_schema_ast` |
+| `json_frontend` | `_json`, `_json_restrictions`, `_json_rewrite`, `_reject_duplicate_json_keys`, `_validate_json_round_trip`, `_validate_json_wildcard`, `openfga_json_to_dsl`, `parse_openfga_json` |
+| `reports` | `_ga_rule_arms`, `_w4_children`, `_w4_computed_only`, `_w4_computed_or_direct`, `_w4_computed_refs`, `_w4_directs_all`, `_w4_directs_union`, `_w4_ttu_arms`, `_w4_tuple_fields`, `graph_admission_report`, `GRAPH_ADMISSION_REPORTED_FIELDS`, `GraphAdmissionReport`, `W4_FRAGMENT_FIELDS`, `w4_fragment_report`, `W4FragmentReport` |
+
+### 6.4 Refused-shape scanner scope
+
+Globbing the WHOLE library found 2 in-scope raises the fixed list never scanned:
+`graphindex/wildcard.py::_reject_star_self_edge` / `_reject_latent_star_cycle`. They refuse
+WRITES that would close a data cycle (explained in their docstrings), not schema shapes, so
+the user rule does not cover them. Decision (REASONED): glob the schema PACKAGE plus the two
+files the list already named. Floors per group: schema package 37, oracle 16, setengine
+engine 1; anti-vacuity floor of in-scope raises 25 (boolean 2, compiler 11, json_frontend 3,
+parser 9). Sabotage: a new `schema/zz_sabotage.py` with an uncommented `_validate_new_shape`
+raise -> `FAILED ...[src/zanzibar/schema/zz_sabotage.py]`, `1 failed, 29 passed`; removed ->
+`28 passed`.
+
+### 6.5 Caught by the final gate: patches on the facade (first-hand)
+
+The first full gate after B-D was RED in all four `tests/` tiles (5 failures, two tests). Both
+tests patched a private schema function on the `zanzibar.schema` OBJECT. After the split the
+callers bind the name in their own submodule, so a patch on the facade reaches no caller:
+`tests/test_tupleset_must_be_direct.py::test_rewrite_keeps_the_old_answers`
+(`monkeypatch.setattr(Z, '_validate_tuplesets_direct', ...)` -> AttributeError, the name is
+not re-exported) and `tests/test_ttu_tupleset_parent_types.py::test_compile_refuses_parent_types_narrower_than_admission`
+(`zu._member_types = ...` -> `DID NOT RAISE ValueError`, the sabotage stopped biting). Both
+were LOUD, which is why the gate was run whole. Fixed by patching the defining submodule; for
+`_validate_tuplesets_direct` that is BOTH `parser` and `json_frontend`, which each bind it,
+matching what the one module-global patch did before. The §3 census missed this shape because
+it looked for STRING patch targets and `monkeypatch` on the module name; an AST sweep for
+attribute assignment / `setattr` on any `zanzibar.*` alias then found no third case in
+`tests/` or `formal/conformance/` (one outside the gate, in a dated probe, wraps the public
+`parse_openfga_schema` for its own calls and was left). Re-run: `88 passed` for both modules,
+then the full gate.
 
 <!-- END -->

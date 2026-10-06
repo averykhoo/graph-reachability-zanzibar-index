@@ -5,6 +5,8 @@ corrections section; FROZEN when the last item it tracks closes. This is the tra
 for a `claude-fable-5` adversarial audit (user-requested) plus the top-level session's
 first-hand reconciliation of it.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 **Provenance labels, and they matter more than usual here** because most of this document
 is a subagent's output and `CLAUDE.md` § Delegation is explicit that a subagent report is
 **evidence, not a finding**:

@@ -39,7 +39,7 @@ pinned by ``tests/test_p12_severity_sign.py``, see ``docs/spec-deviations.md`` 2
 
 ## Root cause (measured, not inferred)
 
-``index_v4/wildcard.py::_ensure_bridges`` only ever links
+``src/zanzibar/graphindex/wildcard.py::_ensure_bridges`` only ever links
 ``w_all(T,p) -> concrete -> w_any(T,p)`` through an **interned node of shape (T,p)**, and
 ``backfill``'s docstring says so in as many words ("Does not create a w node for a shape
 that has no concrete instances"). ``tests/oracle.py::instances`` witnesses the existential
@@ -58,7 +58,7 @@ Measured, holding everything else fixed and varying only which relation mentions
     witness interns folder:f1#viewer    oracle=True  graph=True
 
 The set engine has an explicit, named mechanism for exactly this case and the graph has no
-analogue -- ``setengine/engine.py:1476-1480``, *"the star-parent cross for the triple combo
+analogue -- ``src/zanzibar/setengine/engine.py:1476-1480``, *"the star-parent cross for the triple combo
 owc x star-parent x TTU where NO concrete (T, X, r') is interned"*. That is the pointer for
 whoever fixes this.
 
@@ -145,7 +145,7 @@ def test_owc_star_parent_cross_graph_matches_oracle(witness_relation):
     SHAPE not being interned, not about anything specific to ``editor``.
 
     Do NOT xfail this. Do NOT weaken it to `graph is False`. Fix the bridge — the set
-    engine's ``star-parent cross`` (``setengine/engine.py:1476-1480``) is the analogue to
+    engine's ``star-parent cross`` (``src/zanzibar/setengine/engine.py:1476-1480``) is the analogue to
     port, and ``docs/spec-deviations.md`` 2026-08-09 carries the full filing.
     """
     witness = ('...', 'user', 'u9', witness_relation, 'folder', 'f1')

@@ -3,8 +3,8 @@ truth, plus the atomicity of the (watermark, rebuild) pair.
 
 Three findings, three sections:
 
-  (a) **ZT-P1-8a -- the unlogged write.** ``SetEngine.add_tuple`` mutates ``TupleV1``
-      (the source of truth) and appends NOTHING to ``TupleLogV1``, and the engine used
+  (a) **ZT-P1-8a -- the unlogged write.** ``SetEngine.add_tuple`` mutates ``RelationTuple``
+      (the source of truth) and appends NOTHING to ``TupleLog``, and the engine used
       to hang off ``TupleSource.engine`` as a plain public attribute. So
       ``store.source.engine.add_tuple(...)`` diverged the source from the index
       permanently and INVISIBLY -- ``lag()`` counts unapplied LOG rows, and there is no
@@ -31,11 +31,11 @@ Three findings, three sections:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, func, select
 
-import connectedstore.source as source_mod
-from connectedstore import ConnectedStore, LookupNotFresh, TupleLogV1, TupleSource
-from connectedstore.source import SNAPSHOT_ATTEMPTS
-from index_v4.models import NodeV4
-from setengine import SetEngine, TupleV1, UnloggedWriteRefused
+import zanzibar.connectedstore.source as source_mod
+from zanzibar.connectedstore import ConnectedStore, LookupNotFresh, TupleLog, TupleSource
+from zanzibar.connectedstore.source import SNAPSHOT_ATTEMPTS
+from zanzibar.graphindex.models import Node
+from zanzibar.setengine import SetEngine, RelationTuple, UnloggedWriteRefused
 
 SCHEMA = '''
 type user
@@ -68,8 +68,8 @@ def _keys(session, store_id, result) -> set[tuple[str, str, str]]:
     two backends would have to agree on before a lookup fallback could exist)."""
     if not result.node_ids:
         return set()
-    rows = session.exec(select(NodeV4).where(NodeV4.store_id == store_id)
-                        .where(NodeV4.id.in_(result.node_ids))).all()  # type: ignore[union-attr]
+    rows = session.exec(select(Node).where(Node.store_id == store_id)
+                        .where(Node.id.in_(result.node_ids))).all()  # type: ignore[union-attr]
     return {(r.type, r.name, r.predicate) for r in rows}
 
 
@@ -78,7 +78,7 @@ def _keys(session, store_id, result) -> set[tuple[str, str, str]]:
 # =========================================================================== #
 
 def test_the_hazard_is_real(session):
-    """WHY the guard exists, demonstrated rather than asserted: a ``TupleV1`` mutation
+    """WHY the guard exists, demonstrated rather than asserted: a ``RelationTuple`` mutation
     with no log row diverges source from index and NOTHING reports it.
 
     Drives ``_add_tuple_direct`` -- the body behind the guard, which stays reachable
@@ -90,13 +90,13 @@ def test_the_hazard_is_real(session):
     session.commit()
     assert token > 0 and cs.check('...', 'user', 'u1', 'viewer', 'doc', 'd1') is True
 
-    logged_before = _count(session, TupleLogV1, 'cs')
+    logged_before = _count(session, TupleLog, 'cs')
     cs.source.engine._add_tuple_direct('...', 'user', 'u2', 'editor', 'doc', 'd1')
     session.commit()
 
     # The source of truth grew; the log did not; the index never heard about it.
-    assert _count(session, TupleV1, 'cs') == 2
-    assert _count(session, TupleLogV1, 'cs') == logged_before == 1
+    assert _count(session, RelationTuple, 'cs') == 2
+    assert _count(session, TupleLog, 'cs') == logged_before == 1
     assert cs.check('...', 'user', 'u2', 'viewer', 'doc', 'd1') is False   # WRONG
     assert cs.source.check('...', 'user', 'u2', 'viewer', 'doc', 'd1') is True
     # ...and the divergence is invisible to every freshness signal there is.
@@ -117,8 +117,8 @@ def test_direct_add_on_a_logged_store_is_refused(session):
 
     # Refused BEFORE any mutation, in memory and on disk alike.
     session.commit()
-    assert _count(session, TupleV1, 'cs') == 1
-    assert _count(session, TupleLogV1, 'cs') == 1
+    assert _count(session, RelationTuple, 'cs') == 1
+    assert _count(session, TupleLog, 'cs') == 1
     assert cs.check('...', 'user', 'u2', 'viewer', 'doc', 'd1') is False
     assert cs.source.check('...', 'user', 'u2', 'viewer', 'doc', 'd1') is False
 
@@ -133,15 +133,15 @@ def test_direct_remove_on_a_logged_store_is_refused(session):
     with pytest.raises(UnloggedWriteRefused):
         cs.source.engine.remove_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
     session.commit()
-    assert _count(session, TupleV1, 'cs') == 1
+    assert _count(session, RelationTuple, 'cs') == 1
     assert cs.check('...', 'user', 'u1', 'viewer', 'doc', 'd1') is True
     assert cs.source.check('...', 'user', 'u1', 'viewer', 'doc', 'd1') is True
 
     # ...and the sanctioned path still removes it, both halves together.
     cs.remove_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
     session.commit()
-    assert _count(session, TupleV1, 'cs') == 0
-    assert _count(session, TupleLogV1, 'cs') == 2                 # ADD + REMOVE
+    assert _count(session, RelationTuple, 'cs') == 0
+    assert _count(session, TupleLog, 'cs') == 2                 # ADD + REMOVE
     assert cs.check('...', 'user', 'u1', 'viewer', 'doc', 'd1') is False
 
 
@@ -169,12 +169,12 @@ def test_a_standalone_set_engine_is_untouched(session):
         assert se.add_tuple('...', 'user', name, 'editor', 'doc', 'd1') is True
         writes += 1
     session.commit()
-    assert writes == 3 and _count(session, TupleV1, 'solo') == 3
-    assert _count(session, TupleLogV1, 'solo') == 0                # no log: by design
+    assert writes == 3 and _count(session, RelationTuple, 'solo') == 3
+    assert _count(session, TupleLog, 'solo') == 0                # no log: by design
     assert se.check('...', 'user', 'b', 'viewer', 'doc', 'd1') is True
     se.remove_tuple('...', 'user', 'b', 'editor', 'doc', 'd1')
     session.commit()
-    assert _count(session, TupleV1, 'solo') == 2
+    assert _count(session, RelationTuple, 'solo') == 2
     assert se.check('...', 'user', 'b', 'viewer', 'doc', 'd1') is False
 
 

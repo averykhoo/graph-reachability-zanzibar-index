@@ -9,7 +9,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from tests.oracle import Oracle, OracleTuple
 from tests.scenarios import SCENARIOS
-from setengine import SetEngine, ALL_SETOPS
+from zanzibar.setengine import SetEngine, ALL_SETOPS
 
 
 def _ids(scn):

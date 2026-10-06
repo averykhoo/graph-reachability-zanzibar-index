@@ -149,7 +149,7 @@ theorem mem_throughShapes_iff_isStarTuplesetThrough (S : Schema) (t p : String) 
     That side condition is exactly what `Schema.isSubjectWildcardUserset` decides, and
     disjunct (b) of it (`Schema.isStarTuplesetThrough`, part (i)) is precisely the
     star-tupleset through-shape derivation Python has always had
-    (`zanzibar_utils_v1.py::derive_schema_info`'s second loop). So the widened condition
+    (`src/zanzibar/schema/compiler.py::derive_schema_info`'s second loop). So the widened condition
     says "Python declares this shape and would build the bridge", which is the honest
     statement of what the graph covers once part (ii) composes `ensureInBridges` into the
     rule-routed write path.
@@ -367,7 +367,7 @@ therefore visible ONLY as a tactic failure until this witness existed. -/
 
 /-- Tupleset `doc#parent` carries a wildcard **USERSET** restriction `[folder:*#viewer]`,
     not a bare `[folder:*]`. Python's second loop is gated on `r.predicate == '...'`
-    (`zanzibar_utils_v1.py:1008`), so it contributes NOTHING here — and neither transcription
+    (`src/zanzibar/schema/`), so it contributes NOTHING here — and neither transcription
     may. -/
 def SwNB : Schema :=
   ⟨[(("folder", "viewer"), .direct [("user", BARE, false)]),
@@ -470,7 +470,7 @@ derived". **That is FALSE, and the pins below are what it is instead.** Measured
 
 Why the recorded reason fails: `NoTtuTarget` quantifies over `schemaRewrites`, and
 `schemaRewrites` **filters DERIVED defs out** (`RulesWrite.lean:82-83`, the faithful mirror
-of `zanzibar_utils_v1.py::compile_ruleset`'s `if key not in tainted` loop). The TTU arm's own
+of `src/zanzibar/schema/compiler.py::compile_ruleset`'s `if key not in tainted` loop). The TTU arm's own
 owner `("doc","control")` is itself tainted — `exprRefs`'s `.ttu` case
 (`Spec/Stratify.lean:36-42`) adds `("folder","approver")` via the tupleset's parent types, and
 that key is derived — so the arm is never in `schemaRewrites` and `NoTtuTarget` never sees
@@ -492,8 +492,8 @@ untainted, the arm IS in `schemaRewrites` (`ttu_arm_present`), and `narrow_rejec
 here attributable instead of accidental.
 
 The derived through-shape itself is a declared fragment boundary that Python DOES cover, via
-the processor's public-node bridge (`index_v4/processor.py::DeltaProcessor._write_derived` →
-`WildcardIndex.add_tuple` → `_ensure_bridges` on both endpoints, `index_v4/wildcard.py:521-522`;
+the processor's public-node bridge (`src/zanzibar/graphindex/processor.py::DeltaProcessor._write_derived` →
+`WildcardIndex.add_tuple` → `_ensure_bridges` on both endpoints, `src/zanzibar/graphindex/wildcard.py:521-522`;
 retraction `processor.py::_gc_public_node` → `_maybe_remove_bridges`). Recorded in
 `formal/CORRESPONDENCE.md` §7, and filed as task `P25`.
 -/

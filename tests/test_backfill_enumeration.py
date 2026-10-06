@@ -75,7 +75,7 @@ tests/test_bulk_build.py "compares copy A against copy B and a shared under-enum
 cancels on both arms". MEASURED: it does not cancel -- three of the four kind-drops
 redden ``test_bulk_build_identical_to_incremental`` ITSELF with both copies mutated.
 REASONED, not verified: the two copies read different substrates -- processor.py
-re-queries `node_v4` rows mid-backfill while bulk_backfill.py reads an in-memory
+re-queries `node` rows mid-backfill while bulk_backfill.py reads an in-memory
 `family_names` index seeded at load and grown through the bulk phases -- so the same
 textual edit does not delete the same keys. What survives is the split: test_bulk_build
 misses `derived-computed` entirely, the conformance module misses the other three, and
@@ -115,12 +115,12 @@ import json
 
 from sqlmodel import select
 
-from index_v4.models import NodeV4, ResidueV1
-from index_v4.invariants import snapshot_rows
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
+from zanzibar.graphindex.models import Node, Residue
+from zanzibar.graphindex.invariants import snapshot_rows
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
 from tests.wildcard_helpers import make_wildcard_index
-from zanzibar_utils_v1 import Entity, RelationalTriple, parse_openfga_schema
+from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
 
 
 # `access` and `alias` each have EXACTLY ONE positive leaf, and it is a
@@ -218,9 +218,9 @@ def _preds_only(proc, object_type, rel):
     names = set()
     for pred in preds:
         rows = proc.session.exec(
-            select(NodeV4).where(NodeV4.store_id == proc.store_id)
-            .where(NodeV4.type == object_type).where(NodeV4.predicate == pred)
-            .where(NodeV4.wildcard == '')
+            select(Node).where(Node.store_id == proc.store_id)
+            .where(Node.type == object_type).where(Node.predicate == pred)
+            .where(Node.wildcard == '')
         ).all()
         names.update(n.name for n in rows)
     return names
@@ -228,7 +228,7 @@ def _preds_only(proc, object_type, rel):
 
 def _residues_by_name(session, widx):
     out = {}
-    for r in session.exec(select(ResidueV1)).all():
+    for r in session.exec(select(Residue)).all():
         node = widx._node_by_id(r.object_node_id)
         neg = frozenset((n.predicate, n.type, n.name)
                         for n in (widx._node_by_id(i) for i in json.loads(r.neg))

@@ -1,6 +1,6 @@
 ---
 id: TK38
-title: pin the referenced-vs-invisible NodeV4 split (217/49): the definition has to be written first
+title: pin the referenced-vs-invisible Node split (217/49): the definition has to be written first
 brief:
 pri: HOLD
 size: S
@@ -16,7 +16,7 @@ updated: 2026-09-10
 closed:
 ---
 
-The `NodeV4` endpoint split re-derives as **217/49** (from an earlier 194/41) but is deliberately NOT under the count pin: unlike the edge ledger it has no in-repo implementation to reuse, so "referenced" had to be reconstructed (edge endpoints ∪ residue object nodes ∪ residue `neg`/`upos` subject nodes) and the number is method-sensitive. The recorded instruction is: *"Treat **266** as solid and 217/49 as provisional; pinning it needs the definition written down first."*
+The `Node` endpoint split re-derives as **217/49** (from an earlier 194/41) but is deliberately NOT under the count pin: unlike the edge ledger it has no in-repo implementation to reuse, so "referenced" had to be reconstructed (edge endpoints ∪ residue object nodes ∪ residue `neg`/`upos` subject nodes) and the number is method-sensitive. The recorded instruction is: *"Treat **266** as solid and 217/49 as provisional; pinning it needs the definition written down first."*
 
 `HOLD`: the blocking step is a definition, not a patch, and nobody has committed to one.
 
@@ -49,4 +49,4 @@ LANDED 2026-09-10 (TK53 append) into `formal/CORRESPONDENCE.md` sec 7.1, as a co
 
 GATE-ANCHORED destination, so this was verified before writing, not after: `verify.sh lean` resolves every `file::symbol` anchor in this file, and the one anchor the append adds -- `formal/conformance/extractor.py::graph_fragment_ledger` -- resolves at `extractor.py:277`.
 
-The drafted prose claimed a split would be "pinned off graph_fragment_ledger's own classification". False, and caught by the adversarial pass: that function COUNTS `NodeV4` rows and classifies none, which is exactly why the doc says the split has no in-repo implementation to reuse. The landed text says that absence IS the missing implementation, and cites the canonical form of the rule at `docs/sabotage-procedure.md:273` ("recompute X and compare to the recorded X" tests transcription, never classification) rather than re-deriving it -- the draft had garbled that quote into a run-on.
+The drafted prose claimed a split would be "pinned off graph_fragment_ledger's own classification". False, and caught by the adversarial pass: that function COUNTS `Node` rows and classifies none, which is exactly why the doc says the split has no in-repo implementation to reuse. The landed text says that absence IS the missing implementation, and cites the canonical form of the rule at `docs/sabotage-procedure.md:273` ("recompute X and compare to the recorded X" tests transcription, never classification) rather than re-deriving it -- the draft had garbled that quote into a run-on.

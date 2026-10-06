@@ -16,7 +16,7 @@ updated: 2026-10-04g
 closed:
 ---
 
-`docs/specs/wildcard-materialization-spec.md:141` (§3.4, *Strict ∀⇒∃, pinned*) ends: *"Leave a documented hook (a per-shape config flag that would add a single `w_all(S) → w_any(S)` edge for the lenient/vacuous reading) but do not implement it."* No such flag or hook exists in `index_v4/wildcard.py` or `zanzibar_utils_v1.py`.
+`docs/specs/wildcard-materialization-spec.md:141` (§3.4, *Strict ∀⇒∃, pinned*) ends: *"Leave a documented hook (a per-shape config flag that would add a single `w_all(S) → w_any(S)` edge for the lenient/vacuous reading) but do not implement it."* No such flag or hook exists in `src/zanzibar/graphindex/wildcard.py` or `src/zanzibar/schema/`.
 
 **HOLD because the item is an adjudication, not a build.** §10 (line 324) lists lenient mode under non-goals as "hook only", so the sentence may already be satisfied by the spec text itself. It is a real spec-vs-code deviation only if *hook* means a code affordance. Decide which, then either (a) add the flag, or (b) reword §3.4 so it stops mandating an artifact, and record the outcome in [`docs/spec-deviations.md`](docs/spec-deviations.md).
 
@@ -29,7 +29,7 @@ closed:
 ## Read first
 
 - [`docs/specs/wildcard-materialization-spec.md`](docs/specs/wildcard-materialization-spec.md)`:141` — the mandate, and §10 line 324 — the non-goal that may already satisfy it
-- `index_v4/wildcard.py` / `zanzibar_utils_v1.py` — sweep-l found no flag; the three `lenient`/`vacuous` hits are unrelated prose
+- `src/zanzibar/graphindex/wildcard.py` / `src/zanzibar/schema/` — sweep-l found no flag; the three `lenient`/`vacuous` hits are unrelated prose
 - [`docs/spec-deviations.md`](docs/spec-deviations.md) — where the adjudication is recorded whichever way it goes
 
 ## Log

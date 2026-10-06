@@ -209,17 +209,17 @@ number INTO it over restating it.
 **State-gate projection ledger — what the differential gate does NOT compare.**
 Driven fresh over all **{m['proj']['corpora']}** `GRAPH_FRAGMENT` corpora through the real graph
 index (`extractor.projection_ledger`). Read this as the honest width of the
-state-level claim: of the raw `EdgeV4` rows Python writes, only the `compared`
+state-level claim: of the raw `Edge` rows Python writes, only the `compared`
 row is checked against Lean. **Do not restate these numbers elsewhere** — three
 prose copies rotted through two corpus additions before this became generated.
 
 | edge projection | rows |
 |---|---|
-| raw `EdgeV4` rows | **{m['proj']['raw']}** |
+| raw `Edge` rows | **{m['proj']['raw']}** |
 | dropped by P1 (closure-only) | **{m['proj']['P1']}** |
 | dropped by P2 (bridge) | **{m['proj']['P2']}** |
 | **compared against Lean** | **{m['proj']['compared']}** |
-| raw `NodeV4` rows (all dropped by P5) | **{m['proj']['nodes']}** |
+| raw `Node` rows (all dropped by P5) | **{m['proj']['nodes']}** |
 | residue rows kept | **{m['proj']['residues']}** |
 
 Per conformance file:

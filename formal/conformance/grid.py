@@ -12,7 +12,7 @@ ttuLeaf predicate arms) unpinned (F3). This module fixes all three:
   stored relations are still crossed with EVERY stored object type-obliviously
   (that cross product is the deliberate out-of-schema "ghost relation" probe).
 * **Schema-declared targets (F2)**: the schema text is parsed with the
-  PRODUCTION parser (`zanzibar_utils_v1`) and every declared `(type, relation)`
+  PRODUCTION parser (`zanzibar.schema`) and every declared `(type, relation)`
   is paired with the stored objects OF THAT TYPE — type-aware on purpose, so the
   addition doesn't explode into querying every relation on every type.
 
@@ -23,12 +23,12 @@ ttuLeaf predicate arms) unpinned (F3). This module fixes all three:
   deleted the very query that would have exposed it (a relation the oracle fails
   to see is a relation nobody queries). The "three genuinely independent corners"
   claim was 2-of-3 at the schema-reading layer. Driving the grid off
-  `zanzibar_utils_v1` restores the property that MATTERS for a differential: the
+  `zanzibar.schema` restores the property that MATTERS for a differential: the
   query set is derived independently of the encoder's parse, so an
   oracle-parser misparse now yields a query that CAN expose it.
 
-  The declared-key set comes from `zanzibar_utils_v1.parse_schema_ast`, which is
-  literally step 1 of `zanzibar_utils_v1.parse_openfga_schema` (`ast =
+  The declared-key set comes from `zanzibar.schema.parse_schema_ast`, which is
+  literally step 1 of `zanzibar.schema.parse_openfga_schema` (`ast =
   parse_schema_ast(schema)`). The full `parse_openfga_schema` is NOT used here on
   purpose: its `RuleSet`/`SchemaInfo` result exposes no declared-relation set,
   only compiled artifacts — and those name compiler-generated LEAF families
@@ -52,7 +52,7 @@ from __future__ import annotations
 
 import itertools
 
-from zanzibar_utils_v1 import parse_schema_ast
+from zanzibar.schema import parse_schema_ast
 
 # F3 bound: userset-subject names per type = first N concrete names + the ghost.
 # The naive full-name-pool product pushed the suite past its runtime budget on

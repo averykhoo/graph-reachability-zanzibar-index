@@ -15,7 +15,7 @@ refused the tainted (boolean) form.
 
 WHAT IS PINNED HERE.
   1. Every blocked pattern is refused on EVERY construction path, by
-     ``zanzibar_utils_v1.py::_validate_tuplesets_direct`` and the oracle's independent
+     ``src/zanzibar/schema/parser.py::_validate_tuplesets_direct`` and the oracle's independent
      twin ``tests/oracle.py::_validate_tuplesets_direct``. Each path has a CONTROL, the
      legal direct forms, that it must ACCEPT, so a path refusing everything cannot pass.
   2. The behaviour-preserving REWRITE -- store the links on a direct relation
@@ -40,8 +40,8 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 import tests.oracle as oracle_mod
-import zanzibar_utils_v1 as Z
-from setengine import SetEngine
+import zanzibar.schema as Z
+from zanzibar.setengine import SetEngine
 from tests.oracle import Oracle
 from tests.parity import ParityEngine
 
@@ -100,7 +100,7 @@ def _set_engine(schema):
 
 
 def _connected_store(schema):
-    from connectedstore import ConnectedStore
+    from zanzibar.connectedstore import ConnectedStore
     session = _session()
     try:
         ConnectedStore(session, 'cs', schema=schema)
@@ -246,7 +246,13 @@ def test_rewrite_keeps_the_old_answers(pattern, monkeypatch):
     old_schema, extra, new_schema = _REWRITES[pattern]
     data = _COMMON + extra
     with monkeypatch.context() as m:
-        m.setattr(Z, '_validate_tuplesets_direct', lambda ast: None)
+        # Patch where it is CALLED (TK120, 2026-10-06): since the schema package split, the
+        # DSL parser and the JSON front end each bind the name in their own module, so a
+        # patch on the `zanzibar.schema` facade would turn the refusal off for nobody.
+        import zanzibar.schema.json_frontend
+        import zanzibar.schema.parser
+        m.setattr(zanzibar.schema.parser, '_validate_tuplesets_direct', lambda ast: None)
+        m.setattr(zanzibar.schema.json_frontend, '_validate_tuplesets_direct', lambda ast: None)
         m.setattr(oracle_mod, '_validate_tuplesets_direct', lambda ast: None)
         old, _old_graph = _answers(old_schema, data)
     new, new_graph = _answers(new_schema, _migrate(data))

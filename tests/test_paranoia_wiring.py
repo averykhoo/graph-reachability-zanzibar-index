@@ -32,13 +32,13 @@ import json
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import ConnectedStore, TupleLogV1
-from index_v4.invariants import (InvariantViolation, PARANOIA_ENV_VAR,
+from zanzibar.connectedstore import ConnectedStore, TupleLog
+from zanzibar.graphindex.invariants import (InvariantViolation, PARANOIA_ENV_VAR,
                                  install_paranoia, normalize_paranoia_level,
                                  resolve_paranoia_level)
-from index_v4.models import NodeV4, ResidueV1
+from zanzibar.graphindex.models import Node, Residue
 from tests.wildcard_helpers import make_wildcard_index
-from zanzibar_utils_v1 import parse_openfga_schema
+from zanzibar.schema import parse_openfga_schema
 
 STORE = 'cs'
 
@@ -68,7 +68,7 @@ def _open(session, load_fga_schema, **kw):
 
 
 def _residue(session):
-    row = session.exec(select(ResidueV1).where(ResidueV1.store_id == STORE)).first()
+    row = session.exec(select(Residue).where(Residue.store_id == STORE)).first()
     assert row is not None, 'fixture must leave a residue row to tamper with'
     return row
 
@@ -76,13 +76,13 @@ def _residue(session):
 def _dead_id(session):
     """An id no node holds (and none can: node ids are positive autoincrement)."""
     live = {n.id for n in session.exec(
-        select(NodeV4).where(NodeV4.store_id == STORE)).all()}
+        select(Node).where(Node.store_id == STORE)).all()}
     return max(live) + 10_000
 
 
 def _log_len(session):
-    return len(session.exec(select(TupleLogV1)
-                            .where(TupleLogV1.store_id == STORE)).all())
+    return len(session.exec(select(TupleLog)
+                            .where(TupleLog.store_id == STORE)).all())
 
 
 # --------------------------------------------------------------------------- #
@@ -172,7 +172,7 @@ def test_tier_boundary_is_what_it_says_it_is(session, load_fga_schema):
     so the CHEAP tier does not catch it and the FULL tier does. If someone widens the
     cheap tier they must move this test -- and re-measure."""
     cheap = _open(session, load_fga_schema, paranoia='residue')
-    node = session.exec(select(NodeV4).where(NodeV4.store_id == STORE)).first()
+    node = session.exec(select(Node).where(Node.store_id == STORE)).first()
     node.reference_count += 7
     session.add(node)
     cheap.add_tuple('...', 'user', 'erin', 'editor', 'doc', 'd5')   # commits happily
@@ -181,7 +181,7 @@ def test_tier_boundary_is_what_it_says_it_is(session, load_fga_schema):
     SQLModel.metadata.create_all(engine2)
     with Session(engine2) as s2:
         full = _open(s2, load_fga_schema, paranoia='full')
-        n2 = s2.exec(select(NodeV4).where(NodeV4.store_id == STORE)).first()
+        n2 = s2.exec(select(Node).where(Node.store_id == STORE)).first()
         n2.reference_count += 7
         s2.add(n2)
         with pytest.raises(InvariantViolation, match='I13'):
@@ -278,7 +278,7 @@ def test_reinstall_upgrades_in_place_instead_of_stacking(session, load_fga_schem
     assert list(listeners) == [STORE]
 
     # and the upgraded level is live: an I13 corruption (full-tier only) now bites.
-    node = session.exec(select(NodeV4).where(NodeV4.store_id == STORE)).first()
+    node = session.exec(select(Node).where(Node.store_id == STORE)).first()
     node.reference_count += 3
     session.add(node)
     with pytest.raises(InvariantViolation, match='I13'):

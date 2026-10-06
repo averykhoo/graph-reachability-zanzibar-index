@@ -2,7 +2,7 @@
 """`TK93` -- WHICH TEST moves `_ensure/raw`? Per-nodeid attribution + a cross-run diff.
 
 WHY THIS EXISTS. `formal/probes/tk77_crossable_census_2026-09-19.py` books `_ensure/raw`
-(calls to ``index_v4/wildcard.py::WildcardIndex._ensure_entity_middles``) by MODULE -- its
+(calls to ``src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_entity_middles``) by MODULE -- its
 ``pytest_runtest_logstart`` hook does ``nodeid.split('::')[0]`` -- so a column that moves by
 up to 38 between runs on one unchanged tree names 31 tests at once. `TK93`'s acceptance asks
 for per-test resolution and suggests a `-k` bisection; this is the same answer one level
@@ -78,7 +78,7 @@ _SUMMARY = ['?']
 
 
 def pytest_configure(config):        # noqa: D103  (pytest hook)
-    import index_v4.wildcard as W
+    import zanzibar.graphindex.wildcard as W
 
     ctl_nodeid = os.environ.get('TK93_CTL_NODEID') or None
 
@@ -126,7 +126,7 @@ def pytest_configure(config):        # noqa: D103  (pytest hook)
     # ---------------------------------------------------------------- #
     # ``tests/parity.py::_GraphSide.apply`` runs
     #     try:  [ add_tuple(d) for d in ruleset.apply(triple) ]  except ValueError: rollback
-    # and ``zanzibar_utils_v1.py::RuleSet.apply`` yields out of a **set** (``seeds``, or the
+    # and ``src/zanzibar/schema/rules.py::RuleSet.apply`` yields out of a **set** (``seeds``, or the
     # ``unprocessed.pop()`` worklist). So when one member of a fan-out raises, HOW MANY
     # ``add_tuple`` calls already completed is the raiser's position in a set iteration
     # order -- seed-dependent -- while the decision (rollback, False) is not.
@@ -136,7 +136,7 @@ def pytest_configure(config):        # noqa: D103  (pytest hook)
     # this refutes it. Materialising the generator is safe for that claim because the
     # raiser is ``add_tuple`` (the consumer), not the generator -- ``RuleSet.apply``'s own
     # ``AdmissionRejected``s are raised before the first yield.
-    import zanzibar_utils_v1 as Z
+    import zanzibar.schema as Z
 
     _ra = Z.RuleSet.apply
     sort_fanout = os.environ.get('TK93_SORTED_FANOUT') == '1'

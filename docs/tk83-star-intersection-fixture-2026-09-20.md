@@ -5,6 +5,8 @@ state is the task row (`python scripts/task.py show TK83`) and
 `python scripts/gate_status.py`, never this file. Corrections append **dated at the top**,
 never edited into the body. Freeze it when `TK83` closes.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 Provenance labels: **MEASURED** (this session ran it and read the literal output), **READ**
 (first-hand from the named `file::symbol`), **REASONED** (derived from a READ, not
 separately observed), **UNVERIFIED**. No subagent was used; nothing here is agent-reported.

@@ -47,7 +47,7 @@ import random
 
 import pytest
 
-from zanzibar_utils_v1 import (Computed, Direct, Exclusion, Intersection,
+from zanzibar.schema import (Computed, Direct, Exclusion, Intersection,
                                Restriction, TTU, Union, unparse_schema_ast)
 from tests.oracle import Oracle, t as mk_tuple
 
@@ -56,7 +56,7 @@ from formal.conformance.grid import (
     assert_grid_nonvacuous, queries_for, fmt_mismatches as _fmt)
 from formal.conformance import runner
 from formal.conformance.backends import _fresh_session
-from zanzibar_utils_v1 import AdmissionRejected
+from zanzibar.schema import AdmissionRejected
 
 _N_CASES = 40
 
@@ -160,7 +160,7 @@ def test_generated_schema_zcli_parity(seed):
         have_zcli = False
 
     session = _fresh_session()
-    from setengine import SetEngine
+    from zanzibar.setengine import SetEngine
     eng = SetEngine(session, 's1', schema_text)
     accepted = []
     refused = []

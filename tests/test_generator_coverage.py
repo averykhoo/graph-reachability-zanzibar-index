@@ -169,7 +169,7 @@ from collections import Counter
 import pytest
 from hypothesis import HealthCheck, Phase, given, settings
 
-from zanzibar_utils_v1 import parse_openfga_schema, unparse_schema_ast
+from zanzibar.schema import parse_openfga_schema, unparse_schema_ast
 from tests import genswarm as G
 
 # ---------------------------------------------------------------------------
@@ -297,13 +297,13 @@ def test_rejection_witness_is_still_refused(w):
     actually reaches them. **A scope relaxation cannot silently mint a new blind spot.**
 
     SABOTAGE (literal output). Narrowest plausible weakening: relax exactly one scope
-    check — in `zanzibar_utils_v1._assert_tupleset_scope`, drop the userset-restriction
+    check — in `zanzibar.schema._assert_tupleset_scope`, drop the userset-restriction
     clause (a plausible "we support this now" change). Observed::
 
         FAILED ...::test_rejection_witness_is_still_refused[tupleset-userset-restriction]
-        Failed: DID NOT RAISE <class 'zanzibar_utils_v1.UnsupportedByGraphIndex'>
+        Failed: DID NOT RAISE <class 'zanzibar.schema.UnsupportedByGraphIndex'>
         FAILED ...::test_rejection_witness_is_still_refused[tupleset-wildcard-userset-restriction]
-        Failed: DID NOT RAISE <class 'zanzibar_utils_v1.UnsupportedByGraphIndex'>
+        Failed: DID NOT RAISE <class 'zanzibar.schema.UnsupportedByGraphIndex'>
 
     and, in the same run, the exemption revocation this exists to produce::
 
@@ -348,7 +348,7 @@ def test_undeclared_tupleset_is_refused_whatever_its_target(target):
     so nothing but the property under test separates them.
 
     SABOTAGE (literal output). Narrowest plausible weakening: in
-    `zanzibar_utils_v1._validate_ttu_tuplesets`, drop the `derived_predicate_names`
+    `zanzibar.schema._validate_ttu_tuplesets`, drop the `derived_predicate_names`
     test and refuse on the undeclared tupleset alone::
 
         if (object_type, e.tupleset_rel) not in ast:
@@ -357,7 +357,7 @@ def test_undeclared_tupleset_is_refused_whatever_its_target(target):
 
         FAILED tests/test_generator_coverage.py::
             test_undeclared_tupleset_with_untainted_target_still_compiles
-        E   zanzibar_utils_v1.UnsupportedByGraphIndex: relation doc#r7: TTU 'r0' from
+        E   zanzibar.schema.UnsupportedByGraphIndex: relation doc#r7: TTU 'r0' from
             'nodecl' targets the derived relation 'r0' ...
 
     while `test_rejection_witness_is_still_refused[undeclared-tupleset-with-derived-target]`
@@ -475,7 +475,7 @@ def test_driven_config_space_reaches_a_crossable_schema():
     WHY A FLOOR AND NOT A DOC NOTE. Until 2026-09-19e `genswarm.witness` declared its
     object wildcard on the TTU TUPLESET alone (`('doc','parent')`), while the star
     tupleset's through-shape is the TTU TARGET (`('doc','r1')` —
-    `zanzibar_utils_v1.py::derive_schema_info` folds in `(restriction_type,
+    `src/zanzibar/schema/compiler.py::derive_schema_info` folds in `(restriction_type,
     ttu.target_rel)`). Two disjoint sets, so `crossable_shapes` was empty for every driven
     config and every I14 path the swarm ran was a SILENT NO-OP that passed: an empty
     `crossable_shapes` changes no answer, only which state space is explored, so no
@@ -1321,14 +1321,14 @@ def _crossable_driven_configs():
 
 def test_churn_pass_reaches_the_i14_remove_path():
     """TK87 (2026-09-19f). Property guarded: the driven sweep reaches
-    `index_v4/wildcard.py::_sync_entity_middles` EFFECTIVELY -- i.e. past its
+    `src/zanzibar/graphindex/wildcard.py::_sync_entity_middles` EFFECTIVELY -- i.e. past its
     `crossable_shapes` guard, on a store where the I14 `w_all -> concrete -> w_any`
     crossing actually exists.
 
     WHY THIS IS A TEST AND NOT A NOTE. Until 2026-09-19f `genswarm.Diff` exposed `add`
     and `sweep` only, so every config was driven as a monotone sequence of adds, and
     every caller of `_sync_entity_middles` is a REMOVAL path (`::remove_edge`,
-    `::remove_node`, `index_v4/processor.py`'s reconcile-time GC). The census measured
+    `::remove_node`, `src/zanzibar/graphindex/processor.py`'s reconcile-time GC). The census measured
     this module at `_sync/raw` **0** -- not "reached and guarded out", never called at
     all (`docs/tk77-crossable-census-2026-09-19.md`, and the baseline re-measured
     first-hand 2026-09-19f in `docs/tk87-swarm-churn-2026-09-19.md` §1).
@@ -1368,7 +1368,7 @@ def test_churn_pass_reaches_the_i14_remove_path():
     That is the coverage the churn pass buys, stated as a second independent catcher
     rather than as a count.
     """
-    import index_v4.wildcard as W
+    import zanzibar.graphindex.wildcard as W
 
     cfgs = _crossable_driven_configs()
     assert cfgs, (

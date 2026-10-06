@@ -132,7 +132,7 @@ bridging CEILING the two Lean-side readers disagree with each other: `GraphState
 `formal/probes/p6_step1_logged_bridge_2026-09-13.lean` §tier-2. This is NOT a bridge
 question and bridging does not fix it (the count is 4 at `G-BR-TGT` and at `G-CEIL` alike);
 it is a gap between two model readers with no Python counterpart —
-`index_v4/wildcard.py::WildcardIndex._check_derived` is the single shipped read path and the
+`src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived` is the single shipped read path and the
 parity suite pins it. `CascadeStrataSettle.lean::writeLeg_sem_stable2`'s tier is the one
 that consumes `checkFn` at exactly these keys, so a step-3 proof that leans on it there will
 be settling an obligation the reader cannot discharge.
@@ -263,7 +263,7 @@ materialises the edge, and the rest of the leg is inert until it lands.
 - **The `2026-09-13c` Log entry is what step 3a started from** — where the four new definitions live and why there, the two audited names re-proved (statements unchanged), the 14-mutation sweep and its two honest INERT rows, and the ONE NEW BOUND on step 3 (the stratum-2 `checkFn` gap). The code to read before composing anything: `formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean` §"The in-bridge, LOGGED" (the four defs + their projections/`EvalEq`), its §"CONTROLLED — MUTATION SWEEP over everything `P6` step 2 added" (the evidence table), `formal/lean/ZanzibarProofs/GraphIndex/CascadeInv.lean::structInv_ensureInBridgesLogged` and its two siblings, and `formal/lean/ZanzibarProofs/GraphIndex/UsStarWrite.lean::ensureInBridges_count_le_one` + `::InBridgeIdemWitness` (the multiset invariant and its red-to-green arm).
 - `formal/probes/p6_step1_logged_bridge_2026-09-13.lean` — **step 1's verdict and every number behind it**, literal transcript in the header (rc=0, 244 lines). The GO: bridged leg `14 → 2` of 546, ceiling `0`. Everything it listed as owed to step 2 is DONE as of 2026-09-13c (presence guard; `ensureInBridgesLogged`, TGT chosen and SAID to be unpinned; `releaseInBridges`; both `formal/CORRESPONDENCE.md` §7 entries) — read it now for the NUMBERS step 3 relies on, not for a to-do list. Companion: `formal/probes/p6_phantom_subject_2026-09-13.py` (the residual 2 is a Lean-model gap — the shipped backends are unanimous), whose property is now the pin `tests/test_p6_phantom_subject.py`.
 - `formal/lean/ZanzibarProofs/GraphIndex/TtuStarWide.lean` — what step 0 put there: `::ttuStarFreeW_through_untainted` (the consumer-side Wall-1 lemma), `::Zanzibar.RoutingArmWitness` (which stores are OUT of scope, and why — `no_rewrite_arms` is the load-bearing pin), `::Zanzibar.TermNonvacuityWitness` (that `term` excludes anything at all), and the mutation-sweep table. ⚠ **Every arm must assert per-arm non-vacuity**: an arm measured where `schemaRewrites = []` is measuring nothing, which is exactly how the 2026-09-12 ROUTING arm produced a number that meant nothing. Step 1 honoured this (its `Vac` carries `rewrites`, `bridges`, `narrowRej && wideAdm`, `unmapped`); step 2 and after must keep doing so.
-- Python's side of the bridge, read before modelling it: `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` (write), `::_maybe_remove_bridges` (retract), `index_v4/core.py::ReachabilityIndex.add_edge_by_id` (why the bridge is logged), `index_v4/processor.py::DeltaProcessor._write_derived` (the out-of-fragment derived case).
+- Python's side of the bridge, read before modelling it: `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_own_bridges` (write), `::_maybe_remove_bridges` (retract), `src/zanzibar/graphindex/core.py::ReachabilityIndex.add_edge_by_id` (why the bridge is logged), `src/zanzibar/graphindex/processor.py::DeltaProcessor._write_derived` (the out-of-fragment derived case).
 - board pointer: `ttuStarFree` **(ii)** — bridges on the rule-routed write path. **Promoted `NEXT` → `NOW` MECHANICALLY on 2026-09-05b** — `P3` LANDED (write leg now folds `rewriteClosureL S (rawWriteTuples S t)`, `formal/lean/ZanzibarProofs/GraphIndex/Cascade.lean:190-191`), so "NOT parallel-safe with `P3`" is moot and **increment B must bridge on the LEAF-routed list, not the public one**. Fresh evidence 2026-08-31b that this is a live hole: `ttuStarFree` classifies **SILENT** in the `W4Fragment` scope pin (`formal/conformance/test_w4fragment_scope_pin.py::W4FRAGMENT_SCOPE`)
 
 `formal/CORRESPONDENCE.md` §7 (`ZT-P5-NEW`);
@@ -468,7 +468,7 @@ graph-vs-`sem` agreement, which is the entire stated purpose of increment B.
 (b) Model the entity-middle half and close the recorded gap. A NEW, LARGER project than P6 --
     `formal/CORRESPONDENCE.md:964-973` records that half as DELIBERATELY unmodelled ("a
     fragment boundary, not model drift"), and it is Python's own answer to this exact case
-    (`index_v4/wildcard.py::_ensure_entity_middles` / `::_sync_entity_middles`, I14).
+    (`src/zanzibar/graphindex/wildcard.py::_ensure_entity_middles` / `::_sync_entity_middles`, I14).
 (c) Teach `isSubjectWildcardUserset` about minted leaves. `UsStarWrite.lean:106-109` warns
     this breaks `bridgedInConcrete_elim` (audit-pinned `Audit.lean:134`) and
     `UsStarReach.inbridge`'s `hcp` field.
@@ -490,7 +490,7 @@ counterexample inadmissible)". Adding `b.variant = Variant.plain` to
 `reachedByW3d2E_untOccCount` (`RemoveOccCount.lean:143`) is exactly that forbidden shape.
 This one IS many sessions of proof repair -- but only after a SECOND human decision: should
 the Lean model grow a bridge-GC story, or should Python's presence-guard become ref-counted?
-(Python's `_ensure_own_bridges`, `index_v4/wildcard.py:267-279`, is presence-guarded, one copy,
+(Python's `_ensure_own_bridges`, `src/zanzibar/graphindex/wildcard.py:267-279`, is presence-guarded, one copy,
 NOT ref-counted, and its retract dual is entity GC.)
 
 **THE LOGGED/UNLOGGED VISE (why there is no third way).** UNLOGGED: `ensureInBridges`
@@ -628,16 +628,16 @@ CONSEQUENCE: (ii) does not have to inhabit the derived through-shape, the (a)/(b
 trilemma is retired, and the payoff criterion is UNMEASURED in scope, not failed.
 
 What Python does at the out-of-fragment shape, for the boundary record: the processor's
-`_write_derived` (`index_v4/processor.py:657-681`) writes the derived public node through
+`_write_derived` (`src/zanzibar/graphindex/processor.py:657-681`) writes the derived public node through
 `WildcardIndex.add_tuple`, which calls `_ensure_bridges` on BOTH endpoints
-(`index_v4/wildcard.py:521-522`) -- so Python bridges the PUBLIC derived node from the
+(`src/zanzibar/graphindex/wildcard.py:521-522`) -- so Python bridges the PUBLIC derived node from the
 CASCADE, never from the raw write leg. Retraction is `_gc_public_node` (`processor.py:1262`)
 -> `_maybe_remove_bridges`. That is a fragment boundary of the same class as the
 entity-middle half (`formal/CORRESPONDENCE.md:964-973`), not something increment B owes.
 
 **Two more first-hand facts that dissolve the "logged/unlogged vise" and reshape Wall 2.**
 1. Python's bridges are LOGGED. `_ensure_own_bridges` (`wildcard.py:267-279`) adds via
-   `idx.add_edge_by_id`, whose contract (`index_v4/core.py:1101-1107`) records reachability
+   `idx.add_edge_by_id`, whose contract (`src/zanzibar/graphindex/core.py:1101-1107`) records reachability
    flips in the delta outbox. So the LOGGED horn is the faithful one. And
    `writeLeg_reach_stable` (`CascadeStable.lean:362-370`) states `hunmapped` over
    `cascadeKeys S (σ.writeLoggedRules S t)` -- the POST-write state -- with a proof shaped
@@ -769,7 +769,7 @@ it the basis of "the payoff is UNMEASURED, not failed". **It is false.** Measure
 
 `NoTtuTarget` quantifies over `schemaRewrites`, and `schemaRewrites` DROPS DERIVED DEFS
 (`GraphIndex/RulesWrite.lean::schemaRewrites`, the mirror of
-`zanzibar_utils_v1.py::compile_ruleset`'s `if key not in tainted` loop). The arm's own owner
+`src/zanzibar/schema/compiler.py::compile_ruleset`'s `if key not in tainted` loop). The arm's own owner
 key `("doc","control")` is tainted too, because `Spec/Stratify.lean::exprRefs`'s `.ttu` case
 adds the derived target ref `("folder","approver")` via the tupleset's parent types. So the
 arm never reaches `schemaRewrites` and `term` never sees it. Written as specified, the pin
@@ -913,7 +913,7 @@ TGT is free, not pinned, and this probe must not be cited as evidence for it.
     that `RESIDUE DETAIL` shows is **EMPTY of new edges** — two extra COPIES of a bridge
     already present. The GC correctly declines (node still live), so copies accumulate per
     write: the `_leak_accumulates` shape. **Python does NOT do this** —
-    `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` guards with
+    `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_own_bridges` guards with
     `if not self.idx.direct_edge_exists_by_id(node.id, w_any.id)` before `add_edge_by_id`.
     The Lean def (`UsStarWrite.lean:213-218`) has no guard; its docstring claims only
     reachability-level idempotence, which is true and is not enough once a live chain calls
@@ -972,7 +972,7 @@ still-owed phantom-subject property is now a gated PIN. Whole-tree Lean build gr
 **THE FIDELITY BUG IS FIXED, and the fix is pinned at the level it was wrong on.**
 `GraphState.ensureInBridges` (`UsStarWrite.lean`) now guards with
 `if (c, wAnyNode (c.type, c.pred)) in sigma.edges`, mirroring
-`index_v4/wildcard.py::WildcardIndex._ensure_own_bridges`'s
+`src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_own_bridges`'s
 `if not self.idx.direct_edge_exists_by_id(...)` -- including Python's ORDER, intern the
 `w_any` node first (it is added on every bridged branch, present-edge included), test the
 edge second. The probe's measured `(0 calls, 1, 2, 3) = (0, 1, 2, 3)` now reads
@@ -1821,7 +1821,7 @@ over-grant at this store.
 
 NEXT ACTION, single: MEASURE `D`'s cone -- can the star fold produce `("folder","viewer")`
 here, what does changing it touch, and which arm of
-`index_v4/wildcard.py::WildcardIndex._check_derived` makes Python answer true. Only if the
+`src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived` makes Python answer true. Only if the
 decision is still not obvious after that does it go to `claude-fable-5` (user-authorised
 above). (!) This probe LOCATES the gap and does not PRICE the fix -- do not read `D` as
 costed.
@@ -1839,7 +1839,7 @@ empty stars, so it is falsifiable. (3) `p6_partiv_starfold_cause` -- `coveredFn`
 shape/object already returns TRUE for `admin`, so the coverage TEST is innocent too.
 (4) `p6_partiv_shapes_gap` -- the shape was never in the fold's candidate list.
 
-(!) ROOT CAUSE. `zanzibar_utils_v1.py` builds `SchemaInfo.subject_wildcard_shapes` in TWO
+(!) ROOT CAUSE. `src/zanzibar/schema/` builds `SchemaInfo.subject_wildcard_shapes` in TWO
 passes: declared wildcard restrictions (`:993-995`) PLUS a star-tupleset through-shape pass
 (`:1001-1008`). `ReconcileStars.lean:97::wildcardShapes` implements ONLY THE FIRST, while
 its docstring names that Python function as its correspondent. Shipped:
@@ -1884,7 +1884,7 @@ obeyed -- the one claim that would have changed the answer was re-measured.
 THE SHAPE OF THE DECISION. Do NOT weaken `wsBare` with a disjunct. SPLIT the enumeration:
   * `declaredWildcardShapes S` := today's `ReconcileStars.lean:97::wildcardShapes` body,
     renamed (pass 1 only).
-  * `throughShapes S` := Python's pass 2 (`zanzibar_utils_v1.py:1001-1008`).
+  * `throughShapes S` := Python's pass 2 (`src/zanzibar/schema/`).
   * `wildcardShapes S := declaredWildcardShapes S ++ throughShapes S` -- keeps the NAME, so
     the `CORRESPONDENCE.md` anchors still resolve, and now honestly matches
     `SchemaInfo.subject_wildcard_shapes`.
@@ -1989,7 +1989,7 @@ regeneration. It is a commit point and lands the accuracy fix unconditionally.
 
 STAGE 1 OF `D1-split` IS LANDED, GATED AND SABOTAGE-VERIFIED. Read `docs/p6-part-iv-plan-2026-09-14.md` sec "Corrections appended 2026-09-14h (sixth)" FIRST -- it supersedes the (fifth) on two points and the (fourth) on which part of stage 1 is the work. All ten gate phases PASSED on this tree (`lean` holes=0 audits=617 pinned=617; conf 5/5; tests 4/4); `gate_status.py` says COVERED.
 
-**WHAT LANDED.** `ReconcileStars.lean::declaredWildcardShapes` (pass 1, the old `wildcardShapes` body verbatim) + `::throughShapes` (Python's pass 2) + `::wildcardShapes = declared ++ new-through`, so the model finally enumerates what `zanzibar_utils_v1.py::derive_schema_info` enumerates. `FullScope.lean::W4Fragment.wsBare` re-pointed at pass 1, keeping the fragment extensionally identical.
+**WHAT LANDED.** `ReconcileStars.lean::declaredWildcardShapes` (pass 1, the old `wildcardShapes` body verbatim) + `::throughShapes` (Python's pass 2) + `::wildcardShapes = declared ++ new-through`, so the model finally enumerates what `src/zanzibar/schema/compiler.py::derive_schema_info` enumerates. `FullScope.lean::W4Fragment.wsBare` re-pointed at pass 1, keeping the fragment extensionally identical.
 
 **THE (fourth) CORRECTION WAS WRONG ABOUT THE COST, AND THE BUILD SAID SO.** The 235-reference cone was almost entirely inert -- the whole tree reached `FullScope` with FOUR structural breaks, every one a proof that stepped through the old body with `List.mem_flatMap`. The real work was that **74 bareness carries and ~19 membership conclusions were stated over the FULL list**, so re-pointing `wsBare` stranded all of them.
 

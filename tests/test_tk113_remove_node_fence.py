@@ -13,7 +13,7 @@ and removing a rewrite TARGET made later legitimate removes refuse
 (``AdmissionRejected: Non-existent edge cannot be removed``) while the set engine
 accepted them (agent-PROBED census, same doc sec 2).
 
-The fix (``zanzibar_utils_v1.py::_node_removal_fence`` ->
+The fix (``src/zanzibar/schema/compiler.py::_node_removal_fence`` ->
 ``SchemaInfo.unremovable_node_shapes``, refused in ``WildcardIndex.remove_node``) is
 pinned here as a PROPERTY over every node of four schemas: each removal is either refused
 with the store untouched, or EXACT, meaning that
@@ -30,14 +30,14 @@ stay removable, so the fence is not "refuse everything").
 import pytest
 from sqlmodel import select
 
-from index_v4.core import ReachabilityIndex
-from index_v4.models import NodeV4
-from index_v4.outbox import outbox_watermark
-from index_v4.processor import DeltaProcessor
-from index_v4.wildcard import WildcardIndex
+from zanzibar.graphindex.core import ReachabilityIndex
+from zanzibar.graphindex.models import Node
+from zanzibar.graphindex.outbox import outbox_watermark
+from zanzibar.graphindex.processor import DeltaProcessor
+from zanzibar.graphindex.wildcard import WildcardIndex
 from tests.oracle import Oracle, parse_schema_ast, t as otuple
 from tests.wildcard_helpers import make_wildcard_index
-from zanzibar_utils_v1 import (AdmissionRejected, Entity, RelationalTriple,
+from zanzibar.schema import (AdmissionRejected, Entity, RelationalTriple,
                                parse_openfga_schema)
 
 BASE = """
@@ -124,7 +124,7 @@ class _G:
 
     def nodes(self):
         return sorted({(n.predicate, n.type, n.name) for n in
-                       self.session.exec(select(NodeV4).where(NodeV4.store_id == 'v')).all()
+                       self.session.exec(select(Node).where(Node.store_id == 'v')).all()
                        if n.wildcard == ''})
 
     def answers(self, grid):

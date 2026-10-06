@@ -3,7 +3,7 @@
 Full design: `docs/specs/graph-boolean-ivm-spec.md` (cited as `boolean spec §N`);
 implementation record: `docs/spec-deviations.md`. The mechanism, end to end:
 
-## Compile (`zanzibar_utils_v1.py`)
+## Compile (`src/zanzibar/schema/`)
 
 **Taint**: a relation is *derived* iff its AST transitively reaches an
 `Intersection`/`Exclusion` through `Computed`, `TTU`, or userset restrictions
@@ -47,7 +47,7 @@ object wildcards on derived relations; wildcard userset restrictions over derive
 relations (`[T:*#P]`, P tainted). `enable_boolean=False` restores the historical
 whole-schema refusal.
 
-## Maintain (`index_v4/processor.py`)
+## Maintain (`src/zanzibar/graphindex/processor.py`)
 
 `DeltaProcessor.run_cascade(txn_start_watermark)` runs inside the writing transaction
 (synchronous v1; `_lock_store` already serializes it). Per stratum round: map the
@@ -60,9 +60,9 @@ outbox frontier to keys (§5.2), reconcile each, advance; assert quiescence afte
   a symbolic flip must re-derive the concrete edge-holders on that object, not just
   the residue.
 * **State per (object, derived relation)**: materialised **derived edges** for
-  concretely-supported members (`EdgeV4.derived`, written through the ordinary façade
+  concretely-supported members (`Edge.derived`, written through the ordinary façade
   path so bridges/counts/cycle-checks/delta-emission behave normally — emitted deltas
-  drive the next stratum), plus one **residue** row (`ResidueV1`): `stars` =
+  drive the next stratum), plus one **residue** row (`Residue`): `stars` =
   intensionally covered subject shapes, `neg` = star-covered-but-excluded concrete
   node ids, `upos` = userset-shaped subjects whose membership is true (edge-free —
   see below), `version` bumped on change.
@@ -86,7 +86,7 @@ outbox frontier to keys (§5.2), reconcile each, advance; assert quiescence afte
 * `backfill()` bootstraps/repairs from leaf data (per stratum, chunked, idempotent) —
   the recovery path when I9 finds an inconsistent key.
 
-## Read (`index_v4/wildcard.py`)
+## Read (`src/zanzibar/graphindex/wildcard.py`)
 
 ```
 check(s, R, o) on derived R:

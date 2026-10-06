@@ -26,7 +26,7 @@ Two things went wrong, and only one of them is about size.
 ### Fault 1 — the work list was machine-generated and never curated
 
 The sweep lenses were told to be "exhaustive within your lens". The compile-rejections lens
-duly returned **96 items**, including every parser error in `zanzibar_utils_v1.py`:
+duly returned **96 items**, including every parser error in `src/zanzibar/schema/`:
 `relation definition missing colon`, `stray ']'`, `unterminated '['`, `empty definition`.
 
 Those are not scope reductions in the sense the task meant. A parser refusing a malformed

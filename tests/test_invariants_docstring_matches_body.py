@@ -1,7 +1,7 @@
 """``check_invariants``'s docstring claimed a SMALLER invariant set than it runs.
 
 The zero-trust review's last P5 bullet: "three documents give three different lists of
-which invariants run per commit, and none matches ``index_v4/invariants.py``". Two
+which invariants run per commit, and none matches ``src/zanzibar/graphindex/invariants.py``". Two
 architecture docs were corrected and left the docstring flagged as still wrong -- it
 said "Assert I1-I6 + I10", while the body also runs I7 (residue-version monotonicity)
 and I13 (reference_count == direct-edge degree).
@@ -22,10 +22,10 @@ import json
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from index_v4 import ReachabilityIndex, Store
-from index_v4.invariants import InvariantViolation, check_invariants
-from index_v4.models import NodeV4, ResidueV1
-from zanzibar_utils_v1 import parse_openfga_schema
+from zanzibar.graphindex import ReachabilityIndex, Store
+from zanzibar.graphindex.invariants import InvariantViolation, check_invariants
+from zanzibar.graphindex.models import Node, Residue
+from zanzibar.schema import parse_openfga_schema
 from tests.wildcard_helpers import make_wildcard_index
 
 _SCHEMA = '''
@@ -91,9 +91,9 @@ def test_body_enforces_i7_residue_version_monotonicity():
     ``residue_versions`` ledger -- which the paranoia guard does on every commit."""
     rs = parse_openfga_schema(_SCHEMA, enable_boolean=True)
     session, widx = make_wildcard_index(rs.schema_info)
-    from index_v4.processor import DeltaProcessor
-    from index_v4.outbox import outbox_watermark
-    from zanzibar_utils_v1 import Entity, RelationalTriple
+    from zanzibar.graphindex.processor import DeltaProcessor
+    from zanzibar.graphindex.outbox import outbox_watermark
+    from zanzibar.schema import Entity, RelationalTriple
 
     proc = DeltaProcessor(widx, rs.compiled)
 
@@ -111,7 +111,7 @@ def test_body_enforces_i7_residue_version_monotonicity():
     write(('...', 'user', '*', 'editor', 'doc', 'd1'))    # star-covered positive arm
     write(('...', 'user', 'bob', 'blocked', 'doc', 'd1'))  # -> a neg entry
 
-    rows = session.exec(select(ResidueV1)).all()
+    rows = session.exec(select(Residue)).all()
     assert len(rows) == 1, f'fixture produced {len(rows)} residue rows, need exactly 1'
     row = rows[0]
     assert json.loads(row.stars), 'residue has no stars -- fixture did not bite'
@@ -136,8 +136,8 @@ def test_body_enforces_i7_residue_version_monotonicity():
 
 # Every (repo-relative path, enclosing function) whose `check_invariants` call
 # deliberately passes NO `schema_info`, with the reason. Each was READ first-hand on
-# 2026-09-19f: all six build a raw `index_v4.ReachabilityIndex`, which has no
-# `schema_info` attribute at all (`grep schema_info index_v4/core.py` -> nothing), so
+# 2026-09-19f: all six build a raw `zanzibar.graphindex.ReachabilityIndex`, which has no
+# `schema_info` attribute at all (`grep schema_info src/zanzibar/graphindex/core.py` -> nothing), so
 # there is no handle in scope to pass and the reduced checker is the only one available.
 _SCHEMALESS_SITES = {
     ('tests/test_blind_audit_regressions.py',

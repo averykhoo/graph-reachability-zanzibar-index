@@ -4,7 +4,7 @@ docs/dw1-decidable-w4fragment-2026-09-23.md sec 2 -- NOT a checker; nothing pins
 Run from the repo root."""
 import sys
 sys.path.insert(0, '.')
-from zanzibar_utils_v1 import (Direct, Computed, TTU, Union, Intersection, Exclusion,
+from zanzibar.schema import (Direct, Computed, TTU, Union, Intersection, Exclusion,
                                parse_schema_ast, compute_taint, parse_openfga_schema,
                                wildcard_userset_restriction_shapes, UnsupportedByGraphIndex)
 from formal.conformance import corpus as C

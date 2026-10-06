@@ -34,13 +34,13 @@ the cascade in-transaction). Per op: unanimity, I12 row-multiset snapshots on
 rejection, full-grid check parity vs the oracle. Raw-tuple set semantics live here
 (duplicate add = idempotent no-op).
 
-## Paranoia mode (`index_v4/invariants.py`)
+## Paranoia mode (`src/zanzibar/graphindex/invariants.py`)
 
 Default ON while prerelease **in the TEST harness** (`tests/wildcard_helpers.
 make_wildcard_index`, `paranoia=False` for benchmarks or deliberate-corruption tests) and
 **OFF but selectable in production**: `ConnectedStore.__init__` takes `paranoia=` and
 honours `ZANZIBAR_PARANOIA`, defaulting to `'off'`
-(`connectedstore/store.py::ConnectedStore.DEFAULT_PARANOIA`). This paragraph said the
+(`src/zanzibar/connectedstore/store.py::ConnectedStore.DEFAULT_PARANOIA`). This paragraph said the
 opposite — "`ConnectedStore.__init__` never calls it and exposes no flag … a production
 deployment runs with this entire layer dark" — until 2026-09-19; that was true before
 ZT-P1-3 wired the tiers and stale after. The live caller census is
@@ -54,7 +54,7 @@ ZT-P1-3 wired the tiers and stale after. The live caller census is
 
 And, at the opt-in `'fixpoint'` tier only (TK82, 2026-09-19), **once per boolean cascade**
 after it drains: re-reconcile every key the cascade SCHEDULED and require each to be an I9
-fixpoint (`index_v4/processor.py::DeltaProcessor._check_cascade_fixpoint`). It is the only
+fixpoint (`src/zanzibar/graphindex/processor.py::DeltaProcessor._check_cascade_fixpoint`). It is the only
 detector for an *execution-side* missed reconcile — the terminal settle pass is
 structurally blind to one within the cascade that skipped it, and no I1–I12 clause fires on
 the closure-edge-only staleness left behind (TK74). It sits ABOVE `'full'` on the ladder so

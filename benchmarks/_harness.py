@@ -17,9 +17,9 @@ from pathlib import Path
 
 from sqlmodel import Session, SQLModel, create_engine
 
-from setengine import SetEngine
-from setengine.setops import SetOps
-from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
+from zanzibar.setengine import SetEngine
+from zanzibar.setengine.setops import SetOps
+from zanzibar.schema import parse_openfga_schema, Entity, RelationalTriple
 from tests.wildcard_helpers import make_wildcard_index
 
 
@@ -134,7 +134,7 @@ def build_graph(schema: str, shapes, tuples, store_id: str = 'gb',
     with no derived cascade (simple / gdrive); on a boolean schema an intermediate
     commit would land in a state the cascade hasn't reconciled -> paranoia raises.
     """
-    from index_v4.processor import DeltaProcessor
+    from zanzibar.graphindex.processor import DeltaProcessor
     ruleset = parse_openfga_schema(schema, object_wildcard_shapes=shapes)
     session, widx = make_wildcard_index(ruleset.schema_info, store_id=store_id, paranoia=paranoia)
     boolean = ruleset.compiled is not None and ruleset.compiled.plans

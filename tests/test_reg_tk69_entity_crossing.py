@@ -6,8 +6,8 @@ Property guarded
 ----------------
 On a CROSSABLE shape ``(T, p)`` (bridged in AND out) the graph index mints the crossing
 middle ``(T, x, p)`` -- with both bridges -- for every live ENTITY ``x`` of type ``T``
-(``index_v4/wildcard.py::WildcardIndex._ensure_entity_middles``, invariant I14), because
-``zanzibar_utils_v1.py::SchemaInfo.crossable_shapes`` fixes the wildcard-materialization
+(``src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_entity_middles``, invariant I14), because
+``src/zanzibar/schema/rules.py::SchemaInfo.crossable_shapes`` fixes the wildcard-materialization
 spec's existential as ENTITY-wise. Those bridges are SCHEMATIC, not data: every present
 **and future** entity of type ``T`` gets them. So
 
@@ -125,8 +125,8 @@ from collections import deque
 import pytest
 from sqlmodel import select
 
-from index_v4.models import EdgeV4, NodeV4
-from setengine.setops import ALL_SETOPS
+from zanzibar.graphindex.models import Edge, Node
+from zanzibar.setengine.setops import ALL_SETOPS
 from tests.test_matrix import GraphBackend, SetBackend
 
 SCHEMA = """
@@ -169,13 +169,13 @@ def _latent_star_cycle(graph) -> list[tuple[str, str]]:
         return []
     adj: dict[int, list[int]] = {}
     for s, o in idx.session.exec(
-            select(EdgeV4.subject_id, EdgeV4.object_id)
-            .where(EdgeV4.store_id == idx.store_id)
-            .where(EdgeV4.direct_edge_count > 0)).all():   # type: ignore[arg-type]
+            select(Edge.subject_id, Edge.object_id)
+            .where(Edge.store_id == idx.store_id)
+            .where(Edge.direct_edge_count > 0)).all():   # type: ignore[arg-type]
         adj.setdefault(s, []).append(o)
     w_nodes = {(n.type, n.predicate, n.wildcard): n.id for n in idx.session.exec(
-        select(NodeV4).where(NodeV4.store_id == idx.store_id)
-        .where(NodeV4.name == '*')).all() if n.wildcard in ('any', 'all')}
+        select(Node).where(Node.store_id == idx.store_id)
+        .where(Node.name == '*')).all() if n.wildcard in ('any', 'all')}
     hits = []
     for (t, p) in crossable:
         src, dst = w_nodes.get((t, p, 'any')), w_nodes.get((t, p, 'all'))

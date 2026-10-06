@@ -44,8 +44,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import event
 from sqlmodel import Session, SQLModel, create_engine
 
-from connectedstore import ConnectedStore
-from zanzibar_utils_v1 import Entity, RelationalTriple
+from zanzibar.connectedstore import ConnectedStore
+from zanzibar.schema import Entity, RelationalTriple
 
 
 # ---------------------------------------------------------------------------
@@ -59,8 +59,8 @@ class StmtCounter:
     """Tallies every SQL statement the engine executes: total, by leading keyword
     (SELECT/INSERT/UPDATE/DELETE), occurrences of ``FOR UPDATE`` in the text, and --
     for SELECTs -- the first table named after ``FROM`` (so we can attribute the
-    ``_lock_store`` re-takes on ``store_v4``, the ``log_rows`` read on
-    ``tuple_log_v1``, and the ``outbox_watermark`` read on ``delta_outbox_v1``)."""
+    ``_lock_store`` re-takes on ``store``, the ``log_rows`` read on
+    ``tuple_log``, and the ``outbox_watermark`` read on ``delta_outbox``)."""
 
     def __init__(self) -> None:
         self.n = 0
@@ -368,10 +368,10 @@ def render(name, r):
     lines.append(f'- read sanity: check hits {n_hit}/{n_tot}, '
                  f'lookup non-empty={l_ok}, reverse non-empty={r_ok}')
     lines.append('')
-    lines.append('| op | stmts/op (mean) | min | max | kw/op (S/I/U/D) | FOR UPDATE/op | ops/s | store_v4 SELECT/op |')
+    lines.append('| op | stmts/op (mean) | min | max | kw/op (S/I/U/D) | FOR UPDATE/op | ops/s | store SELECT/op |')
     lines.append('|---|--:|--:|--:|---|--:|--:|--:|')
-    lines.append(_op_row('add_tuple', r['add'], f'{_sum_from(r["add"][0], "store_v4"):.1f}'))
-    lines.append(_op_row('remove_tuple', r['remove'], f'{_sum_from(r["remove"][0], "store_v4"):.1f}'))
+    lines.append(_op_row('add_tuple', r['add'], f'{_sum_from(r["add"][0], "store"):.1f}'))
+    lines.append(_op_row('remove_tuple', r['remove'], f'{_sum_from(r["remove"][0], "store"):.1f}'))
     lines.append(_op_row('check', r['check'], '-'))
     lines.append(_op_row('lookup', r['lookup'], '-'))
     lines.append(_op_row('lookup_reverse', r['lookup_reverse'], '-'))
@@ -385,17 +385,17 @@ def render(name, r):
     lines.append('')
     lines.append('| table | SELECT/op | inventory item |')
     lines.append('|---|--:|---|')
-    lines.append(f'| store_v4 | {_fromline(add, "store_v4")} | (2)+(3) `_lock_store` re-takes (predict 1+K) |')
-    lines.append(f'| tuple_log_v1 | {_fromline(add, "tuple_log_v1")} | (5) `log_rows` (predict 1) |')
-    lines.append(f'| delta_outbox_v1 | {_fromline(add, "delta_outbox_v1")} | (6) `outbox_watermark` (boolean only, predict 1) |')
-    lines.append(f'| index_cursor_v1 | {_fromline(add, "index_cursor_v1")} | (4) cursor refresh (predict 1) |')
-    lines.append(f'| node_v4 | {_fromline(add, "node_v4")} | index node resolution |')
-    lines.append(f'| edge_v4 | {_fromline(add, "edge_v4")} | index closure work |')
-    lines.append(f'| residue_v1 | {_fromline(add, "residue_v1")} | derived residue (boolean only) |')
+    lines.append(f'| store | {_fromline(add, "store")} | (2)+(3) `_lock_store` re-takes (predict 1+K) |')
+    lines.append(f'| tuple_log | {_fromline(add, "tuple_log")} | (5) `log_rows` (predict 1) |')
+    lines.append(f'| delta_outbox | {_fromline(add, "delta_outbox")} | (6) `outbox_watermark` (boolean only, predict 1) |')
+    lines.append(f'| index_cursor | {_fromline(add, "index_cursor")} | (4) cursor refresh (predict 1) |')
+    lines.append(f'| node | {_fromline(add, "node")} | index node resolution |')
+    lines.append(f'| edge | {_fromline(add, "edge")} | index closure work |')
+    lines.append(f'| residue | {_fromline(add, "residue")} | derived residue (boolean only) |')
     lines.append('')
     k_mean = r['k'][0]
-    sv = _sum_from(add[0], 'store_v4')
-    lines.append(f'store_v4 SELECT/write = **{sv:.2f}** vs predicted 1+K = **{1 + k_mean:.2f}** '
+    sv = _sum_from(add[0], 'store')
+    lines.append(f'store SELECT/write = **{sv:.2f}** vs predicted 1+K = **{1 + k_mean:.2f}** '
                  f'(K mean {k_mean:.2f}).')
     lines.append('')
     return '\n'.join(lines)

@@ -2,8 +2,8 @@
 """`TK77` -- the crossable-shape census. Probe for docs/tk77-crossable-census-2026-09-19.md.
 
 WHAT IT MEASURES. A schema reaches the I14 crossing-middle machinery
-(``index_v4/wildcard.py::_ensure_entity_middles`` / ``::_sync_entity_middles``) only if its
-``zanzibar_utils_v1.py::SchemaInfo.crossable_shapes`` is non-empty. This probe measures that
+(``src/zanzibar/graphindex/wildcard.py::_ensure_entity_middles`` / ``::_sync_entity_middles``) only if its
+``src/zanzibar/schema/rules.py::SchemaInfo.crossable_shapes`` is non-empty. This probe measures that
 property over every corpus and generator in the repo, statically (sections 2-5 of the doc)
 and live (section 6).
 
@@ -12,7 +12,7 @@ WALKED INTO and was caught by `TK89` -- read all three before changing it.
 
   (a) A RAW call count of ``_ensure_entity_middles`` / ``_sync_entity_middles`` is NOT reach.
       Both are called unconditionally (from ``::_ensure_bridges`` and from
-      ``index_v4/processor.py``) and return at a guard when ``crossable_shapes`` is empty, so
+      ``src/zanzibar/graphindex/processor.py``) and return at a guard when ``crossable_shapes`` is empty, so
       a module with zero crossable schemas still books hundreds of calls. Measured 2026-09-19c
       over seven modules: 7408 raw ``_ensure`` calls, 257 EFFECTIVE; 524 raw ``_sync`` calls,
       8 EFFECTIVE. Reading raw as reach inverts the table's conclusion.
@@ -41,7 +41,7 @@ WALKED INTO and was caught by `TK89` -- read all three before changing it.
       book today, so those runs were not at the seed they claimed. The guard that was deleted
       was aimed at the right mechanism; what failed was its evidence, not its target.
 
-      THE MECHANISM (first-hand, `TK93`): `zanzibar_utils_v1.py::RuleSet.apply` yields its
+      THE MECHANISM (first-hand, `TK93`): `src/zanzibar/schema/rules.py::RuleSet.apply` yields its
       rewrite fan-out out of a **set** (`seeds`, or the `unprocessed.pop()` worklist), and
       `tests/parity.py::_GraphSide.apply` consumes it inside one `try` that rolls back on
       `ValueError`. When one member of a fan-out is refused, how many `add_tuple` calls
@@ -118,8 +118,8 @@ def _bump(key: str, n: int = 1) -> None:
 
 
 def pytest_configure(config):        # noqa: D103  (pytest hook)
-    import zanzibar_utils_v1 as Z
-    import index_v4.wildcard as W
+    import zanzibar.schema as Z
+    import zanzibar.graphindex.wildcard as W
 
     _parse = Z.parse_openfga_schema
 
@@ -136,7 +136,7 @@ def pytest_configure(config):        # noqa: D103  (pytest hook)
         return rs
 
     Z.parse_openfga_schema = parse
-    # Rebind the `from zanzibar_utils_v1 import parse_openfga_schema` re-exports that
+    # Rebind the `from zanzibar.schema import parse_openfga_schema` re-exports that
     # already resolved. Modules imported later pick up the patched attribute themselves.
     for mod in list(sys.modules.values()):
         if mod is not None and getattr(mod, 'parse_openfga_schema', None) is _parse:
@@ -209,7 +209,7 @@ def _classify(ast):
     The split is the whole point: ``_reject_doubly_bridged_shapes`` categorically refuses to
     let a literal ``T:*#p`` shape also be an object wildcard, so only the through-shapes can
     ever close a crossing."""
-    from zanzibar_utils_v1 import derive_schema_info, wildcard_userset_restriction_shapes
+    from zanzibar.schema import derive_schema_info, wildcard_userset_restriction_shapes
     bridged_in = frozenset(derive_schema_info(ast, frozenset()).bridged_in_shapes)
     literal = wildcard_userset_restriction_shapes(ast)
     return bridged_in, bridged_in & literal, bridged_in - literal
@@ -217,7 +217,7 @@ def _classify(ast):
 
 def census_fixtures() -> None:
     """Section 2: ``tests/fga_schemas/``."""
-    from zanzibar_utils_v1 import parse_schema_ast
+    from zanzibar.schema import parse_schema_ast
     print('=== 2. tests/fga_schemas/ ===')
     print(f'{"fixture":24} {"in":>3} {"lit":>3} {"thru":>4}  through-shapes')
     capable = []
@@ -233,7 +233,7 @@ def census_fixtures() -> None:
 def census_conformance() -> None:
     """Section 3: the conformance enum corpus, each at its OWN declared owc."""
     import formal.conformance.test_conformance_enum as E
-    from zanzibar_utils_v1 import parse_schema_ast
+    from zanzibar.schema import parse_schema_ast
     print('=== 3. formal/conformance test_conformance_enum.SCHEMAS ===')
     capable = []
     for name, entry in sorted(E.SCHEMAS.items()):
@@ -249,7 +249,7 @@ def census_genswarm() -> None:
     """Section 4: ``genswarm.witness`` over its CLOSED switch-subset space."""
     sys.path.insert(0, str(_REPO_ROOT / 'tests'))
     import genswarm as G
-    from zanzibar_utils_v1 import derive_schema_info
+    from zanzibar.schema import derive_schema_info
     print('=== 4. tests/genswarm.py witness space (closed, RNG-free) ===')
     configs = G.enumerate_configs(len(G.SWARM_SWITCHES))
     crossable = 0
@@ -271,7 +271,7 @@ def census_genswarm() -> None:
 def census_star_bridge() -> None:
     """Section 5: ``test_hypothesis.star_bridge_configs`` over its CLOSED domain."""
     import tests.test_hypothesis as H
-    from zanzibar_utils_v1 import parse_openfga_schema
+    from zanzibar.schema import parse_openfga_schema
     print('=== 5. tests/test_hypothesis.py::star_bridge_configs (closed domain) ===')
     total = rejected = crossable = 0
     by_arm: collections.Counter = collections.Counter()

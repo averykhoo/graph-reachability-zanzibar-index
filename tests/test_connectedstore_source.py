@@ -12,8 +12,8 @@ S2 (connected-store spec §2.3-§2.6, §5-S2): the source-of-truth write path.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import TupleSource, TupleLogV1, log_rows, log_watermark, save_schema
-from setengine import SetEngine, TupleV1
+from zanzibar.connectedstore import TupleSource, TupleLog, log_rows, log_watermark, save_schema
+from zanzibar.setengine import SetEngine, RelationTuple
 
 _SCHEMA = '''
 type user
@@ -40,7 +40,7 @@ def env():
 
 
 def _tuples(session, store_id):
-    rows = session.exec(select(TupleV1).where(TupleV1.store_id == store_id)).all()
+    rows = session.exec(select(RelationTuple).where(RelationTuple.store_id == store_id)).all()
     return {(r.subject_predicate, r.subject_type, r.subject_name,
              r.relation, r.object_type, r.object_name) for r in rows}
 

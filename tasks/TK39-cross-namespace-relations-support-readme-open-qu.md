@@ -22,12 +22,12 @@ closed:
 
 ## Traps
 
-⚠ **This is a SCHEMA-shape change, and schemas are static here.** `SchemaV4` is write-once and a new schema means a new store/index (`CLAUDE.md`, `connectedstore/`). Any design has to survive that constraint, and it touches the parser, `compile_ruleset`, both backends and the independent oracle — which parses the DSL itself and must be changed SEPARATELY, or the independence contract is broken.
+⚠ **This is a SCHEMA-shape change, and schemas are static here.** `SchemaRecord` is write-once and a new schema means a new store/index (`CLAUDE.md`, `src/zanzibar/connectedstore/`). Any design has to survive that constraint, and it touches the parser, `compile_ruleset`, both backends and the independent oracle — which parses the DSL itself and must be changed SEPARATELY, or the independence contract is broken.
 
 ## Read first
 
 - [`README.md`](../README.md)`:399` — the question, in its list (the ROOT README, 660 lines; `tasks/README.md` is a different 86-line file and this link used to resolve to it)
-- `zanzibar_utils_v1.py::parse_openfga_schema` — the parser that would have to admit it
+- `src/zanzibar/schema/compiler.py::parse_openfga_schema` — the parser that would have to admit it
 - `tests/oracle.py` — the independent oracle, which parses the DSL itself
 
 ## Log
@@ -42,6 +42,6 @@ LANDED 2026-09-10 (TK53 append) as a nested sub-bullet under `* cross-namespace 
 
 The first pass put it at :405, a free-floating paragraph before the mermaid fence, which reads as an annotation of the WRONG bullet (`* default condition exists?`). The adversarial pass caught that and the placement moved to :400, directly under the bullet it annotates, with the 4-space sub-bullet indent this section already uses (verified at README.md:432-436).
 
-Two other draft defects were dropped rather than written: a self-contradicting "lands in four places at once" followed by a five-item list (the source row deliberately carries no count), and a verbatim restatement of `SchemaV4 is write-once` that already has a home in this same file.
+Two other draft defects were dropped rather than written: a self-contradicting "lands in four places at once" followed by a five-item list (the source row deliberately carries no count), and a verbatim restatement of `SchemaRecord is write-once` that already has a home in this same file.
 
 Not superseded: `namespace` appears in README only at :399 and inside the mermaid diagram, so the question is schema-shaped and is not answered by existing type-crossing usersets.

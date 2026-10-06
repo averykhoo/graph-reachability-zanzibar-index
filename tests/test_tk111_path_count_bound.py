@@ -1,6 +1,6 @@
 """TK111 S5: a write whose closure path count overflows storage is a CLEAN refusal.
 
-``EdgeV4.indirect_edge_count`` counts derivation paths, so a K-layer diamond chain makes
+``Edge.indirect_edge_count`` counts derivation paths, so a K-layer diamond chain makes
 it ``2**K``. Before this fix the overflowing write died at FLUSH with a raw driver error
 that no caller could classify: ``DataError: integer out of range`` on PostgreSQL at K=31,
 ``OverflowError: Python int too large to convert to SQLite INTEGER`` on SQLite at K=63
@@ -25,13 +25,13 @@ import pytest
 from sqlalchemy import func
 from sqlmodel import Session, SQLModel, create_engine, select
 
-import index_v4.core as core
-from connectedstore import ConnectedStore
-from index_v4 import EdgeV4, InvariantViolation, ReachabilityIndex
-from index_v4.models import DeltaOutboxV1, NodeV4, Store
+import zanzibar.graphindex.core as core
+from zanzibar.connectedstore import ConnectedStore
+from zanzibar.graphindex import Edge, InvariantViolation, ReachabilityIndex
+from zanzibar.graphindex.models import DeltaOutbox, Node, Store
 from tests import oracle as O
 from tests.test_tk111_stall_aware_freshness import DIAMOND, _diamond_writes
-from zanzibar_utils_v1 import (AdmissionRejected, IndexResourceLimit,
+from zanzibar.schema import (AdmissionRejected, IndexResourceLimit,
                                PathCountExceeded)
 
 
@@ -129,7 +129,7 @@ def _raw_store():
 
 def _counts(session):
     return tuple(session.exec(select(func.count()).select_from(m)).one()
-                 for m in (EdgeV4, NodeV4, DeltaOutboxV1))
+                 for m in (Edge, Node, DeltaOutbox))
 
 
 def test_direct_edge_row_alone_is_checked(monkeypatch):
@@ -185,9 +185,9 @@ def test_both_build_index_constructors_apply_the_same_bound(monkeypatch, bulk, b
                                                              refused):
     """``build_index`` has two constructors over one snapshot. The incremental one
     (``bulk=False``) refuses through the edge-add path; the bulk one
-    (``index_v4/bulk_build.py``) builds the closure in memory and must refuse the same
+    (``src/zanzibar/graphindex/bulk_build.py``) builds the closure in memory and must refuse the same
     snapshot with the same type, not fail in the driver at INSERT. K=3 is exactly 8."""
-    from connectedstore import TupleSource, build_index, save_schema
+    from zanzibar.connectedstore import TupleSource, build_index, save_schema
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:

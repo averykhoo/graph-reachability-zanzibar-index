@@ -29,7 +29,7 @@ The evaluated proposal (*"if we detect a DoS-causing fan-out, do a bulk rebuild 
 ## Read first
 
 - [`docs/spec-deviations.md`](docs/spec-deviations.md)`:855-862` — the surviving idea and its measured crossover; `:801-816` — the refuted proposal and the measurement table that killed it
-- `connectedstore/apply.py::advance_index` — the apply step any amortisation replaces
+- `src/zanzibar/connectedstore/apply.py::advance_index` — the apply step any amortisation replaces
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the reopening rule
 
 ## Log
@@ -40,7 +40,7 @@ The evaluated proposal (*"if we detect a DoS-causing fan-out, do a bulk rebuild 
 
 ### 2026-09-10
 
-TK53 disposition 2026-09-10: NOT an append. Both the verify and the adversarial pass agree the statement is ALREADY CARRIED in the named destination, `docs/spec-deviations.md` -- the rebuild-outbox entry's blocker 4 (zero REMOVED rows, the fail-open direction), the cap note that `index_v4/core.py` "already exempts removals" (grepped live), and the later "it inherits blockers 2-4" sentence that binds mid-stream refusal, quiescence and the REMOVED fail-open together.
+TK53 disposition 2026-09-10: NOT an append. Both the verify and the adversarial pass agree the statement is ALREADY CARRIED in the named destination, `docs/spec-deviations.md` -- the rebuild-outbox entry's blocker 4 (zero REMOVED rows, the fail-open direction), the cap note that `src/zanzibar/graphindex/core.py` "already exempts removals" (grepped live), and the later "it inherits blockers 2-4" sentence that binds mid-stream refusal, quiescence and the REMOVED fail-open together.
 
 I confirmed the two anchor phrases exist first-hand; I did not re-derive the whole store-level-quota argument. Deliberately citing them by PHRASE, not line: this session appended three dated entries to the top of that file, so every line number recorded for it before 2026-09-10 has shifted.
 

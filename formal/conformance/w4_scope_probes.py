@@ -18,7 +18,7 @@ Each entry is `label -> (schema_text, tuples, object_wildcard_shapes, expected_f
 `expected_failures` was derived BY HAND from the Lean definitions in
 `FullScope.lean::W4Fragment` (REASONED, 2026-09-23), before either decider was run on the
 fixture. `test_conformance_fragment.py` holds Lean's `zcli mode="fragment"` AND the
-production `zanzibar_utils_v1.py::w4_fragment_report` to it. That makes three derivations
+production `src/zanzibar/schema/reports.py::w4_fragment_report` to it. That makes three derivations
 that share no code. **The hand derivation was wrong twice on the first run**, and both
 errors were the hand's, not a decider's: Lean and Python agreed with each other on all 17
 fixtures of that run. (An 18th, `computedOnlyOperands/derived-operand-second`, was added by
@@ -175,7 +175,7 @@ SCOPE_PROBES: dict[str, tuple[str, list, tuple, tuple[str, ...]]] = {
         """,
         [], (), ("term",),
     ),
-    # The other LOUD corner (`zanzibar_utils_v1.py::_validate_ttu_tuplesets`' comment:
+    # The other LOUD corner (`src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets`' comment:
     # "a member type whose own `target_rel` is untainted while another type's is
     # tainted"). doc#view's tupleset admits only team, whose `member` is plain, so doc#view
     # stays UNTAINTED; its TTU target NAME `member` is derived on org. Both Python's refusal

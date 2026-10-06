@@ -15,7 +15,7 @@ separate questions and does not conflate them:
       plans have BOTH a non-empty `Plan.deps` AND a star-admitting leaf child? sec 10.5
       measured 3 intersections and 0 such plans. The new fixture must be the only one.
 
-  (B) OPERATIONAL -- does the intersection actually WRITE a starred `ResidueV1` row?
+  (B) OPERATIONAL -- does the intersection actually WRITE a starred `Residue` row?
       This is the claim sec 9.5 got wrong, and it is a measurement, not a code read.
       A structural yes with an empty residue would mean the fixture is the wrong shape.
 
@@ -59,7 +59,7 @@ RAN 2026-09-20g, VERBATIM stdout:
     === (B) OPERATIONAL -- star_admitting_intersection.fga ===
         grants: [('user:*', 'taken'), ('user:alice', 'taken')]
         answers: {'access(alice, doc:d2)': True, 'authorized_user(alice, role:r3)': True, 'access(bob, doc:d2)': True}
-        ResidueV1 rows (unit: residue rows): 5
+        Residue rows (unit: residue rows): 5
           ('cond', 'user_met_requirement', 'c1')   stars=[['user', '...']]   neg=[]   upos=[]
           ('cond', 'user_missing_requirement', 'c1')   stars=[]   neg=[]   upos=[6]
           ('doc', 'access', 'd2')   stars=[['user', '...']]   neg=[]   upos=[17]
@@ -70,7 +70,7 @@ RAN 2026-09-20g, VERBATIM stdout:
     === (B) OPERATIONAL -- demorgans_law_2.fga ===
         grants: [('user:*', 'refused'), ('user:alice', 'taken')]
         answers: {'access(alice, doc:d2)': True, 'authorized_user(alice, role:r3)': True, 'access(bob, doc:d2)': False}
-        ResidueV1 rows (unit: residue rows): 4
+        Residue rows (unit: residue rows): 4
           ('cond', 'user_met_requirement', 'c1')   stars=[['user', '...']]   neg=[]   upos=[]
           ('cond', 'user_missing_requirement', 'c1')   stars=[]   neg=[]   upos=[6]
           ('doc', 'access', 'd2')   stars=[]   neg=[]   upos=[17]
@@ -91,9 +91,9 @@ sys.path.insert(0, r'C:/Users/user/PycharmProjects/graph-reachability-zanzibar-i
 
 from sqlmodel import select                                      # noqa: E402
 
-from index_v4.models import NodeV4, ResidueV1                    # noqa: E402
+from zanzibar.graphindex.models import Node, Residue                    # noqa: E402
 from tests.parity import ParityEngine                            # noqa: E402
-from zanzibar_utils_v1 import (                                  # noqa: E402
+from zanzibar.schema import (                                  # noqa: E402
     Direct, Computed, TTU, Union, Intersection, Exclusion,
     PIntersection, parse_openfga_schema, parse_schema_ast,
 )
@@ -201,7 +201,7 @@ CONCRETE_GRANT = ('...', 'user', 'alice', 'assigned', 'role', 'r3')
 
 
 def residues(stem: str):
-    """(B) -- drive the fixture and dump every `ResidueV1` row, joined to `NodeV4`.
+    """(B) -- drive the fixture and dump every `Residue` row, joined to `Node`.
 
     Joined, not a guessed subset: sec 9.5's G5 hypothesis was killed by dumping ALL rows.
     """
@@ -224,9 +224,9 @@ def residues(stem: str):
         store_id = eng.graph.widx.idx.store_id
         out = []
         for res, node in session.exec(
-                select(ResidueV1, NodeV4)
-                .where(ResidueV1.object_node_id == NodeV4.id)
-                .where(ResidueV1.store_id == store_id)).all():
+                select(Residue, Node)
+                .where(Residue.object_node_id == Node.id)
+                .where(Residue.store_id == store_id)).all():
             out.append({
                 'key': (node.type, res.relation, node.name),
                 'stars': json.loads(res.stars),
@@ -277,7 +277,7 @@ def main() -> int:
         print(f'\n=== (B) OPERATIONAL -- {stem}.fga ===')
         print(f'    grants: {took}')
         print(f'    answers: {answers}')
-        print(f'    ResidueV1 rows (unit: residue rows): {len(res)}')
+        print(f'    Residue rows (unit: residue rows): {len(res)}')
         for r in res:
             print(f'      {r["key"]}   stars={r["stars"]}   neg={r["neg"]}   '
                   f'upos={r["upos"]}')

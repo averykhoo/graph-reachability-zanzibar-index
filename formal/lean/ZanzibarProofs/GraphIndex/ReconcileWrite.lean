@@ -4,13 +4,13 @@ import ZanzibarProofs.GraphIndex.RulesWrite
 /-!
 # The derived reconcile — the WRITE model (ROADMAP W3a, write half)
 
-`SEMANTICS.md` §7.6, §7.8; `index_v4/processor.py::DeltaProcessor._reconcile` /
+`SEMANTICS.md` §7.6, §7.8; `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` /
 `::DeltaProcessor._reconcile_subject` / `::_EvalContext`. This is the write half of W3a
 (star-free, bare-subject derived
 booleans), mirroring how W1b/W1c/W2 each landed a "write model DONE" increment before
 the read correspondence.
 
-## The processor's `check_fn` (`index_v4/processor.py::_EvalContext.leaf_check`; the
+## The processor's `check_fn` (`src/zanzibar/graphindex/processor.py::_EvalContext.leaf_check`; the
 `plan.check_fn(ctx, ...)` calls in `::DeltaProcessor._reconcile` step (2) and
 `::DeltaProcessor._reconcile_subject`)
 
@@ -54,7 +54,7 @@ end GraphModel
 /-- **The compiled `check_fn`, modelled.** Evaluate the derived def `e` on the fixed
     bare subject `s` at object `(dt, on)` under relation `R`, with node-recursion
     reading the graph (`graphRec`). Faithful to
-    `index_v4/processor.py::DeltaProcessor._reconcile`'s per-subject boolean
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile`'s per-subject boolean
     evaluation on the W3a fragment (its step-(2) `plan.check_fn(ctx, (n.predicate,
     n.type, n.name))` calls). The store `T`/query are threaded only for `evalE`'s
     `direct`/`ttu` leaves.
@@ -76,7 +76,7 @@ def GraphState.checkFn (σ : GraphState) (T : Store) (s : SubjectRef)
 /-- **Reconcile one derived key `(dt, R)` at object name `on`.** For each candidate
     bare subject in `cands`, materialise the derived edge `subjNode s → objNode
     ⟨dt,on⟩ R` **iff** `check_fn` holds — the canonical
-    `index_v4/processor.py::DeltaProcessor._reconcile_subject` rule
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject` rule
     (`want_edge = should ∧ ¬covered`, `covered = false` on star-free data). Residues
     stay untouched (empty on W3a). Faithful mechanism: a guarded `writeDirect` fold. -/
 def GraphState.reconcileKey (σ : GraphState) (T : Store) (dt on R : String) (e : Expr)

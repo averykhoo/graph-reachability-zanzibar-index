@@ -12,7 +12,7 @@ which is `p = BARE ∨ isLeafPred p = false` with
 `Leaf.lean::isLeafPred p := p.toList.contains '.'`).
 
 Narrowing a fragment is only sound if the Python it models never leaves the fragment.
-It doesn't: `zanzibar_utils_v1.py::_validate_ast_references` raises `ValueError`
+It doesn't: `src/zanzibar/schema/parser.py::_validate_ast_references` raises `ValueError`
 ("reserved leaf namespace") on any *referenced* relation name containing `'.'` other
 than the bare `'...'`, and it applies that to a `TTU` node's ``target_rel``. Until this
 module, that argument existed only as PROSE in the Lean file's ★★ note.
@@ -55,7 +55,7 @@ from types import EllipsisType
 
 import pytest
 
-from zanzibar_utils_v1 import Rule, parse_openfga_schema
+from zanzibar.schema import Rule, parse_openfga_schema
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -173,7 +173,7 @@ def test_no_corpus_rule_mints_a_leaf_named_ttu_target():
     actually drives.
 
     `RuleSet.rules_and_filters` holds BOTH Lean rule layers in one list -- untainted
-    rules from `zanzibar_utils_v1.py::_emit_expr` (Lean `schemaRewrites`) and leaf
+    rules from `src/zanzibar/schema/compiler.py::_emit_expr` (Lean `schemaRewrites`) and leaf
     rules from `::_emit_leaf_expr` (Lean `leafRewrites`) -- so one pass covers
     `schemaRewritesL = schemaRewrites S ++ leafRewrites S`.
 
@@ -275,7 +275,7 @@ def test_a_leaf_layer_ttu_rule_exists_and_is_not_leaf_named():
 
     A leaf-layer TTU rule IS constructible. `define safe: viewer from parent but not
     banned` taints `doc#safe`, so the TTU arm compiles through
-    `zanzibar_utils_v1.py::_emit_leaf_expr` onto leaf family `safe.0`. Verified by
+    `src/zanzibar/schema/boolean.py::_emit_leaf_expr` onto leaf family `safe.0`. Verified by
     throwaway probe on 2026-08-31 before this assertion was written::
 
         RULE if: parent None -> then rel: safe.0 sp: 'viewer'
@@ -326,7 +326,7 @@ def test_a_leaf_layer_ttu_rule_exists_and_is_not_leaf_named():
 def test_dsl_refuses_a_ttu_target_in_the_reserved_leaf_namespace():
     """PART 3 — the refusal control. This is what makes parts 1 and 2 mean anything.
 
-    Parts 1 and 2 can only ever pass, because `zanzibar_utils_v1.py::
+    Parts 1 and 2 can only ever pass, because `src/zanzibar/schema/::
     _validate_ast_references` rejects a violating schema at PARSE time. So the load-
     bearing claim behind Lean's `NoLeafSubjects` narrowing is not "the corpus happens
     to comply" -- it is "Python REFUSES everything the narrowed fragment excludes".
@@ -346,7 +346,7 @@ def test_dsl_refuses_a_ttu_target_in_the_reserved_leaf_namespace():
     both front-ends.
 
     SABOTAGE-VERIFIED (a), 2026-08-31. Neutering the refusal -- `check_name` inside
-    `zanzibar_utils_v1.py::_validate_ast_references` replaced by a bare `return`, the
+    `src/zanzibar/schema/parser.py::_validate_ast_references` replaced by a bare `return`, the
     narrowest plausible weakening (a future contributor "simplifying" a validator that
     no test appeared to need) -- makes this test fail with the literal output::
 
@@ -405,7 +405,7 @@ def test_dsl_refuses_a_dotted_DECLARED_relation_name():
     """PART 3, sibling — and the NEGATIVE CONTROL for the sabotage above.
 
     A declared relation name carrying `'.'` is refused by a DIFFERENT guard, in
-    `zanzibar_utils_v1.py::parse_schema_ast`'s line loop rather than in
+    `src/zanzibar/schema/parser.py::parse_schema_ast`'s line loop rather than in
     `::_validate_ast_references`, with a different message. Kept as its own test on
     purpose (`docs/sabotage-procedure.md`, "Make the red attributable"): under the
     sabotage that neuters `_validate_ast_references::check_name` this test must stay

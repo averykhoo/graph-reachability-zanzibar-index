@@ -1,6 +1,6 @@
 """`AdmissionRejected` — the type that separates a CORRECT REFUSAL from a BUG.
 
-ZT-P4-7. `index_v4` used to raise bare `ValueError` for BOTH (a) legitimate write
+ZT-P4-7. `zanzibar.graphindex` used to raise bare `ValueError` for BOTH (a) legitimate write
 refusals (cycle, undeclared wildcard shape, bad identifier, removing what is not
 there, a tuple no declared restriction admits) and (b) internal-contract failures
 that are bugs (a stale node id, a malformed wildcard encoding, an I5 routing
@@ -8,7 +8,7 @@ breach). A consumer could not tell them apart, so `formal/conformance/backends.p
 had to classify by MESSAGE SUBSTRING — recorded at the time as an explicit stopgap.
 That mattered concretely: `GraphDriver.apply` reports "rejected", and
 `test_conformance_remove.py` builds its oracle from the graph's own accepted set,
-so an `index_v4` bug that spuriously raised on a LEGITIMATE add shrank BOTH sides
+so an `zanzibar.graphindex` bug that spuriously raised on a LEGITIMATE add shrank BOTH sides
 of the differential and the gate stayed green.
 
 This module pins the replacement contract:
@@ -29,13 +29,13 @@ This module pins the replacement contract:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from index_v4 import ReachabilityIndex, Store, WildcardIndex
-from index_v4.core import AdmissionRejected as CoreAdmissionRejected
-from index_v4.invariants import InvariantViolation
-from setengine import SetEngine
+from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
+from zanzibar.graphindex.core import AdmissionRejected as CoreAdmissionRejected
+from zanzibar.graphindex.invariants import InvariantViolation
+from zanzibar.setengine import SetEngine
 from tests.oracle import t as mk_tuple
 from tests.wildcard_helpers import make_wildcard_index
-from zanzibar_utils_v1 import (AdmissionRejected, Entity, RelationalTriple,
+from zanzibar.schema import (AdmissionRejected, Entity, RelationalTriple,
                                parse_openfga_schema, validate_write_identifiers)
 
 
@@ -78,9 +78,9 @@ def _core():
 # --------------------------------------------------------------------------- #
 
 def test_admission_rejected_is_a_valueerror_subclass():
-    """BACKWARD COMPATIBILITY, and it is load-bearing: `connectedstore.store._write`,
-    `tests/parity.py`, `tests/test_matrix.py`'s backends, `index_v4.processor`'s
-    cycle guard and `connectedstore.apply._apply_row` all catch `ValueError` around
+    """BACKWARD COMPATIBILITY, and it is load-bearing: `zanzibar.connectedstore.store._write`,
+    `tests/parity.py`, `tests/test_matrix.py`'s backends, `zanzibar.graphindex.processor`'s
+    cycle guard and `zanzibar.connectedstore.apply._apply_row` all catch `ValueError` around
     a write. Breaking this subclassing silently changes all of them."""
     assert issubclass(AdmissionRejected, ValueError)
     assert AdmissionRejected is CoreAdmissionRejected      # re-exported, one class
@@ -258,7 +258,7 @@ def test_undeclared_wildcard_shapes_are_admission_rejected():
 
 
 def test_identifier_charset_violation_is_admission_rejected():
-    """`zanzibar_utils_v1._require`, reached through both backends' write paths."""
+    """`zanzibar.schema._require`, reached through both backends' write paths."""
     with pytest.raises(AdmissionRejected, match=r'must match \['):
         validate_write_identifiers('...', 'user', 'bad name', 'member', 'group', 'g')
 
@@ -300,7 +300,7 @@ def test_set_engine_refusals_are_admission_rejected():
     """The peer backend raises the SAME class, so a rejection is one type
     system-wide (`SetEngine._validate` + the missing-tuple rejection). The composed
     store's admission gate IS the set engine, so this is what
-    `connectedstore.store._write`'s narrowed handler keys on."""
+    `zanzibar.connectedstore.store._write`'s narrowed handler keys on."""
     session = Session(create_engine('sqlite:///:memory:'))
     SQLModel.metadata.create_all(session.get_bind())
     eng = SetEngine(session, 's', SCHEMA)

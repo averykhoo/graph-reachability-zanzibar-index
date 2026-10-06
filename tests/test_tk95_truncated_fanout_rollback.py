@@ -1,9 +1,9 @@
 """TK95: a fan-out refused part-way through must leave NO trace, whatever order it ran in.
 
-WHY THIS EXISTS. ``zanzibar_utils_v1.py::RuleSet.apply`` yields a raw tuple's rewrite
+WHY THIS EXISTS. ``src/zanzibar/schema/rules.py::RuleSet.apply`` yields a raw tuple's rewrite
 fan-out out of a ``set``, so its order moves with ``PYTHONHASHSEED``. Both write paths
 consume it inside one transaction, leaf by leaf -- ``tests/parity.py::_GraphSide.apply``
-(every differential harness) and ``connectedstore/apply.py::_apply_row`` under
+(every differential harness) and ``src/zanzibar/connectedstore/apply.py::_apply_row`` under
 ``advance_index`` (production). When a LATER leaf is refused, the leaves before it are
 already written, and correctness rests entirely on the caller's rollback undoing exactly
 that prefix -- a prefix whose CONTENTS are a hash-seed accident. `TK93` measured it
@@ -88,10 +88,10 @@ import pytest
 from sqlalchemy import inspect, select, text
 from sqlmodel import SQLModel
 
-import zanzibar_utils_v1 as Z
-from connectedstore.apply import advance_index, ensure_cursor
-from connectedstore.models import TupleLogV1
-from index_v4.invariants import InvariantViolation
+import zanzibar.schema as Z
+from zanzibar.connectedstore.apply import advance_index, ensure_cursor
+from zanzibar.connectedstore.models import TupleLog
+from zanzibar.graphindex.invariants import InvariantViolation
 from tests.genswarm import Diff
 from tests.wildcard_helpers import make_wildcard_index
 
@@ -133,7 +133,7 @@ def _dump(session) -> dict:
     order -- plus ``sqlite_sequence`` (the next-id state) when it exists. Flushes first so a
     mid-transaction dump sees the pending writes.
 
-    The one column left out is the wall clock (``created_at``, on ``store_v4`` and the
+    The one column left out is the wall clock (``created_at``, on ``store`` and the
     tuple/log tables): two stores built a millisecond apart differ there and nowhere else,
     and no row the refused write could add or leave behind is distinguished by it alone."""
     session.flush()
@@ -289,7 +289,7 @@ def test_advance_index_batch_rollback_is_order_independent(case, stored, refused
             cursor = ensure_cursor(session, 'ix', 'src')
 
             def log(raw):
-                session.add(TupleLogV1(store_id='src', op='ADD', subject_predicate=raw[0],
+                session.add(TupleLog(store_id='src', op='ADD', subject_predicate=raw[0],
                                        subject_type=raw[1], subject_name=raw[2],
                                        relation=raw[3], object_type=raw[4],
                                        object_name=raw[5], created_at=0.0))

@@ -10,8 +10,8 @@ restoring the structural invariants -- without failing.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from index_v4 import ReachabilityIndex, Store, WildcardIndex
-from zanzibar_utils_v1 import SchemaInfo
+from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
+from zanzibar.schema import SchemaInfo
 from tests.wildcard_helpers import assert_wildcard_invariants
 
 

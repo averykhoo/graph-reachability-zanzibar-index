@@ -5,7 +5,7 @@ WHY THIS EXISTS, and why it is the FIRST thing to measure about step 4'.
 The 2026-09-15 scouting sweep (`docs/p6-step4prime-scout-2026-09-15.md`) closed with an
 UNVERIFIED blocker that outranks the rest of the cost analysis:
 
-    "UNVERIFIED: Python-side parity.  Nobody checked whether `index_v4/wildcard.py`'s
+    "UNVERIFIED: Python-side parity.  Nobody checked whether `src/zanzibar/graphindex/wildcard.py`'s
      rule-routed write path bridges.  Per CLAUDE.md the Lean must track the shipped Python,
      and R1's entire justification is that it should.  If the Python does NOT bridge there,
      R1 is chasing a model change the code does not have, and the honest move is a
@@ -114,9 +114,9 @@ CONTROLS, and what each rules out:
 """
 import sys
 
-from zanzibar_utils_v1 import parse_openfga_schema, UnsupportedByGraphIndex
-from index_v4.invariants import snapshot_rows
-from zanzibar_utils_v1 import RelationalTriple, Entity
+from zanzibar.schema import parse_openfga_schema, UnsupportedByGraphIndex
+from zanzibar.graphindex.invariants import snapshot_rows
+from zanzibar.schema import RelationalTriple, Entity
 
 sys.path.insert(0, 'tests')
 from wildcard_helpers import make_wildcard_index          # noqa: E402

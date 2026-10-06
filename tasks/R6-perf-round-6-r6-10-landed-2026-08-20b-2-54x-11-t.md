@@ -138,8 +138,8 @@ stores back between iterations. R6-11's owed CORRESPONDENCE edit was already lan
 
 MEASURED: R6-5's 32.7% is not R6-5's. One profile run serves both R6-4 and R6-5 (the
 `target_graph_lookup` banner is literally "[R6-4, R6-5]") and the 32.7% is SQLAlchemy's generic
-`_instance` line. Per-class attribution gives 6,000 ResidueV1 (26.8%, R6-4's scan) vs 16,410
-NodeV4+EdgeV4 (73.2%). The two headline numbers OVERLAP BY ~8.8 POINTS AND CANNOT BE ADDED.
+`_instance` line. Per-class attribution gives 6,000 Residue (26.8%, R6-4's scan) vs 16,410
+Node+Edge (73.2%). The two headline numbers OVERLAP BY ~8.8 POINTS AND CANNOT BE ADDED.
 R6-4 is the better true win of the pair. Probe `.scratch/r6-decomp/probe_instance_by_class.py`;
 its deduped total reconciles EXACTLY to the profile's recorded 22,410, which is the instrument
 control -- its first run said 38,820 and the disagreement is what exposed a double-registered

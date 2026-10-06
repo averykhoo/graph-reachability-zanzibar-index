@@ -123,6 +123,15 @@ case "$PHASE" in
 esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# TK120 (2026-10-06): the library lives in src/zanzibar/. Every python this script
+# runs -- the preflight `-c` probes, `-m formal.conformance.*`, pytest AND the child
+# interpreters tests spawn -- must import THIS checkout's src/, never an installed copy
+# (an editable install may point at another worktree). So PYTHONPATH is SET here, not
+# appended to: <repo> (for the `formal`/`tests` packages) then <repo>/src. Joined with
+# ':' on purpose -- MSYS converts a colon-joined POSIX path list for native Windows
+# python, while a hand-written ';' list is NOT converted and lands as a mangled path.
+# tests/test_tk120_package_layout.py pins the in-process and child-process halves.
+export PYTHONPATH="$REPO_ROOT:$REPO_ROOT/src"
 LEAN_DIR="$REPO_ROOT/formal/lean"
 CONF_DIR="formal/conformance/"          # relative to REPO_ROOT (pytest is run there)
 TESTS_DIR="tests/"                      # the backend suite -- see MIN_TESTS_ALL
@@ -476,7 +485,7 @@ MIN_CONF_ALL=1087
 # 823, and 763 before that). The schema-shape corpus (tests/test_schema_shapes.py)
 # accounts for the recent steps: four fixtures covering shapes the .fga corpus could not
 # express, their answer grids, the corpus feature+pair floors, and the derived
-# boolean-routing pin in test_zanzibar_utils.py.
+# boolean-routing pin in test_schema.py.
 #
 # ⚠ 869 -> 867 is a LOWERING, which this file says must be deliberate and reviewed --
 # so here is the review. `test_fixture_earns_its_place` was a per-fixture parametrized
@@ -489,7 +498,7 @@ MIN_CONF_ALL=1087
 # is the only lowering in this file's history; treat a future one with more suspicion.
 #
 # Raised 867 -> 879 on 2026-08-14 (`pytest tests/ -q --collect-only`): +12 for
-# `tests/test_residue_ref_index.py`, the ResidueRefV1 reverse-index pins.
+# `tests/test_residue_ref_index.py`, the ResidueRef reverse-index pins.
 #
 # Raised 879 -> 895 on 2026-08-17 (`pytest tests/ -q --collect-only`): +16 for
 # `tests/test_gate_status.py`, which pins the gate's own status tool -- until that
@@ -607,7 +616,7 @@ MIN_CONF_ALL=1087
 #   (ASK-2, above), test_ttu_tupleset_parent_types.py +9, test_pure_union_ttu.py +4,
 #   test_processor.py +2, test_generator_coverage.py +2 (two new rejection witnesses),
 #   test_schema_ast.py +1. Gone: tupleset_shapes.fga's retirement (test_schema_shapes 5,
-#   test_compile_snapshot 1, test_zanzibar_utils 1), RC1/RC2 pins rewritten or refused
+#   test_compile_snapshot 1, test_schema 1), RC1/RC2 pins rewritten or refused
 #   (test_ttu_tupleset_parent_types 8), refused-shape tests converted (test_pure_union_ttu
 #   4, test_processor 2), test_boolean_compile 1, test_hypothesis 1, the retired
 #   `owc-on-derived-relation` witness 1. 1328 + 101 - 24 = 1405. No drift.
@@ -642,10 +651,15 @@ MIN_CONF_ALL=1087
 #   legacy/). DELIBERATE, not drift: exactly the 28 cases that ran only against the
 #   deleted legacy indexes -- tests/test_index.py 7 functions x IndexV1/V2/V3Polyfill
 #   (21) and tests/test_integration.py 7 functions x the `v3` backend (7). Each of those
-#   14 functions still runs the identical body on the live graph index (IndexV4Polyfill /
-#   V4Backend), so no assertion on live code was lost (docs/tk120-repo-restructure-
+#   14 functions still runs the identical body on the live graph index (GraphIndexPolyfill /
+#   GraphIndexBackend), so no assertion on live code was lost (docs/tk120-repo-restructure-
 #   2026-10-05.md sec 5.0). Re-measured: `pytest tests/ -q --collect-only` -> 1717.
-MIN_TESTS_ALL=1717
+# RAISED 1717 -> 1740 on 2026-10-06 (TK120 B-D). +4 are the new
+#   tests/test_tk120_package_layout.py; +19 are tests/test_refused_shape_comments.py, whose
+#   parametrization went from 3 fixed files to the globbed schema package (12 files x 2
+#   per-file tests + 3 group floors + 1 anti-vacuity test = 28, was 9). 1717 + 23 = 1740,
+#   re-measured: `pytest tests/ -q --collect-only` -> 1740.
+MIN_TESTS_ALL=1740
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -671,7 +685,7 @@ MIN_TESTS_ALL=1717
 # `TupleSource.__init__` read the log watermark and THEN rebuilt the set engine,
 # two statements that are atomic under a pinned SQLite-WAL snapshot and are not at
 # PostgreSQL READ COMMITTED. `_consistent_rebuild` (optimistic wm1/rebuild/wm2 with
-# a bounded retry, falling back to a SHARED lock on the SchemaV4 row) closed it, and
+# a bounded retry, falling back to a SHARED lock on the SchemaRecord row) closed it, and
 # the pin became a plain test. There are now ZERO live xfail markers in tests/.
 #
 # Keep it at 0 unless you are genuinely pinning a filed divergence. The budget
@@ -825,19 +839,19 @@ preflight_py() {
          echo "      or point ZANZIBAR_PY at the right interpreter"; \
          exit 1; }
   echo "  interpreter: $PY"
-  # ZT-P2-6: a missing pyroaring makes setengine/setops.py fall back to PySets
+  # ZT-P2-6: a missing pyroaring makes src/zanzibar/setengine/setops.py fall back to PySets
   # SILENTLY (RoaringSets = None), so every "both SetOps" leg of the matrix and of
   # the conformance suite quietly halves. Nothing detected that. Now it FAILS.
   ( cd "$REPO_ROOT" && "$PY" -c "
 import sys
-from setengine.setops import RoaringSets, ALL_SETOPS, DEFAULT_SETOPS
+from zanzibar.setengine.setops import RoaringSets, ALL_SETOPS, DEFAULT_SETOPS
 if RoaringSets is None or len(ALL_SETOPS) < 2 or DEFAULT_SETOPS.name != 'roaring':
     sys.stderr.write('  set-engine SetOps available: %r (default %r)\n'
                      % ([o.name for o in ALL_SETOPS], DEFAULT_SETOPS.name))
     sys.exit(1)
 " ) \
     || { echo "FAIL: pyroaring is missing -- the set engine silently fell back to PySets"; \
-         echo "      (setengine/setops.py: RoaringSets is None => DEFAULT_SETOPS = PySets)."; \
+         echo "      (src/zanzibar/setengine/setops.py: RoaringSets is None => DEFAULT_SETOPS = PySets)."; \
          echo "      Every 'both SetOps' leg would then run ONE backend and the gate"; \
          echo "      would pass having tested half of what it claims."; \
          echo "      Fix: pip install pyroaring   (into conda env '$ENV_NAME')"; \
@@ -1108,7 +1122,7 @@ run_lean() {
   # row in doc_counts.py::measure.
   # -------------------------------------------------------------------------- #
   echo "--- [4e/7] FINAL_REVIEW.md counts pin ---"
-  ( cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" "$PY" -m formal.conformance.doc_counts --check ) \
+  ( cd "$REPO_ROOT" && "$PY" -m formal.conformance.doc_counts --check ) \
     || { echo "FAIL: FINAL_REVIEW.md counts pin (see above)"; exit 1; }
 
   # -------------------------------------------------------------------------- #

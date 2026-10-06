@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import time
 
-from setengine import memberset as ms
-from setengine.memberset import MemberSet
-from setengine.setops import ALL_SETOPS
+from zanzibar.setengine import memberset as ms
+from zanzibar.setengine.memberset import MemberSet
+from zanzibar.setengine.setops import ALL_SETOPS
 
 # Large populations across several shapes -> star-heavy, big ext() sets.
 # Sized so the whole sweep stays well under 30s on both backends.

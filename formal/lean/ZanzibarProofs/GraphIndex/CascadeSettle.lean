@@ -3,7 +3,7 @@ import ZanzibarProofs.GraphIndex.CascadeStable
 /-!
 # Targeted-key re-settlement, the settledness invariant, and `graph_correct_w3d` (ROADMAP W3d-1b, final leg)
 
-`index_v4/processor.py::DeltaProcessor._reconcile` (the per-key wholesale pass), its
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` (the per-key wholesale pass), its
 steps (2)/(2b) (the audit enumeration: `::DeltaProcessor._leaf_concretes` ∪ the
 persisted incoming R-node concretes from `::DeltaProcessor._incoming_concretes`), and
 `::DeltaProcessor._run_cascade`. This file closes W3d-1b:
@@ -27,7 +27,7 @@ persisted incoming R-node concretes from `::DeltaProcessor._incoming_concretes`)
 **Attack-first (2026-07-11h, machine-checked `#eval` vs the real `writeLoggedRules`/
 `runCascade`/`check`/`sem`; scratch deleted).** The NEW edge-holder coverage clause
 (`j.cands ⊇ pre-leg edge holders at j's key` — Python's audit enumerates persisted
-incoming R-node concretes — `index_v4/processor.py::DeltaProcessor._reconcile` step
+incoming R-node concretes — `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` step
 (2b) via `::DeltaProcessor._incoming_concretes`) was attacked both ways on
 `viewer := member ∖ banned`:
 * **Refutation without the clause, CONFIRMED live**: `write member(alice) → cascade →
@@ -160,7 +160,7 @@ theorem reachedByW3d_reach_collapse_root {σ : GraphState} {S : Schema} {T : Sto
 
 /-! ## The coverage chain `ReachedByW3dC` (decision: wrapper, not a constructor change)
 
-The audit enumeration of `index_v4/processor.py::DeltaProcessor._reconcile` (steps (2)
+The audit enumeration of `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` (steps (2)
 and (2b)) re-derives, on EVERY pass:
 the store-supported concretes of every leaf (`::DeltaProcessor._leaf_concretes`), the
 persisted incoming R-node concretes (the edge holders,
@@ -186,7 +186,7 @@ transfers through the projection. -/
     never through an edge (`want_edge = checkFn ∧ ¬covered`), which is exactly the
     guard `CompleteKey`'s edge clause already carries. Python's `_leaf_concretes`
     likewise only ever enumerates store-SUPPORTED subjects
-    (`index_v4/processor.py::DeltaProcessor._leaf_concretes`). -/
+    (`src/zanzibar/graphindex/processor.py::DeltaProcessor._leaf_concretes`). -/
 def W3dJobCoverage (S : Schema) (T : Store) (σ : GraphState) (j : W3cJob) : Prop :=
   (∀ s : SubjectRef, (subjNode s, objNode ⟨j.dt, j.on⟩ j.R) ∈ σ.edges → s ∈ j.cands) ∧
   (∀ s : SubjectRef, s.predicate = BARE → s.name ≠ STAR →

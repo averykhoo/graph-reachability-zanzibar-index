@@ -7,7 +7,7 @@ CROSSABLE shape ``(T, p)`` the graph index ACCEPTS the write that closes a users
 while no entity of type ``T`` exists yet -- the cycle is latent, not closed -- and then
 REFUSES the next write that mints such an entity, even when that write names no wildcard,
 no userset and not the crossable relation. That is the "detonation" named in
-``index_v4/wildcard.py::WildcardIndex._reject_star_self_edge``'s own docstring.
+``src/zanzibar/graphindex/wildcard.py::WildcardIndex._reject_star_self_edge``'s own docstring.
 
 THIS PROBE IS THE OVER-REJECT CONTROL, and it is deliberately wider than the four-write
 case the `TK69` probe pins. The fix direction is graph-side -- refuse the latent write
@@ -113,8 +113,8 @@ from collections import deque
 
 from sqlmodel import select
 
-from index_v4.models import EdgeV4, NodeV4
-from setengine.setops import ALL_SETOPS
+from zanzibar.graphindex.models import Edge, Node
+from zanzibar.setengine.setops import ALL_SETOPS
 from tests.test_matrix import GraphBackend, SetBackend
 
 SCHEMA = '''
@@ -159,12 +159,12 @@ def latent_paths(graph) -> list[tuple[str, str]]:
     if not crossable:
         return []
     nodes = {n.id: n for n in idx.session.exec(
-        select(NodeV4).where(NodeV4.store_id == idx.store_id)).all()}
+        select(Node).where(Node.store_id == idx.store_id)).all()}
     adj: dict[int, list[int]] = {}
     for s, o in idx.session.exec(
-            select(EdgeV4.subject_id, EdgeV4.object_id)
-            .where(EdgeV4.store_id == idx.store_id)
-            .where(EdgeV4.direct_edge_count > 0)).all():   # type: ignore[arg-type]
+            select(Edge.subject_id, Edge.object_id)
+            .where(Edge.store_id == idx.store_id)
+            .where(Edge.direct_edge_count > 0)).all():   # type: ignore[arg-type]
         adj.setdefault(s, []).append(o)
     by_shape = {}
     for n in nodes.values():

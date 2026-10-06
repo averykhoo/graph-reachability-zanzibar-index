@@ -16,7 +16,7 @@ updated: 2026-09-10
 closed:
 ---
 
-`bridged_out_shapes` returns every declared object-wildcard shape, with the comment *"(Sink-shape elision is a future optimization; be conservative now.)"* — in the spec at `docs/specs/wildcard-materialization-spec.md:100` and mirrored in the code at `zanzibar_utils_v1.py:376`. A shape that can never be a bridge source (or sink) does not need its bridges materialized. Deliberately unbuilt, and it has never carried an id.
+`bridged_out_shapes` returns every declared object-wildcard shape, with the comment *"(Sink-shape elision is a future optimization; be conservative now.)"* — in the spec at `docs/specs/wildcard-materialization-spec.md:100` and mirrored in the code at `src/zanzibar/schema/`. A shape that can never be a bridge source (or sink) does not need its bridges materialized. Deliberately unbuilt, and it has never carried an id.
 
 `SOMEDAY`: it is an optimization with no measurement behind it, in an area where being conservative was a deliberate choice.
 
@@ -27,14 +27,14 @@ closed:
 ## Read first
 
 - [`docs/specs/wildcard-materialization-spec.md`](docs/specs/wildcard-materialization-spec.md)`:100` and §10 line 324 — the deferral
-- `zanzibar_utils_v1.py::SchemaInfo.bridged_out_shapes` — the conservative implementation and its comment
-- `index_v4/wildcard.py::WildcardIndex._ensure_own_bridges` — what elision would skip
+- `src/zanzibar/schema/rules.py::SchemaInfo.bridged_out_shapes` — the conservative implementation and its comment
+- `src/zanzibar/graphindex/wildcard.py::WildcardIndex._ensure_own_bridges` — what elision would skip
 
 ## Log
 
 ### 2026-08-21b
 
-**Provenance.** COVERAGE.md PART 1 U-20 (`W-1`, tier 4, sweep-l only); anchor re-read this pass at docs/specs/wildcard-materialization-spec.md:100 and zanzibar_utils_v1.py:376.
+**Provenance.** COVERAGE.md PART 1 U-20 (`W-1`, tier 4, sweep-l only); anchor re-read this pass at docs/specs/wildcard-materialization-spec.md:100 and src/zanzibar/schema/.
 
 ### 2026-09-10
 
@@ -44,4 +44,4 @@ The adjudication named `docs/specs/wildcard-materialization-spec.md` sec 2.3 as 
 
 The drafted prose had two factual errors, both caught adversarially and both fixed before writing. (1) It said the BL-1 leak "changed a `lookup` answer rather than merely costing an edge" -- `docs/spec-deviations.md:275` records **Severity: STATE-ONLY** and :279 "Not an authorization fail-open". (2) It claimed lifecycle, not creation, is where this design's bugs land -- refuted by the `## 2026-08-09` entry, whose root cause (:721) is `_ensure_bridges` never interning a crossing middle, i.e. the creation side.
 
-Verified first-hand: spec `:104` carries the unqualified "harmless" sentence, and `zanzibar_utils_v1.py:354` mirrors it verbatim -- both now covered by the entry.
+Verified first-hand: spec `:104` carries the unqualified "harmless" sentence, and `src/zanzibar/schema/` mirrors it verbatim -- both now covered by the entry.

@@ -58,7 +58,7 @@ BARE_RE = re.compile(r"`::(?P<sym>[A-Za-z_][A-Za-z0-9_.']*)`")
 ANY_RE = re.compile(
     r"`(?:(?P<file>[A-Za-z0-9_./+-]+\.(?:py|lean)))?::(?P<sym>[A-Za-z_][A-Za-z0-9_.']*)`"
 )
-# A plain backticked file mention (`index_v4/processor.py`) with no `::` also
+# A plain backticked file mention (`src/zanzibar/graphindex/processor.py`) with no `::` also
 # supplies the inherited file for the bare anchors that follow it in the same
 # scope -- §8's prose bullets name the file in their bold header and then use the
 # bare form throughout the body.
@@ -261,7 +261,7 @@ def lean_symbols(path: Path) -> set[str]:
 def resolve_path(anchor_file: str) -> Path | None:
     """Map an anchor's file string to a repo path.
 
-    Python anchors are repo-relative (`tests/oracle.py`, `index_v4/processor.py`).
+    Python anchors are repo-relative (`tests/oracle.py`, `src/zanzibar/graphindex/processor.py`).
     Lean anchors are relative to `formal/lean/ZanzibarProofs/` (`Core/Refs.lean`).
     """
     if anchor_file.endswith(".lean"):

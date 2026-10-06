@@ -29,9 +29,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from setengine import SetEngine, PySets, RoaringSets
-from setengine.setops import SetOps
-from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
+from zanzibar.setengine import SetEngine, PySets, RoaringSets
+from zanzibar.setengine.setops import SetOps
+from zanzibar.schema import parse_openfga_schema, Entity, RelationalTriple
 from tests.wildcard_helpers import make_wildcard_index
 
 # Shared plumbing (RSS reader, session, time-boxed timing) -- see benchmarks/_harness.py.

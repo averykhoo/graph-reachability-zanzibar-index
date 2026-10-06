@@ -32,6 +32,52 @@ from here.
 
 ---
 
+## 2026-10-06 — `TK120` CLOSED: the code is one `src/zanzibar/` package, versions gone, `legacy/` deleted
+
+rows: TK120 (closed), TK102 (-> NOW)
+
+`task lint: clean (13 checks, 238 task file(s) parsed), 29 warning(s)`
+
+`read: board + note` -- strictly: `task.py show TK120` and its plan doc; the board itself was
+first printed at write-back.
+
+The user asked for the plan, then shaped it in chat: ONE package, because the code may be
+published (`zanzibar` is free on PyPI, user checked); Lean stays outside it; delete `legacy/`
+but keep every live behaviour it tested; rename the TABLES too (no stored databases, nothing
+uses this); "just do the whole thing". A `claude-fable-5` second opinion reviewed the plan
+before any move. Its one blocker was that open task rows must be re-pointed in the same commit
+as the move, because `task.py lint` check 14 runs in the `lean` phase. It also found three
+fail-by-passing shapes: subprocess children not seeing `pythonpath = src`, scope pins resolving
+through the package facade, and the pin re-generation needing the FULL name map. All were
+taken. Midway the user asked for one commit for the rest with a single full gate; A had already
+landed on its own.
+
+- **A (`86e3298`, ten-phase gate green):** `legacy/` deleted, `MultiSet` re-homed, dead
+  `NodeV2` gone; the 28 legacy-only test cases dropped (each of their 14 functions still runs on
+  the live index); `MIN_TESTS_ALL` 1745 -> 1717 with provenance.
+- **B-D (this commit):** `src/zanzibar/{schema,graphindex,setengine,connectedstore}`, classes
+  and tables unversioned (`TupleV1` -> `RelationTuple`, `SchemaV4` -> `SchemaRecord`, the rest
+  drop the suffix), the 3,300-line schema module split VERBATIM into nine submodules. Every pin
+  re-generation came after a body-equality check under the full name map (486/486). New pins,
+  each with literal sabotage output in the plan doc §6: a repo-root `conftest.py` refuses a
+  foreign `zanzibar` install; scope pins resolve `reported_by` from the file it names; the
+  refused-shape scanner globs the schema package. `MIN_TESTS_ALL` 1717 -> 1740.
+
+Record (FROZEN): [`docs/tk120-repo-restructure-2026-10-05.md`](../tk120-repo-restructure-2026-10-05.md)
+§6. Old -> new key for every frozen doc: `docs/architecture/overview.md` § "Renamed in TK120".
+`TK120` held docs/process work (user, 2026-10-04c); that hold is over. `TK102` promoted to `NOW`
+(first `NEXT` row; correctness certainty, the user's standing order).
+
+The first full gate after B-D went RED in all four `tests/` tiles: two tests patched a private
+schema function on the package facade, which no longer reaches the callers after the split.
+Fixed by patching the defining submodule (plan doc §6.5); both failures were loud.
+
+Gate: all ten phases run after this entry is written; see `python scripts/gate_status.py`.
+
+Still owed: none from this session. Push is the user's call.
+
+---
+
 ## 2026-10-05b — pre-`TK120` pre-flight: `.scratch/` swept, three findings salvaged, `TK120` scouted
 
 rows: P12, P10, TK44, TK120 (comments only; nothing opened, closed or re-ranked)

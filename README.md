@@ -46,13 +46,18 @@ reference material, not just history.
 
 ## Repo layout
 
+The library is one package, `zanzibar` (`src/zanzibar/`, `pyproject.toml`); everything
+else in the repo is tests, proofs, benchmarks and docs. `pip install -e .` for scripts;
+the test suite needs no install (`pytest.ini` puts `src` on the path).
+
 ```
-zanzibar_utils_v1.py   shared schema layer (DSL + OpenFGA JSON parsers, compile,
+src/zanzibar/
+  schema/              shared schema layer (DSL + OpenFGA JSON parsers, compile,
                        validation)
-index_v4/              the graph index (closure core, wildcard façade,
+  graphindex/          the graph index (closure core, wildcard façade,
                        boolean delta processor, invariants, outbox)
-setengine/             the set engine (bitmap evaluation, MemberSet, interner)
-connectedstore/        the composed system: source-of-truth tuples + permanent
+  setengine/           the set engine (bitmap evaluation, MemberSet, interner)
+  connectedstore/      the composed system: source-of-truth tuples + permanent
                        log feeding the index (sync or async), freshness tokens,
                        offline index builds - the Zanzibar/Leopard split
 formal/                Lean 4 machine-checked proofs that the two backend
@@ -264,7 +269,7 @@ See the paper at https://zanzibar.tech
 ### boolean operators
 
 Boolean relations (`and`, `but not`) are supported by **both backends**. The set engine
-(`setengine/`) evaluates them on the fly with bitmap algebra; the graph index compiles
+(`src/zanzibar/setengine/`) evaluates them on the fly with bitmap algebra; the graph index compiles
 them into **derived predicates** maintained by a delta processor — stratified
 incremental view maintenance over the closure's own delta stream (see
 [Booleans in the graph index](#booleans-in-the-graph-index-derived-predicates) below and
@@ -276,7 +281,7 @@ reachable for callers that want the guard.
 
 ### zookies (zookie-lite freshness tokens)
 
-Implemented as **per-store `TupleLogV1` log ids** — no snowflake/ULID/lamport clock
+Implemented as **per-store `TupleLog` log ids** — no snowflake/ULID/lamport clock
 needed. A write returns its log id; a read passes it back as `at_least=` to demand
 "at least this fresh":
 
@@ -296,8 +301,8 @@ and cross-store ordering — deliberately out of scope here.
 
 ### `*` wildcard entities (materialized)
 
-Wildcards are supported as a first-class, **materialized** feature in `index_v4`
-(`index_v4/wildcard.py`, the `WildcardIndex` façade). We support the OpenFGA subject
+Wildcards are supported as a first-class, **materialized** feature in `zanzibar.graphindex`
+(`src/zanzibar/graphindex/wildcard.py`, the `WildcardIndex` façade). We support the OpenFGA subject
 wildcard `user:*`, and — as deliberate extensions beyond OpenFGA — wildcard **usersets**
 like `group:*#member`, star **tuplesets** (a stored `doc:d1#parent@folder:*` walked by
 `viewer from parent`), and wildcard **objects** like `folder:*`. `check()` stays constant time (≤4 point lookups
@@ -306,7 +311,7 @@ that can occur in the *interior* of a path are materialized as real edges at wri
 only the two hops touching the literal query endpoints stay virtual.
 
 **Split wildcard nodes.** Each wildcard-capable shape `S = (type, predicate)` gets up to
-two nodes (`NodeV4.wildcard ∈ {'', 'any', 'all'}`):
+two nodes (`Node.wildcard ∈ {'', 'any', 'all'}`):
 
 * `w_any(S)` — "some instance of S." Concrete instances bridge **into** it
   (`concrete → w_any`); grants depart **out of** it. A tuple whose *subject* is a wildcard
@@ -414,7 +419,7 @@ goals:
       static and write-once — a new schema means a new store and index built from the tuples,
       not a migration ([`decision-log.md`](docs/architecture/decision-log.md)) — so any design
       has to survive that before anything else. It also lands in the parser
-      (`zanzibar_utils_v1.py::parse_openfga_schema`), `compile_ruleset`, both backends, and
+      (`src/zanzibar/schema/compiler.py::parse_openfga_schema`), `compile_ruleset`, both backends, and
       `tests/oracle.py` — and the oracle has to be changed *separately*, by hand: it parses
       the DSL itself on purpose, so sharing one parser fix across both would let a single
       parser bug corrupt both sides of the validation matrix.
@@ -470,12 +475,12 @@ schema rewrite to rules/filters
 
 | schema syntax                    | action type                             | action description                                                                                       |
 |----------------------------------|-----------------------------------------|----------------------------------------------------------------------------------------------------------|
-| `[user]`                         | filter                                  | allow edge of type `user -> object`, see [zanzibar_utils_v1](./zanzibar_utils_v1.py)                     |
+| `[user]`                         | filter                                  | allow edge of type `user -> object`, see [zanzibar.schema](./src/zanzibar/schema/)                     |
 | `[user:*]`                       | filter + add tuple upon entity creation | or, add the (inefficient) rules `user:?->...` -> `user:?->user:*` and  `...->user:?` -> `user:?->user:*` |
-| `[group#member]`                 | filter                                  | allow edge of type `group#member -> object`, see [zanzibar_utils_v1](./zanzibar_utils_v1.py)             |
+| `[group#member]`                 | filter                                  | allow edge of type `group#member -> object`, see [zanzibar.schema](./src/zanzibar/schema/)             |
 | `[group:*#member]`               | filter + ...                            | combination of the actions above                                                                         |
-| `... or admin`                   | rule                                    | see [zanzibar_utils_v1](./zanzibar_utils_v1.py)                                                          |
-| `... or member from owner-group` | rule                                    | see [zanzibar_utils_v1](./zanzibar_utils_v1.py)                                                          |
+| `... or admin`                   | rule                                    | see [zanzibar.schema](./src/zanzibar/schema/)                                                          |
+| `... or member from owner-group` | rule                                    | see [zanzibar.schema](./src/zanzibar/schema/)                                                          |
 | `(... and ...)`                  | parsed to `Intersection`                | graph: compiled to a derived predicate (leaf routing + delta processor); set engine: bitmap `&`          |
 | `(... but not ...)`              | parsed to `Exclusion`                   | graph: compiled to a derived predicate (edge + residue state); set engine: bitmap `-`                    |
 
@@ -494,15 +499,15 @@ schema rewrite to rules/filters
 The repo now ships **two evaluation backends with identical semantics and opposite cost
 models** — they are the two endpoints of a single memoization spectrum:
 
-* the **graph index** (`index_v4`, `WildcardIndex`) memoizes *everything at write time*.
+* the **graph index** (`zanzibar.graphindex`, `WildcardIndex`) memoizes *everything at write time*.
   It materialises the full transitive closure (plus wildcard bridges) as ref-counted
   edges, so `check` is O(1) — at most a few point lookups on the unique edge index,
   independent of data size or nesting depth. Writes pay for that: each write updates the
   closure, and boolean relations are maintained as **derived predicates** by an
-  in-transaction delta processor (`index_v4/processor.py`) — more write amplification,
+  in-transaction delta processor (`src/zanzibar/graphindex/processor.py`) — more write amplification,
   same O(1) reads.
-* the **set engine** (`setengine/`) memoizes *nothing across queries*. It stores only the
-  raw tuples (`TupleV1`) and computes memberships on the fly with bitmap algebra. Writes
+* the **set engine** (`src/zanzibar/setengine/`) memoizes *nothing across queries*. It stores only the
+  raw tuples (`RelationTuple`) and computes memberships on the fly with bitmap algebra. Writes
   are O(1) in-memory updates; reads are O(schema depth × topology) with the bulk set work
   vectorized. In exchange it supports boolean operators (`and`, `but not`) the closure
   index cannot. Interning is **reference-counted**: the `(type, name, predicate)` key is
@@ -538,12 +543,12 @@ over the candidate universe into reference lookups.
 | write | O(closure delta) — materialises transitive edges + bridges; derived relations add the reconcile cascade (see below) | O(1) — append a raw tuple, update three in-memory maps |
 | `check` | O(1): one edge-probe SQL statement (≤4 keys); derived relations: edge probe + residue (≤2 point reads) | O(schema depth × topology), memoized per query |
 | booleans (`and` / `but not`) | ✓ derived predicates (stratified IVM) | ✓ |
-| deltas (`PermissionDelta`) | ✓ (transactional outbox, `index_v4/outbox.py`) — including derived relations | ✗ (returns `[]`) |
+| deltas (`PermissionDelta`) | ✓ (transactional outbox, `src/zanzibar/graphindex/outbox.py`) — including derived relations | ✗ (returns `[]`) |
 | storage | derived closure edges (+ derived edges & one residue row per (object, boolean relation)) | raw tuples only (ground truth) |
 
 ### Set representation (`SetOps`)
 
-All set state and algebra go through a thin pluggable seam (`setengine/setops.py`), a
+All set state and algebra go through a thin pluggable seam (`src/zanzibar/setengine/setops.py`), a
 factory pair selected at construction: `RoaringSets` (`pyroaring`, default) or `PySets`
 (builtin `set`/`frozenset`). Builtin sets tend to win on small, membership-heavy work
 (`check`); roaring wins on large populations and bulk union/intersection/difference (the
@@ -586,10 +591,10 @@ Tainted relations compile ahead-of-time into:
 * **strata** — a topo order over derived dependencies (recursion through a boolean
   relation is a compile error).
 
-The **delta processor** (`index_v4/processor.py`) consumes the closure's own transactional
-outbox (`DeltaOutboxV1`) and maintains, per derived relation: materialised **derived
-edges** for concretely-supported members (flagged `EdgeV4.derived`) and a per-object
-**residue** row (`ResidueV1`: `stars` = intensionally covered subject shapes, `neg` =
+The **delta processor** (`src/zanzibar/graphindex/processor.py`) consumes the closure's own transactional
+outbox (`DeltaOutbox`) and maintains, per derived relation: materialised **derived
+edges** for concretely-supported members (flagged `Edge.derived`) and a per-object
+**residue** row (`Residue`: `stars` = intensionally covered subject shapes, `neg` =
 star-covered-but-excluded concrete ids). Star-covered members hold **no** edges — they
 are answered by the residue, which is what keeps `[user:*] but not banned` costing one
 row instead of a universe. `check` on a derived relation is an edge probe + a residue
@@ -632,11 +637,11 @@ documented hook).
 ### Non-goals (documented hooks only)
 
 Cross-query caching / version-counter invalidation; bitmap snapshot persistence
-(`BitMap.serialize()` blobs — state is in-memory, rebuilt from `TupleV1` on open); deltas
-from the set engine; wiring the graph backend through `TupleV1` (harness-level fan-out
+(`BitMap.serialize()` blobs — state is in-memory, rebuilt from `RelationTuple` on open); deltas
+from the set engine; wiring the graph backend through `RelationTuple` (harness-level fan-out
 only — `WildcardIndex` is finished code); async outbox workers (the replay property keeps
 the seam viable; SAVEPOINT-per-delta noted in the spec); exposing derived-relation deltas
-to external consumers; automatic outbox pruning (a MANUAL `index_v4.outbox.prune_outbox`
+to external consumers; automatic outbox pruning (a MANUAL `zanzibar.graphindex.outbox.prune_outbox`
 now exists — retention is the operator's call, and it deliberately keeps the head row so
 SQLite cannot recycle ids out from under a held cursor); residue GC beyond empty-row deletion;
 lenient ∀⇒∃; 64-bit id space; any query-time node interning.
@@ -649,11 +654,11 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 > record of what shipped (struck = done) plus a few deliberately-deferred items.
 
 * ~~re-introduce invariant checks for the index v3, and think of more checks~~
-  v4 has I1–I13 + paranoia mode now (`index_v4/invariants.py`); v1-v3 were deleted in TK120 (git history keeps them)
+  v4 has I1–I13 + paranoia mode now (`src/zanzibar/graphindex/invariants.py`); v1-v3 were deleted in TK120 (git history keeps them)
 * ~~re-introduce randomized testing for v3~~ superseded by the validation matrix,
   the ParityEngine walks, and the hypothesis campaign (`tests/test_hypothesis.py`)
 * ~~support tracking user-triples and rule-triples in the index~~ resolved by
-  decision (2026-07-17): raw tuples live exactly once in `TupleV1`/`TupleLogV1`;
+  decision (2026-07-17): raw tuples live exactly once in `RelationTuple`/`TupleLog`;
   the index's direct edges are its own materialization, not a second tuple store,
   and `TupleSource.remove` already guards the remove hazard at the source layer
   (full rationale in `docs/history/handoff-status-2026-07.md` "Deferred / backlog"
@@ -663,12 +668,12 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 * ~~parse the fga schema (json) into filters and rewrite rules~~
   `parse_openfga_json` (OpenFGA 1.1 authorization-model JSON → the same AST)
 * ~~store the filters and rewrite rules in the database~~ resolved by decision:
-  the schema *source* is stored (`SchemaV4`, write-once); compiled rules are a
+  the schema *source* is stored (`SchemaRecord`, write-once); compiled rules are a
   deterministic cache, recompiled on open (persisting them would be a drift surface)
 * ~~support namespacing within the database~~ every table is `store_id`-scoped from
-  the start (`StoreV4`); see `TestMultiStoreIsolation`
+  the start (`Store`); see `TestMultiStoreIsolation`
 * ~~output the new edges and newly removed edges for external indexing~~
-  `DeltaOutboxV1` + `index_v4/outbox.py`'s `drain_deltas` (transactional, replayable)
+  `DeltaOutbox` + `src/zanzibar/graphindex/outbox.py`'s `drain_deltas` (transactional, replayable)
 * ~~async outbox worker~~ `ConnectedStore(sync=False)` + `catch_up()` — the worker
   body exists and is tested (lag, crash-retry exactly-once, convergence); a daemon
   would just call it on a timer

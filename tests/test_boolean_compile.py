@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from zanzibar_utils_v1 import (
+from zanzibar.schema import (
     Entity, Exclusion, Intersection, RelationalTriple, RewriteFilter, Rule, Union,
     UnsupportedByGraphIndex,
     PClosureLeaf, PDerivedTTU, PExclusion,
@@ -33,7 +33,7 @@ from tests.wildcard_helpers import make_wildcard_index
 #: direction is the silent one: append a boolean fixture at the END and it simply never
 #: gets its boolean-specific assertions, green throughout. That is exactly how
 #: `owc_star_ttu.fga` spent its whole life in the weak leg
-#: (`tests/test_zanzibar_utils.py::test_boolean_fga_files_is_derived_not_hardcoded`),
+#: (`tests/test_schema.py::test_boolean_fga_files_is_derived_not_hardcoded`),
 #: and it is the hand-maintained-list-beside-a-derivation pattern this tree has now been
 #: bitten by three times. Derived from the SCHEMA, order is no longer load-bearing.
 ALL_FIXTURES = ['boolean_wildcards.fga', 'demorgans_law_1.fga', 'demorgans_law_2.fga',
@@ -44,7 +44,7 @@ ALL_FIXTURES = ['boolean_wildcards.fga', 'demorgans_law_1.fga', 'demorgans_law_2
 
 def _is_boolean_fixture(name: str) -> bool:
     """Does this fixture contain a boolean operator anywhere? Independent of the compiler:
-    an AST scan, the same derivation `tests/test_zanzibar_utils.py::_is_boolean_fixture`
+    an AST scan, the same derivation `tests/test_schema.py::_is_boolean_fixture`
     uses. Deliberately NOT `rs.compiled.tainted` -- routing the split through the thing
     under test means a taint-analysis bug reclassifies the fixtures that would have
     caught it.
@@ -385,7 +385,7 @@ def test_rewritten_untainted_tupleset_rejected():
 
     # the set engine refuses too; it no longer degrades past the schema
     from sqlmodel import Session, SQLModel, create_engine
-    from setengine import SetEngine
+    from zanzibar.setengine import SetEngine
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
@@ -467,7 +467,7 @@ def test_facade_derived_family_exclusivity():
     with pytest.raises(ValueError, match='processor'):
         widx.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
 
-    from index_v4.outbox import drain_deltas, outbox_watermark
+    from zanzibar.graphindex.outbox import drain_deltas, outbox_watermark
     wm = outbox_watermark(session, 'test')
     widx.processor_writes = True
     widx.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')

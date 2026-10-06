@@ -5,7 +5,7 @@ pattern matching, SchemaInfo, and the §2.2 propagation regression.
 
 import pytest
 
-from zanzibar_utils_v1 import (
+from zanzibar.schema import (
     Entity,
     EntityPattern,
     RelationalTriple,

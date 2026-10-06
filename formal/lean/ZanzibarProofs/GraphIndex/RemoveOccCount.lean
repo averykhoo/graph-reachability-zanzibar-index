@@ -15,7 +15,7 @@ materialized across the rewrite closures of the stored writes:
 `GraphState.edges : List (NodeKey × NodeKey)` is a MULTISET
 (`GraphIndex/State.lean::GraphState.addEdge` prepends
 unconditionally), so `List.count (a,b)` IS the model's `direct_edge_count`
-(the ref-count maintained by `index_v4/core.py::ReachabilityIndex._add_direct_edge_unsafe`
+(the ref-count maintained by `src/zanzibar/graphindex/core.py::ReachabilityIndex._add_direct_edge_unsafe`
 and decremented by `::ReachabilityIndex._remove_edge_locked`).
 
 **★ That sentence was FALSE when it was written, and is TRUE as of 2026-08-08.** It
@@ -57,8 +57,8 @@ and touches no existing def/theorem/inductive. Not in `Audit.lean` (R3 is infras
   edges: its diffing pass `GraphIndex/ReconcileDiff.lean::GraphState.reconcileKeyD` writes
   on the guard
   `checkFn ∧ ¬covered` — it does NOT probe edge presence (`¬has_edge`) the way Python does
-  (`index_v4/processor.py::DeltaProcessor._reconcile_subject`'s bare-entity tail, whose
-  `has_edge` probe is `index_v4/core.py::ReachabilityIndex.direct_edge_exists_by_id`),
+  (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject`'s bare-entity tail, whose
+  `has_edge` probe is `src/zanzibar/graphindex/core.py::ReachabilityIndex.direct_edge_exists_by_id`),
   so it STACKS duplicate derived copies across passes/rounds,
   compensated by making retraction a filter-ALL
   (`GraphIndex/ReconcileDiff.lean::GraphState.removeEdgePair`).

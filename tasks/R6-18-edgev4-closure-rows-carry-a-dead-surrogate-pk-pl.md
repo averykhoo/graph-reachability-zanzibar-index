@@ -1,6 +1,6 @@
 ---
 id: R6-18
-title: EdgeV4 closure rows carry a dead surrogate PK plus store_id (53.1% smaller without)
+title: Edge closure rows carry a dead surrogate PK plus store_id (53.1% smaller without)
 brief:
 pri: LATER
 size: M
@@ -16,7 +16,7 @@ updated: 2026-09-22b
 closed:
 ---
 
-`index_v4/models.py::EdgeV4.id`
+`src/zanzibar/graphindex/models.py::Edge.id`
 
 **Measured (2026-08-17 motivating-measurement pass):** direct layout A/B on file-backed VACUUMed SQLite: **53.1% smaller** (57.7 → 27.0 bytes/row at 200k rows) — the closure table is **2.1×** larger than it needs to be. Composite PK / `WITHOUT ROWID` takes one whole B-tree off the biggest table.
 
@@ -35,7 +35,7 @@ closed:
 - [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §`### R6-18` — the entry, **including its verifier corrections**
 - the same file, §"Traps the numbers do not carry" — the round-wide traps. Read the section; it is short, and it is the only home for how many there are. (This line used to say "the five", attributed to the tree generator recounting them at generation time. That generator was deleted with `.scratch/tasktool/` on 2026-09-07, so the attribution named a mechanism that could not run — `TK61`, reworded 2026-09-07b. A bare "five" with no attribution would have been worse: that is an unsourced restated count.)
 - [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md) — verdicts, method, and the two honest limits (in-memory SQLite understates statement-count wins; cProfile depresses throughput)
-- `index_v4/models.py::EdgeV4.id` — the code
+- `src/zanzibar/graphindex/models.py::Edge.id` — the code
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the fence and the reopening rule
 - `python scripts/task.py show R6` — the parent: round-wide order, traps and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
@@ -49,7 +49,7 @@ closed:
 
 2026-09-22b LEAN VERDICT: representation only, NO def edit -- but the full ten-phase gate plus a
 fuzz sweep are still owed, because the change rewrites the probe query and the schema of the
-modelled state. Anchor census this session: `EdgeV4` 9, `_check_internal` 9, `bulk_build` 9 --
+modelled state. Anchor census this session: `Edge` 9, `_check_internal` 9, `bulk_build` 9 --
 all heavily anchored, so nothing here may be RENAMED, but the Lean model states path-count
 arithmetic over a pure `DirectGraph : V -> V -> Nat` and has no notion of a surrogate PK. The
 governing precedent is `CORRESPONDENCE.md` sec 7's P2-batching entry: a change that alters HOW
@@ -65,7 +65,7 @@ in the repo), with nothing in-tree to test it.
 
 UNVERIFIED, re-grep before starting: a subagent census this session reports that this row and the
 audit both name `wildcard.py::WildcardIndex.check` as the probe site, while the live
-`select(EdgeV4.id)` probe is in `::WildcardIndex._check_internal` -- and that the audit's TK47
+`select(Edge.id)` probe is in `::WildcardIndex._check_internal` -- and that the audit's TK47
 banner lists this row's quoted blocks as deliberately left verbatim. Not re-verified first-hand.
 If true, a session reading this row alone greps the wrong function.
 

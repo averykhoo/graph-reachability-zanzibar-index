@@ -14,7 +14,7 @@ bare shape needs **no materialized bridge edges**: a bare-concrete subject node
 predicate is a *relation* name, never `BARE`), and the star node
 `wAny(T,BARE) = ⟨T, *, BARE, wAny⟩` has no in-edges either. So a bare-star grant is
 a pure *leading* hop — exactly the read-side `wAny` endpoint substitution of
-**probe 2** (the untainted arm of `index_v4/wildcard.py::WildcardIndex.check`) — with no
+**probe 2** (the untainted arm of `src/zanzibar/graphindex/wildcard.py::WildcardIndex.check`) — with no
 interior hop to bridge.
 
 Concretely, relative to `DirectCorrect.lean` (`StarFreeStore`), the store predicate

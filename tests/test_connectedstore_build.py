@@ -12,9 +12,9 @@ import json
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import ConnectedStore, TupleSource, build_index, save_schema
-from index_v4.invariants import snapshot_rows
-from index_v4.models import ResidueV1
+from zanzibar.connectedstore import ConnectedStore, TupleSource, build_index, save_schema
+from zanzibar.graphindex.invariants import snapshot_rows
+from zanzibar.graphindex.models import Residue
 
 _SCHEMA = '''
 type user
@@ -58,7 +58,7 @@ def session():
 
 def _residues_by_name(session, widx, store_id):
     out = {}
-    for r in session.exec(select(ResidueV1).where(ResidueV1.store_id == store_id)).all():
+    for r in session.exec(select(Residue).where(Residue.store_id == store_id)).all():
         node = widx._node_by_id(r.object_node_id)
         neg = frozenset((n.predicate, n.type, n.name)
                         for n in (widx._node_by_id(i) for i in json.loads(r.neg))

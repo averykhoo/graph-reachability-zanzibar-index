@@ -16,7 +16,7 @@ updated: 2026-09-22b
 closed:
 ---
 
-`index_v4/processor.py::DeltaProcessor._run_cascade`
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`
 
 **Measured (2026-08-17 motivating-measurement pass):** **120** residue-cache scopes for **30** reconciles — built and torn down **~4× per reconcile**; re-confirmed 2026-08-21 at `184 scopes / 40 reconciles = 4.6×`. The fix is the digest’s one-line scoping change; invalidation already exists.
 
@@ -35,7 +35,7 @@ closed:
 - [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §`### R6-11` — the entry, **including its verifier corrections**
 - the same file, §"Traps the numbers do not carry" — the round-wide traps. Read the section; it is short, and it is the only home for how many there are. (This line used to say "the five", attributed to the tree generator recounting them at generation time. That generator was deleted with `.scratch/tasktool/` on 2026-09-07, so the attribution named a mechanism that could not run — `TK61`, reworded 2026-09-07b. A bare "five" with no attribution would have been worse: that is an unsourced restated count.)
 - [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md) — verdicts, method, and the two honest limits (in-memory SQLite understates statement-count wins; cProfile depresses throughput)
-- `index_v4/processor.py::DeltaProcessor._run_cascade` — the code
+- `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade` — the code
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the fence and the reopening rule
 - `python scripts/task.py show R6` — the parent: round-wide order, traps and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 

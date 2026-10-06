@@ -3,8 +3,8 @@ show it, because no conformance schema uses a DERIVED relation as a userset subj
 
 WHAT THIS MODULE SETTLES
 ------------------------
-``index_v4/bulk_backfill.py::_BulkBackfill._live_keys_of`` mirrors
-``index_v4/processor.py::DeltaProcessor._live_keys_of``, including the leading ``rel`` in
+``src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._live_keys_of`` mirrors
+``src/zanzibar/graphindex/processor.py::DeltaProcessor._live_keys_of``, including the leading ``rel`` in
 
     preds = [rel] + [spec.predicate for spec in plan.leaves
                      if spec.positive and spec.kind in ('closure', 'derived-userset')]
@@ -12,7 +12,7 @@ WHAT THIS MODULE SETTLES
 On the PROCESSOR side that term is a repair affordance and deleting it is a live
 authorization fail-open (``TK91``, ``tests/test_reg_tk91_live_keys_repair.py``). On the
 BULK side ``TK91`` left a hypothesis behind, explicitly labelled UNVERIFIED: that
-``connectedstore/build.py::build_index`` "refuses to run on an index that already has
+``src/zanzibar/connectedstore/build.py::build_index`` "refuses to run on an index that already has
 state", so the bulk backfill only ever sees a store it built itself and its ``[rel]`` term
 might be **unreachable by construction**.
 
@@ -57,7 +57,7 @@ nothing" is a test that cannot be sabotaged.
 
 SABOTAGE (2026-09-21, ``docs/sabotage-procedure.md``), literal observed output. Each run
 is ``pytest tests/test_reg_tk92_bulk_rel_term.py -q`` with one byte-level edit to
-``index_v4/bulk_backfill.py``:
+``src/zanzibar/graphindex/bulk_backfill.py``:
 
   * CLEAN: ``4 passed in 0.38s``
 
@@ -126,11 +126,11 @@ import json
 
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import TupleSource, build_index, save_schema
-from index_v4 import bulk_backfill
-from index_v4.invariants import snapshot_rows
-from index_v4.models import ResidueV1
-from zanzibar_utils_v1 import parse_openfga_schema
+from zanzibar.connectedstore import TupleSource, build_index, save_schema
+from zanzibar.graphindex import bulk_backfill
+from zanzibar.graphindex.invariants import snapshot_rows
+from zanzibar.graphindex.models import Residue
+from zanzibar.schema import parse_openfga_schema
 
 # `member` is DERIVED (`allowed but not blocked`) *and* is the subject predicate of a
 # stored userset on `viewer`. That pairing is what no conformance corpus has.
@@ -175,7 +175,7 @@ _LEAF_BACKED = 'ops'
 def _preds_without_rel(bf, o_type, rel, enumerate_sub):
     """The half of ``_live_keys_of``'s enumeration that is NOT the leading ``rel``.
 
-    Kept in lockstep with ``index_v4/bulk_backfill.py::_BulkBackfill._live_keys_of``;
+    Kept in lockstep with ``src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._live_keys_of``;
     ``test_instrument_models_the_shipped_preds`` is the mechanical check that it still
     is. ``enumerate_sub`` is the shipped (unwrapped) enumerator, used for the recursive
     leaf kinds so the model recurses exactly as the body does.
@@ -240,7 +240,7 @@ def _enumerations(tuples):
 
 def _residues_by_name(session, widx):
     out = {}
-    for r in session.exec(select(ResidueV1)).all():
+    for r in session.exec(select(Residue)).all():
         node = widx._node_by_id(r.object_node_id)
         neg = frozenset((n.predicate, n.type, n.name)
                         for n in (widx._node_by_id(i) for i in json.loads(r.neg))
@@ -323,7 +323,7 @@ def test_instrument_models_the_shipped_preds():
     Without this, ``_EXCLUSIVE not in other`` could pass because the model silently
     stopped covering a leaf kind rather than because the name is genuinely rel-exclusive
     -- a green that means the instrument broke. ``LeafSpec.kind`` is one of five values
-    (``zanzibar_utils_v1.py::LeafSpec``) and both this model and the shipped body handle
+    (``src/zanzibar/schema/boolean.py::LeafSpec``) and both this model and the shipped body handle
     all five; this is what holds that in lockstep as either changes.
     """
     rec, _session, _widx = _enumerations(_TUPLES)

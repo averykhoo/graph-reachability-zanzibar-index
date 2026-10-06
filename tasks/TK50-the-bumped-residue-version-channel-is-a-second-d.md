@@ -16,7 +16,7 @@ updated: 2026-09-10
 closed:
 ---
 
-`formal/CORRESPONDENCE.md:436-452` records a second dirty-key source with no Lean model: `self._bumped`, appended by `index_v4/processor.py::DeltaProcessor._store_residue` on every residue write and drained into a fan-out. The consequence is stated plainly at `:352` and in §7: **T5 (`runCascade2_no_abort` / `cascade2_drains`) is a claim about a STRICTLY WEAKER abort condition than the one Python ships**, because Python's abort fires iff the outbox is empty AND the pending `_bumped` fan-out is empty. So T5 does not entail *"Python's abort is dead code"*, which is how it is easy to read it.
+`formal/CORRESPONDENCE.md:436-452` records a second dirty-key source with no Lean model: `self._bumped`, appended by `src/zanzibar/graphindex/processor.py::DeltaProcessor._store_residue` on every residue write and drained into a fan-out. The consequence is stated plainly at `:352` and in §7: **T5 (`runCascade2_no_abort` / `cascade2_drains`) is a claim about a STRICTLY WEAKER abort condition than the one Python ships**, because Python's abort fires iff the outbox is empty AND the pending `_bumped` fan-out is empty. So T5 does not entail *"Python's abort is dead code"*, which is how it is easy to read it.
 
 Not a crash or a correctness bug — a version bump with no outbox row would abort a real transaction in a case the theorem does not cover, i.e. it fails loudly and in the safe direction. It is a live gap in **what a landed theorem actually proves**, and it has no id.
 
@@ -32,7 +32,7 @@ Not a crash or a correctness bug — a version bump with no outbox row would abo
 
 - [`formal/HANDOFF.md`](../formal/HANDOFF.md) — **first, for any formal item**: the proof frontier, what is proved and what the next lemma is (the corpus convention. Enforced by nothing since 2026-09-07, when the checker was deleted with `.scratch/tasktool/`; `TK59` is the row that would re-enforce it.)
 - [`formal/CORRESPONDENCE.md`](formal/CORRESPONDENCE.md)`:436-452` — the ★ NEW entry (`ZT-P4-3a`), and `:352` — the T5 row that carries the weaker-abort warning
-- `index_v4/processor.py::DeltaProcessor._store_residue` — where `_bumped` is appended, and `index_v4/processor.py::DeltaProcessor._run_cascade` — where it is drained
+- `src/zanzibar/graphindex/processor.py::DeltaProcessor._store_residue` — where `_bumped` is appended, and `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade` — where it is drained
 - `formal/lean/ZanzibarProofs/GraphIndex/CascadeStrata.lean::runCascade2_no_abort` — the theorem whose scope this bounds
 
 ## Log

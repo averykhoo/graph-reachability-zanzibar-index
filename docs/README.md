@@ -215,7 +215,7 @@ docstrings. They must survive a rewrite of the file they came from.
     defs/classes plus class- and module-level assignments, deliberately. Name the
     enclosing function instead. Closures ARE valid (`::Oracle.check.ttu_leaf`);
   * a bare filename (`models.py:121`) — there are three `models.py`. Write the
-    package (`index_v4/models.py`) whenever the file name is not unique.
+    package (`src/zanzibar/graphindex/models.py`) whenever the file name is not unique.
 
   When the target is a comment, a branch, or a `dict` key rather than a symbol,
   **quote the code and name the symbol it sits in** — `extractor.py::_edge_projection`

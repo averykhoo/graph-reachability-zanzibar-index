@@ -15,9 +15,9 @@ import random
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from connectedstore import ConnectedStore, TupleLogV1, log_rows
-from index_v4.invariants import install_paranoia, snapshot_rows
-from setengine import TupleV1
+from zanzibar.connectedstore import ConnectedStore, TupleLog, log_rows
+from zanzibar.graphindex.invariants import install_paranoia, snapshot_rows
+from zanzibar.setengine import RelationTuple
 from tests.oracle import Oracle, OracleTuple
 from tests.test_matrix import _boolean_pool, _boolean_grid
 from tests.wildcard_helpers import assert_wildcard_invariants
@@ -42,11 +42,11 @@ def _full_state(session, store_id, widx):
     tuples = frozenset(
         (r.subject_predicate, r.subject_type, r.subject_name,
          r.relation, r.object_type, r.object_name)
-        for r in session.exec(select(TupleV1).where(TupleV1.store_id == store_id)).all())
+        for r in session.exec(select(RelationTuple).where(RelationTuple.store_id == store_id)).all())
     log = tuple((r.op, r.subject_name, r.relation, r.object_name)
-                for r in session.exec(select(TupleLogV1)
-                                      .where(TupleLogV1.store_id == store_id)
-                                      .order_by(TupleLogV1.id)).all())
+                for r in session.exec(select(TupleLog)
+                                      .where(TupleLog.store_id == store_id)
+                                      .order_by(TupleLog.id)).all())
     return tuples, log, snapshot_rows(session, store_id)
 
 

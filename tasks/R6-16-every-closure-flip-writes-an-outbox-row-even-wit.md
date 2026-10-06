@@ -16,7 +16,7 @@ updated: 2026-09-22b
 closed:
 ---
 
-`index_v4/core.py::ReachabilityIndex._add_db_edges_unsafe`
+`src/zanzibar/graphindex/core.py::ReachabilityIndex._add_db_edges_unsafe`
 
 **Measured (2026-08-17 motivating-measurement pass):** exactly **1.00 outbox row per closure edge** on a schema with **no derived relations** (14,868 rows, nothing consumes them, manual prune only). The biggest combined space+write win in the round.
 
@@ -41,7 +41,7 @@ closed:
 - [`docs/perf-round6-audit-2026-08.md`](docs/perf-round6-audit-2026-08.md) §`### R6-16` — the entry, **including its verifier corrections**
 - the same file, §"Traps the numbers do not carry" — the round-wide traps. Read the section; it is short, and it is the only home for how many there are. (This line used to say "the five", attributed to the tree generator recounting them at generation time. That generator was deleted with `.scratch/tasktool/` on 2026-09-07, so the attribution named a mechanism that could not run — `TK61`, reworded 2026-09-07b. A bare "five" with no attribution would have been worse: that is an unsourced restated count.)
 - [`R6_PROFILE_2026-08-17.md`](benchmarks/results/R6_PROFILE_2026-08-17.md) — verdicts, method, and the two honest limits (in-memory SQLite understates statement-count wins; cProfile depresses throughput)
-- `index_v4/core.py::ReachabilityIndex._add_db_edges_unsafe` — the code
+- `src/zanzibar/graphindex/core.py::ReachabilityIndex._add_db_edges_unsafe` — the code
 - [`docs/perf-next-round.md`](docs/perf-next-round.md) — the fence and the reopening rule
 - `python scripts/task.py show R6` — the parent: round-wide order, traps and the re-run recipe (`python -m benchmarks.profile_r6[_write] --target <t>`, never beside another bench or a pytest run)
 
@@ -60,8 +60,8 @@ related-edge sweep (trial finding F1): added `related: [R6-7, R6-8]`, and CORREC
 TWO CORRECTIONS, both verified first-hand 2026-09-22b.
 
 (1) THIS ROW DESCRIBES HALF ITS OWN SURFACE. The row and the audit index name
-`index_v4/core.py::ReachabilityIndex._add_db_edges_unsafe` as the emit site.
-`grep -n "self\._emit(" index_v4/core.py` returns SIX: `:550`/`:578`/`:600` inside
+`src/zanzibar/graphindex/core.py::ReachabilityIndex._add_db_edges_unsafe` as the emit site.
+`grep -n "self\._emit(" src/zanzibar/graphindex/core.py` returns SIX: `:550`/`:578`/`:600` inside
 `_add_db_edges_unsafe` (which starts `:506`) and `:664`/`:676`/`:696` inside
 `::ReachabilityIndex._add_indirect_edges_batch_unsafe` (`:602`), which this row does not
 mention anywhere. Line numbers dated 2026-09-22.
@@ -69,7 +69,7 @@ mention anywhere. Line numbers dated 2026-09-22.
 (2) THE LEAN COST MAY BE A CREDIT, NOT A DEBIT -- and nobody has asked this in this round.
 Emission IS modelled: `CORRESPONDENCE.md:317` maps `_emit`/`_flush_outbox` to
 `GraphIndex/Cascade.lean::GraphState.writeLoggedOne`/`::writeLoggedRules` ("delta row per
-accepted flip", unconditional), and `:327` maps `DeltaOutboxV1` to `::pushDelta`/`::nextDeltaId`.
+accepted flip", unconditional), and `:327` maps `DeltaOutbox` to `::pushDelta`/`::nextDeltaId`.
 So the audit is right that conditional emission changes the modelled write algorithm. BUT the
 verifier requires the gate derive from "schema boolean-ness", and the fragment can ALREADY
 state exactly that: `GraphIndex/LeafRules.lean::writeRulesRaw_untaintedSchema` is stated at

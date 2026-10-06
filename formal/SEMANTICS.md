@@ -38,8 +38,8 @@ citations moved.
 Companion reading already digested into this doc: `docs/architecture/theory.md`
 (the math), `docs/architecture/correctness.md` (the contract), the three
 `docs/specs/*.md` normative specs, `tests/oracle.py` (the reference evaluator),
-`setengine/memberset.py`, `index_v4/{core,wildcard,processor,invariants,models}.py`,
-and the parser/stratifier in `zanzibar_utils_v1.py`.
+`src/zanzibar/setengine/memberset.py`, `src/zanzibar/graphindex/{core,wildcard,processor,invariants,models}.py`,
+and the parser/stratifier in `src/zanzibar/schema/`.
 
 ---
 
@@ -87,14 +87,14 @@ backends' lookup surfaces are pinned empirically by the brute-force oracle gate
 
 ## 2. Domain and identifiers
 
-### 2.1 Identifiers (`zanzibar_utils_v1.py:22-64`)
+### 2.1 Identifiers (`src/zanzibar/schema/`)
 
 - Charset: `IDENTIFIER_CHARSET = r'A-Za-z0-9_./@+=-'`, length 1–256
-  (`zanzibar_utils_v1.py:22-23`).
+  (`src/zanzibar/schema/`).
 - `is_valid_identifier` is **strict charset only**; the sentinels `'*'` and `'...'`
   are NOT valid identifiers — they are admitted *positionally*, never by the
-  predicate (`zanzibar_utils_v1.py:26-32`).
-- **Write validity** (`zanzibar_utils_v1.py::validate_write_identifiers`): on a stored tuple,
+  predicate (`src/zanzibar/schema/`).
+- **Write validity** (`src/zanzibar/schema/errors.py::validate_write_identifiers`): on a stored tuple,
   `subject_type`, `relation`, `object_type` must be plain identifiers;
   `subject_name`, `object_name` may additionally be `'*'` (wildcard sentinel);
   `subject_predicate` may additionally be `'...'` / `Ellipsis` (bare sentinel).
@@ -175,7 +175,7 @@ succeeds) as a hypothesis (§8). On non-stratifiable schemas the spec is
 ### 4.1 The AST
 
 The oracle's independent AST is the cleanest reference (`tests/oracle.py::ODirect` … `::OExclusion`);
-the production AST in `zanzibar_utils_v1.py` (`SchemaAST`) is
+the production AST in `src/zanzibar/schema/` (`SchemaAST`) is
 structurally identical (`Direct`/`Computed`/`TTU`/`Union`/`Intersection`/`Exclusion`).
 
 ```
@@ -203,7 +203,7 @@ schema error (`tests/oracle.py::_Parser._chain`). At most one `but not`, loosest
 
 ### 4.2 Well-formedness `WF S` (with citations)
 
-Enforced in `zanzibar_utils_v1.py` and mirrored by the oracle parser:
+Enforced in `src/zanzibar/schema/` and mirrored by the oracle parser:
 
 - **`.` reserved in declared relation names** — leaf predicates are `<relation>.<index>`
   and would collide (`parse_schema_ast:697-702`, `parse_openfga_schema:1802`,
@@ -225,7 +225,7 @@ Enforced in `zanzibar_utils_v1.py` and mirrored by the oracle parser:
   tupleset must resolve to **stored** (Direct) tuples; the graph rejects TTU
   tuplesets with computed/rewritten arms (`correctness.md` §4). **Since 2026-09-26
   (`TK106`) this is a parse-time rule of the whole system**, tainted tuplesets
-  included: `zanzibar_utils_v1.py::_validate_tuplesets_direct` and the oracle's
+  included: `src/zanzibar/schema/parser.py::_validate_tuplesets_direct` and the oracle's
   independent twin refuse any tupleset that is not Directs or a union of Directs. This is the
   stored-parent rule (§5.5).
 
@@ -252,7 +252,7 @@ perfect model, **all theorems carry `stratify S = some strata` as a hypothesis**
 and make no claim otherwise. (Audit recommendation: reject upstream.)
 
 **2026-10-04 (`TK114`): the recommendation is taken for NEGATION.** Both checked parsers
-(`zanzibar_utils_v1.py::_validate_stratified_negation`, independent twin
+(`src/zanzibar/schema/parser.py::_validate_stratified_negation`, independent twin
 `tests/oracle.py::_validate_stratified_negation`) refuse a schema whose relation dependency
 graph (computed refs, TTU tuplesets, TTU targets, `[T#p]` restrictions) has a cycle through
 a step inside a `but not` subtrahend, at any depth. Those schemas had no fixpoint or several,
@@ -375,7 +375,7 @@ residue fold lifts the same three star rules (§7).
 
 ## 6. Set engine model — the `MemberSet` algebra
 
-Source: `setengine/memberset.py` (whole file, 132 lines) + `theory.md` §2.
+Source: `src/zanzibar/setengine/memberset.py` (whole file, 132 lines) + `theory.md` §2.
 
 ### 6.1 Representation and invariant
 
@@ -413,7 +413,7 @@ stars ∧ u ∉ neg)` (`::MemberSet.contains_entity`); `contains_star(shape) = s
 
 ### 6.3 The set-engine `check`
 
-The engine (`setengine/engine.py`, out of this doc's line budget but extracted in
+The engine (`src/zanzibar/setengine/engine.py`, out of this doc's line budget but extracted in
 the prior audit) evaluates the AST pointwise exactly like §5: `Union→any`,
 `Intersection→all`, `Exclusion→base ∧ ¬sub`, `Direct` = tuple lookup with wildcard
 match, `Computed` = recurse, `TTU` = stored-parent loop; recursion well-founded by
@@ -429,7 +429,7 @@ abstract `(type,name,predicate)` keys.
 
 ## 7. Graph index model — materialized closure + residues + cascade
 
-Sources: `index_v4/{core,wildcard,processor,invariants,models}.py`;
+Sources: `src/zanzibar/graphindex/{core,wildcard,processor,invariants,models}.py`;
 `theory.md` §1; `wildcard-materialization-spec.md`; `graph-boolean-ivm-spec.md`.
 This is the largest and hardest model (plan Phase 4, ~half the effort).
 
@@ -437,7 +437,7 @@ This is the largest and hardest model (plan Phase 4, ~half the effort).
 
 A directed acyclic **multigraph** over typed nodes. The closure materializes, per
 ordered pair with ≥1 path, a row with two counters
-(`index_v4/models.py::EdgeV4`, `index_v4/core.py`):
+(`src/zanzibar/graphindex/models.py::Edge`, `src/zanzibar/graphindex/core.py`):
 
 ```
 d(u,v) = direct_edge_count   = # parallel direct edges u→v (multigraph multiplicity)
@@ -494,7 +494,7 @@ distributed to instances, and its absence makes ∀⇒∃ *strict* (a path
 `x→w_all→c→w_any→y` needs a real concrete `c`) (`theory.md` §1.3,
 `wildcard-spec §1.2, §3.4`). Node identity is `(store, predicate, type, name,
 wildcard∈{'','any','all'})` with `name=='*' ⟺ wildcard!=''`
-(`index_v4/models.py::NodeV4` and `::NodeV4.__table_args__`; unique constraint verbatim there). This keying is why a
+(`src/zanzibar/graphindex/models.py::Node` and `::Node.__table_args__`; unique constraint verbatim there). This keying is why a
 `user:*` bridge for relation R cannot alias another type/relation (§ invariant I3).
 
 ### 7.5 Read path — the ≤4 probes (`wildcard.py::WildcardIndex.check`, `wildcard-spec §3.1`)
@@ -510,8 +510,8 @@ This is **T2b** for non-derived relations.
 
 ### 7.6 Derived relations: residues (`theory.md` §1.5, `boolean-ivm-spec §4-6`)
 
-Persisted per `(object node, derived relation)` as `ResidueV1`
-(`index_v4/models.py::ResidueV1`): `stars` (JSON list of covered shapes), `neg` (concrete subject
+Persisted per `(object node, derived relation)` as `Residue`
+(`src/zanzibar/graphindex/models.py::Residue`): `stars` (JSON list of covered shapes), `neg` (concrete subject
 ids star-covered-but-excluded), `upos` (userset-shaped members recorded edge-free).
 The canonical membership form (`theory.md` §1.5):
 
@@ -579,7 +579,7 @@ important cross-cutting fact for the proof (§9, §11-A1).**
 
 ### 7.8 IVM cascade — the perfect model, incrementally (`processor.py`)
 
-- **Stratification** (`zanzibar_utils_v1.py::_stratify`): Kahn topo-layering over tainted
+- **Stratification** (`src/zanzibar/schema/boolean.py::_stratify`): Kahn topo-layering over tainted
   derived→derived dependency edges; `Plan.stratum` assigned per layer;
   `CyclicDerivedDependency` on any leftover. Polarity-blind: `Exclusion` base and
   subtract both contribute ordinary dependency edges.
@@ -600,7 +600,7 @@ important cross-cutting fact for the proof (§9, §11-A1).**
 - **Cascade-in-same-transaction is an assumed precondition, not a checked
   invariant.** Nothing structural forces `run_cascade` to run on a write; the
   commit hooks don't call it (`invariants.py::install_paranoia`). Every production write path
-  *does* call it (`connectedstore/apply.py::advance_index`; `GraphBackend.apply` in the test
+  *does* call it (`src/zanzibar/connectedstore/apply.py::advance_index`; `GraphBackend.apply` in the test
   matrix), and `build_index` uses `backfill`. The graph model in Lean will bake the
   cascade into each write op (so the model is always consistent); the honesty note
   (§11-A1) records that the *Python* relies on convention here.
@@ -610,7 +610,7 @@ important cross-cutting fact for the proof (§9, §11-A1).**
 `add_tuple` at the wildcard layer is **multigraph** — the same triple twice counts
 to 2 and needs two removes (`wildcard.py::WildcardIndex._reject_star_self_edge`, extraction surprise #7). Zanzibar
 set-idempotence lives one layer up in `connectedstore.TupleSource`
-(`connectedstore/source.py::TupleSource.add` + the `TupleV1` unique constraint). The graph model's edges are
+(`src/zanzibar/connectedstore/source.py::TupleSource.add` + the `RelationTuple` unique constraint). The graph model's edges are
 **multisets (ℤ counters)**; `Store` at the spec level is a set, so the graph model's
 op sequence must apply the connectedstore dedup or model raw multiplicity explicitly.
 Resolve per §11-A4.
@@ -835,18 +835,18 @@ rather than quoting):*
   the Lean graph model's FINAL STATE (zcli mode `"graph-state"`: the same
   `graphRun` fold and rc 2/3 gates as graph mode, emitting the canonical
   direct-edge set + residue rows) diffed against the Python graph index's
-  final SQL state (`EdgeV4`/`ResidueV1` decoded through `NodeV4`), every
+  final SQL state (`Edge`/`Residue` decoded through `Node`), every
   in-fragment corpus, under the SIX documented projections of
   `formal/conformance/extractor.py` — P1–P5 and P7 since **P6 retired 2026-09-05**, the
   numbering deliberately left alone (P1 closure rows / P2 bridges — inert, RE-MEASURED
-  on 2026-07-29 over the 23 corpora then in the fragment: 477 raw `EdgeV4` rows, 0
+  on 2026-07-29 over the 23 corpora then in the fragment: 477 raw `Edge` rows, 0
   dropped by P2 / P3 multiplicity,
   narrowed 2026-07-29 to the DERIVED arm only, the untainted arm now compared exactly /
-  P4 empty residues / P5 node GC, under which no `NodeV4` row is compared at all /
+  P4 empty residues / P5 node GC, under which no `Node` row is compared at all /
   ~~P6 leaf-family split~~ — RETIRED 2026-09-05, the model's logged write now folds the
   leaf-routed closure and those 76 rows are compared directly (`compared against Lean`
   189 → 265, measured 2026-09-05 over the 25 in-fragment corpora) /
-  P7 `ResidueV1.version`, declared 2026-07-27 — a MODELLING gap, not
+  P7 `Residue.version`, declared 2026-07-27 — a MODELLING gap, not
   a representation difference: Lean's `Residue` has no version field, so I7 is gated by
   nothing formal).
 - **C3 exhaustive small-scope enumeration** (2026-07-12m):
@@ -898,7 +898,7 @@ What the plan proposed and was **NOT built** (`FINAL_REVIEW.md` §1/§4):
   surface (admission rc 2, not-drained rc 3, unknown-mode rc 4, `"ops"`-in-spec rc 5)
   plus the repo-wide validity parity of the existing test matrix.
 - **No Lean model of the bulk build / bulk backfill constructor**
-  (`index_v4/bulk_build.py` + `index_v4/bulk_backfill.py`), which is the DEFAULT
+  (`src/zanzibar/graphindex/bulk_build.py` + `src/zanzibar/graphindex/bulk_backfill.py`), which is the DEFAULT
   `build_index` path (`bulk=True`) and an entirely separate constructor of index state
   from the incremental write path the `ReachedBy` chain models. Its only net is a
   Python-vs-Python differential identity gate (`tests/test_bulk_build.py`).
@@ -945,7 +945,7 @@ Each must be resolved or escalated before Phase 1 Lean. Proposed resolutions giv
   empty); fold "compiler rejects" into `WF S` so graph theorems never see such a
   schema. Verify the compiler's actual behavior in Phase 0.5 and adjust `WF`.
 - **A4 — Store as set vs graph multigraph.** The spec `Store` is a set; the graph
-  layer counts multiplicity, with idempotence added by `connectedstore`
+  layer counts multiplicity, with idempotence added by `zanzibar.connectedstore`
   (§7.9). *Proposed:* the graph model op sequence applies connectedstore-style dedup
   (add is a no-op if the tuple is present; remove deletes) so its edge multiplicities
   stay in `{0,1}` per tuple and match the set semantics. **Escalate: confirm we model

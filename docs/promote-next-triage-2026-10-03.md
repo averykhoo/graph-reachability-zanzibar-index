@@ -3,6 +3,8 @@
 **ACTIVE-PLAN** (`docs/README.md` sec 3). Corrections are appended **dated at the top** of sec 1.
 Freeze when the promotion decision it feeds is made and recorded on the rows.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 ## 1. Question, method, provenance
 
 **Question (user, 2026-10-03c):** which `LATER` row, promoted to `NEXT`, would most increase

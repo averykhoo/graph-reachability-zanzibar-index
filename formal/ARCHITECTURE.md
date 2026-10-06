@@ -92,14 +92,14 @@ Python module by `CORRESPONDENCE.md`.
 The star-closed `MemberSet` algebra (`pos`/`stars`/`neg`, `MemberSet.lean`) plus
 on-the-fly expansion (`expandDirect`, `expandTtu`, `SetEngineModel.check` in `Eval.lean`).
 It stores raw tuples and computes memberships on demand with set algebra — the model of
-`setengine/`. No materialized closure.
+`src/zanzibar/setengine/`. No materialized closure.
 
 ### 3.2 The operational graph-index model (`GraphIndex/`, `FullScope.lean`)
 
 A concrete state machine `GraphState` (nodes / path-counted closure edges / residues /
 outbox / watermark, `State.lean`) with reads via `GraphModel.check` (route by
 `isDerived`; ≤ 4 probes for untainted, edge-probe + `stars`∖`neg` / `upos` residue for
-derived). The model of `index_v4/`.
+derived). The model of `src/zanzibar/graphindex/`.
 
 The load-bearing object is the **operational closure** `ReachedBy` (`:=
 ReachedByW3d2E`, `FullScope.lean` / `CascadeStrataAssemble.lean`) — the set of states
@@ -195,14 +195,14 @@ restriction comes from (`FullScope.lean`):
   2 are SILENT: `matchDecl` (Python admits a dangling reference) and `ranked` (Python
   admits an untainted computed cycle). **Since 2026-09-26 (`ASK-1`, user decision) both
   are LOUD too**: the parsers refuse dangling references and reference cycles
-  (`zanzibar_utils_v1.py::_validate_ast_consistency`), so it is LOUD 12 / MIXED 2 /
+  (`src/zanzibar/schema/parser.py::_validate_ast_consistency`), so it is LOUD 12 / MIXED 2 /
   SILENT 0. **Since 2026-09-26 (`TK106`, user decision) `ttuDirect` is LOUD as well**:
   both parsers refuse every non-direct tupleset
-  (`zanzibar_utils_v1.py::_validate_tuplesets_direct`), so it is LOUD 13 / MIXED 1
+  (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`), so it is LOUD 13 / MIXED 1
   (`storeValid`) / SILENT 0. The classification and its probes are
   `conformance/test_graphadmission_scope_pin.py`. **Decided since 2026-09-25**
   (`GraphIndex/AdmissionDecide.lean::graphAdmissionB_iff`, exact), and the two SILENT
-  fields are reported to an operator by `zanzibar_utils_v1.py::graph_admission_report`,
+  fields are reported to an operator by `src/zanzibar/schema/reports.py::graph_admission_report`,
   differential-pinned to the decider.
 - **`W4Fragment S T`** — the **honest carries**: scope restrictions the current proof
   needs that Python admission does **not** imply. `structure W4Fragment`
@@ -363,11 +363,11 @@ differential comparisons break down as:
   Lean graph model's FINAL MATERIALIZED STATE (zcli mode `"graph-state"` — same
   `graphRun` fold, same admission/drain gates, emitting canonical direct edges + residue
   triples) is diffed against the real Python graph index's final SQL state
-  (`EdgeV4`/`ResidueV1` decoded through `NodeV4`). Compared under **six documented
+  (`Edge`/`Residue` decoded through `Node`). Compared under **six documented
   projections since 2026-09-05** — P1–P5 and P7, the numbering left alone where **P6
   retired 2026-09-05** — each justified in `formal/conformance/extractor.py`: P1 closure
   rows (a function of the direct set), P2 wildcard bridges (inert — RE-MEASURED
-  2026-07-29 over the 23 corpora then in the fragment: 477 raw `EdgeV4` rows, **P2
+  2026-07-29 over the 23 corpora then in the fragment: 477 raw `Edge` rows, **P2
   dropped 0 of them**, and `bridged_in_shapes`/`bridged_out_shapes` compiled EMPTY on
   all 23, the only non-empty pairs in the corpus file being shapes excluded from
   `GRAPH_FRAGMENT`; the generated projection ledger keeps the live P2 row, still
@@ -375,13 +375,13 @@ differential comparisons break down as:
   NARROWED 2026-07-29 to the DERIVED arm only** (the untainted arm is now compared
   EXACTLY, and the derived arm is golden-pinned by
   `test_conformance_state.py::test_derived_arm_multiplicity_ledger`; see
-  `CORRESPONDENCE.md` §7.2 for the adjudication), P4 all-empty residue rows, P5 node GC (**no `NodeV4` row is compared at
+  `CORRESPONDENCE.md` §7.2 for the adjudication), P4 all-empty residue rows, P5 node GC (**no `Node` row is compared at
   all**), ~~P6 leaf-family closure-leaf copies
   (evaluation output compared exactly)~~ — **RETIRED 2026-09-05**: leg 7's flip re-pointed
   the Lean logged write path onto the leaf-routed closure, so the leaf rows are compared
   DIRECTLY (76 rows moved from dropped to compared, `compared against Lean` 189 → **265**,
   measured 2026-09-05 over the 25 in-fragment corpora; the `"P6"` ledger key is deleted
-  rather than pinned at 0) — **P7 `ResidueV1.version`** — declared
+  rather than pinned at 0) — **P7 `Residue.version`** — declared
   2026-07-27, and unlike P1–P5 (the other five, since P6 retired) a **MODELLING GAP, not a
   representation difference**:
   Lean's `Residue` has no version field at all, so invariant **I7 is gated by nothing
@@ -413,7 +413,7 @@ differential comparisons break down as:
   retracts exactly what its add materialized): driven graph `check` == oracle on the
   accepted final store, driven graph SQL state (`snapshot_rows` + id-free symbolic
   residues) == a fresh add-only build's, and a full-churn test asserts the graph drains to
-  a fresh-EMPTY state (no `NodeV4`/`EdgeV4`/`ResidueV1` rows) with I12 non-mutation on a
+  a fresh-EMPTY state (no `Node`/`Edge`/`Residue` rows) with I12 non-mutation on a
   rejected repeat remove. Scope honesty: BOTH Python remove paths are now pinned to
   oracle/`sem` (the graph transitively, via `graph == oracle` on the corpora the set-engine
   leg pins `sem == oracle`); the Lean-side remove leg is now CLOSED too (2026-07-19f, §6)
@@ -604,18 +604,18 @@ per-field argument or a Lean witness makes it so.
    divergence strictly inside a projected class (~~P6 leaf-family edge content~~ — **P6
    RETIRED 2026-09-05**, that content is now compared directly, P3 edge
    multiplicity **on the derived arm only since 2026-07-29 — the untainted arm is now
-   compared exactly and the derived arm is golden-pinned**, P2 bridge edges — inert — P5 node GC, under which **no `NodeV4` row is
-   compared at all**, and **P7** `ResidueV1.version`, declared as a projection
+   compared exactly and the derived arm is golden-pinned**, P2 bridge edges — inert — P5 node GC, under which **no `Node` row is
+   compared at all**, and **P7** `Residue.version`, declared as a projection
    2026-07-27 after being dropped silently) would not fail it; each is pinned elsewhere
    and documented in `extractor.py`. Two artifacts sit outside the canonical form
-   entirely: the `EdgeV4.derived` flag and the outbox rows/watermark (drained-ness is
+   entirely: the `Edge.derived` flag and the outbox rows/watermark (drained-ness is
    gated as a boolean, not row equality) — pinned only by Python-internal I5/I10 + the
    §8.3 verifier, never against Lean.
 
    **How thin the gate actually is (ZT-P4-5) — the quantification is GENERATED, not
-   restated here.** The projection ledger — of the raw `EdgeV4` rows Python writes,
+   restated here.** The projection ledger — of the raw `Edge` rows Python writes,
    how many each projection drops and how many survive to be compared against Lean,
-   plus the `NodeV4` rows P5 drops wholesale — lives in `FINAL_REVIEW.md`'s generated
+   plus the `Node` rows P5 drops wholesale — lives in `FINAL_REVIEW.md`'s generated
    counts block ("State-gate projection ledger", re-checked by `verify.sh` step 4e).
    Read it as the honest width of the state-level claim: only the `compared` row is
    ever checked against Lean, and a portion of the dropped nodes are not even
@@ -629,7 +629,7 @@ per-field argument or a Lean witness makes it so.
    and all 11 had `|stars| == 1` and `|neg| == 1`. **P5 cannot be closed by comparing
    harder:** the Lean `GraphState` has a `nodes` field, but zcli's `"graph-state"` dump
    emits only edges and residues, the model never GCs while Python does (so set equality
-   is false by design), and `NodeV4.implicit` / `reference_count` have no Lean
+   is false by design), and `Node.implicit` / `reference_count` have no Lean
    counterpart — there is no node property to compare. What is gated instead is
    Python-side: `test_conformance_state.py::test_python_nodes_are_all_justified` (no
    orphan node rows; 0 measured). This is §6's "invisible to the gate by construction"
@@ -640,10 +640,10 @@ per-field argument or a Lean witness makes it so.
    `corpus.py::SCHEMAS`'s `"residue_rich"` entry (multi-shape `stars`, multi-subject `neg`, a `upos`
    member), pinned non-vacuously; most corpora still contribute edges only.
 5. **The representation layers, and the whole concurrency layer** — interner/bitmap
-   (`setengine`), SQL rows / ref-counted closure storage (`index_v4`), `rebuild()` / crash
+   (`zanzibar.setengine`), SQL rows / ref-counted closure storage (`zanzibar.graphindex`), `rebuild()` / crash
    recovery, and sessions/transactions/concurrency, which is **wider than the
    `_lock_store` protocol this item used to name alone**. Also out-of-model:
-   `TupleSource._lock_source` (the `SchemaV4`-row lock) and the **writer lock ordering**
+   `TupleSource._lock_source` (the `SchemaRecord`-row lock) and the **writer lock ordering**
    between it and the graph store lock; **multi-instance / HA replica tailing** —
    `catch_up_evaluator` → `SetEngine.apply_logged`, i.e. instance-local set engines synced
    by tailing the permanent log — and the per-`Session` state that makes that safe; plus
@@ -655,8 +655,8 @@ per-field argument or a Lean witness makes it so.
    sequence" true in the first place. There is no TLA+ phase; CI concurrency coverage is
    SQLite-shaped, where both locks render to no-ops.
 6. **Bulk build / bulk backfill — a second, unmodeled constructor of index state, and it
-   is the DEFAULT path.** `index_v4/bulk_build.py` (P13/N18) and
-   `index_v4/bulk_backfill.py` (R4-BF) build the final index state **directly** — one
+   is the DEFAULT path.** `src/zanzibar/graphindex/bulk_build.py` (P13/N18) and
+   `src/zanzibar/graphindex/bulk_backfill.py` (R4-BF) build the final index state **directly** — one
    in-memory closure pass + bulk INSERTs, T4's closed form evaluated in closed form —
    instead of replaying routed triples through the incremental
    `WildcardIndex.add_tuple` / `DeltaProcessor` path that the Lean `ReachedBy` chain

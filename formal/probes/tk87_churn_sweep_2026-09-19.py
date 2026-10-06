@@ -6,7 +6,7 @@ What it sweeps:
   * `tests/genswarm.py::Diff.remove` / `::Diff.restored` / `::Diff.grid`'s `extra_names`
     and `::drive_config`'s churn pass -- the capability;
   * the three pins in `tests/test_generator_coverage.py` section 6b;
-  * one PRODUCT arm in `index_v4/wildcard.py`, because a capability that no product
+  * one PRODUCT arm in `src/zanzibar/graphindex/wildcard.py`, because a capability that no product
     mutation can move is a capability that reaches nothing.
 
 Run from the repo root:
@@ -44,7 +44,7 @@ ROOT = Path('.').resolve()
 GCOV = 'tests/test_generator_coverage.py'
 GSW = 'tests/genswarm.py'
 PROP = 'tests/test_wildcard_property.py'
-WC = 'index_v4/wildcard.py'
+WC = 'src/zanzibar/graphindex/wildcard.py'
 TARGETS = [GCOV, GSW, WC]               # PROP is run, never mutated
 
 SELECT = 'churn or removal_grid or middle_sync or crossable_schema or empty_pool'

@@ -38,8 +38,8 @@ agreeing) is unchanged and is also the behaviour-preserving rewrite of section 1
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar_utils_v1 import parse_openfga_schema
-from setengine import SetEngine, ALL_SETOPS
+from zanzibar.schema import parse_openfga_schema
+from zanzibar.setengine import SetEngine, ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from tests.test_matrix import GraphBackend
 

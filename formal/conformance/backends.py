@@ -6,7 +6,7 @@ whose `check` the Lean set-engine MODEL (Phase 3) mirrors, so pinning
 `sem` == set-engine here is direct evidence for T1 ahead of the proof.
 
 Phase 6 adds the GRAPH side: `graphindex_answers` drives the real
-`index_v4.WildcardIndex` + `DeltaProcessor` through the synchronous write path
+`zanzibar.graphindex.WildcardIndex` + `DeltaProcessor` through the synchronous write path
 (mirroring `tests/test_matrix.py::GraphBackend`), so the harness can diff it
 against the Lean operational graph model (`zcli` mode "graph", whose outputs are
 covered by `graph_correct` via `graphRun_reached` / `graphRun_check_eq_sem`).
@@ -18,8 +18,8 @@ from types import EllipsisType
 
 from sqlmodel import Session, SQLModel, create_engine
 
-from setengine import SetEngine
-from zanzibar_utils_v1 import AdmissionRejected
+from zanzibar.setengine import SetEngine
+from zanzibar.schema import AdmissionRejected
 
 
 def _fresh_session() -> Session:
@@ -63,9 +63,9 @@ def graphindex_drive(schema_text: str, tuples, object_wildcards=()):
     (`graphindex_answers`) or extract the final SQL state (the state-level
     conformance extractor). The caller owns closing the session.
     """
-    from index_v4.outbox import outbox_watermark
-    from index_v4.processor import DeltaProcessor
-    from zanzibar_utils_v1 import parse_openfga_schema, Entity, RelationalTriple
+    from zanzibar.graphindex.outbox import outbox_watermark
+    from zanzibar.graphindex.processor import DeltaProcessor
+    from zanzibar.schema import parse_openfga_schema, Entity, RelationalTriple
     from tests.wildcard_helpers import make_wildcard_index
 
     ruleset = parse_openfga_schema(schema_text,
@@ -95,7 +95,7 @@ def graphindex_drive(schema_text: str, tuples, object_wildcards=()):
 def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
     """Build the real graph index OFFLINE from a tuple snapshot, via
     `connectedstore.build_index(bulk=True)` — the production bootstrap path
-    (`index_v4/bulk_build.py`: one in-memory pass, closed-form path counts,
+    (`src/zanzibar/graphindex/bulk_build.py`: one in-memory pass, closed-form path counts,
     in-memory boolean backfill, bulk INSERTs) — instead of growing it one logged
     write + cascade at a time as `graphindex_drive` does.
 
@@ -111,7 +111,7 @@ def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
     `build_index(session, store_id)` — same store id for source and index, the
     production default — materializes the index. Conformance corpora are
     add-only, duplicate-free and admission-clean, so EVERY corpus tuple must
-    land as a `TupleV1` row: `TupleSource.add` is idempotent on duplicates and
+    land as a `RelationTuple` row: `TupleSource.add` is idempotent on duplicates and
     absorbs nothing else, so a landed count below `len(tuples)` means the
     snapshot the bulk side saw is SMALLER than the one `graphindex_drive`
     replayed — the two sides would be comparing different stores. That is
@@ -119,7 +119,7 @@ def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
     differential), not tolerated.
 
     REFUSES, too, if `build_index` did not actually take its BULK branch
-    (`BuildReport.constructor`, `connectedstore/build.py`). The two
+    (`BuildReport.constructor`, `src/zanzibar/connectedstore/build.py`). The two
     constructors are byte-identical in effect by design (P13), so no state
     assertion in any caller of this drive can tell them apart: a flipped
     default or a silent fallback would downgrade every one of them to a second
@@ -135,8 +135,8 @@ def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
     """
     from sqlmodel import select
 
-    from connectedstore import TupleSource, build_index, save_schema
-    from setengine.models import TupleV1
+    from zanzibar.connectedstore import TupleSource, build_index, save_schema
+    from zanzibar.setengine.models import RelationTuple
 
     store_id = "conf"
     session = _fresh_session()
@@ -148,10 +148,10 @@ def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
     session.commit()
 
     landed = len(session.exec(
-        select(TupleV1).where(TupleV1.store_id == store_id)).all())
+        select(RelationTuple).where(RelationTuple.store_id == store_id)).all())
     if landed != len(tuples):
         raise AssertionError(
-            f"bulk_build_drive: {landed} TupleV1 row(s) landed for a corpus of "
+            f"bulk_build_drive: {landed} RelationTuple row(s) landed for a corpus of "
             f"{len(tuples)} tuple(s) — the snapshot build_index will read is not "
             f"the tuple list graphindex_drive replays (a duplicate the source "
             f"deduplicated, or a rejected write). Refusing to compare two "
@@ -161,11 +161,11 @@ def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
     if report.constructor != 'bulk':
         raise AssertionError(
             f"bulk_build_drive: build_index ran its {report.constructor!r} "
-            f"constructor, not 'bulk' -- index_v4/bulk_build.py never "
+            f"constructor, not 'bulk' -- src/zanzibar/graphindex/bulk_build.py never "
             f"executed. Every caller of this drive exists to pin the OFFLINE "
             f"BULK bootstrap; because the two constructors are byte-identical "
             f"in effect by design (P13), a flipped `bulk` default or a silent "
-            f"fallback in connectedstore/build.py would downgrade this "
+            f"fallback in src/zanzibar/connectedstore/build.py would downgrade this "
             f"differential to a second run of the incremental path and NOTHING "
             f"else here would notice. Measured 2026-09-20: `if bulk:` -> "
             f"`if False:` left test_conformance_remove.py::"
@@ -195,18 +195,18 @@ def graphindex_answers(schema_text: str, tuples, queries,
 # `GraphDriver.apply` used to catch BARE `ValueError` and report "rejected".
 # `graphindex_drive_ops` then drops a rejected add from `present`, and
 # `test_conformance_remove.py` builds the ORACLE from that same graph-derived
-# final set. So an `index_v4` bug that spuriously raised `ValueError` on a
+# final set. So an `zanzibar.graphindex` bug that spuriously raised `ValueError` on a
 # LEGITIMATE add removed the tuple from BOTH sides, both corners agreed on a
 # smaller store, and the test stayed green: the gate was structurally incapable
 # of detecting an admission regression.
 #
 # The classification is now STRUCTURAL — three disjoint exception classes, no
 # message text anywhere:
-#   * `zanzibar_utils_v1.AdmissionRejected` (a `ValueError` subclass) — a
+#   * `zanzibar.schema.AdmissionRejected` (a `ValueError` subclass) — a
 #     CORRECT refusal of an inadmissible write: a cycle, an undeclared wildcard
 #     shape, an out-of-charset identifier, a tuple no declared type restriction
 #     admits, a remove of what is not there. Absorbed as "rejected" below.
-#   * `index_v4.invariants.InvariantViolation` (an `AssertionError` subclass,
+#   * `zanzibar.graphindex.invariants.InvariantViolation` (an `AssertionError` subclass,
 #     NOT a `ValueError` — "a rejection is a *correct* refusal; a violation is
 #     corruption"). Never enters the handler at all; propagates.
 #   * any OTHER `ValueError` — by construction an internal-contract failure and
@@ -236,8 +236,8 @@ class GraphDriver:
     """
 
     def __init__(self, schema_text: str, object_wildcards=()):
-        from index_v4.processor import DeltaProcessor
-        from zanzibar_utils_v1 import parse_openfga_schema
+        from zanzibar.graphindex.processor import DeltaProcessor
+        from zanzibar.schema import parse_openfga_schema
         from tests.wildcard_helpers import make_wildcard_index
 
         self.store_id = "conf"
@@ -253,7 +253,7 @@ class GraphDriver:
         """Fan `tup` through `RuleSet.apply` onto its leaf families, adding or
         removing each derived leaf edge. Raises the `remove_tuple` propagation
         path's `AdmissionRejected` for a non-existent edge."""
-        from zanzibar_utils_v1 import Entity, RelationalTriple
+        from zanzibar.schema import Entity, RelationalTriple
 
         sp = Ellipsis if _norm(tup.subject_predicate) == "..." else tup.subject_predicate
         triple = RelationalTriple(Entity(tup.subject_type, tup.subject_name),
@@ -280,7 +280,7 @@ class GraphDriver:
 
         Ordering matters: `AdmissionRejected` subclasses `ValueError`, so its
         `except` clause must come FIRST."""
-        from index_v4.outbox import outbox_watermark
+        from zanzibar.graphindex.outbox import outbox_watermark
         try:
             wm = outbox_watermark(self.session, self.store_id)
             self._route(tup, op)
@@ -297,7 +297,7 @@ class GraphDriver:
                 f"GraphDriver.apply: {op} of {tup} raised a ValueError that is "
                 f"NOT an `AdmissionRejected` write-admission refusal — treating "
                 f"it as 'rejected' would silently shrink BOTH the driven store "
-                f"and the oracle built from it (ZT-P4-7). Either index_v4 has a "
+                f"and the oracle built from it (ZT-P4-7). Either zanzibar.graphindex has a "
                 f"regression, or this is a new legitimate refusal whose raise "
                 f"site must be classified `AdmissionRejected` deliberately.\n"
                 f"  {type(e).__name__}: {e}") from e

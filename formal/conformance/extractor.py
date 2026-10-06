@@ -6,7 +6,7 @@ Two extractors producing THE SAME representation-neutral canonical form:
   * `python_graph_state` — drive the real `WildcardIndex` + `DeltaProcessor`
     through the synchronous v1 write path (exactly as `graphindex_answers` /
     `test_conformance_graph.py` do — same `graphindex_drive` helper), then read
-    the final SQL state (`NodeV4` / `EdgeV4` / `ResidueV1` rows) back out.
+    the final SQL state (`Node` / `Edge` / `Residue` rows) back out.
   * `lean_graph_state` — run `zcli` mode `"graph-state"` (the `graphRun` fold of
     the `ReachedBy` chain's own constructors, `GraphIndex/Exec.lean` +
     `Cli.lean`) and parse its canonical JSON.
@@ -18,16 +18,16 @@ Canonical form::
                       (stars, neg, upos)}}         # three frozensets
 
 with node keys the SYMBOLIC `(type, name, predicate, wildcard)` 4-tuples
-(`wildcard` in `''`/`'any'`/`'all'` — the `NodeV4.wildcard` encoding, which the
+(`wildcard` in `''`/`'any'`/`'all'` — the `Node.wildcard` encoding, which the
 Lean side maps its `Variant` onto), `stars` a frozenset of `(type, predicate)`
 shapes, and `neg`/`upos` frozensets of `(type, name, predicate)` subject
-triples (Python node ids decoded through `NodeV4`).
+triples (Python node ids decoded through `Node`).
 
 The encodings differ BY DESIGN (HANDOFF item 1), so the comparison applies the
 following documented projections — nothing else is dropped, and a mismatch
 outside these classes fails the gate:
 
-  P1 **Closure rows.** Python materializes the transitive closure as `EdgeV4`
+  P1 **Closure rows.** Python materializes the transitive closure as `Edge`
      rows; the Lean model computes reachability on demand from direct edges
      only. Projection: keep only rows with `direct_edge_count > 0` — the
      closure is a FUNCTION of the direct set, so equality of the direct sets
@@ -66,7 +66,7 @@ outside these classes fails the gate:
 
      **(a) The claim is false on the derived arm.** Python writes a
      processor-derived edge by a presence DIFF —
-     `index_v4/processor.py::DeltaProcessor._reconcile_subject` computes
+     `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject` computes
      `want_edge and not has_edge` — so a re-derived edge changes NOTHING and
      `direct_edge_count` on such a row is always 0 or 1. The Lean model has no
      presence test (`GraphIndex/Write.lean::admitEdge` is `(a != b) && !reach b a`;
@@ -97,8 +97,8 @@ outside these classes fails the gate:
      `CORRESPONDENCE.md` §7.2 when the finding was filed: with several
      candidates at a key it compounds superlinearly.
 
-     The exemption is decided from the SCHEMA (`zanzibar_utils_v1.compute_taint`),
-     not from `EdgeV4.derived`, so a mis-set flag cannot silently move the
+     The exemption is decided from the SCHEMA (`zanzibar.schema.compute_taint`),
+     not from `Edge.derived`, so a mis-set flag cannot silently move the
      boundary — and the two classifications are cross-checked against each other
      (`_classify_edges`), which is itself a new I5-adjacent pin.
   P4 **Empty residues.** Python deletes an all-empty residue row
@@ -120,10 +120,10 @@ outside these classes fails the gate:
      node-SET equality is false by design — the gate would have to compare a
      projection, and any projection weak enough to hold is implied by the edge
      and residue equality already asserted; (iii) there is no comparable node
-     PROPERTY — Python's `NodeV4.implicit` and `NodeV4.reference_count` have no
+     PROPERTY — Python's `Node.implicit` and `Node.reference_count` have no
      counterpart in Lean's `NodeKey` (which is just `(type, name, pred,
      variant)`). Quantified (2026-07-27, over the corpora then in the
-     fragment): of **235** `NodeV4` rows, **194** were
+     fragment): of **235** `Node` rows, **194** were
      endpoints/references of the COMPARED state and so
      pinned implicitly by the edge+residue equality; the remaining **41** are
      invisible to this gate entirely — they exist only to carry P1-dropped
@@ -146,13 +146,13 @@ outside these classes fails the gate:
      `Cascade.lean::GraphState.writeLoggedRules`), so those rows are now
      compared; there is no dotted-relation filter left in `_edge_projection`.
 
-  P7 **`ResidueV1.version` is dropped** (declared 2026-07-27, ZT-P4-5(b); it
+  P7 **`Residue.version` is dropped** (declared 2026-07-27, ZT-P4-5(b); it
      was being dropped SILENTLY before, which is the thing this projection
      fixes — an undeclared exclusion is indistinguishable from an oversight).
-     `index_v4/models.py::ResidueV1` carries a `version` column, incremented by
-     `index_v4/processor.py::DeltaProcessor._store_residue` on every changing
+     `src/zanzibar/graphindex/models.py::Residue` carries a `version` column, incremented by
+     `src/zanzibar/graphindex/processor.py::DeltaProcessor._store_residue` on every changing
      reconcile and checked for monotonicity by invariant **I7**
-     (`index_v4/invariants.py::_check_residue_rows`).
+     (`src/zanzibar/graphindex/invariants.py::_check_residue_rows`).
      **Reason it cannot be compared: the Lean model has no such field.**
      `GraphIndex/State.lean::Residue` is `⟨stars, neg, upos⟩` — its doc comment
      says so in as many words ("whose `version` column has NO Lean
@@ -164,7 +164,7 @@ outside these classes fails the gate:
      the dropped information from what remains. It is recorded as such in
      `CORRESPONDENCE.md` §7.2, and the consequence is stated there and here:
      **I7 is gated by nothing formal.** Its only pins are Python-side —
-     `index_v4/invariants.py` under paranoia mode in `tests/`. Concretely, the
+     `src/zanzibar/graphindex/invariants.py` under paranoia mode in `tests/`. Concretely, the
      `version` values this gate throws away are real data: measured 2026-07-27,
      the 11 residue rows then in the curated state gate carried versions 2 and 3
      (and the `residue_rich` corpus's rows 4 and 5), i.e. the counter is
@@ -195,11 +195,11 @@ def derived_relations(schema_text: str) -> frozenset:
     """The `(type, relation)` pairs that compile to DERIVED (boolean-tainted)
     predicates — the P3 multiplicity exemption boundary.
 
-    Read from the SCHEMA via `zanzibar_utils_v1.compute_taint`, deliberately not
-    from `EdgeV4.derived`: the exemption must not be movable by the very flag a
+    Read from the SCHEMA via `zanzibar.schema.compute_taint`, deliberately not
+    from `Edge.derived`: the exemption must not be movable by the very flag a
     divergence would corrupt. `_classify_edges` cross-checks the two.
     """
-    from zanzibar_utils_v1 import compute_taint, parse_schema_ast
+    from zanzibar.schema import compute_taint, parse_schema_ast
 
     return compute_taint(parse_schema_ast(schema_text))
 
@@ -209,7 +209,7 @@ def derived_relations(schema_text: str) -> frozenset:
 # --------------------------------------------------------------------------- #
 
 def _edge_projection(nodes: dict, e) -> str | None:
-    """Which projection drops this raw `EdgeV4` row — `"P1"`/`"P2"` — or
+    """Which projection drops this raw `Edge` row — `"P1"`/`"P2"` — or
     `None` if the row survives to be compared.
 
     **THE single implementation of the edge-side projection cascade.** Both
@@ -237,7 +237,7 @@ def projection_ledger(session, store_id: str) -> dict[str, int]:
     """Count, for ONE store, how many raw rows each projection drops.
 
     Returns `raw` / `P1` / `P2` / `compared` (edges, and `P1+P2+compared == raw`
-    by construction) plus `nodes` (raw `NodeV4` rows, all of
+    by construction) plus `nodes` (raw `Node` rows, all of
     which P5 drops) and `residues` (rows kept — residues are keyed on the public
     relation, so no edge projection touches them).
 
@@ -251,22 +251,22 @@ def projection_ledger(session, store_id: str) -> dict[str, int]:
     `doc_counts.py` — `ZT-P3-5`'s "a quoted count is not just stale, it is
     unenforced" applied to the one number that measures the gate's own blindness.
     """
-    from index_v4.models import EdgeV4, NodeV4, ResidueV1
+    from zanzibar.graphindex.models import Edge, Node, Residue
 
     nodes: dict[int, NodeKey] = {
         n.id: (n.type, n.name, n.predicate, n.wildcard)
         for n in session.exec(
-            select(NodeV4).where(NodeV4.store_id == store_id)).all()
+            select(Node).where(Node.store_id == store_id)).all()
     }
     out = {"raw": 0, "P1": 0, "P2": 0, "compared": 0,
            "nodes": len(nodes), "residues": 0}
     for e in session.exec(
-            select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
+            select(Edge).where(Edge.store_id == store_id)).all():
         out["raw"] += 1
         reason = _edge_projection(nodes, e)
         out[reason if reason is not None else "compared"] += 1
     out["residues"] = len(session.exec(
-        select(ResidueV1).where(ResidueV1.store_id == store_id)).all())
+        select(Residue).where(Residue.store_id == store_id)).all())
 
     if out["P1"] + out["P2"] + out["compared"] != out["raw"]:
         raise AssertionError(                           # cannot happen; pinned anyway
@@ -314,22 +314,22 @@ def extract_sql_state(session, store_id: str) -> dict:
     P3 is applied by `diff_states`, which needs the schema's taint set).
 
     `edge_counts` carries `direct_edge_count`-weighted multiplicity for the same
-    keys as `edges`; `derived_flag` records `EdgeV4.derived` per key so the
+    keys as `edges`; `derived_flag` records `Edge.derived` per key so the
     schema-driven P3 exemption can be cross-checked against it.
     """
-    from index_v4.models import EdgeV4, NodeV4, ResidueV1
+    from zanzibar.graphindex.models import Edge, Node, Residue
 
     nodes: dict[int, NodeKey] = {
         n.id: (n.type, n.name, n.predicate, n.wildcard)
         for n in session.exec(
-            select(NodeV4).where(NodeV4.store_id == store_id)).all()
+            select(Node).where(Node.store_id == store_id)).all()
     }
 
     edges = set()
     edge_counts: dict[tuple, int] = {}
     derived_flag: dict[tuple, bool] = {}
     for e in session.exec(
-            select(EdgeV4).where(EdgeV4.store_id == store_id)).all():
+            select(Edge).where(Edge.store_id == store_id)).all():
         # P1 (closure-only) / P2 (bridge). The cascade
         # lives in `_edge_projection` so `projection_ledger` counts exactly the
         # rows this drops — see that function's docstring.
@@ -345,7 +345,7 @@ def extract_sql_state(session, store_id: str) -> dict:
 
     residues: dict[tuple, tuple] = {}
     for r in session.exec(
-            select(ResidueV1).where(ResidueV1.store_id == store_id)).all():
+            select(Residue).where(Residue.store_id == store_id)).all():
         obj = nodes.get(r.object_node_id)
         if obj is None:
             raise AssertionError(
@@ -388,7 +388,7 @@ def python_graph_state(schema_text: str, tuples, object_wildcards=()) -> dict:
 def python_bulk_graph_state(schema_text: str, tuples, object_wildcards=()) -> dict:
     """BULK-BUILD the real graph index from the corpus as a tuple snapshot
     (`backends.bulk_build_drive` -> `connectedstore.build_index(bulk=True)` ->
-    `index_v4/bulk_build.py`), then extract the SAME canonical state as
+    `src/zanzibar/graphindex/bulk_build.py`), then extract the SAME canonical state as
     `python_graph_state` — same `extract_sql_state`, same projections P1/P2/P5/P7.
 
     Board row `P17`. The two Python extractors differ ONLY in how the index came
@@ -460,7 +460,7 @@ def lean_graph_state(schema_text: str, tuples, object_wildcards=()) -> dict:
 
 def _classify_edges(py: dict, tainted: frozenset) -> dict:
     """Split compared edge keys into derived-arm / untainted-arm by SCHEMA taint,
-    cross-checking the classification against Python's own `EdgeV4.derived` flag.
+    cross-checking the classification against Python's own `Edge.derived` flag.
 
     The two must agree: I5 makes the delta processor the only writer of incoming
     direct edges on derived-public families, and users' raw writes are routed onto
@@ -480,12 +480,12 @@ def _classify_edges(py: dict, tainted: frozenset) -> dict:
 
       * a leaf family is registered in `RuleSet.compiled.leaf_families`, NOT in
         `schema_info.derived_families`, and `WildcardIndex._derived_write_ctx`
-        (`index_v4/wildcard.py`) gates the `derived` stamp on `derived_families`
+        (`src/zanzibar/graphindex/wildcard.py`) gates the `derived` stamp on `derived_families`
         membership under `processor_writes` — so a leaf row is `derived=False`
         structurally, and would be even if the processor wrote it; and
       * `derived_relations` -> `compute_taint(parse_schema_ast(...))` ranges over
         DECLARED relations, where `.` is reserved
-        (`zanzibar_utils_v1.py::validate_write_identifiers` and the parser's
+        (`src/zanzibar/schema/errors.py::validate_write_identifiers` and the parser's
         relation-name check) — so a dotted pair can never enter the taint set.
 
     Both predicates are therefore False on every leaf row, and cannot disagree.
@@ -511,7 +511,7 @@ def _classify_edges(py: dict, tainted: frozenset) -> dict:
     if bad:
         raise AssertionError(
             "P3 edge classification disagreement (schema taint vs "
-            "EdgeV4.derived) — the multiplicity exemption boundary is not "
+            "Edge.derived) — the multiplicity exemption boundary is not "
             "where extractor.py claims:\n" + "\n".join(
                 f"  {k[0]} -> {k[1]}: by_schema={s} by_flag={f}"
                 for k, s, f in sorted(bad)))

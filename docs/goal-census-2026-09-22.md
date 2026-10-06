@@ -3,6 +3,8 @@
 **ACTIVE-PLAN** (`docs/README.md` §3). Corrections append **dated at the top**. Freeze when a
 direction is chosen and its first item closes.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 ## Correction, 2026-10-04e (appended; the body below is as-written)
 
 **Hole H4 is closed by `TK101`.** Stores holding an object-wildcard WRITE are now

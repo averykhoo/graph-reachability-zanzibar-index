@@ -24,10 +24,10 @@ cross-instance case, and the transient case (a stall clears on the next good bat
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-import connectedstore.store as store_mod
-from connectedstore import ConnectedStore, IndexStalled
+import zanzibar.connectedstore.store as store_mod
+from zanzibar.connectedstore import ConnectedStore, IndexStalled
 from tests import oracle as O
-from zanzibar_utils_v1 import PathCountExceeded
+from zanzibar.schema import PathCountExceeded
 
 DIAMOND = '''
 type user
@@ -46,7 +46,7 @@ def _diamond_writes(k):
     """``u`` in L0, then K diamond layers L_i -> {A_i, B_i} -> L_{i+1}: the path count
     from ``u`` to ``L_k`` is 2**k. That overflowed a 64-bit counter at k=63 (the raw
     SQLite error), and since TK111 S5 (2026-10-03b) it is refused at k=31, the int4
-    ceiling ``index_v4.core.MAX_PATH_COUNT``, on the LAST write of the chain."""
+    ceiling ``zanzibar.graphindex.core.MAX_PATH_COUNT``, on the LAST write of the chain."""
     w = [('+', MALLORY), ('+', ('...', 'user', 'u', 'member', 'group', 'L0'))]
     for i in range(k):
         for mid in ('A', 'B'):
@@ -135,7 +135,7 @@ def test_fanout_over_cap_row_no_longer_stalls_the_async_apply(session, caplog):
     new = ('member', 'group', 'big', 'viewer', 'doc', 'new')
     cs.add_tuple(*new)                         # 30 closure rows: over the cap
     cs.remove_tuple(*old)
-    with caplog.at_level('WARNING', logger='index_v4.core'):
+    with caplog.at_level('WARNING', logger='zanzibar.graphindex.core'):
         assert cs.catch_up() == 2
     assert cs.lag() == 0 and not cs.index_stalled and cs.stall_error is None
     assert any('materialised anyway' in r.getMessage() and 'limit of 20' in r.getMessage()
@@ -145,7 +145,7 @@ def test_fanout_over_cap_row_no_longer_stalls_the_async_apply(session, caplog):
     assert cs.widx.check('...', 'user', 'u7', 'viewer', 'doc', 'new') is True
     assert cs.lookup('...', 'user', 'u0') is not None
     # the cap is still in force on this index outside catch_up: a direct write refuses
-    from zanzibar_utils_v1 import ClosureFanoutExceeded
+    from zanzibar.schema import ClosureFanoutExceeded
     with pytest.raises(ClosureFanoutExceeded):
         cs.widx.add_tuple('member', 'group', 'big', 'viewer', 'doc', 'newer')
     session.rollback()

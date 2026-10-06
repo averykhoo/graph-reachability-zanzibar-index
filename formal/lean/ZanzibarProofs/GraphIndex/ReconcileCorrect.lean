@@ -141,7 +141,7 @@ for `ComputedOnly`. -/
     `ComputedOnly` (`computedOnly_computedOrDirect`). Mirrors the raw `SchemaAST` a derived
     def carries once a `Direct` arm is admitted inside a boolean root (the Python entry is
     an `Exclusion`/`Intersection` root or a reference to an already-derived relation;
-    `zanzibar_utils_v1.py` `compile_ruleset`, `CORRESPONDENCE.md` §7). -/
+    `src/zanzibar/schema/` `compile_ruleset`, `CORRESPONDENCE.md` §7). -/
 def ComputedOrDirect : Expr → Prop
   | .computed _ => True
   | .direct _ => True
@@ -1019,7 +1019,7 @@ the widened admission.
 
 `exprDirectsAll` recurses into `inter`/`excl` (unlike `exprDirects`), mirroring Python's leaf
 extraction: `compile_ruleset` splits out every `Direct` leaf of a def regardless of the
-enclosing boolean, routing raw writes to that leaf family (`zanzibar_utils_v1.py`; `RuleSet.apply`
+enclosing boolean, routing raw writes to that leaf family (`src/zanzibar/schema/`; `RuleSet.apply`
 + I5). It is a SEPARATE function — `exprDirects` is left untouched, so `evalE_direct_arm`
 (false for `excl`, a negation) and all W2 storage-arm machinery are unaffected. -/
 
@@ -1122,9 +1122,9 @@ theorem exprTtus_computedOrDirect : ∀ {e : Expr}, ComputedOrDirect e → exprT
     where `graph_correct_w3c`'s star content lives).
 
     Faithfulness note: the enumeration-side mirror is Python's own wildcard filtering —
-    `index_v4/processor.py:268` (`_incoming_concretes` ends `return [n for n in nodes if
+    `src/zanzibar/graphindex/processor.py:268` (`_incoming_concretes` ends `return [n for n in nodes if
     n.wildcard == '']`) and the `upos` loop's `n.wildcard != ''` skip at
-    `index_v4/processor.py:670` — which
+    `src/zanzibar/graphindex/processor.py:670` — which
     `storedDirectSubjects` now applies too. Under this clause that filter is provably a
     no-op; the clause is what closes the `edgeHolders` half, which no filter can. -/
 def DirectArmsConcrete (S : Schema) : Prop :=

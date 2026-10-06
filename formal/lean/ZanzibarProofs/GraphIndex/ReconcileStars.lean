@@ -4,11 +4,11 @@ import ZanzibarProofs.GraphIndex.ReconcileUposComplete
 # The derived reconcile — star coverage and the `stars`/`neg` residue (ROADMAP W3c, write half)
 
 `SEMANTICS.md` §7.6; `boolean spec §5.3-5.4`;
-`index_v4/processor.py::DeltaProcessor._reconcile` (step (1) the star fold, step (2)
+`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` (step (1) the star fold, step (2)
 the `neg` recompute, step (2c) `upos`, step (3) the residue upsert, step (4) the edge
 audit — the in-code step markers travel with the code) and
 `::DeltaProcessor._reconcile_subject` (whose bare-entity tail computes
-`want_edge = should and not covered`); `index_v4/wildcard.py::WildcardIndex._check_derived`
+`want_edge = should and not covered`); `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_derived`
 (the full residue read: bare ⇒ edge ∨ (shape ∈ stars ∧ ∉ neg), star ⇒ shape ∈ stars,
 userset ⇒ upos ∨ (shape ∈ stars ∧ ∉ neg)).
 
@@ -21,10 +21,10 @@ carried only `upos`. **W3c makes the star-coverage content go live**: with `user
 grants on operand relations the processor persists
 
 * `stars` — the star×boolean fold `plan.stars_fn`
-  (`zanzibar_utils_v1.py::_compile_stars_fn`): per closure leaf, `leaf_stars` holds a
+  (`src/zanzibar/schema/boolean.py::_compile_stars_fn`): per closure leaf, `leaf_stars` holds a
   declared wildcard shape `sh` iff the graph's *star-subject* read
   `widx.check(sh.pred, sh.type, '*', leaf, o)` is true
-  (`index_v4/processor.py::_EvalContext.leaf_stars`);
+  (`src/zanzibar/graphindex/processor.py::_EvalContext.leaf_stars`);
   `Union → ∪`, `Intersection → ∩`, `Exclusion → −` over those
   sets. **Pointwise this fold is exactly the boolean evaluation on the star subject**:
   `sh ∈ stars_fn(ctx) ⟺ check_fn(ctx, (sh.pred, sh.type, '*'))` — each set constructor
@@ -89,11 +89,11 @@ namespace Zanzibar
 
 /-! ## Subject-wildcard shapes — `derive_schema_info`'s TWO passes
 
-`zanzibar_utils_v1.py::derive_schema_info` builds `SchemaInfo.subject_wildcard_shapes`
+`src/zanzibar/schema/compiler.py::derive_schema_info` builds `SchemaInfo.subject_wildcard_shapes`
 in **two** passes, and until 2026-09-14h this file modelled only the first while its
 docstring named that two-pass function as its correspondent. The processor enumerates
 its star fold over exactly this (schema-fixed) list — `self.subject_shapes`, set in
-`index_v4/processor.py::DeltaProcessor.__init__` and consumed by
+`src/zanzibar/graphindex/processor.py::DeltaProcessor.__init__` and consumed by
 `::_EvalContext.leaf_stars` — so the missing pass made the fold's candidate list too
 small, and `CascadeStrata.lean::GraphState.reconcileResidueKeyR`'s
 `stars := shapes.filter …` cannot mint a shape its input never held. Measured:
@@ -101,7 +101,7 @@ at `P6`'s divergence store the shipped residue carried `stars := [("folder","vie
 and the model's carried `[]`, and a phantom userset subject answered wrongly
 (`docs/p6-part-iv-plan-2026-09-14.md`, correction "2026-09-14g (third)"). -/
 
-/-- **Pass 1 — DECLARED wildcard restrictions** (`zanzibar_utils_v1.py:990-995`):
+/-- **Pass 1 — DECLARED wildcard restrictions** (`src/zanzibar/schema/`):
     the shapes `(type, pred)` carried by a `[T:*]` / `[T:*#p]` restriction anywhere in
     the schema.
 
@@ -113,7 +113,7 @@ def declaredWildcardShapes (S : Schema) : List Shape :=
   S.defs.flatMap (fun d => (exprRestrictions d.2).filterMap
     (fun r => if r.2.2 then some (r.1, r.2.1) else none))
 
-/-- **Pass 2 — star-tupleset TTU THROUGH-shapes** (`zanzibar_utils_v1.py:1001-1009`):
+/-- **Pass 2 — star-tupleset TTU THROUGH-shapes** (`src/zanzibar/schema/`):
     for every TTU `p from ts` in every def of object type `dt`, if the SAME object
     type's tupleset relation `(dt, ts)` carries a **bare** wildcard restriction `[t:*]`,
     contribute `(t, p)`. Python's own rationale, verbatim: *"a wildcard restriction
@@ -136,7 +136,7 @@ def throughShapes (S : Schema) : List Shape :=
           if r.2.2 && r.2.1 == BARE then some ((r.1, tt.1) : Shape) else none)))
 
 /-- **Both passes — the fold's candidate list, and the correspondent of
-    `zanzibar_utils_v1.py::SchemaInfo.subject_wildcard_shapes`.**
+    `src/zanzibar/schema/rules.py::SchemaInfo.subject_wildcard_shapes`.**
 
     The declared pass is kept as a verbatim PREFIX and the through pass contributes only
     shapes it does not already hold, which is what makes every pre-2026-09-14h `decide`
@@ -144,7 +144,7 @@ def throughShapes (S : Schema) : List Shape :=
 
     ⚠ **Two representation divergences from Python remain, both deliberate and bounded**
     (`CORRESPONDENCE.md` §7): Python's is a `frozenset` rendered `sorted(...)` at
-    `index_v4/processor.py::DeltaProcessor.__init__:237`, so (a) a shape produced twice
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor.__init__:237`, so (a) a shape produced twice
     appears twice here and once there, and (b) the orders differ. Both are REACHABLE on a
     schema the compiler admits — `ShapeRepresentationWitness` below pins one where this
     list has five entries to Python's three, and pass 1 duplicates on its own, so the
@@ -160,7 +160,7 @@ def throughShapes (S : Schema) : List Shape :=
     membership-shaped (`List.contains`, `∈`, `= []`, or a self-coherent
     `= (wildcardShapes S).filter …` pin), the one serializer canonicalises
     (`Cli.lean::canonJsonArr` mergeSorts and dedups), and the Lean model has no twin of
-    Python's `residue_changed` gate (`index_v4/processor.py::DeltaProcessor._reconcile`),
+    Python's `residue_changed` gate (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile`),
     so a duplicate cannot reach a convergence test. A consumer that breaks any of those
     four must canonicalise here rather than reason around it. -/
 def wildcardShapes (S : Schema) : List Shape :=
@@ -276,7 +276,7 @@ theorem dedup_preserves_membership (sh : Shape) :
 end ShapeRepresentationWitness
 
 /-- The star subject of a shape — the intensional `(type, '*', pred)` probe subject
-    (`index_v4/processor.py::_EvalContext.leaf_stars` passes `'*'` as the subject
+    (`src/zanzibar/graphindex/processor.py::_EvalContext.leaf_stars` passes `'*'` as the subject
     name). -/
 def starSubj (sh : Shape) : SubjectRef := ⟨sh.1, STAR, sh.2⟩
 
@@ -413,7 +413,7 @@ theorem evalE_star_of_noConc {rec1 rec2 : Rec} {T : Store} {q1 q2 : Query} {s : 
   | ttu tr ts => intro hcd _ _ _; exact hcd.elim
 
 /-- **The wholesale residue recompute** for one derived key
-    (`index_v4/processor.py::DeltaProcessor._reconcile` steps (1)–(3)): `stars` = the
+    (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` steps (1)–(3)): `stars` = the
     covered shapes; `neg` = the candidate subjects that are star-covered ∧ expr-false
     (step (2)); `upos` = the userset candidates that are uncovered ∧ expr-true
     (step (2c)). One `putResidue` upsert
@@ -427,13 +427,13 @@ def GraphState.reconcileResidueKey (σ : GraphState) (T : Store) (dt on R : Stri
   σ.putResidue (objNode ⟨dt, on⟩ R) R ⟨stars, neg, upos⟩
 
 /-- Coverage as persisted: is the shape in the stored `stars` row?
-    (`index_v4/processor.py::DeltaProcessor._reconcile_subject` re-reads
+    (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject` re-reads
     `::DeltaProcessor._residue_state` per subject.) -/
 def GraphState.coveredAt (σ : GraphState) (k : NodeKey) (R : String) (sh : Shape) : Bool :=
   ((σ.residue k R).getD Residue.empty).stars.contains sh
 
 /-- **The covered-guarded edge fold**
-    (`index_v4/processor.py::DeltaProcessor._reconcile` step (4) →
+    (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` step (4) →
     `::DeltaProcessor._reconcile_subject`, `want_edge = should and not covered`):
     materialise the derived
     edge iff expr-true AND the subject's shape is not star-covered. `covered` reads
@@ -444,7 +444,7 @@ def GraphState.reconcileKeyC (σ : GraphState) (T : Store) (dt on R : String) (e
     if acc.checkFn T c dt on R e && !(acc.coveredAt (objNode ⟨dt, on⟩ R) R c.shape)
     then acc.writeDirect ⟨c, R, ⟨dt, on⟩⟩ else acc) σ
 
-/-- **One full-object reconcile** (`index_v4/processor.py::DeltaProcessor._reconcile`):
+/-- **One full-object reconcile** (`src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile`):
     the residue recompute (steps (1)–(3)) **then** the edge audit (step (4)). The order
     is load-bearing: the edge fold's covered guard reads the row this pass just wrote
     (Python's step (3) `_store_residue` upsert precedes the step-(4) edge audit). -/
@@ -624,7 +624,7 @@ theorem reconcileStarsKey_residue_self (σ : GraphState) (T : Store) (dt on R : 
 
 /-- **`ReachedByW3c σ S T`** — an admitted rule-routed base plus full-object star
     reconcile passes (`reconcileStarsKey` — the faithful atomic unit:
-    `index_v4/processor.py::DeltaProcessor._reconcile` always writes the residue
+    `src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile` always writes the residue
     (step (3)) *before* auditing edges (step (4)); a
     free-floating covered-guard edge pass without its residue write is NOT a Python
     behaviour and would break the space rule). Side conditions mirror the audit
@@ -635,7 +635,7 @@ theorem reconcileStarsKey_residue_self (σ : GraphState) (T : Store) (dt on R : 
     `::DeltaProcessor._derived_leaf_neg_ids` + the step-(2a) from-chain keys);
     `upos` candidates are concrete userset-shaped (step (2c) over the step-(2b) audit
     set); the shapes list is the schema-fixed
-    `zanzibar_utils_v1.py::SchemaInfo.subject_wildcard_shapes`, snapshotted in
+    `src/zanzibar/schema/rules.py::SchemaInfo.subject_wildcard_shapes`, snapshotted in
     `::DeltaProcessor.__init__`. -/
 inductive ReachedByW3c : GraphState → Schema → Store → Prop where
   | base {σ : GraphState} {S : Schema} {T : Store} :

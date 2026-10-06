@@ -6,6 +6,8 @@ correction section; FROZEN when `P6` closes. Supersedes nothing — it is the me
 established at this line"* (the 2026-09-15 *eighth* correction) explicitly owed before step
 4′ could be planned.
 
+**2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 All line numbers are **2026-09-15 snapshots of `a186419`** and will rot; the `file::symbol`
 is the durable anchor. Every claim carries a provenance label: **READ** (top-level session
 opened the file), **KERNEL/PROBE** (a rc=0 artifact in `formal/probes/`), **READ(agent)** (a

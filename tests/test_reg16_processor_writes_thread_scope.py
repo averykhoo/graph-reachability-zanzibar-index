@@ -27,7 +27,7 @@ import threading
 
 import pytest
 
-from zanzibar_utils_v1 import parse_openfga_schema
+from zanzibar.schema import parse_openfga_schema
 from tests.wildcard_helpers import make_wildcard_index
 
 SCHEMA = '''
@@ -149,7 +149,7 @@ def test_foreign_thread_refusal_names_the_routing_fix(widx):
     """The loud failure must stay diagnosable: the I5 ValueError names the relation
     and the routing contract, and is NOT an AdmissionRejected (a bypassed write path
     is a wiring bug, not an inadmissible tuple -- see ``_assert_derived_exclusivity``)."""
-    from zanzibar_utils_v1 import AdmissionRejected
+    from zanzibar.schema import AdmissionRejected
 
     caught: list[BaseException] = []
 
