@@ -1,10 +1,6 @@
 import pytest
 from sqlmodel import SQLModel
 
-from legacy.index_v1 import DirectedAcyclicMultiGraphReachabilityIndex
-from legacy.index_v2 import DirectedAcyclicMultiGraphReachabilityIndexV2, Node as NodeV2
-from legacy.index_v3 import engine, add_edge, remove_edge, check_reachable
-
 
 class IndexPolyfill:
     def add_edge(self, from_node: str, to_node: str):
@@ -15,50 +11,6 @@ class IndexPolyfill:
 
     def check_reachable(self, from_node: str, to_node: str) -> bool:
         raise NotImplementedError
-
-
-class IndexV1Polyfill(IndexPolyfill):
-    def __init__(self):
-        self.idx = DirectedAcyclicMultiGraphReachabilityIndex()
-
-    def add_edge(self, from_node: str, to_node: str):
-        self.idx.add_edge(from_node, to_node)
-
-    def remove_edge(self, from_node: str, to_node: str):
-        self.idx.remove_edge(from_node, to_node)
-
-    def check_reachable(self, from_node: str, to_node: str) -> bool:
-        return to_node in self.idx.index_paths.get(from_node, set())
-
-
-class IndexV2Polyfill(IndexPolyfill):
-    def __init__(self):
-        self.idx = DirectedAcyclicMultiGraphReachabilityIndexV2()
-
-    def add_edge(self, from_node: str, to_node: str):
-        self.idx.add_edge(NodeV2(name=from_node), NodeV2(name=to_node))
-
-    def remove_edge(self, from_node: str, to_node: str):
-        self.idx.remove_edge(NodeV2(name=from_node), NodeV2(name=to_node))
-
-    def check_reachable(self, from_node: str, to_node: str) -> bool:
-        return self.idx.check_reachable(NodeV2(name=from_node), NodeV2(name=to_node))
-
-
-class IndexV3Polyfill(IndexPolyfill):
-    def __init__(self):
-        # Clear database and recreate tables
-        SQLModel.metadata.drop_all(engine)
-        SQLModel.metadata.create_all(engine)
-
-    def add_edge(self, from_node: str, to_node: str):
-        add_edge(..., 'node', from_node, '...', 'node', to_node)
-
-    def remove_edge(self, from_node: str, to_node: str):
-        remove_edge(..., 'node', from_node, '...', 'node', to_node)
-
-    def check_reachable(self, from_node: str, to_node: str) -> bool:
-        return check_reachable(..., 'node', from_node, '...', 'node', to_node)
 
 
 class IndexV4Polyfill(IndexPolyfill):
@@ -91,7 +43,7 @@ class IndexV4Polyfill(IndexPolyfill):
             self.session.close()
 
 
-@pytest.fixture(params=[IndexV1Polyfill, IndexV2Polyfill, IndexV3Polyfill, IndexV4Polyfill])
+@pytest.fixture(params=[IndexV4Polyfill])
 def index(request):
     """Provides a fresh index instance for each test across all versions."""
     return request.param()

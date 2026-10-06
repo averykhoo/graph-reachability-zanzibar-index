@@ -325,10 +325,9 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   (write-once schema source; compiled artifacts are cache). Composition layer only:
   it imports both backends, they never import it. Schemas are static — a new schema
   means a new store/index.
-- **`legacy/`** — superseded predecessors v1–v3 (v1 in-memory; v3 the DB closure design,
-  carrying a documented concurrency note that points at the v4 fix). Runnable
-  documentation only — don't build on them; live code still imports `legacy.index_v1.
-  MultiSet` and `legacy.index_v2.Node`.
+- **`legacy/` was DELETED 2026-10-06 (`TK120`, user decision).** It held the superseded
+  v1–v3 indexes; git history keeps them. `MultiSet`, the only piece live code used, now
+  lives in the graph-index package (`multiset.py`).
 - **Docs**: start at `docs/architecture/overview.md` (module map + pointers; the other
   architecture files cover the graph index, derived predicates, verification, and the
   decision log). Full design specs live in `docs/specs/` — code comments cite them by

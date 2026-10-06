@@ -1,10 +1,6 @@
 import pytest
 from sqlmodel import SQLModel
 
-from legacy.index_v3 import engine as v3_engine
-from legacy.index_v3 import add_edge as v3_add_edge
-from legacy.index_v3 import remove_edge as v3_remove_edge
-from legacy.index_v3 import check_reachable as v3_check_reachable
 from zanzibar_utils_v1 import (
     Entity,
     RelationalTriple,
@@ -35,27 +31,6 @@ class Backend:
 
     def teardown(self):
         pass
-
-
-class V3Backend(Backend):
-    def __init__(self):
-        SQLModel.metadata.drop_all(v3_engine)
-        SQLModel.metadata.create_all(v3_engine)
-
-    def add_edge(self, subject_predicate, subject_type, subject_name,
-                 relation, object_type, object_name):
-        v3_add_edge(subject_predicate, subject_type, subject_name,
-                    relation, object_type, object_name)
-
-    def remove_edge(self, subject_predicate, subject_type, subject_name,
-                    relation, object_type, object_name):
-        v3_remove_edge(subject_predicate, subject_type, subject_name,
-                       relation, object_type, object_name)
-
-    def check_reachable(self, subject_predicate, subject_type, subject_name,
-                        relation, object_type, object_name) -> bool:
-        return v3_check_reachable(subject_predicate, subject_type, subject_name,
-                                  relation, object_type, object_name)
 
 
 class V4Backend(Backend):
@@ -138,13 +113,11 @@ class V4WildcardBackend(Backend):
 # Fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(params=["v3", "v4"])
-def backend(request) -> Backend:
-    """Provides a fresh backend for each test, parameterized over v3 and v4."""
-    if request.param == "v3":
-        be = V3Backend()
-    else:
-        be = V4Backend()
+@pytest.fixture
+def backend() -> Backend:
+    """Provides a fresh graph-index backend for each test.  It was parameterized over
+    the legacy v3 index too, until legacy/ was deleted (TK120, 2026-10-06)."""
+    be = V4Backend()
     yield be
     be.teardown()
 

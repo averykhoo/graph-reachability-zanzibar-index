@@ -8,7 +8,7 @@ from sqlalchemy import insert, tuple_, update
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
-from legacy.index_v1 import MultiSet
+from index_v4.multiset import MultiSet
 from zanzibar_utils_v1 import (AdmissionRejected, ClosureFanoutExceeded,
                                PathCountExceeded,
                                validate_write_identifiers,

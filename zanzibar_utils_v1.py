@@ -5,8 +5,6 @@ from functools import reduce
 from types import EllipsisType
 from typing import Callable
 
-from legacy.index_v2 import Node
-
 
 # ---------------------------------------------------------------------------
 # Identifier validation (strict surrogate ids for both backends)
@@ -191,13 +189,6 @@ class Entity:
         return f'{self.type}:{self.name}'
 
 
-@dataclass(frozen=True, unsafe_hash=True, order=True, slots=True)
-class NodeV2(Node):
-    type: str
-    name: str
-    predicate: str | EllipsisType
-
-
 @dataclass(frozen=True, slots=True, order=True, unsafe_hash=True)
 class RelationalTriple:
     subject: Entity
@@ -216,18 +207,6 @@ class RelationalTriple:
             assert self.subject_predicate is Ellipsis
             subject_predicate = '...'
         return f'{self.object}#{self.relation}@{self.subject}#{subject_predicate}'
-
-    @property
-    def node_from(self):
-        return NodeV2(type=self.subject.type,
-                      name=self.subject.name,
-                      predicate=self.subject_predicate)
-
-    @property
-    def node_to(self):
-        return NodeV2(type=self.object.type,
-                      name=self.object.name,
-                      predicate=self.relation)
 
 
 @dataclass(frozen=True, slots=True, order=True, kw_only=True)

@@ -70,7 +70,6 @@ formal/                Lean 4 machine-checked proofs that the two backend
                        (formal/FINAL_REVIEW.md 3.0).
                        Never rounds up to "the code is formally verified"
                        (start at formal/HANDOFF.md)
-legacy/                v1-v3, superseded but runnable documentation
 tests/                 incl. the independent oracle + the validation matrix
 docs/                  architecture notes, design specs, deviations log
 benchmarks/            set-engine + scale benchmarks
@@ -650,7 +649,7 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 > record of what shipped (struck = done) plus a few deliberately-deferred items.
 
 * ~~re-introduce invariant checks for the index v3, and think of more checks~~
-  v4 has I1–I13 + paranoia mode now (`index_v4/invariants.py`); v3 is `legacy/`
+  v4 has I1–I13 + paranoia mode now (`index_v4/invariants.py`); v1-v3 were deleted in TK120 (git history keeps them)
 * ~~re-introduce randomized testing for v3~~ superseded by the validation matrix,
   the ParityEngine walks, and the hypothesis campaign (`tests/test_hypothesis.py`)
 * ~~support tracking user-triples and rule-triples in the index~~ resolved by

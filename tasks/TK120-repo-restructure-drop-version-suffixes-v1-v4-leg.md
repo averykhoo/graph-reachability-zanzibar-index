@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-10-02
-moved: 2026-10-05b
-updated: 2026-10-05b
+moved: 2026-10-06
+updated: 2026-10-06
 closed:
 ---
 
@@ -81,3 +81,9 @@ PROMOTED LATER -> NEXT 2026-10-04c by user instruction, with an ORDER. (1) Run t
 ### 2026-10-05b
 
 SCOUTED 2026-10-05b (pre-flight before the planning session). Census doc: docs/tk120-repo-restructure-2026-10-05.md (ACTIVE-PLAN). LANDED: a code-side census (versioned-name inventory, reference counts by area, import graph, legacy/ reachability, module sizes, seams of zanzibar_utils_v1.py) and a rename-trap census (silent / hard-red / cosmetic), both from read-only agents transcribed verbatim, plus sec 1 = the claims the session re-checked first-hand. Headlines (sec 1): goldens embed NO module/versioned names (the UNVERIFIED item, now answered) but do embed Filter/Rule/RewriteFilter/RelationalTriplePattern reprs; NodeV2 is dead code; MultiSet is the only live product dependency on legacy/; legacy/index_v3.py declares node/edge tables in the shared SQLModel registry; several path/name string literals survive a sed and two fail by passing. Sec 2 lists the decisions the plan must take (layout + name map, class vs TABLE rename, legacy/ fate, split or move the schema module, rewrite mechanics). Nothing moved; nothing is RED. NEXT ACTION: write the layout + old->new map into that doc (sec 2), then present it to the user for approval before any move.
+
+### 2026-10-06
+
+PLAN DRAFTED 2026-10-06: docs/tk120-repo-restructure-2026-10-05.md sec 5 (PROPOSED, awaiting user approval). Flat layout: zanzibar_utils_v1.py -> schema/ package split along sec 3 F (both cycles dissolved by moving helpers down), index_v4/ -> graphindex/, setengine/ and connectedstore/ unchanged, legacy/ deleted (MultiSet re-homed, NodeV2 deleted, 28 legacy cases dropped, re-counted first-hand). Class suffixes dropped (TupleV1 -> RelationTuple, SchemaV4 -> SchemaRecord, rest drop the suffix); table names kept. Six ordered commits, gate before each; step 0 hardens the silent scanners before anything moves. Two user calls open: delete legacy/? rename tables? Nothing moved, nothing RED. NEXT ACTION: get user approval, then step 0.
+
+USER DECISION 2026-10-06: no stored databases exist and nothing uses this code, so RENAME THE TABLES and break backwards compatibility freely (no migration, no shims). That makes plan sec 5.4 item 3 and step 5 a go. OPEN: (a) one top-level package (user leaning yes, because it may be released as a library); (b) whether Lean goes inside it; (c) legacy/ delete, not yet answered. User said do not start yet.

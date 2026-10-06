@@ -638,7 +638,14 @@ MIN_CONF_ALL=1087
 # Re-measured 2026-10-04g (NEXT cap 3 -> 5) with the same command: 1745. +1 is the new
 #   tests/test_handoff_lint_b_prime.py::test_next_cap_matches_the_shipped_tree_budget.
 #   1744 + 1 = 1745. No drift.
-MIN_TESTS_ALL=1745
+# LOWERED 1745 -> 1717 on 2026-10-06 (TK120 commit A, user decision 2026-10-06b: delete
+#   legacy/). DELIBERATE, not drift: exactly the 28 cases that ran only against the
+#   deleted legacy indexes -- tests/test_index.py 7 functions x IndexV1/V2/V3Polyfill
+#   (21) and tests/test_integration.py 7 functions x the `v3` backend (7). Each of those
+#   14 functions still runs the identical body on the live graph index (IndexV4Polyfill /
+#   V4Backend), so no assertion on live code was lost (docs/tk120-repo-restructure-
+#   2026-10-05.md sec 5.0). Re-measured: `pytest tests/ -q --collect-only` -> 1717.
+MIN_TESTS_ALL=1717
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

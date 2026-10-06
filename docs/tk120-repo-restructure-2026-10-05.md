@@ -3,14 +3,14 @@
 **ACTIVE-PLAN** (`docs/README.md` §3). Corrections are appended **dated at the top** of the
 corrections section; FROZEN when `TK120` closes. Row: `python scripts/task.py show TK120`.
 
-**STATUS 2026-10-05b: SCOUTING ONLY. No target layout is chosen, no name map exists, and no
+**STATUS 2026-10-06b: plan in §5 APPROVED by the user; execution in progress (see the row for the step reached).** Previous status, 2026-10-05b: **SCOUTING ONLY. No target layout is chosen, no name map exists, and no
 file may move until the user approves a plan** (the row's own condition). This doc is the
 measurement the plan is built on, so the planning session starts from a census instead of
 re-running one. It answers the row's one UNVERIFIED item (goldens: §1.1).
 
 ## Corrections (newest first)
 
-(none yet)
+- **2026-10-06b:** §5 rewritten. The 2026-10-06 draft (flat layout, tables kept) was superseded by user decisions before anything moved: one `src/zanzibar/` package, tables renamed, `legacy/` deleted.
 
 ## 1. First-hand checks by the session (READ 2026-10-05b)
 
@@ -596,5 +596,148 @@ for _, f, sym in anchor_check.extract_anchors(doc):
     if got and re.search(names, got[1]): hit[k] = 1
 # output 2026-10-05: 255 unique Python anchors | 153 in a moving file | 65 bodies mention a listed name | 18 of those outside moving files
 ```
+
+## 5. Plan (revised 2026-10-06b and APPROVED by the user 2026-10-06b: "just do the whole thing")
+
+Supersedes the 2026-10-06 draft (flat layout, tables kept), which was never acted on.
+User decisions, 2026-10-06b: **one package**, because the code may be released as a library.
+`zanzibar` is free on PyPI (user checked). **Lean stays outside the package. Delete
+`legacy/`**, but first confirm every behaviour it tested is still tested. **Rename the
+tables** and break backwards compatibility freely (no stored databases, no users). The rest
+are the model's calls (`CLAUDE.md` "Who decides"), labelled REASONED.
+
+### 5.0 First-hand checks behind this revision (READ 2026-10-06)
+
+- **Legacy coverage.** `tests/test_index.py` + `tests/test_integration.py` collect 46 cases.
+  28 run only against legacy code: 7 functions x `IndexV1/V2/V3Polyfill` (21) and 7 functions
+  x `v3` (7). **Every one of those 14 functions is also parametrized on a v4 backend that
+  runs the identical body** (`IndexV4Polyfill`; `v4`). So deleting the legacy parameters
+  loses no assertion on live code; it only stops checking the dead implementations.
+- Nothing in `.gitignore` matches `src`, `zanzibar`, `schema` or `graphindex`. setuptools
+  82.0.1 and pip 26.1.2 are in the env.
+- Liveness of tracked `*.md` (bolded banner in the first 8 lines): 37 FROZEN and 19
+  ACTIVE-PLAN outside the history dirs, plus everything under `docs/history/`,
+  `formal/history/` and `docs/specs/`.
+- `formal/` and `tests/` are themselves Python packages (`formal/__init__.py`,
+  `formal.conformance.*`, `tests.oracle`) and rely on the repo root being on `sys.path`.
+
+### 5.1 Target layout
+
+```
+pyproject.toml                 distribution "zanzibar"; src layout; deps from requirements.txt
+src/zanzibar/__init__.py       docstring + __version__ only (no eager imports: avoids import cycles)
+src/zanzibar/schema/           from zanzibar_utils_v1.py, split (5.3)
+src/zanzibar/graphindex/       from index_v4/ (+ multiset.py from legacy/index_v1.py)
+src/zanzibar/setengine/        from setengine/
+src/zanzibar/connectedstore/   from connectedstore/
+tests/  formal/  benchmarks/  scripts/  docs/  tasks/   unchanged, outside the package
+```
+
+- **Lean stays in `formal/` (REASONED, user agreed).** It is the evidence, not the library. A
+  wheel ships Python only, and the Lean build needs elan and mathlib. `formal/conformance/`
+  is a test suite of the library, like `tests/`. `tests/oracle.py` stays in `tests/`
+  because its independence contract forbids importing the library.
+- **How the gate finds the code.** `pytest.ini` gets `pythonpath = src`, and `verify.sh`
+  python invocations get `src` on `PYTHONPATH`. So the gate tests THIS checkout, in any
+  worktree, with nothing installed. Separately, `pip install -e .` into the conda env makes
+  benchmarks, probes and prototypes work without path hacks.
+  `tests/conftest.py` refuses to run if `zanzibar.__file__` is not under `<rootdir>/src/`,
+  which catches a stale install shadowing the tree. It gets a sabotage check.
+- Subpackage names: `graphindex` (pairs with `setengine`). `connectedstore` is kept: `store`
+  would read as the `Store` table class.
+
+### 5.2 Name map
+
+| old | new | table (old -> new) |
+|---|---|---|
+| `StoreV4` | `Store` | `store_v4` -> `store` |
+| `NodeV4` | `Node` | `node_v4` -> `node` |
+| `EdgeV4` | `Edge` | `edge_v4` -> `edge` |
+| `ResidueV1` | `Residue` | `residue_v1` -> `residue` |
+| `ResidueRefV1` | `ResidueRef` | `residue_ref_v1` -> `residue_ref` |
+| `DeltaOutboxV1` | `DeltaOutbox` | `delta_outbox_v1` -> `delta_outbox` |
+| `TupleV1` | `RelationTuple` (not `Tuple`: `typing.Tuple`) | `tuple_v1` -> `relation_tuple` |
+| `SchemaV4` | `SchemaRecord` | `schema_v4` -> `schema_record` (SCHEMA is an SQL keyword) |
+| `TupleLogV1` | `TupleLog` | `tuple_log_v1` -> `tuple_log` |
+| `IndexCursorV1` | `IndexCursor` | `index_cursor_v1` -> `index_cursor` |
+| `NodeV2` | deleted (dead) | -- |
+
+Constraint and index names follow their table (for example `node_v4_unique_constraint`
+becomes `node_unique_constraint`). The existing aliases `Node = NodeV4` etc. are deleted.
+**Unchanged:** `Filter`, `Rule`, `RewriteFilter`, `RelationalTriplePattern` (golden reprs) and
+`LookupResult`.
+
+| old module path | new |
+|---|---|
+| `zanzibar_utils_v1.py` / `zanzibar_utils_v1` | `src/zanzibar/schema.py` / `zanzibar.schema` in step 1, then the package in step 2 |
+| `index_v4/` / `index_v4` | `src/zanzibar/graphindex/` / `zanzibar.graphindex` |
+| `setengine/` / `setengine` | `src/zanzibar/setengine/` / `zanzibar.setengine` |
+| `connectedstore/` / `connectedstore` | `src/zanzibar/connectedstore/` / `zanzibar.connectedstore` |
+| `legacy/index_v1.py::MultiSet` | `src/zanzibar/graphindex/multiset.py::MultiSet` |
+| `tests/test_index_v4{,_core,_models}.py` | `tests/test_graphindex{,_core,_models}.py` |
+
+### 5.3 Split of the schema module (step 2)
+
+| module | from §3 F | notes |
+|---|---|---|
+| `schema/errors.py` | S1 + the S5 error types | leaf |
+| `schema/ast.py` | S5 AST + `_iter_directs`, `_iter_ttus` (S7) + `_directs_only` (S9) | breaks the S7<->S9 cycle |
+| `schema/rules.py` | S2 + S3 + S4 + `_restriction_pattern`, `_rewrite_rule`, `_assert_ttu_parent_types_cover_admission` (S9) | breaks the S9<->S11 cycle |
+| `schema/parser.py` | S6 + S7 | |
+| `schema/boolean.py` | S11 | |
+| `schema/compile.py` | S8 + S9 + S10 + S12 | imports `boolean` one way |
+| `schema/json_frontend.py`, `schema/unparse.py`, `schema/reports.py` | S13, S14, S15+S16 | |
+| `schema/__init__.py` | re-exports the names product code and tests import today | private names are imported from their submodule |
+
+The exact symbol -> module table is generated from the AST at split time and recorded here.
+
+### 5.4 Execution: four commits, the full ten-phase gate green before each
+
+**Rules for every step (REASONED).**
+- No shims at old paths.
+- No behaviour change inside a move or rename commit.
+- Rewrites go through one tracked byte-preserving script, `scripts/tk120_rename.py`. It
+  keeps CRLF/LF, applies the path form BEFORE the dotted form, and refuses an unexpected
+  hit count. It is deleted when `TK120` closes.
+- **Not rewritten:** FROZEN docs, ACTIVE-PLAN docs, the history dirs, closed task rows,
+  this doc and its row. They keep the old names; §5.2 is their key. ACTIVE-PLAN docs get
+  one dated pointer line at the top instead.
+
+1. **Commit A: delete `legacy/`.**
+   - Move `MultiSet` into `index_v4/multiset.py`.
+   - Delete `NodeV2` and the `legacy.index_v2` import.
+   - Delete `legacy/`, the V1/V2/V3 polyfills and the `v3` backend.
+   - Lower `MIN_TESTS_ALL` by exactly 28, with provenance.
+   - Update `CLAUDE.md` Layout.
+2. **Commit B: package move and renames.** This covers the class, table and module renames,
+   `pyproject.toml`, `pythonpath`, and the conftest guard.
+   - Census first: the bare `setengine`/`connectedstore` tokens were never censused for
+     non-module uses (local variables, attributes, prose), so classify those contexts
+     before rewriting.
+   - **Hand-fixed after the script:**
+     - `tests/test_reads.py` SQL substring filters: `'edge'` would match far more than
+       `'edge_v4'` did, so they go to word-bounded patterns.
+     - The `foreign_keys='[EdgeV4.subject_id]'` strings.
+     - The alias lines and `__all__` duplicates.
+     - `caplog` logger names.
+     - `_GUARDED_MODULES`.
+     - `verify.sh`'s `PYTHONPATH`.
+   - **Pins:** `claim_rot.py --generate` only after a check that every changed pinned body
+     equals its old body with the name map applied. Regenerate the `doc_counts` block for
+     the renamed test files.
+   - **PostgreSQL leg** (`scripts/pg_local.sh`) after this commit's gate, because the tables
+     changed.
+3. **Commit C: split `schema.py` into `schema/`** (5.3). Moves only; bodies are identical,
+   so the pin rows only re-key.
+   - The fixed-file scanners (`test_refused_shape_comments.py::FILES`/`MIN_HEADERS`,
+     `test_tk116::_SRC`, `test_reg15::_GUARDED_MODULES`, `genswarm` `getsource`) change to
+     package globs with a nonzero floor, so a new file cannot escape them. Sabotage each.
+   - `test_grid_independence`'s `__module__` expectation follows `parse_schema_ast`.
+4. **Commit D: prose sweep and close.** Covers LIVING docs, `CLAUDE.md`, `README.md`, the
+   open task rows, and the ACTIVE-PLAN pointer lines. Then delete the rename script, close
+   `TK120`, write the session log and banner, run the `lean` phase, and commit.
+
+Each of B and C ends with a `git grep` for the old names outside the excluded paths. The
+expected result is zero hits.
 
 <!-- END -->

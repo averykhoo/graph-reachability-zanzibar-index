@@ -68,8 +68,6 @@ connectedstore/          the composed system (imports both backends, never impor
                          apply step), ConnectedStore (sync/async schedules,
                          freshness-gated reads, refresh(), catch_up()),
                          build_index (offline bootstrap)
-legacy/                  superseded v1-v3, runnable documentation only (v1.MultiSet and
-                         v2.Node are still imported by live code)
 tests/
   oracle.py              INDEPENDENT reference oracle: own parser, stdlib only,
                          pointwise, boolean-aware. Ground truth for semantics.
