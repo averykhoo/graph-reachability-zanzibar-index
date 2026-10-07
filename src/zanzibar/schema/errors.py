@@ -142,9 +142,15 @@ def is_valid_identifier(value) -> bool:
 
 
 def _require(value, label: str, *, allow_star: bool = False, allow_ellipsis: bool = False) -> None:
-    if allow_ellipsis and (value is Ellipsis or value == '...'):
+    # The sentinels are admitted only as the exact ``str`` (or ``Ellipsis``), never by
+    # ``==`` alone: a non-str whose ``__eq__`` matched ``'*'`` / ``'...'`` used to pass
+    # here and reach the database driver as an unbindable parameter (TK125, 2026-10-08,
+    # pinned by tests/test_tk125_write_field_types.py). ``None`` is NOT the bare
+    # predicate on a WRITE -- ``norm_pred``'s ``None -> '...'`` is read-side leniency.
+    is_str = isinstance(value, str)
+    if allow_ellipsis and (value is Ellipsis or (is_str and value == '...')):
         return
-    if allow_star and value == '*':
+    if allow_star and is_str and value == '*':
         return
     if not is_valid_identifier(value):
         extra = ''.join([" or '*'" if allow_star else '', " or '...'" if allow_ellipsis else ''])
@@ -159,13 +165,33 @@ def validate_write_identifiers(subject_predicate, subject_type, subject_name,
     """Reject any out-of-charset identifier on a tuple write (shared by both backends).
 
     Types and relations must be plain identifiers; names may be the wildcard ``'*'``; the
-    subject predicate may be the bare ``'...'`` (or ``Ellipsis``)."""
+    subject predicate may be the bare ``'...'`` (or ``Ellipsis``). Every field must be a
+    ``str`` (``Ellipsis`` aside): ``None``, ``int``, ``bytes`` are refused in EVERY
+    field, the subject predicate included (TK125) -- call this on the RAW argument,
+    before ``norm_pred``, which would turn a ``None`` predicate into ``'...'``."""
     _require(subject_type, 'subject_type')
     _require(relation, 'relation')
     _require(object_type, 'object_type')
     _require(subject_name, 'subject_name', allow_star=True)
     _require(object_name, 'object_name', allow_star=True)
     _require(subject_predicate, 'subject_predicate', allow_ellipsis=True)
+
+
+def validate_store_id(store_id, label: str = 'store_id') -> None:
+    """A store id must be a ``str`` with at least one non-whitespace character (TK127
+    follow-up, 2026-10-08, pinned by ``tests/test_tk127_store_id.py``).
+
+    Called first by every constructor that takes a store id and can persist under it
+    (``ConnectedStore``, ``TupleSource``, ``SetEngine``, ``ReachabilityIndex``) and by
+    ``save_schema``, so the refusal precedes any statement. ``None`` used to reach the
+    NOT NULL ``store_id`` column as a raw ``IntegrityError``; ``5``, ``b'x'``, ``''`` and
+    ``' '`` were accepted as ids no caller meant. The identifier CHARSET is deliberately
+    NOT applied: a store id is the caller's key (``tenant:acme``, a UUID), not a tuple
+    field. ``AdmissionRejected`` because it is a correct refusal of the caller's input,
+    never a sign of a broken store."""
+    if not isinstance(store_id, str) or not store_id.strip():
+        raise AdmissionRejected(
+            f'invalid {label} {store_id!r}: must be a str with a non-whitespace character')
 
 
 def validate_node_identifiers(predicate, entity_type, entity_name) -> None:

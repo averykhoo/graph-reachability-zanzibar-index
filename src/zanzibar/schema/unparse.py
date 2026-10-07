@@ -9,8 +9,9 @@ from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction
 
 def unparse_schema_ast(ast: SchemaAST) -> str:
     """Render an AST back to DSL text such that ``parse_schema_ast(unparse_schema_ast(a))
-    == a``. Operator children inside chains are parenthesized (the grammar's `unit`);
-    leaves render bare."""
+    == a`` for every AST a parse can produce. The empty AST is not one of them: it renders
+    as ``""``, which the parser refuses (`TK124`). Operator children inside chains are
+    parenthesized (the grammar's `unit`); leaves render bare."""
 
     def render_restriction(r: Restriction) -> str:
         s = r.type + (':*' if r.wildcard else '')

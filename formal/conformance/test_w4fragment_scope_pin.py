@@ -92,6 +92,21 @@ is then `computedOrDirect` (a `.ttu` leaf inside a now-derived def), NOT `term`,
 Python refusal. Only the two corners where the containing relation stays UNTAINTED
 (undeclared tupleset; mixed member types) reach the raise. The row below says that.
 
+**2026-10-08 (TK126), dated note -- the probe lines above are as-of 2026-08-31 and are not
+edited.** `term.NoTtuTarget/mixed-member-types` is now ADMITTED: Python's I5 checks key on
+`(type, relation)` (the TTU's produced subject type is the admitted tupleset type, `team`,
+whose `member` is plain). Lean's `NoTtuTarget` is still name-keyed, so the probe still fails
+`term` -- served, outside the fragment. The undeclared-tupleset corner is still RAISED (at
+parse, ASK-1). `w4_scope_probes.py::PYTHON_OUTCOME` carries the flip.
+
+**2026-10-08 (TK127 review follow-up), dated note: `term` is reclassified MIXED -> SILENT.**
+That undeclared-tupleset refusal is ASK-1's generic dangling-reference check, which refuses
+the same schema with a plain TTU target as well
+(`test_term_undeclared_tupleset_refusal_is_not_term_specific`). Both term-keyed raises are
+dead code from a checked parse. The classification counts move from 3 MIXED / 7 SILENT to
+2 / 8, and `test_a_loud_or_mixed_row_does_not_cite_dead_refusal_code` now makes a LOUD /
+MIXED row that cites an unreachable refusal red.
+
 ---------------------------------------------------------------------------
 SABOTAGE (mandatory; `docs/sabotage-procedure.md`)
 ---------------------------------------------------------------------------
@@ -406,9 +421,12 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "(NoTtuTarget) and never appears as the predicate of a stored userset subject "
             "(NoStoreSubjectR)."
         ),
-        "classification": "MIXED",
+        # MIXED -> SILENT 2026-10-08 (TK127 review follow-up of TK126); see the dated end
+        # of `note`. The evidence was `compiler.py::_validate_ttu_tuplesets`, now dead code
+        # from a checked parse (`test_a_loud_or_mixed_row_does_not_cite_dead_refusal_code`).
+        "classification": "SILENT",
         "reported_by": "src/zanzibar/schema/reports.py::w4_fragment_report",
-        "evidence": "src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets",
+        "evidence": "src/zanzibar/schema/boolean.py::compile_boolean_schema",
         "note": (
             "LOUD sub-case, and it is NARROWER than it looks: `_validate_ttu_tuplesets` "
             "raises `UnsupportedByGraphIndex` for a TTU onto a derived relation only while "
@@ -420,7 +438,25 @@ W4FRAGMENT_SCOPE: dict[str, dict[str, str]] = {
             "raise. The `NoStoreSubjectR` half is fully SILENT: a stored subject whose "
             "predicate is a derived relation was ADMITTED (added=True). Since ASK-1 "
             "(2026-09-26) the undeclared-tupleset corner is refused EARLIER, at parse, "
-            "by `_validate_ast_consistency` (a dangling reference); it is still RAISED."
+            "by `_validate_ast_consistency` (a dangling reference); it is still RAISED. "
+            "2026-10-08 (TK126): the mixed-member-types corner is now ADMITTED -- both I5 "
+            "checks (`_validate_ttu_tuplesets`, `compile_boolean_schema`) are keyed on "
+            "(type, relation), so a TTU whose admitted parent types carry only a PLAIN "
+            "same-named relation is served (`w4_scope_probes.py::PYTHON_OUTCOME`; evidence "
+            "`tests/test_tk126_ttu_target_name_collision.py`). It is SILENT for `term`, "
+            "which stays NAME-keyed in Lean: served-but-outside-`W4Fragment`, and "
+            "`w4_fragment_report` says so. The row stays MIXED on the undeclared corner. "
+            "2026-10-08 (TK127 review follow-up), RECLASSIFIED SILENT: the undeclared "
+            "corner is refused by ASK-1's GENERIC dangling-reference check "
+            "(`src/zanzibar/schema/parser.py::_validate_ast_consistency`), which refuses the "
+            "same schema with a PLAIN target too, so it is not `term`'s refusal "
+            "(`test_term_undeclared_tupleset_refusal_is_not_term_specific`). Both "
+            "term-keyed raises are unreachable from a checked parse "
+            "(`tests/test_tk116_oracle_only_setengine.py::UNREACHABLE`). A derived cycle "
+            "through a TTU target is refused (`CyclicDerivedDependency`), but that is the "
+            "stratification refusal, counted for no field (`computedOrDirect` is SILENT on "
+            "the same reasoning). What `term` excludes is now always SERVED: the "
+            "type-keyed I5 check in `compile_boolean_schema` is where it is admitted."
         ),
     },
 }
@@ -701,13 +737,83 @@ def test_mixed_and_loud_rows_are_the_minority_and_that_is_the_finding():
         f"refuse every schema outside that field, say so here and in the field's row -- "
         f"it is a genuine strengthening of what a reader can rely on."
     )
-    assert counts["MIXED"] == 3, (
-        f"expected exactly 3 MIXED rows (wsBare, bareStar, term), got {counts}"
+    # 2026-10-08 (TK127 review follow-up): 3 MIXED / 7 SILENT -> 2 / 8. `term` lost its
+    # LOUD half when TK126 made both term-keyed refusals unreachable (see its row).
+    assert counts["MIXED"] == 2, (
+        f"expected exactly 2 MIXED rows (wsBare, bareStar), got {counts}"
     )
-    assert counts["SILENT"] == 7, (
-        f"expected exactly 7 SILENT rows, got {counts}"
+    assert counts["SILENT"] == 8, (
+        f"expected exactly 8 SILENT rows, got {counts}"
     )
     assert sum(counts.values()) == W4FRAGMENT_FIELD_COUNT
+
+
+_TK116 = Path(__file__).resolve().parents[2] / "tests" / "test_tk116_oracle_only_setengine.py"
+
+
+def _unreachable_refusal_functions() -> set[str]:
+    """The function names of `tests/test_tk116_oracle_only_setengine.py::UNREACHABLE`
+    (graph-refusal raise sites a CHECKED parse cannot reach), read from the source with
+    `ast` so this module does not import that heavy test module."""
+    import ast as _ast
+    tree = _ast.parse(_TK116.read_text(encoding="utf-8"))
+    for node in tree.body:
+        target = getattr(node, "target", None) or (getattr(node, "targets", None) or [None])[0]
+        if isinstance(target, _ast.Name) and target.id == "UNREACHABLE":
+            entries = _ast.literal_eval(node.value)
+            return {label.split(":", 1)[0].strip() for label, _reason in entries}
+    raise AssertionError(f"UNREACHABLE not found in {_TK116}")
+
+
+def test_a_loud_or_mixed_row_does_not_cite_dead_refusal_code():
+    """TK127 review follow-up (2026-10-08). A LOUD / MIXED row's `evidence` is the refusal a
+    reader is told they will hit. If that function is one whose graph refusals a checked
+    parse can no longer reach (TK116's `UNREACHABLE`), the pointer leads to dead code and
+    the LOUD half it vouches for is gone. This happened: after TK126 the `term` row still
+    cited `compiler.py::_validate_ttu_tuplesets` while `UNREACHABLE` listed that very raise
+    site, and every test here stayed green because they only check the field's FORMAT.
+
+    LIMIT: matched by function name. A function with one reachable and one unreachable
+    graph refusal would be flagged; none exists today, and the fix would be to cite the
+    reachable one by a more specific symbol.
+
+    Observed red on the pre-fix row (2026-10-08, literal)::
+
+        AssertionError: term (MIXED) cites src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets,
+        whose graph refusals a checked parse cannot reach (tests/test_tk116_oracle_only_setengine.py::UNREACHABLE).
+        Re-adjudicate the row: cite a reachable refusal, or reclassify it.
+        1 failed, 1 passed
+    """
+    dead = _unreachable_refusal_functions()
+    assert "_validate_ttu_tuplesets" in dead, dead   # anti-vacuity: the reader still parses
+    for field, row in sorted(W4FRAGMENT_SCOPE.items()):
+        if row["classification"] == "SILENT":
+            continue
+        fn = row["evidence"].rpartition("::")[2].rpartition(".")[2]
+        assert fn not in dead, (
+            f"{field} ({row['classification']}) cites {row['evidence']}, whose graph "
+            f"refusals a checked parse cannot reach ({_TK116.relative_to(_TK116.parents[1]).as_posix()}"
+            f"::UNREACHABLE). Re-adjudicate the row: cite a reachable refusal, or reclassify it.")
+
+
+def test_term_undeclared_tupleset_refusal_is_not_term_specific():
+    """Why `term` is SILENT since 2026-10-08, not MIXED: its one remaining RAISED probe,
+    `term.NoTtuTarget/undeclared-tupleset`, is refused by ASK-1's GENERIC dangling-reference
+    check (`src/zanzibar/schema/parser.py::_validate_ast_consistency`), which refuses the
+    same schema just as loudly when its TTU target is a PLAIN relation, i.e. when it does not
+    violate `term` at all. A refusal that ignores the field is not that field's LOUD half."""
+    from formal.conformance.w4_scope_probes import SCOPE_PROBES
+    from zanzibar.schema import parse_openfga_schema
+
+    derived = SCOPE_PROBES["term.NoTtuTarget/undeclared-tupleset"][0]
+    plain = derived.replace("define member: [user] but not banned", "define member: [user]")
+    assert plain != derived
+    msgs = []
+    for text in (derived, plain):
+        with pytest.raises(ValueError, match="undeclared relation") as ei:
+            parse_openfga_schema(text)
+        msgs.append(str(ei.value))
+    assert msgs[0] == msgs[1], msgs
 
 
 # --------------------------------------------------------------------------- #

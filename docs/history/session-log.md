@@ -32,6 +32,54 @@ from here.
 
 ---
 
+## 2026-10-08 — `TK127`: the 0.0.2 install trial's three bugs fixed (`TK124`/`TK125`/`TK126`); 0.0.3
+
+rows: TK124, TK125, TK126 (closed), TK127 (open until the release is confirmed), TK132, TK133, TK134 (new)
+
+`task lint: clean (13 checks, 251 task file(s) parsed), 29 warning(s)`
+
+`read: board + note` -- same session as `2026-10-07d`; the user named `TK127`.
+
+**One workflow fixed the three trial bugs:** three sequential implementers, three adversarial
+reviewers (small fixes, `TK126` equivalence, `TK126` assurance) and one fixer. The reports
+are transcribed in [`docs/history/tk127-fixes-2026-10-08.md`](../tk127-fixes-2026-10-08.md).
+- `TK126` used design (a) from the scout doc. The I5 checks now key on `(type, relation)`,
+  and variants B, C and D are served.
+- `TK124` refuses a schema that declares no type, or no relation, in both parsers and the
+  JSON front end.
+- `TK125` refuses a non-str write field on every backend.
+
+The reviewers found three more problems, and the fixer closed all three:
+- a relationless schema (`type user`) still bricked a store;
+- `store_id` was never validated;
+- the hypothesis campaign never drew a `TK126`-new shape. It now draws 9 of 180.
+
+The fixer also reclassified the W4 `term` row from MIXED to SILENT, reasoning recorded on
+`TK126`. Follow-ups: `TK132` (Lean `isPure` faithful, LATER), `TK133` (`term` widening,
+SOMEDAY), `TK134` (JSON front end leaks raw errors on malformed models, LATER).
+
+**First-hand (2026-10-08), against `src/`:**
+- The trial's B and D schemas are served on `ConnectedStore`: alice True, banned bob False.
+- `""`, header-only and `type user` are refused, and the same store id then opens with a
+  real schema.
+- `add_tuple(None, ...)` raises `AdmissionRejected`.
+- Every claim-rot-flagged `CORRESPONDENCE.md` row (213, 249, 371, 385, 442, 572,
+  §7.1) was re-read before `claim_rot.py --generate`.
+
+**PostgreSQL leg** (`scripts/pg_local.sh`, stopped afterwards):
+- `test_postgres_ha.py` + `test_tk127_store_id.py` + `test_tk125_write_field_types.py`: `355 passed`.
+- The concurrency and multi-instance modules: `17 passed, 3 skipped`.
+
+**Fuzz sweep** (`--hypothesis-seed`, seeds 7 19 31 53 71 97):
+- `tests/test_hypothesis.py`: `32 passed` per seed, 61-93 s.
+- `tests/test_lookup_hypothesis.py`: `17 passed` per seed, 32-37 s.
+
+Version 0.0.3 with a `CHANGELOG.md` entry.
+
+Still owed: none.
+
+---
+
 ## 2026-10-07d — context housekeeping `TK128`-`TK131` closed: caps on `CLAUDE.md` / `HANDOFF.md`, prunes
 
 rows: TK128, TK129, TK130, TK131 (all closed), TK126 (scouted)

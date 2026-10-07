@@ -79,6 +79,58 @@ def _assert_ttu_parent_types_cover_admission(compiled, rules_and_filters: list) 
                     f'suspect _member_types, not this check.')
 
 
+def _rule_subject_types_fn(ast: SchemaAST, rules_and_filters: list
+                           ) -> Callable[[Rule], 'frozenset[str] | None']:
+    """For the I5 subject check in ``compile_boolean_schema`` (TK126, 2026-10-08): the
+    entity types a TTU rewrite Rule can put on the SUBJECT of the triple it produces, or
+    ``None`` when they cannot be pinned (the caller then falls back to the NAME test).
+
+    Why this is exact. ``rules._rewrite_rule``'s TTU then-pattern pins no subject type,
+    and ``EntityPattern.replace`` keeps the matched triple's, so the produced subject
+    type is the type of the triple carrying the if-pattern relation. Rules run on the
+    forward chain of ONE admitted raw tuple (``RuleSet.apply``), so when only plain
+    Filters feed that relation (no Rule rewrites into it -- true of every tupleset since
+    TK106 made tuplesets direct-only), the produced types are exactly the subject types
+    those Filters admit.
+
+    Why the Filters and not ``_member_types`` alone. ``_member_types`` is the function
+    RC1 got wrong, and ``compute_taint`` is built on it; a guard that derived its types
+    from it would move together with the bug it exists to catch (the MIRROR instrument,
+    ``docs/sabotage-procedure.md``; same reasoning as
+    ``_assert_ttu_parent_types_cover_admission``). The two are UNIONED: an
+    over-approximation only makes the guard stricter.
+
+    ``None`` (name-test fallback) when the relation is fed by a Rule or a leaf-routing
+    RewriteFilter, or when no type is found at all (an undeclared tupleset on a
+    hand-built / unchecked AST): the defensive behaviour must not weaken where the types
+    are not pinned by admission.
+    """
+    admitted: dict[tuple[str, str], set[str]] = {}
+    unpinned: set[tuple] = set()
+    for rf in rules_and_filters:
+        if isinstance(rf, RewriteFilter):
+            unpinned.add((rf.if_pattern.object_type, rf.if_pattern.relation))
+        elif isinstance(rf, Filter):
+            p = rf.if_pattern
+            if p.subject_type is None:
+                unpinned.add((p.object_type, p.relation))
+            else:
+                admitted.setdefault((p.object_type, p.relation), set()).add(p.subject_type)
+        elif isinstance(rf, Rule) and rf.then_pattern is not None:
+            then_t = rf.then_pattern.object_type or rf.if_pattern.object_type
+            unpinned.add((then_t, rf.then_pattern.relation))
+
+    def types(rule: Rule) -> 'frozenset[str] | None':
+        key = (rule.if_pattern.object_type, rule.if_pattern.relation)
+        if key[0] is None or key in unpinned:
+            return None
+        out = set(admitted.get(key, ()))
+        out |= _member_types(key[0], key[1], ast, frozenset())
+        return frozenset(out) or None
+
+    return types
+
+
 # ===========================================================================
 # Boolean derived-predicate compilation (boolean spec §3)
 # ===========================================================================
@@ -710,6 +762,7 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
     # asserts (blind-audit: last line of defense for I5, must survive python -O).
     derived = compiled.derived_families
     derived_predicates = {r for (_t, r) in derived}
+    rule_subject_types = _rule_subject_types_fn(ast, rules_and_filters)
     for rf in rules_and_filters:
         if isinstance(rf, RewriteFilter):
             o_t = rf.if_pattern.object_type
@@ -723,10 +776,32 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
             then_t = rf.then_pattern.object_type or rf.if_pattern.object_type
             if (then_t, then_rel) in derived:
                 raise ValueError(f'Rule rewrites into a derived-public family: {rf}')
+            # A TTU rewrite Rule (the only Rule kind that sets a str subject predicate,
+            # `rules._rewrite_rule`) produces the subject node (T, name, sp), where T is
+            # the stored tupleset tuple's subject type. I5 forbids that node being
+            # derived-public, i.e. (T, sp) in `derived`. Keyed on (type, relation) since
+            # TK126 (2026-10-08): the NAME test (`sp in derived_predicates`) refused the
+            # OpenFGA idiom where another type's same-named relation is boolean. The
+            # types are read off the emitted Filters (independent of `_member_types`,
+            # see `_rule_subject_types_fn`); when they are unknown, the NAME test stays.
             sp = rf.then_pattern.subject_predicate
-            if isinstance(sp, str) and sp in derived_predicates:
-                raise ValueError(
-                    f'Rule then-pattern carries a derived subject predicate: {rf}')
+            if isinstance(sp, str):
+                types = rule_subject_types(rf)
+                if types is None:
+                    bad = sorted(t for (t, r) in derived if r == sp)
+                else:
+                    bad = sorted(t for t in types if (t, sp) in derived)
+                if bad:
+                    ip = rf.if_pattern
+                    raise ValueError(
+                        f'internal compiler invariant (I5 exclusivity, boolean spec '
+                        f'§3.3): the rewrite rule from {ip.object_type}#{ip.relation} '
+                        f'into {then_t}#{then_rel} carries a derived subject predicate '
+                        f'{sp!r}: it would produce subject nodes on the derived '
+                        f'relation(s) {", ".join(f"{t}#{sp}" for t in bad)} through a '
+                        f'plain rewrite. A checked parse cannot reach this (compute_taint '
+                        f'taints every relation whose TTU reaches a derived target); it '
+                        f'means a hand-built/unchecked AST or a taint-analysis bug.')
 
     _assert_ttu_parent_types_cover_admission(compiled, rules_and_filters)
 

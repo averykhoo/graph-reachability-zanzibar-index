@@ -519,7 +519,13 @@ models** — they are the two endpoints of a single memoization spectrum:
 **Identifier validation.** Surrogate identities (entity types, entity names, relations)
 are constrained on every write — in *both* backends — to a strict, delimiter-free charset
 `[A-Za-z0-9_./@+=-]` (1–256 chars; a name may also be the wildcard `*`, a subject
-predicate the bare `...`). This keeps DSL/parsing delimiters, whitespace, quotes, control
+predicate the bare `...` or `Ellipsis`). Every field of a write must be a `str`: `None`,
+numbers and `bytes` are refused with `AdmissionRejected` in every field, the subject
+predicate included (reads stay lenient and still treat a `None` predicate as `...`).
+A store id must be a `str` with a non-whitespace character, refused with
+`AdmissionRejected` at construction otherwise; it is the caller's key, so the charset
+above does not apply to it (`tenant:acme` is fine).
+This keeps DSL/parsing delimiters, whitespace, quotes, control
 bytes, and injection payloads out of identity strings entirely (SQL is parameterized
 regardless, so this is defense-in-depth). Internal ids stay strictly numeric, decoupled
 from these strings.

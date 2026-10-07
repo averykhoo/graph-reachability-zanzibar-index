@@ -42,6 +42,7 @@ from sqlalchemy import update
 from sqlmodel import Session, select
 
 from zanzibar.graphindex.core import is_sqlite, take_row_write_lock
+from zanzibar.schema import validate_store_id
 from zanzibar.setengine import SetEngine
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 
@@ -238,6 +239,7 @@ class TupleSource:
         # SERIALIZABLE escalation ran entirely through this constructor, never
         # touching ``ConnectedStore``. Cheap and idempotent: a no-op on SQLite, and
         # ``ConnectedStore`` calling it too costs one extra dialect check.
+        validate_store_id(store_id)  # TK127 follow-up: before any statement
         assert_read_isolation(session)
         self.session = session
         self.store_id = store_id

@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-10-07b
-moved: 2026-10-07b
-updated: 2026-10-07b
+moved: 2026-10-08
+updated: 2026-10-08
 closed:
 ---
 
@@ -66,3 +66,7 @@ push"; recipe in `.github/workflows/publish.yml`'s header):
   release pipeline was built and what its first runs showed.
 
 ## Log
+
+### 2026-10-08
+
+All three children closed 2026-10-08 (TK124, TK125, TK126) plus the review follow-ups (relationless schema, store_id). Version 0.0.3 + CHANGELOG. Evidence: docs/history/tk127-fixes-2026-10-08.md; session-log 2026-10-08 (first-hand repros, PG leg, 6-seed fuzz). Next: full gate, commit, then the release procedure above.

@@ -2620,7 +2620,15 @@ theorem lrStD_no_ttu_rule :
     REFUSES to compile this shape (its exclusivity pass runs the same type-agnostic name
     test), so this fixture is a MODEL-level probe and not a corpus schema. It is kept anyway,
     because it is the only shape that distinguishes the two taint tests, and the model is the
-    thing `ttuTargetsSatL_ne_of_noTtuTarget` is proved about. -/
+    thing `ttuTargetsSatL_ne_of_noTtuTarget` is proved about.
+
+    ⚠ 2026-10-08 (`TK126`): the refusal above is GONE. Python's exclusivity checks are now
+    `(type, relation)`-keyed, so this shape COMPILES and is served (it is the `SlXt` case of
+    `tests/test_tk126_ttu_target_name_collision.py`, oracle-checked). Python keeps the TTU
+    arm as a pure closure leaf (index 0, `banned` index 1) where this model drops it: the
+    pin above now describes the MODEL only, a recorded gap (`formal/CORRESPONDENCE.md` §7,
+    `TK126` entry), dead inside `W4Fragment` (`computedOrDirect` bans a `.ttu` in a derived
+    def). -/
 def SlXt : Schema :=
   ⟨[(("team", "z"), .direct [("user", BARE, false)]),
     (("team", "y"), .direct [("user", BARE, false)]),

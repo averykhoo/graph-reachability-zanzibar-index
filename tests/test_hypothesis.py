@@ -132,6 +132,14 @@ _TUPLESET_BODIES = {
     # = {} (also `docs/tk106-triage-2026-09-26.md` §3). Until 2026-09-26 this comment claimed it
     # was tainted ("a DERIVED predicate with storage leaves"); that was false.
     'union': Union((Direct((_R_DOC,)), Direct((_R_FOLDER,)))),
+    # TK127 review follow-up of TK126 (2026-10-08): the one body WITHOUT `doc`. Every other
+    # body admits doc, the type that owns every generated boolean relation, so a TTU's
+    # container was always tainted and the shapes TK126 newly serves (a TTU onto a PLAIN
+    # folder#r_k while doc#r_k is boolean, the OpenFGA "every type defines its own viewer"
+    # idiom) were never drawn: 0 in 3000 seeded draws. `_schema_ast` declares every name
+    # on folder for this body (ASK-1 refuses a TTU target undeclared on every tupleset
+    # type). Pinned by `test_schema_asts_draws_the_tk126_cell`.
+    'folder-only': Direct((_R_FOLDER,)),
 }
 _TUPLESET_KINDS = sorted(_TUPLESET_BODIES)
 
@@ -313,6 +321,12 @@ def _schema_ast(ch, allow_usersets: bool = True, tupleset_kind: str | None = Non
         # r0 is the one name every draw has (n >= 2) and the only one a TTU can target
         # from position 1, so it is the cell-bearing choice.
         ast[('folder', names[0])] = Direct((Restriction('user', '...', False),))
+    if 'doc' not in _restriction_types(ast[('doc', 'parent')]):
+        # 'folder-only' (TK127 follow-up): EVERY TTU target resolves on folder alone, so
+        # every name a TTU can target must be declared there (ASK-1). PLAIN on purpose: a
+        # plain folder#r_k beside a boolean doc#r_k is the TK126 cell.
+        for name in names:
+            ast[('folder', name)] = Direct((Restriction('user', '...', False),))
     return ast
 
 
@@ -496,7 +510,8 @@ def test_every_tupleset_kind_is_reachable_and_the_grid_queries_it():
     # non-direct bodies ('intersection', 'negonly-multitype', 'negonly-star') are refused at
     # parse time and left ``_TUPLESET_BODIES``; the five direct-only bodies remain. Zero
     # headroom on purpose -- dropping another body must be a reviewed edit here too.
-    assert len(_TUPLESET_KINDS) >= 5, _TUPLESET_KINDS
+    # RAISED 5 -> 6 on 2026-10-08 (TK127 follow-up): the 'folder-only' body, zero headroom.
+    assert len(_TUPLESET_KINDS) >= 6, _TUPLESET_KINDS
     for kind in _TUPLESET_KINDS:
         schema = _ts_probe_schema(kind)
         ast = parse_schema_ast(schema)
@@ -678,7 +693,9 @@ def test_schema_asts_draws_the_whole_tupleset_grammar():
         ['multitype', 'multitype-wildcard', 'union', 'wildcard'] -- the TTU tupleset is
         hardcoded again
     Measured 2026-09-26, the unsabotaged sweep draws every body: multitype 32,
-    multitype-wildcard 37, plain 44, union 35, wildcard 32 (of 180).
+    multitype-wildcard 37, plain 44, union 35, wildcard 32 (of 180). Re-measured 2026-10-08
+    after the 'folder-only' body (TK127): folder-only 27, multitype 31, multitype-wildcard
+    30, plain 39, union 26, wildcard 27.
     """
     seen = {}
     for ast in _sweep_schema_asts():
@@ -713,6 +730,9 @@ def test_schema_asts_draws_the_whole_tupleset_grammar():
 # 32/32, union 35/35, multitype-wildcard 19/37, wildcard 14/32; all 36 drops are the same
 # decision-15 star-tupleset family. Pinning every draw to ``'wildcard'`` gives 49 %, so the
 # floor still fires on the narrowest weakening. Floor UNCHANGED at 60 %.
+# RE-MEASURED 2026-10-08 after the 'folder-only' body (TK127 follow-up): 150/180 = 83 %.
+# Joins per body: folder-only 27/27, plain 39/39, multitype 31/31, union 26/26,
+# multitype-wildcard 15/30, wildcard 12/27. Floor UNCHANGED at 60 %.
 _SCHEMA_ASTS_FOUR_WAY_FLOOR = 0.60
 
 
@@ -761,6 +781,83 @@ def test_schema_asts_four_way_rate():
         f'only {joined}/{total} = {rate:.0%} of generated schemas compile for the graph '
         f'index (floor {_SCHEMA_ASTS_FOUR_WAY_FLOOR:.0%}); the campaign has drifted into '
         f'fuzzing 3-way. Reasons: {sorted(set(reasons))[:3]}')
+
+
+def _is_tk126_new(ast) -> bool:
+    """True when the PRE-TK126 name tests would have refused or crashed this schema, i.e.
+    it is one of the shapes TK126 (2026-10-08) newly serves: an UNTAINTED relation whose
+    TTU target NAME is tainted on some type (the old ``_validate_ttu_tuplesets`` test), or
+    a compiled TTU Rule whose string subject predicate NAMES a derived relation (the old
+    I5 guard in ``compile_boolean_schema``). The TK127 equivalence review's detector
+    (``.scratch/tk127-2026-10-08/tmp-tk126-equivalence/gen_census.py``), made a helper;
+    its control is ``test_tk126_new_detector_control``."""
+    from zanzibar.schema import compute_taint
+    from zanzibar.schema.rules import Rule
+    from zanzibar.schema.syntax import _iter_ttus
+    tainted = compute_taint(ast)
+    names = {r for (_t, r) in tainted}
+    if any(e.target_rel in names for k, x in ast.items() if k not in tainted
+           for e in _iter_ttus(x)):
+        return True
+    try:
+        rs = parse_openfga_schema(unparse_schema_ast(ast))
+    except (UnsupportedByGraphIndex, CyclicDerivedDependency):
+        return False
+    derived = {r for (_t, r) in rs.compiled.derived_families} if rs.compiled else set()
+    return any(isinstance(rf, Rule) and rf.then_pattern is not None
+               and isinstance(rf.then_pattern.subject_predicate, str)
+               and rf.then_pattern.subject_predicate in derived
+               for rf in rs.rules_and_filters)
+
+
+def test_tk126_new_detector_control():
+    """Instrument control for ``_is_tk126_new``: it flags every schema TK126 newly serves
+    (``tests/test_tk126_ttu_target_name_collision.py::SERVED`` minus ``C_cross``) and does
+    NOT flag ``C_cross``, which compiled before TK126 too."""
+    from tests.test_tk126_ttu_target_name_collision import SERVED
+    got = {n: _is_tk126_new(parse_schema_ast(s)) for n, s in SERVED.items()}
+    assert got.pop('C_cross') is False
+    assert got and all(got.values()), got
+
+
+# Provenance (2026-10-08, TK127 review follow-up of TK126). Before the 'folder-only' body
+# the deterministic sweep drew 0 TK126-new schemas in 180 (and 0 in 3000 seeded draws,
+# the reviewer's census), so the multi-seed fuzz sweep -- the gate's check for an algorithm
+# change -- never exercised TK126. Cause: every tupleset body admitted `doc`, the type that
+# owns every boolean relation, so the container was always tainted. Measured after:
+# 9 of 180 (all 9 on the 27 folder-only draws), and 242 in the 3000-draw census. Floor 5,
+# set below the measurement like the four-way floor.
+_TK126_NEW_FLOOR = 5
+
+
+def test_schema_asts_draws_the_tk126_cell():
+    """The generated-schema campaign DRAWS the shapes TK126 newly serves (a TTU whose
+    tupleset admits only types where the target is PLAIN, while a same-named relation is
+    boolean on another type), so the ParityMachine and the multi-seed fuzz sweep drive
+    them 4-way rather than relying on eight hand-written schemas.
+
+    RED FIRST (2026-10-08, written before the 'folder-only' body existed, placeholder
+    floor 1), literal::
+
+        AssertionError: only 0/180 generated schemas are TK126-new (floor 1); the campaign
+        no longer draws the shape TK126 serves
+        1 failed, 1 passed, 30 deselected in 0.52s
+
+    SABOTAGE on the fixed generator (``.scratch/tk127-2026-10-08/fix-tk127-sab-gen.py``,
+    anchor asserted, sha256-restored; this test + the whole-grammar + four-way tests):
+
+    * S1, the 'folder-only' entry deleted: ``1 failed, 2 passed`` --
+      ``AssertionError: only 0/180 generated schemas are TK126-new (floor 5)``. The
+      whole-grammar test stays green: its expectation is derived from the table.
+    * S2, folder declares only ``r0`` again (the pre-existing folder branch reused):
+      ``2 failed, 1 passed`` -- ``ValueError: doc#r2: 'r1' from 'parent' is an
+      undeclared relation on every tupleset type ['folder']`` (ASK-1), here and in the
+      four-way rate test.
+    """
+    hits = sum(_is_tk126_new(ast) for ast in _sweep_schema_asts())
+    assert hits >= _TK126_NEW_FLOOR, (
+        f'only {hits}/{_SWEEP_N * len(_SWEEP_SEEDS)} generated schemas are TK126-new '
+        f'(floor {_TK126_NEW_FLOOR}); the campaign no longer draws the shape TK126 serves')
 
 
 # ---------------------------------------------------------------------------

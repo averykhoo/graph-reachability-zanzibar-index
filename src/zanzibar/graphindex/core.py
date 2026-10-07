@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from zanzibar.graphindex.multiset import MultiSet
 from zanzibar.schema import (AdmissionRejected, ClosureFanoutExceeded,
                                PathCountExceeded,
+                               validate_store_id,
                                validate_write_identifiers,
                                validate_node_identifiers)
 from .invariants import InvariantViolation
@@ -291,6 +292,7 @@ class ReachabilityIndex:
 
     def __init__(self, session: Session, store_id: str, *,
                  max_closure_fanout: int | None = None):
+        validate_store_id(store_id)  # TK127 follow-up: before any statement
         self.session = session
         self.store_id = store_id
         # Per-write closure fan-out cap (ZT-P1-6a). Resolved once, here, so the value

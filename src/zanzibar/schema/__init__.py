@@ -28,6 +28,7 @@ from .errors import (
     UnsupportedByGraphIndex,
     is_valid_identifier,
     validate_node_identifiers,
+    validate_store_id,
     validate_write_identifiers,
 )
 from .syntax import (
@@ -168,6 +169,7 @@ __all__ = [
     'unparse_schema_ast',
     'unproven_extensions',
     'validate_node_identifiers',
+    'validate_store_id',
     'validate_write_identifiers',
     'w4_fragment_report',
     'wildcard_userset_restriction_shapes',

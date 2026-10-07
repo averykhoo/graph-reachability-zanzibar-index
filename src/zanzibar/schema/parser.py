@@ -262,8 +262,45 @@ def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
             # relation definitions (blind-audit S-3)
             raise ValueError(f'unrecognized schema line: {line!r}')
 
+    _validate_declares_a_type(seen_types, ast)
     _validate_ast_references(ast)
     return ast
+
+
+def _validate_declares_a_type(seen_types: set[str], ast: SchemaAST) -> None:
+    """A schema must declare at least one ``type`` and at least one relation (`TK124`,
+    2026-10-08; the relation half is the `TK127` review follow-up of the same day). Its
+    independent twin is `tests/oracle.py::_validate_declares_a_type`; the JSON front end's
+    are `json_frontend.py::_validate_json_declares_a_type` and
+    `json_frontend.py::_validate_json_declares_a_relation`. A relationless type BESIDE a type
+    that declares a relation still parses (``type user`` in any real schema), and so does a
+    schema without the ``model`` / ``schema 1.1`` header."""
+    # REFUSED SHAPE (TK124): a schema that declares no type -- ``""``, whitespace, comments
+    # only, or only the ``model`` / ``schema 1.1`` header lines.
+    # WHY: it parsed to an empty schema, and `ConnectedStore(session, "x", schema="")`
+    # persisted it write-once (`save_schema`). Every later write was then refused (no type
+    # restriction matches), re-opening the store with the intended schema raised
+    # `SchemaMismatch`, and there is no public way to drop a store, so the store id was lost.
+    # An empty schema file read from disk reaches this (0.0.2 install trial, B2).
+    # INSTEAD: declare the types, e.g. ``model\n  schema 1.1\ntype user\ntype doc\n
+    # relations\n    define viewer: [user]``.
+    if not seen_types:
+        raise ValueError(
+            'schema declares no type (empty, comments only, or only the model / schema '
+            'header); a store would persist it write-once and refuse every write')
+    # REFUSED SHAPE (TK124, TK127 follow-up): types but no relation anywhere -- ``type user``,
+    # or ``type user`` / ``type doc`` with empty ``relations`` blocks.
+    # WHY: the AST is keyed by ``(type, relation)``, so this parses to the SAME empty schema
+    # as ``""`` and bricks a store id the same way (persisted write-once, every write refused,
+    # re-opening with the intended schema raises `SchemaMismatch`). Reviewer probe
+    # 2026-10-08: ``ConnectedStore(s, "x", schema="type user")`` bootstrapped, then the id was
+    # lost.
+    # INSTEAD: declare the relations, e.g. ``type user\ntype doc\n  relations\n
+    # define viewer: [user]``.
+    if not ast:
+        raise ValueError(
+            'schema declares no relation (its types have no `define` lines); a store would '
+            'persist it write-once and refuse every write')
 
 
 def _validate_ast_references(ast: SchemaAST) -> None:

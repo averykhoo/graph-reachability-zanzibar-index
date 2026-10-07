@@ -84,6 +84,16 @@ _REFUSED = {
     'TK109/restriction-wild-space': _HEAD + "    define owner: [user: *]\n",
     'TK109/restriction-type-garbage': _HEAD + "    define owner: [group:)]\n",
     'TK109/restriction-userset-garbage': _HEAD + "    define owner: [group#mem*er]\n",
+    # TK124 (2026-10-08) -- a schema that declares no type. The fuzz cannot reach these
+    # (a 1-3 character edit of a seed never deletes every `type` line), so these named
+    # cases are the parity pin; `tests/test_tk124_empty_schema.py` has the rest.
+    'TK124/empty': "",
+    'TK124/comments-only': "# nothing here\n",
+    'TK124/header-only': "model\n  schema 1.1\n",
+    # TK127 follow-up (2026-10-08): types but no relation parse to the same empty AST and
+    # bricked a store the same way; this was an ACCEPT control until then.
+    'TK124/type-without-relations': "type user\n",
+    'TK124/types-with-empty-relations-blocks': "type user\n  relations\ntype doc\n  relations\n",
 }
 
 #: Accept controls: near-misses of the shapes above that BOTH parsers must accept with
@@ -99,6 +109,10 @@ _ACCEPTED = {
     'userset-ellipsis-is-bare': _HEAD + "    define owner: [group#...]\n",
     'space-before-colon': _HEAD + "    define owner : [user]\n",
     'header-lines-with-junk': "model x y\nrelations z\n" + _HEAD,
+    # TK124 controls: a schema without the model / schema header is not refused, and
+    # neither is a relationless type beside a type that declares a relation.
+    'TK124/no-header': _HEAD.replace("model\n  schema 1.1\n", ""),
+    'TK124/relationless-type-beside-a-relation': "type team\n" + _HEAD,
 }
 
 

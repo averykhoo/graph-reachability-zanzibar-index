@@ -27,6 +27,7 @@ from zanzibar.schema import (
     derive_schema_info,
     schema_filters,
     compile_ruleset,
+    validate_store_id,
     validate_write_identifiers,
     UnsupportedByGraphIndex,
     Direct,
@@ -319,6 +320,7 @@ class SetEngine:
                  object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
                  ops: SetOps = DEFAULT_SETOPS,
                  ruleset=None):
+        validate_store_id(store_id)  # TK127 follow-up: before any statement
         self.session = session
         self.store_id = store_id
         self.ops = ops
@@ -521,8 +523,12 @@ class SetEngine:
         ``TupleSource.add`` calls THIS: it is the sanctioned writer, and it appends
         the ``TupleLog`` row itself in the same transaction, so the property the
         guard protects (no ``RelationTuple`` change without a log row) still holds."""
+        # Validate the RAW predicate, THEN normalise (TK125): ``_norm_pred`` maps None
+        # to '...', so normalising first admitted a None predicate as bare -- accepted
+        # here, refused by the graph index, and logged as NULL by TupleSource.
+        validate_write_identifiers(subject_predicate, s_type, s_name,
+                                   relation, o_type, o_name)
         s_pred = _norm_pred(subject_predicate)
-        validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
         if self._tuple_present(s_pred, s_type, s_name, relation, o_type, o_name):
             return False                               # idempotent: septuple already present (in-memory, no SELECT)
         # one rewrite fan-out per accepted add: validation and application share it
@@ -551,8 +557,12 @@ class SetEngine:
     def _remove_tuple_direct(self, subject_predicate, s_type: str, s_name: str,
                              relation: str, o_type: str, o_name: str) -> None:
         """``remove_tuple`` past the log-governance guard -- see ``_add_tuple_direct``."""
+        # Validate the RAW predicate, THEN normalise (TK125): ``_norm_pred`` maps None
+        # to '...', so normalising first admitted a None predicate as bare -- accepted
+        # here, refused by the graph index, and logged as NULL by TupleSource.
+        validate_write_identifiers(subject_predicate, s_type, s_name,
+                                   relation, o_type, o_name)
         s_pred = _norm_pred(subject_predicate)
-        validate_write_identifiers(s_pred, s_type, s_name, relation, o_type, o_name)
         # Cheap in-memory existence test first; only fetch the ORM row (needed for
         # session.delete) when the tuple is actually present -- an absent tuple is
         # rejected without a DB round-trip.

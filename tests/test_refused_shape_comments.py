@@ -90,12 +90,21 @@ HEADER = 'REFUSED SHAPE'
 #: Re-keyed 2026-10-06 (TK120): the schema module's floor is now per PACKAGE, because it
 #: was split into submodules and a per-submodule floor would only track where code happens
 #: to sit. Same count as before the split (37, `header_blocks` summed over the glob).
-MIN_HEADERS = {LIB: 37, 'tests/oracle.py': 16, 'src/zanzibar/setengine/engine.py': 1}
+#: Re-measured 2026-10-08 after TK124 (+2 schema package: `parser.py::_validate_declares_a_type`
+#: and `json_frontend.py::_validate_json_declares_a_type`; +1 oracle: its
+#: `_validate_declares_a_type` twin): 39 / 17 / 1.
+#: Re-measured 2026-10-08 after the TK127 review follow-up (types but no relation: +2 schema
+#: package, the second block in `parser.py::_validate_declares_a_type` and
+#: `json_frontend.py::_validate_json_declares_a_relation`; +1 oracle, the second block in its
+#: twin): 41 / 18 / 1.
+MIN_HEADERS = {LIB: 41, 'tests/oracle.py': 18, 'src/zanzibar/setengine/engine.py': 1}
 #: In-scope raises the scope rule must keep seeing (anti-vacuity, replacing the per-file
 #: "no in-scope raise found" assert, which cannot hold per SUBMODULE). Measured 2026-10-06
 #: with `in_scope_raises`: 25 over the schema package (boolean 2, compiler 11,
-#: json_frontend 3, parser 9); the oracle keeps its old per-file >= 1.
-MIN_IN_SCOPE_RAISES = {LIB: 25, 'tests/oracle.py': 1}
+#: json_frontend 3, parser 9); the oracle keeps its old per-file >= 1. Re-measured
+#: 2026-10-08 after TK124: 27 (json_frontend 4, parser 10). Re-measured 2026-10-08 after
+#: the TK127 follow-up: 29 (json_frontend 5, parser 11).
+MIN_IN_SCOPE_RAISES = {LIB: 29, 'tests/oracle.py': 1}
 
 
 def _group(rel: str) -> str:

@@ -336,7 +336,21 @@ type-agnostic name test (`derived_predicates = {r for (_t, r) in derived}`; *"Ru
 then-pattern carries a derived subject predicate"*). Measured 2026-08-16 on
 `viewer` derived on `team`, untainted on `folder`, `parent: [folder]`: `ValueError`.
 So on the domain of schemas Python compiles, `derivedAnywhere` **is** the
-`parent_types` test for this purpose. -/
+`parent_types` test for this purpose.
+
+⚠ **2026-10-08 (`TK126`) — the backing above is GONE; the paragraph is kept as history.**
+Python's two I5 checks (`src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets` and the
+exclusivity loop in `src/zanzibar/schema/boolean.py::compile_boolean_schema`) are now keyed
+on `(type, relation)`: a TTU rule's produced subject type is the stored tupleset tuple's
+type, which admission pins to the tupleset's restriction types. So the shape above
+(`viewer` derived on `team`, untainted on `folder`, `parent: [folder]`) now COMPILES, and
+Python treats the TTU arm as PURE (a closure leaf, index-consuming) where this model's
+`derivedAnywhere` treats it as non-pure (no index). That is a recorded model/code gap
+(`formal/CORRESPONDENCE.md` §7, `TK126` entry), not an equivalence: it is unobservable
+inside `W4Fragment`, because `isPure`'s `.ttu` case is evaluated only on a derived def's
+subtree and `W4Fragment.computedOrDirect` bans `.ttu` there. Making this case use the
+tupleset's parent types (as `Spec/Stratify.lean::exprRefs` already does) is the follow-up
+row filed under `TK126`. -/
 
 /-- One persisted (index-consuming) leaf position of a derived def's plan tree.
     Python: the `alloc()` calls in `src/zanzibar/schema/boolean.py::_build_plan_tree` —
@@ -355,7 +369,10 @@ deriving Repr, DecidableEq, Inhabited
 
 /-- Does ANY declared type carry `R` as a derived relation? The model's stand-in for
     Python's frozen TTU `parent_types` taint test — and, per the section header, the
-    same type-agnostic name test `compile_ruleset`'s exclusivity pass itself uses. -/
+    same type-agnostic name test `compile_ruleset`'s exclusivity pass itself uses.
+    (2026-10-08, `TK126`: Python's exclusivity pass is now `(type, relation)`-keyed, so
+    that last clause is history; the gap is recorded in the section header and in
+    `formal/CORRESPONDENCE.md` §7.) -/
 def derivedAnywhere (S : Schema) (R : String) : Bool :=
   S.keys.any (fun k => k.2 == R && isDerived S k)
 
@@ -366,7 +383,11 @@ def isTaintedUserset (S : Schema) (r : Restriction) : Bool :=
 
 /-- **Purity** — `src/zanzibar/schema/boolean.py::_is_pure`: no boolean operator and no
     derived-relation reference anywhere in the subtree, so it can become ONE closure
-    leaf. `inter`/`excl` are never pure (Python returns `False` for both). -/
+    leaf. `inter`/`excl` are never pure (Python returns `False` for both).
+    ⚠ 2026-10-08 (`TK126`): the `.ttu` case uses the type-agnostic `derivedAnywhere`,
+    while Python's `_is_pure` asks over the tupleset's member types and, since `TK126`,
+    Python compiles the shapes where the two disagree. Dead inside `W4Fragment`
+    (`computedOrDirect`); recorded in `formal/CORRESPONDENCE.md` §7. -/
 def isPure (S : Schema) (ty : String) : Expr → Bool
   | .direct rs  => rs.all (fun r => !isTaintedUserset S r)
   | .computed R => !isDerived S (ty, R)

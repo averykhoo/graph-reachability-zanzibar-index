@@ -29,6 +29,52 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-10-08 — `TK126`: the graph's I5 exclusivity checks are keyed on `(type, relation)`, not on the relation NAME
+
+**What the spec says.** Boolean spec §3.3 (exclusivity, compile-time third): no plain
+Filter admits a derived-public relation and no rewrite Rule lands derived state on one.
+For a TTU rewrite rule that means its produced SUBJECT node must not be derived-public. The
+spec states the property per derived FAMILY, i.e. per `(type, relation)`.
+**What the code did until 2026-10-08:** both checks compared the TTU target's NAME with
+the derived relations on EVERY type (`src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets`,
+`UnsupportedByGraphIndex`; the exclusivity loop in
+`src/zanzibar/schema/boolean.py::compile_boolean_schema`, a bare `ValueError` dumping an
+internal `Rule`). So `viewer from parent` with `parent: [folder]` and a plain
+`folder#viewer` was refused whenever ANY type had a boolean `viewer` (variants B and C of
+the 0.0.2 install trial, `docs/pypi-trial-0.0.2-2026-10-07.md` sec 1 B1), and
+`define viewer: ([user] or viewer from parent) but not banned` (variant D) crashed BOTH
+backends, because `SetEngine.__init__` compiles the graph `RuleSet` and lets a bare
+`ValueError` surface. The set engine and OpenFGA serve all three.
+**What the code does since 2026-10-08:** a TTU rule's produced subject type is the stored
+tupleset tuple's type, which admission pins to the tupleset's restriction types; both
+checks now ask whether `(t, target)` is derived for such a `t`. The compiler check reads
+`_member_types`; the exclusivity guard reads the types off the emitted Filters (unioned
+with `_member_types`), so it is not a mirror of the function RC1 got wrong. When no type
+can be pinned (an undeclared tupleset on a hand-built AST, a relation fed by a Rule) both
+keep the old NAME test. From a checked parse neither can fire any more (`compute_taint`
+taints every relation whose TTU reaches a derived target), so both are pinned on hand-built
+inputs, with sabotage: `tests/test_tk126_ttu_target_name_collision.py`. The guard's message
+is now prose, not a `Rule` dump.
+
+**Why.** `CLAUDE.md` "Who decides": the graph refusing what the set engine serves is a
+gap to close, and the name key guarded nothing the `(type, relation)` key does not. The
+scout and the decision: `docs/tk126-ttu-target-boolean-name-2026-10-07.md` (design (a)).
+Evidence the graph matches the oracle on B, C, D and five neighbours (`D_nested`,
+`B_star`, `C_cross`, the retired TK116 witness, and the Lean probe `SlXt`): ParityEngine
+4-way with paranoia, `ConnectedStore` sync and async, `build_index` bulk and incremental,
+`rebuild_index`, and the lookup surfaces, all in the module above.
+**What it costs in proof scope.** B and C are served but outside `W4Fragment` (field
+`term`: Lean's `NoTtuTarget` is still name-keyed); D was already outside
+(`computedOrDirect`). The Lean leaf-allocation model's `.ttu` purity test
+(`GraphIndex/Leaf.lean::isPure` via `derivedAnywhere`) now differs from Python's on these
+shapes; that gap is recorded in `formal/CORRESPONDENCE.md` §7.1 (`TK126` entry) and is dead
+inside `W4Fragment`. Pins moved: `formal/conformance/w4_scope_probes.py::PYTHON_OUTCOME`
+(`term.NoTtuTarget/mixed-member-types` RAISED -> ADMITTED) and the TK116 witness
+`ttu-target-name-is-derived-elsewhere` (retired; its raise site is `UNREACHABLE`).
+Still refused, for a different reason: a tupleset that admits the boolean relation's OWN
+type (`parent: [folder, doc]`), a derived dependency cycle (`CyclicDerivedDependency`,
+boolean spec §1.9).
+
 ## 2026-10-04c — `TK117` (c): the ParityEngine grid always asks the queries at the written object
 
 **What the spec says.** Boolean spec sec 8.4: per op, *"assert check-parity over the

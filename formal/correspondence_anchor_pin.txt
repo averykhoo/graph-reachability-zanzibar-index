@@ -145,6 +145,7 @@ GraphIndex/LeafRules.lean::GraphState.writeRulesRaw	lean:def	ac5f5105cfd231d4
 GraphIndex/LeafRules.lean::LeafScope	lean:structure	719def31a1abf93d
 GraphIndex/LeafRules.lean::NoLeafSubjects	lean:def	7895aa0b6d325296
 GraphIndex/LeafRules.lean::SlBridgeWitness.writeRulesRaw_creates_the_bridge	lean:theorem-statement	882ceb346600ca51
+GraphIndex/LeafRules.lean::SlXt	lean:def	e3714072f839646b
 GraphIndex/LeafRules.lean::keyLeafRewrites	lean:def	9a68a9e776278cd7
 GraphIndex/LeafRules.lean::leafRewrites	lean:def	4504d98a962da573
 GraphIndex/LeafRules.lean::plain_fold_misses_the_bridge	lean:theorem-statement	362283ecea49b0d3
@@ -286,7 +287,7 @@ src/zanzibar/connectedstore/store.py::ConnectedStore.catch_up	py:function	845d20
 src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._stored_tupleset_subjects	py:function	6a7221ad0173cf7d
 src/zanzibar/graphindex/bulk_build.py::bulk_build	py:function	74a8e3afad9a1b9e
 src/zanzibar/graphindex/core.py::ReachabilityIndex	py:class-shell	0423972313cbaf4e
-src/zanzibar/graphindex/core.py::ReachabilityIndex.__init__	py:function	3319fdfa1745d568
+src/zanzibar/graphindex/core.py::ReachabilityIndex.__init__	py:function	b71b33b4576a373e
 src/zanzibar/graphindex/core.py::ReachabilityIndex._add_db_edges_unsafe	py:function	f9d64efcb12a2d5f
 src/zanzibar/graphindex/core.py::ReachabilityIndex._add_direct_edge_unsafe	py:function	d34e83cf83f6a020
 src/zanzibar/graphindex/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl	py:function	526f7906ac3ad6e9
@@ -395,13 +396,13 @@ src/zanzibar/schema/boolean.py::_mentions	py:function	6988b6585110f382
 src/zanzibar/schema/boolean.py::_plan_deps_and_fanout	py:function	6e2d7a41d7c110ff
 src/zanzibar/schema/boolean.py::_plan_leaves	py:function	23d2140675589b71
 src/zanzibar/schema/boolean.py::_stratify	py:function	24d003353bfd4e3e
-src/zanzibar/schema/boolean.py::compile_boolean_schema	py:function	bc179af37dde79b2
+src/zanzibar/schema/boolean.py::compile_boolean_schema	py:function	8dc68286846e622c
 src/zanzibar/schema/boolean.py::compute_taint	py:function	c01980829eb94c8d
 src/zanzibar/schema/compiler.py::_emit_expr	py:function	5ca6cf19f9b81bc1
 src/zanzibar/schema/compiler.py::_node_removal_fence	py:function	aedeaf8425f1e904
 src/zanzibar/schema/compiler.py::_reject_doubly_bridged_shapes	py:function	b6d6581918e0e3d6
 src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope	py:function	8f5de98765e021e4
-src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets	py:function	31710324441418e4
+src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets	py:function	c61f8ab21c78766c
 src/zanzibar/schema/compiler.py::compile_ruleset	py:function	5ff36805c0d1b1f9
 src/zanzibar/schema/compiler.py::derive_schema_info	py:function	dc5639e082a4c0cc
 src/zanzibar/schema/compiler.py::wildcard_userset_restriction_shapes	py:function	6e05d44c7ea9d53e
@@ -494,10 +495,12 @@ tests/oracle.py::Oracle.check.ttu_leaf	py:function	2a2fc3f21840b1a6
 tests/oracle.py::Oracle.check.universe	py:function	af119131d1341d6b
 tests/oracle.py::OracleTuple	py:class-shell	4b09b15c1f3a6fec
 tests/oracle.py::_validate_declared_name	py:function	61cdc001297d3535
+tests/oracle.py::_validate_declares_a_type	py:function	3779ead8a4a28443
 tests/oracle.py::parse_schema_ast	py:function	4a10e961af585de1
-tests/oracle.py::parse_schema_ast_unchecked	py:function	886eb033bae29107
+tests/oracle.py::parse_schema_ast_unchecked	py:function	82cd1004c120b052
 tests/parity.py::ParityEngine	py:class-shell	54541d2d5a0174b3
 tests/test_bulk_build.py::_residues_proj	py:function	84c39eab78cd32d3
 tests/test_hypothesis.py::test_add_then_remove_restores_row_multiset	py:function	3d68eb3cf07533f6
+tests/test_tk126_ttu_target_name_collision.py::test_slxt_python_allocation_is_the_recorded_gap	py:function	0caeaf66da3ef378
 tests/test_ttu_tupleset_parent_types.py::test_rc2_positive_control_star_parent_on_untainted_tupleset	py:function	d835f38a48fed43b
 tests/test_zt_p5_readjudication.py::test_zt_p5_group_userset_admission_domains_are_identical	py:function	a31f5bb1ef146acc

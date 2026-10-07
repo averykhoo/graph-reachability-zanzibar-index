@@ -46,6 +46,7 @@ def parse_openfga_json(model) -> SchemaAST:
     # model it as a relation: ``define viewer: [user] but not suspended``.
     if model.get('conditions'):
         raise ValueError('OpenFGA conditions are not supported')
+    _validate_json_declares_a_type(model.get('type_definitions'))
 
     ast: SchemaAST = {}
     seen_types: set[str] = set()
@@ -81,12 +82,42 @@ def parse_openfga_json(model) -> SchemaAST:
     # predicates, computedUserset / tupleToUserset refs) -- the DSL front-end runs
     # this in parse_schema_ast; skipping it here left a foreign write handle into
     # compiled leaf families open through JSON metadata.
+    _validate_json_declares_a_relation(ast)
     _validate_ast_references(ast)
     _validate_ast_consistency(ast)
     _validate_tuplesets_direct(ast)
     _validate_stratified_negation(ast)
     _validate_json_round_trip(ast)
     return ast
+
+
+def _validate_json_declares_a_relation(ast: SchemaAST) -> None:
+    """The JSON twin of the no-relation half of `parser.py::_validate_declares_a_type`
+    (`TK127` review follow-up, 2026-10-08). Without it the model was still refused, by
+    `_validate_json_round_trip`, but with the misleading "DSL rendering does not parse
+    (schema declares no type ...)"."""
+    # REFUSED SHAPE (TK124, TK127 follow-up): type definitions none of which has a relation
+    # (``[{"type": "user"}]``, or ``"relations": {}`` everywhere).
+    # WHY: it is the same empty schema as no ``type_definitions`` at all (see
+    # `_validate_json_declares_a_type`); a store would persist it and the id would be lost.
+    # INSTEAD: give some type a relation, e.g. ``{"type": "doc", "relations": {"viewer":
+    # {"this": {}}}, "metadata": {"relations": {"viewer": {"directly_related_user_types":
+    # [{"type": "user"}]}}}}``.
+    if not ast:
+        raise ValueError('OpenFGA JSON: the model declares no relation (no type has relations)')
+
+
+def _validate_json_declares_a_type(type_definitions) -> None:
+    """The JSON twin of `parser.py::_validate_declares_a_type` (`TK124`, 2026-10-08). A model
+    whose types all lack relations is refused by `_validate_json_declares_a_relation`."""
+    # REFUSED SHAPE (TK124): a model with no ``type_definitions`` (absent, ``null`` or ``[]``).
+    # WHY: it parsed to an empty schema that a store would persist write-once and then refuse
+    # every write against; the store id is lost (the DSL twin's comment has the detail).
+    # INSTEAD: list the types, e.g. ``"type_definitions": [{"type": "user"}, {"type": "doc",
+    # "relations": {"viewer": {"this": {}}}, "metadata": {"relations": {"viewer":
+    # {"directly_related_user_types": [{"type": "user"}]}}}}]``.
+    if not type_definitions:
+        raise ValueError('OpenFGA JSON: the model declares no type (no type_definitions)')
 
 
 def _reject_duplicate_json_keys(pairs: list) -> dict:

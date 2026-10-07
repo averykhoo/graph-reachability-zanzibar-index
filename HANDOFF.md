@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-07d -- **`TK127` is `NOW` (user): fix what the fresh-user install trial of the published `zanzibar-index` 0.0.2 found broken (`TK126`, `TK124`, `TK125`), then release 0.0.3 on the user's word only.** Order, release procedure, traps, trial and the `TK126` design doc: `task.py show TK127` / `show TK126`. Naming and ergonomics are parked in `TK123`. ANOTHER SESSION works in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-08 -- **`TK127` (`NOW`): the three bugs the 0.0.2 install trial found are fixed and committed as 0.0.3 (`TK124`/`TK125`/`TK126` closed); what is left is the release.** The release procedure is on the row (`task.py show TK127`): fetch, push master, push tag `v0.0.3`, CI babysitter, confirm on PyPI, install-trial subagent. Then close `TK127`. Naming and ergonomics are parked in `TK123`. ANOTHER SESSION works in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

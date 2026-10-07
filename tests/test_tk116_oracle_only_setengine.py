@@ -15,7 +15,9 @@ For every refusal family reachable from a checked parse (``WITNESSES``, one per 
 in ``src/zanzibar/schema/``):
 
 * the graph refuses it with THAT family's message, and no other witness's message matches
-  (so the nine witnesses are nine distinct families, not one family nine times);
+  (so the nine witnesses are nine distinct families, not one family nine times; EIGHT
+  since 2026-10-08, when TK126 made the name-collision family served and its raise site
+  moved to ``UNREACHABLE``);
 * ``ParityEngine`` degrades to set:py + set:roaring + oracle, both ``_ruleset``s are None;
 * a SCRIPTED walk drives the family's own refused shape (star-object writes, star
   tuplesets, wildcard usersets over a derived relation, data cycles) -- every scripted add
@@ -154,19 +156,12 @@ WITNESSES: tuple[Witness, ...] = (
          _u('blocked', 'group', 'n2', name='n2'),
          ('member', 'group', 'n1', 'member', 'group', 'n2'),
          ('member', 'group', 'n2', 'member', 'group', 'n1'))),
-    Witness(
-        # `compile_ruleset`'s I5 exclusivity check: an untainted TTU whose target NAME is
-        # a derived relation on another type (the name collision left since ASK-1).
-        'ttu-target-name-is-derived-elsewhere',
-        'type user\ntype folder\n  relations\n'
-        '    define blocked: [user]\n    define viewer: [user] but not blocked\n'
-        'type team\n  relations\n    define viewer: [user]\n'
-        'type doc\n  relations\n'
-        '    define parent: [team]\n    define can_view: viewer from parent\n',
-        frozenset(), UnsupportedByGraphIndex,
-        'targets the derived relation',
-        (('...', 'team', 'n1', 'parent', 'doc', 'n1'), _u('viewer', 'team', 'n1'),
-         _u('viewer', 'folder', 'n1'), _u('blocked', 'folder', 'n1'))),
+    # 2026-10-08 (TK126): the witness `ttu-target-name-is-derived-elsewhere` (an untainted
+    # TTU whose target NAME is derived on another type) is RETIRED here: the schema is now
+    # SERVED by the graph (both I5 checks key on (type, relation)), so it is no longer a
+    # refusal. Its raise site stays as a defensive check and moved to `UNREACHABLE`; the
+    # schema itself is driven 4-way as `C_team` in
+    # `tests/test_tk126_ttu_target_name_collision.py`. Census: 12 sites = 8 + 4.
     Witness(
         # `_stratify`: a derived cycle through a TTU target. The parent rows form a DATA
         # cycle too (n1 -> n2 -> n1).
@@ -189,6 +184,12 @@ UNREACHABLE: tuple[tuple[str, str], ...] = (
      'refused at parse since TK106 (`_validate_tuplesets_direct`); hand-built AST only'),
     ('compile_ruleset: tupleset declares a userset restriction',
      'refused at parse since TK108 (`_validate_tuplesets_direct`); hand-built AST only'),
+    ('_validate_ttu_tuplesets: untainted TTU reaches a derived (type, target)',
+     'TK126 (2026-10-08): keyed on (type, relation), and compute_taint taints every '
+     'relation whose TTU reaches a derived target through the same _member_types, so a '
+     'checked parse cannot reach it; the undeclared-tupleset fallback is refused at '
+     'parse since ASK-1. Hand-built AST / taint regression only, pinned by '
+     'tests/test_tk126_ttu_target_name_collision.py'),
 )
 
 # The whole schema PACKAGE, globbed (TK120, 2026-10-06): it was one file until the split,

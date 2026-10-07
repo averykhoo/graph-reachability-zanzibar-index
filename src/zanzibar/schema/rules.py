@@ -396,7 +396,10 @@ def norm_pred(pred: 'str | EllipsisType | None') -> str:
     """The storage form of a subject predicate: '...' for the bare-entity sentinel
     (Ellipsis or None), else the relation name unchanged. THE shared normalizer --
     the backends and the composition layer import this instead of keeping copies
-    (the oracle keeps its own by the independence contract)."""
+    (the oracle keeps its own by the independence contract).
+
+    ``None -> '...'`` is READ-side leniency only. A write validates the RAW predicate
+    first (``validate_write_identifiers`` refuses ``None``), then normalises (TK125)."""
     return '...' if (pred is Ellipsis or pred is None) else pred
 
 

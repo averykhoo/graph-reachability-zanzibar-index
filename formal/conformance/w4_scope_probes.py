@@ -164,6 +164,10 @@ SCOPE_PROBES: dict[str, tuple[str, list, tuple, tuple[str, ...]]] = {
     # A LOUD corner: the tupleset `parent` is not declared on doc, so no member type
     # carries taint onto doc#view, it stays UNTAINTED, and its TTU rule targets the
     # derived NAME `member`. Python's compile raises.
+    # 2026-10-08 (TK127 review follow-up): still RAISED, but no longer counted as `term`'s
+    # LOUD corner. Since ASK-1 the refusal is the generic dangling-reference check at parse,
+    # which refuses the same schema with a plain target too; `term` is now SILENT
+    # (`test_w4fragment_scope_pin.py::test_term_undeclared_tupleset_refusal_is_not_term_specific`).
     "term.NoTtuTarget/undeclared-tupleset": (
         """
         type user
@@ -183,6 +187,9 @@ SCOPE_PROBES: dict[str, tuple[str, list, tuple, tuple[str, ...]]] = {
     # CORRECTION (2026-09-23, first run): the first reconstruction had `parent: [org,
     # team]`. Taint then propagates through org, the schema COMPILES, and it fails
     # `computedOrDirect`, which is not the RAISED corner the probe observed.
+    # 2026-10-08 (TK126): no longer a LOUD corner. Python's refusal is now keyed on
+    # (type, relation) and ADMITS this schema (`PYTHON_OUTCOME` below); Lean's
+    # `NoTtuTarget` still compares names, so the expected Lean failure stays `term`.
     "term.NoTtuTarget/mixed-member-types": (
         """
         type user
@@ -285,5 +292,12 @@ PYTHON_OUTCOME: dict[str, str] = {
     "term.NoTtuTarget/untainted-ttu-onto-derived": "ADMITTED",
     "ttuStarFree/star-tupleset-schema": "ADMITTED",
     "term.NoTtuTarget/undeclared-tupleset": "RAISED",
-    "term.NoTtuTarget/mixed-member-types": "RAISED",
+    # 2026-10-08 (TK126): RAISED -> ADMITTED. Python's two I5 checks
+    # (`compiler.py::_validate_ttu_tuplesets`, `boolean.py::compile_boolean_schema`) are
+    # now keyed on (type, relation): the TTU's produced subject type is `team` (admission
+    # pins `parent: [team]`), and `team#member` is plain, so the schema is SERVED. Lean's
+    # `term` (`NoTtuTarget`) is still NAME-keyed, so the probe's expected failure stays
+    # `("term",)`: served-but-outside-`W4Fragment`. Evidence:
+    # `tests/test_tk126_ttu_target_name_collision.py` (`C_team` is this shape).
+    "term.NoTtuTarget/mixed-member-types": "ADMITTED",
 }

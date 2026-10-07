@@ -18,7 +18,7 @@ from sqlmodel import Session, select
 from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
 from zanzibar.setengine import SetEngine
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
-from zanzibar.schema import RuleSet, parse_openfga_schema
+from zanzibar.schema import RuleSet, parse_openfga_schema, validate_store_id
 
 from .models import SchemaRecord
 
@@ -38,6 +38,7 @@ def save_schema(session: Session, store_id: str, schema_text: str,
     so a bootstrapping caller can reuse it instead of re-parsing the same text via
     ``open_graph_index`` (the schema is compiled once, not twice).
     """
+    validate_store_id(store_id)  # TK127 follow-up: the one SchemaRecord insert
     existing = session.get(SchemaRecord, store_id)
     if existing is not None:
         raise ValueError(

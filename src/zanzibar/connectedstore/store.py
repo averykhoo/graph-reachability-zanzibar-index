@@ -29,7 +29,7 @@ from zanzibar.graphindex.invariants import (PARANOIA_ENV_VAR, PARANOIA_OFF,
                                  install_paranoia, resolve_paranoia_level)
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
-from zanzibar.schema import AdmissionRejected
+from zanzibar.schema import AdmissionRejected, validate_store_id
 
 from .apply import advance_index, ensure_cursor
 from .schema_io import ensure_schema, open_graph_index
@@ -169,6 +169,9 @@ class ConnectedStore:
         off in a deployment without a code change, and a caller that has made an
         explicit choice is never overridden by the environment.
         """
+        # TK127 follow-up (2026-10-08): a non-str / blank store id is refused before any
+        # statement (``None`` used to reach the NOT NULL column as a raw IntegrityError).
+        validate_store_id(store_id)
         self.session = session
         self.store_id = store_id
         self.sync = sync

@@ -342,7 +342,26 @@ def parse_schema_ast_unchecked(text: str) -> dict[tuple[str, str], object]:
             # silently skipping an unrecognised line lost whole definitions (production's
             # blind-audit S-3; oracle twin added by P23)
             raise ValueError(f'unrecognized schema line: {line!r}')
+    _validate_declares_a_type(seen_types, ast)
     return ast
+
+
+def _validate_declares_a_type(seen_types: set[str], ast: dict) -> None:
+    """Independent twin of `src/zanzibar/schema/parser.py::_validate_declares_a_type` (TK124, 2026-10-08;
+    the no-relation half is the TK127 review follow-up of the same day)."""
+    # REFUSED SHAPE (TK124): a schema with no `type` line (empty, whitespace, comments only,
+    # or only the `model` / `schema 1.1` header). WHY: production refuses it (a store would
+    # persist it write-once and refuse every write), and an oracle that accepted it would
+    # referee a schema the system never runs. INSTEAD: declare the types,
+    # `type user` / `type doc` / `relations` / `define viewer: [user]`.
+    if not seen_types:
+        raise ValueError('schema declares no type')
+    # REFUSED SHAPE (TK124, TK127 follow-up): types but no `define` anywhere (`type user`).
+    # WHY: it is the same empty schema as `""` (relations are what the AST is keyed by), and
+    # production refuses it for the same reason. INSTEAD: declare a relation,
+    # `type user` / `type doc` / `relations` / `define viewer: [user]`.
+    if not ast:
+        raise ValueError('schema declares no relation')
 
 
 #: Independent copy of the write identifier charset (`src/zanzibar/schema/errors.py::IDENTIFIER_CHARSET`),

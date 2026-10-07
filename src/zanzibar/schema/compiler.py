@@ -8,7 +8,7 @@ from .errors import DoublyBridgedShapeError, UnsupportedByGraphIndex
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _directs_only, _iter_directs, _iter_ttus
 from .rules import Filter, Rule, RuleSet, SchemaInfo, _restriction_pattern, _rewrite_rule, norm_pred
 from .parser import parse_schema_ast
-from .boolean import compile_boolean_schema, compute_taint
+from .boolean import _member_types, compile_boolean_schema, compute_taint
 
 
 def derive_schema_info(
@@ -162,41 +162,58 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
     # refuses -- with a bare `ValueError`, a class `tests/parity.py` declares "must
     # surface", so `ParityEngine` was UNCONSTRUCTIBLE rather than degrading to 3-way.
     #
-    # Reaching it needs the containing relation to stay untainted while the target is
-    # tainted, which `compute_taint` normally prevents: `_mentions` taints the caller
-    # via `_member_types(tupleset)`. The hole is any TTU whose tupleset contributes no
-    # member type carrying the tainted target -- an UNDECLARED tupleset (`_member_types`
-    # early-outs on `key not in ast`) being the reachable case, and a member type whose
-    # own `target_rel` is untainted while another type's is tainted being the second
-    # (the exclusivity check compares NAMES, type-agnostically, so it fires there too).
-    # Both are scope holes, not compiler bugs, so they are refused here as
-    # `UnsupportedByGraphIndex` in the decision-15 family. The `ValueError` at the
-    # `compile_boolean_schema` site stays as the unreachable last line of defence.
-    derived_predicate_names = {r for (_t, r) in tainted}
+    # Reaching it needs the containing relation to stay untainted while a target it
+    # can actually reach is tainted, which `compute_taint` prevents: `_mentions` taints
+    # the caller via `_member_types(tupleset)`, the same type set this check reads.
+    #
+    # TK126 (2026-10-08): keyed on (type, relation). Until then the test was the target
+    # NAME against every derived relation on ANY type, which refused the ordinary
+    # OpenFGA idiom (`viewer from parent` with `parent: [folder]`, plain `folder#viewer`,
+    # while some OTHER type's `viewer` is boolean) although the set engine served it.
+    # The rule's produced subject type is the stored tupleset tuple's type, which
+    # admission pins to the tupleset's restriction types, so only those types matter
+    # (`docs/tk126-ttu-target-boolean-name-2026-10-07.md` sec 2.2). From a checked
+    # parse this raise is now unreachable; it stays as the scoped pre-emption of the
+    # `compile_boolean_schema` `ValueError` for a hand-built / unchecked AST or a taint
+    # regression. An UNDECLARED tupleset (refused at parse since ASK-1) has no types at
+    # all, so it keeps the old conservative NAME test, mirroring that guard's fallback.
     for (object_type, relation), expr in ast.items():
         if (object_type, relation) in tainted:
             continue                      # boolean path: no rewrite Rule is emitted
         for e in _iter_ttus(expr):
-            # REFUSED SHAPE (decision-15 family): a TTU in an untainted relation whose
-            # target NAME is a derived relation on some type. WHY: the comment above.
-            # INSTEAD: the undeclared-tupleset cause is refused at parse since ASK-1, so
-            # from a checked parse what remains is a NAME collision (e.g. boolean
-            # ``folder#viewer``, plain ``team#viewer``, ``parent: [team]``): rename the
-            # boolean relation and the references that mean it
-            # (``define can_view: [user] but not blocked``). The check compares NAMES on
-            # every type, and a relation reading a boolean one is tainted too, so EVERY
-            # tainted relation sharing the name needs a new name (probed 2026-09-27). Same
-            # answers under the new names.
-            if e.target_rel in derived_predicate_names:
+            ts_key = (object_type, e.tupleset_rel)
+            types = (_member_types(object_type, e.tupleset_rel, ast, frozenset())
+                     if ts_key in ast else frozenset())
+            if types:
+                hit = sorted(t for t in types if (t, e.target_rel) in tainted)
+            else:
+                hit = sorted(t for (t, r) in tainted if r == e.target_rel)
+            # REFUSED SHAPE (decision-15 family): a TTU in an untainted relation that can
+            # reach a boolean-tainted (type, target) -- possible only from a hand-built or
+            # unchecked AST (e.g. an undeclared tupleset) or a taint-analysis bug.
+            # WHY: the comment above -- the TTU would compile to a plain rewrite rule that
+            # produces derived-public subject nodes (I5 exclusivity), so the graph index
+            # would diverge from the set engine and the oracle.
+            # INSTEAD: parse the schema text with the checked parser and declare the
+            # tupleset as a direct relation, ``define parent: [folder]`` then
+            # ``define reader: viewer from parent``; the checked compile taints such a
+            # relation and serves it. A same-NAMED boolean relation on another type is
+            # NOT refused (TK126), so no rename is needed.
+            if hit:
+                undeclared = ts_key not in ast
                 raise UnsupportedByGraphIndex(
-                    f"relation {object_type}#{relation}: TTU "
-                    f"{e.target_rel!r} from {e.tupleset_rel!r} targets the derived "
-                    f"relation {e.target_rel!r}, but the containing relation is not "
-                    f"itself boolean-tainted, so it compiles to a plain rewrite rule "
-                    f"that would carry derived state on its subject predicate "
-                    f"(I5 exclusivity). Reached when the tupleset contributes no "
-                    f"member type bearing the tainted target -- an undeclared tupleset "
-                    f"relation being the usual cause (decision-15 family)")
+                    f"relation {object_type}#{relation}: TTU {e.target_rel!r} from "
+                    f"{e.tupleset_rel!r} can reach the boolean-tainted relation(s) "
+                    f"{', '.join(f'{t}#{e.target_rel}' for t in hit)}, but the "
+                    f"containing relation is not itself tainted, so it would compile "
+                    f"to a plain rewrite rule carrying derived state on its subject "
+                    f"predicate (I5 exclusivity). "
+                    + (f"The tupleset {object_type}#{e.tupleset_rel} is undeclared; "
+                       f"declare it, e.g. 'define {e.tupleset_rel}: [<type>]'. "
+                       if undeclared else
+                       "A checked parse taints such a relation, so this AST is "
+                       "hand-built/unchecked or the taint analysis regressed. ")
+                    + "(decision-15 family)")
     for (object_type, relation), expr in ast.items():
         for e in _iter_ttus(expr):
             ts_key = (object_type, e.tupleset_rel)
