@@ -212,7 +212,21 @@ def phase_scope(phase: str) -> str:
 # `## Banner` section is what `task.py board` prints and lint check 12 reads, and
 # `live_copy` copies it beside the corpus. Prefix match, so `formal/HANDOFF.md`
 # (which no collected test reads) stays excluded.
-CODE_SCOPE_MD_KEEP = (b"tasks/", b"HANDOFF.md")
+#
+# SURVEY RE-DONE 2026-10-07d (fix-hk review), as the note above demands; it had not been
+# since 2026-09-06 and three test modules had joined the gate reading live markdown:
+#   * `PYPI_README.md`, `CHANGELOG.md` -- tests/test_tk122_release_metadata.py EXECUTES
+#     the README quickstart and pins CHANGELOG's newest heading to `__version__` (TK122,
+#     2026-10-07). A README-only edit could redden a tests tile at a COVERED status.
+#   * `formal/CORRESPONDENCE.md` -- tests/test_claim_rot_gate.py reads
+#     `claim_rot.DOC` (the LIVE file) at import and builds its sabotages from it. Found
+#     only by following the import, not by grepping for ".md": an INDIRECT read, which is
+#     why tests/test_gate_status.py's literal-path survey test says it cannot see them.
+#   * `CLAUDE.md` -- tests/test_tk131_claude_md_cap.py read it live for one day; that read
+#     was REMOVED instead (its assertion moved to `handoff_lint.py::MAX_BYTES_SLACK`, in
+#     `lean`), so CLAUDE.md stays excluded and a CLAUDE.md edit still costs no tile re-run.
+CODE_SCOPE_MD_KEEP = (b"tasks/", b"HANDOFF.md", b"PYPI_README.md", b"CHANGELOG.md",
+                      b"formal/CORRESPONDENCE.md")
 
 
 def _in_scope(rel: bytes, scope: str) -> bool:

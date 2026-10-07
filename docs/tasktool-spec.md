@@ -154,7 +154,7 @@ trivial.
 | `id` | `new`, immutable | e.g. `T7`, `P3`, `HS-5`, `ZT-P0-1` | unique across open + closed + retired registry |
 | `title` | human | one line, <= `TITLE_MAX` chars | prints in `board` / `list` |
 | `brief` | `new --brief`, `set brief` | one line, <= `BRIEF_MAX` chars, no `\|`, **may be empty** | the constraint a board reader must not miss; prints under the NOW block and under each NEXT row |
-| `pri` | `promote` | `NOW`/`NEXT`/`LATER`/`HOLD`/`SOMEDAY` | exactly 1 NOW and <= 3 NEXT among OPEN tasks |
+| `pri` | `promote` | `NOW`/`NEXT`/`LATER`/`HOLD`/`SOMEDAY` | exactly 1 NOW, and NEXT within its cap (`tasks/config.json` `budgets`), among OPEN tasks |
 | `size` | human | `S`/`M`/`L`/`?` | |
 | `deps` | `dep` | flow list of ids, `[]` when empty | ordering/blocking edges; acyclic |
 | `related` | `set related` | flow list of ids, `[]` when empty | **navigation only**, unordered, untyped, NOT acyclic |
@@ -340,7 +340,7 @@ ledger.)
 |---|---|
 | `new TITLE [--id ID --brief --pri --size --deps --related --labels --parent --source --body FILE]` | Allocate the next id by SCANNING open + closed + retired registry for the max integer suffix on the configured prefix, then +1. Never store a counter — counters go stale. **`--id ID`** overrides that allocation, refusing an id that is live, retired, or malformed: without it every task joins the `id_prefix` series, so a piece of build work is minted into the series everything else cites as a *finding*, and since the id is the address the miscategory is permanent. Create the file with the standard body skeleton. Print id and path. **Then ratchet `min_tasks_parsed` to the measured file total (since 2026-09-06, `task.py::ratchet_min_parsed`)** — `max(floor, files on disk)`, a one-integer substitution on the raw config text, printed as `floor min_tasks_parsed N -> N+1`. It never LOWERS the floor, so a breach (floor above the corpus, i.e. lost files) stays red; it only closes headroom, which is the defect. The manual step was forgotten in three consecutive sessions (config.json's provenance string names each); `counts` still only prints the value, because a tool that sets the floor to whatever is on disk would also seal breaches. |
 | `set ID FIELD VALUE` | Only `title`, `brief`, `size`, `labels`, `related`, `parent`. `id`/`created`/`source`/`moved`/`updated` are IMMUTABLE, and `closed`/`pri`/`deps` have dedicated ops whose rules a plain assignment would skip. `related` is whole-list assignment rather than add/rm because, unlike `deps`, no edge of it depends on the rest of the graph. **Positional, not flags** — `set P3 --title x` is the natural typo given every other write op here takes `--flags`, so the flag forms are declared and refused with the working command line rather than left to argparse's `unrecognized arguments`. |
-| `promote ID PRI [--demote ID2 PRI2]` | Change `pri`. **Refuse at write time** if the result would violate the NOW=1 / NEXT<=3 budget, naming the offending rows and telling the caller to pass `--demote`. With `--demote`, apply both changes atomically (write both files, or neither). Mechanical refusal beats a doc warning. |
+| `promote ID PRI [--demote ID2 PRI2]` | Change `pri`. **Refuse at write time** if the result would violate the NOW=1 / NEXT-cap budget (`tasks/config.json` `budgets`), naming the offending rows and telling the caller to pass `--demote`. With `--demote`, apply both changes atomically (write both files, or neither). Mechanical refusal beats a doc warning. |
 | `dep add ID DEP` / `dep rm ID DEP` | Existence check and cycle detection at write time; refuse on either failure. |
 | `comment ID -m TEXT` | Append a dated Log entry. `-m -` reads the message from stdin (for multi-line). This is the workhorse: cheap appends are what fix "completed but never marked". |
 | `touch ID` | Record progress with no message: bump `moved` and `updated`. For "worked it, the detail is in the session ledger". |
@@ -422,7 +422,8 @@ and the next check appended is 15. Check 11 warns rather than fails.
    sentinel, and is empty whenever `source` is `hand` (a hand-filed task has no source
    block for a digest to be OF and no source that could be missing a row for it, so
    either non-empty value there is a state no write path can produce);
-5. exactly one `NOW` and at most three `NEXT` among OPEN tasks;
+5. exactly one `NOW`, and no more `NEXT` than the cap in `tasks/config.json` `budgets`,
+   among OPEN tasks;
 6. every id in `deps` **and every id in `related`** resolves to a real task (open or
    closed); no cycle in the deps graph; `related` refuses self-reference and is
    deliberately NOT cycle-checked;
@@ -450,7 +451,8 @@ and the next check appended is 15. Check 11 warns rather than fails.
     code. There is no flag to promote it to fatal: a warning that a flag can promote is a
     warning nobody promotes.
 
-12. **The banner exists, fits `BANNER_MAX_LINES`, its first line carries a session key,
+12. **The banner exists, fits `BANNER_MAX_LINES` lines of at most `BANNER_MAX_WIDTH`
+    characters (width since 2026-10-07d, `TK130`), its first line carries a session key,
     and it uses only glyphs `board` can render** — the banner being the `## Banner`
     section of `<root>/HANDOFF.md` since the 2026-09-06 cutover (`tasks/BANNER.md`
     before it; **a `tasks/BANNER.md` that reappears is itself a violation**, because two
@@ -521,7 +523,7 @@ headroom.
 {
   "id_prefix": "<measured: zero \\bPREFIX\\d+\\b hits in any first-party file>",
   "labels": ["formal", "perf", "docs", "infra"],
-  "budgets": {"NOW": 1, "NEXT": 3},
+  "budgets": {"NOW": 1, "NEXT": "<judgement: the live cap -- read the shipped tasks/config.json, never copy it here>"},
   "min_tasks_parsed": "<measured: the live file count, ZERO headroom (task.py counts)>",
   "stale_days": "<judgement, inside a measured band; write down the band>"
 }

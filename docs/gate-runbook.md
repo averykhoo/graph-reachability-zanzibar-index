@@ -201,8 +201,8 @@ Conformance genuinely is independent of `tests/`; `lean` is not.
 scripts/handoff_lint.py` and `python scripts/task.py lint` yourself first (Rhythm step
 0, `docs/README.md` §7, under a second each) rather than discovering it after a Lean
 build. Since the 2026-09-06 cutover the `tests-tile` phases key off `t2c`, which
-INCLUDES `tasks/*.md` and `HANDOFF.md` (`gate_status.py::CODE_SCOPE_MD_KEEP`), so a
-tree op after the tiles ran stales them too.
+INCLUDES the markdown collected tests read (`tasks/*.md`, `HANDOFF.md`, and the rest of
+`gate_status.py::CODE_SCOPE_MD_KEEP`), so a tree op after the tiles ran stales them too.
 
 ### 2. Lean + conformance — the split `verify.sh` gate
 `verify.sh` takes a **phase argument** so the whole formal gate (its 5 steps) runs
@@ -301,7 +301,7 @@ so **adding** theorems/tests never fails the gate (the one `-le` is called out):
 | `MIN_FIXTURES` (`tests/test_compile_snapshot.py`) | `.fga` fixtures the byte-identity snapshot gate runs on |
 | `MIN_PY_ANCHORS` / `MIN_LEAN_ANCHORS` | `CORRESPONDENCE.md` anchors found (in `anchor_check.py`) |
 | *(no constant)* | step **4e** compares `FINAL_REVIEW.md`'s generated counts block against the tree exactly; there is no floor to lower, only a regeneration to perform |
-| `MAX_LINES` / `NEXT_MAX` / `WARN_BUDGET` / `HEADLINE_MAX` / `MAX_BOLDCAPS` (in `scripts/handoff_lint.py`, step **4f**) | the board files' capacities: line ceilings, at most three `NEXT` rows, the trap budget, the ledger-headline cap, and the bold-caps ratchets. All are set at measured values with in-file provenance; `MAX_BOLDCAPS` is a ratchet — lower it when you clean a line, never raise it |
+| `MAX_LINES` / `MAX_BYTES` / `NEXT_MAX` / `WARN_BUDGET` / `HEADLINE_MAX` / `MAX_BOLDCAPS` (in `scripts/handoff_lint.py`, step **4f**) | the board files' capacities: line and byte ceilings (the byte one covers `CLAUDE.md` too, `TK131`), the `NEXT` cap, the trap budget, the ledger-headline cap, and the bold-caps ratchets. All are set at measured values with in-file provenance; `MAX_BOLDCAPS` is a ratchet — lower it when you clean a line, never raise it |
 | `MIN_DOC_LINKS` (same file, step **4f**) | an **instrument control**, not a coverage ratchet: it asserts `check_doc_links` parsed any pointers at all, because a link checker that matches nothing passes forever. Deliberately loose (100 against a measured 220), like `check_ledger_row_ids`' `len(known) < 5` |
 
 **Lowering any of them must be a deliberate, reviewed edit to `verify.sh`** — and
@@ -448,8 +448,8 @@ time there were seven — the `ZT-P3-5` shape, in the file a session reads to ru
   scripts/handoff_lint.py`. A suite of checks over the two board files, the two ledgers
   and a short list of living doc roots — the tool prints how many on every run
   (`handoff_lint: clean (N checks)`), which is that number's only home: line ceilings,
-  exactly one `NOW` row and at
-  most three `NEXT`, zero retired `★` glyphs, the trap budget, a liveness
+  exactly one `NOW` row and no more `NEXT` rows than the cap in `tasks/config.json`
+  `budgets`, zero retired `★` glyphs, the trap budget, a liveness
   declaration in the first ten lines of every `docs/history/` and `formal/history/`
   file, the ledger-headline cap, the bold-caps ratchets,
   root-ledger-not-behind-`PROOF_STATUS`, `rows:`-cited ids resolving to real board
@@ -622,7 +622,7 @@ intact; rows earned on a tree WITH one are unmatched now, which is the safe dire
 | id | covers | phases |
 |---|---|---|
 | `t2a:` | everything | `lean` |
-| `t2c:` | everything **minus `*.md` and `benchmarks/`, but KEEPING `tasks/`** | `conf-tile:I/K`, `tests-tile:I/K` |
+| `t2c:` | everything **minus `*.md` and `benchmarks/`, but KEEPING the markdown tests read (`CODE_SCOPE_MD_KEEP`)** | `conf-tile:I/K`, `tests-tile:I/K` |
 
 🛑 **`tasks/` was added back to `t2c` on 2026-09-03c, closing a fail-open that had been
 open since 2026-08-29d.** The `*.md` exclusion was justified in 2026-08-17 by a survey

@@ -701,6 +701,19 @@ BOARD_FILENAME = 'HANDOFF.md'
 BANNER_HEADING = '## Banner'
 BANNER_MAX_LINES = 14
 
+# The line cap is evadable by line LENGTH, and was evaded (TK130, 2026-10-07d): the banner
+# sat at exactly BANNER_MAX_LINES while single lines ran to ~3.7k characters, because each
+# session appended a dated layer to an old line instead of rewriting it (the layering
+# docs/README.md section 6 bans). So every banner line is also capped in CHARACTERS, as
+# `board` prints it (blockquote marker stripped by `extract_banner`). Lint only (check 12),
+# not render time: `BOARD_MAX_LINES` is arithmetic over line COUNT, which width does not
+# move. 600 = the pruned banner's widest line, 509 chars on 2026-10-07d, plus room for one
+# more clause -- about six wrapped lines on a 100-column terminal, a paragraph and not an
+# essay. The whole-file byte cap is `scripts/handoff_lint.py::MAX_BYTES`; at
+# BANNER_MAX_LINES x BANNER_MAX_WIDTH the banner alone would overflow it, which is the
+# intent -- the byte cap binds first, this one stops a single line swallowing it.
+BANNER_MAX_WIDTH = 600
+
 # THE `moved` / `updated` SPLIT, which is the reason both fields exist.
 #
 # `updated` bumps on EVERY write. `moved` bumps only when a session made PROGRESS. The
@@ -2609,7 +2622,10 @@ def check_enums(store, fail, state):
 
 
 def check_pri_budget(store, fail, state):
-    """Check 5: exactly one NOW and at most three NEXT among OPEN tasks.
+    """Check 5: exactly one NOW, and NEXT within ``budgets['NEXT']``, among OPEN tasks.
+
+    The live cap is ``tasks/config.json`` ``budgets``; it is never restated here (this
+    line said "at most three" for three days after the cap became 5 -- TK128).
 
     Exactly-one rather than at-most-one: NOW is what an unassigned session picks up, and
     zero of them is the same non-answer as two.
@@ -2938,8 +2954,9 @@ def check_min_parsed(store, fail, state):
 
 def check_banner(store, fail, state):
     """Check 12: `<root>/HANDOFF.md` exists, has a `## Banner` section that fits
-    BANNER_MAX_LINES, uses only glyphs `board` can render, and whose first line carries
-    a date and a session key. (Until the 2026-09-06 cutover the subject was
+    BANNER_MAX_LINES lines of at most BANNER_MAX_WIDTH characters each (the width half
+    added 2026-10-07d, `TK130`), uses only glyphs `board` can render, and whose first line
+    carries a date and a session key. (Until the 2026-09-06 cutover the subject was
     `tasks/BANNER.md`; the rules are the same, the file moved.)
 
     `board` refuses without it, so why lint it too? Because the two answer different
@@ -3003,6 +3020,14 @@ def check_banner(store, fail, state):
         fail('%s: the `%s` section is %d lines, cap %d. The banner is a handoff, not a '
              'log: the argument goes in the task file, the state of play goes here.'
              % (rel(path), BANNER_HEADING, len(lines), BANNER_MAX_LINES))
+    wide = [(n, len(ln)) for n, ln in enumerate(lines, 1) if len(ln) > BANNER_MAX_WIDTH]
+    if wide:
+        fail('%s: %d banner line(s) wider than %d characters (BANNER_MAX_WIDTH): %s. '
+             'A line cap that a line can evade by length caps nothing. Rewrite the line, '
+             'do not append to it: an older layer goes to the session log or the row it '
+             'is about (docs/README.md section 6).'
+             % (rel(path), len(wide), BANNER_MAX_WIDTH,
+                ', '.join('banner line %d is %d' % w for w in wide)))
     stray = unmappable('\n'.join(lines))
     if stray:
         fail('%s: the banner uses %d character(s) `board` cannot render: %s. They print '

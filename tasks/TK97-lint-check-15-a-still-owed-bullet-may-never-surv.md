@@ -2,7 +2,7 @@
 id: TK97
 title: lint check 15: a Still-owed bullet may never survive two sessions
 brief: Still owed has no checker; 0 of 5 live bullets were skipped-Rhythm actions, oldest 15 days
-pri: LATER
+pri: NEXT
 size: M
 deps: []
 related: [TK96]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-22
-moved: 2026-09-22
-updated: 2026-09-22
+moved: 2026-10-07c
+updated: 2026-10-07c
 closed:
 ---
 
@@ -96,3 +96,7 @@ expensive, because the only way to keep it is to file a row.
   anti-staleness rule is still worth having.
 
 ## Log
+
+### 2026-10-07c
+
+Promoted LATER -> NEXT by the owner (2026-10-07c, in chat), on the recommendation of the 2026-10-07 cross-repo context audit (docs/context-audit-2026-10-07.md item 5): a 2026-10-05 Still-owed bullet had already been re-stamped instead of acted on. HS-5 and TK86 stay at LATER (owner chose only TK97).

@@ -447,3 +447,193 @@ def test_the_check_is_registered_in_the_gated_tuple():
     about -- and the check being WRITTEN is not the same fact as the check being RUN.
     """
     assert handoff_lint.check_restated_counts in handoff_lint.CHECKS
+
+
+# --------------------------------------------------------------------------- #
+# tier caps (TK128, 2026-10-07d) -- a VALUE check riding the same walk
+# --------------------------------------------------------------------------- #
+# MUTATION SWEEP, 2026-10-07d: nine plausible one-line weakenings of the cap check, each
+# exec'd IN MEMORY as `scripts.handoff_lint` (the shipped file was never edited), with this
+# module run against every one. 9/9 caught, by the test named (unmutated: 22 passed):
+#
+#   cap check after dated escape  1 failed  ..._caught_even_on_a_dated_line
+#   tier name blanked too         3 failed  ..._dated_line, ..._agrees_..., ..._extracts_...
+#   comparison form dropped       2 failed  ..._agrees_..., ..._extracts_...
+#   hardcoded NEXT 5              1 failed  ..._reads_the_live_constant_not_a_literal
+#   no intervening words          3 failed  ..._agrees_..., ..._extracts_..., ..._live_constant_...
+#   tier case-insensitive         1 failed  ..._not_a_tier_cap_stay_silent
+#   quote escape off for caps     1 failed  ..._extracts_... (the quoted-phrase assertion)
+#   spelled numbers dropped       1 failed  ..._extracts_...
+#   NOW cap off (1 -> 2)          3 failed  ..._agrees_..., ..._extracts_..., ..._live_constant_...
+#
+# The quote-escape row was a hole on the first pass (the `cap of `3`` assertion cannot
+# tell: a backtick already breaks the pattern), closed by asserting a fully quoted phrase.
+# The line the check exists for, cut from `HANDOFF.md`'s banner as it stood on 2026-10-07
+# (baseline copy of the 2026-10-07d housekeeping run). It carries a `2026-09-22` key, which
+# is the whole point: the dated escape silences a census, and it silenced this cap too
+# until TK128 moved the cap check in front of it.
+STALE_BANNER_LINE = (
+    "> **`ASK-*` is a NEW id series, decided with the user 2026-09-22**: `LATER` by "
+    "default; **`NEXT` means the session must raise it with the user in chat that "
+    "session**, and `NEXT`'s cap of 3 bounds the standing nags at three."
+)
+
+
+def test_a_stale_tier_cap_in_the_banner_is_caught_even_on_a_dated_line(run_check):
+    """THE sabotage for TK128: the real stale banner line, planted back.
+
+    Literal observed output (2026-10-07d, this test's run against the shipped check)::
+
+        HANDOFF.md:3 restates the NEXT cap as 3 ("NEXT`'s cap of 3"), but the live cap
+        is 5. A cap is a rule, not a stamped measurement, so a date on the line does
+        not excuse it. DELETE the number and point at its home (`tasks/config.json`
+        `budgets` (mirrored by `handoff_lint.py::NEXT_MAX`)); ...
+
+    Before TK128 the same input produced NO failure -- no pattern spoke of caps, and the
+    line's `2026-09-22` would have tripped the dated escape anyway. Both halves of that
+    are pinned: the failure exists, and it survives the date.
+    """
+    failures = run_check({"HANDOFF.md": "# HANDOFF\n\n%s\n" % STALE_BANNER_LINE})
+    assert len(failures) == 1, failures
+    assert "HANDOFF.md:3" in failures[0]
+    assert "NEXT cap as 3" in failures[0]
+    assert "live cap is %d" % handoff_lint.NEXT_MAX in failures[0]
+
+
+def test_a_tier_cap_that_agrees_with_the_live_value_passes(run_check):
+    """A VALUE check, not a refusal: the right number is silent, the wrong one is not.
+
+    Each correct phrasing is paired with the same phrasing off by one, so a pattern that
+    has quietly stopped matching cannot pass this as "agrees".
+    """
+    live = handoff_lint.NEXT_MAX
+    for tmpl in ("`NEXT`'s cap of %d bounds the nags.",
+                 "`NEXT` is capped at %d now.",
+                 "the NEXT tier has a cap of %d",
+                 "it refuses to break `NOW`=1 / `NEXT`<=%d at write time"):
+        assert run_check({"docs/live.md": "# live\n\n%s\n" % (tmpl % live)}) == [], tmpl
+        bad = run_check({"docs/live.md": "# live\n\n%s\n" % (tmpl % (live + 1))})
+        assert len(bad) == 1 and "NEXT cap as %d" % (live + 1) in bad[0], (tmpl, bad)
+    assert run_check({"docs/live.md": "# live\n\nNOW is capped at 1.\n"}) == []
+    assert len(run_check({"docs/live.md": "# live\n\nNOW is capped at 2.\n"})) == 1
+
+
+def test_each_cap_phrasing_extracts_the_tier_and_number():
+    """Token-level instrument control for BOTH cap patterns (the TK58 lesson: a module
+    guarding N patterns must assert on all N). Spelled-out numbers count, a backticked
+    tier name survives the quote-blanker, a backticked NUMBER does not."""
+    caps = handoff_lint._restated_caps
+    assert caps("NEXT has a cap of three") == [
+        ("NEXT", 3, handoff_lint.NEXT_MAX, "NEXT has a cap of three")]
+    assert caps("violate the NOW=1 / NEXT<=3 budget") == [
+        ("NEXT", 3, handoff_lint.NEXT_MAX, "NEXT<=3")]
+    assert [c[:2] for c in caps("`NEXT`'s cap of 3")] == [("NEXT", 3)]
+    assert caps("`NEXT`'s cap of `3`") == []          # quoted figure: a citation
+    assert caps("it used to read `NEXT is capped at 3`") == []   # quoted phrase, ditto
+
+
+def test_cap_phrasings_that_are_not_a_tier_cap_stay_silent(run_check):
+    """The false-positive side, each one a real or near-real line.
+
+    Lower-case "next" is English, not the tier. "the 100,000 fan-out cap of rows" is the
+    closure cap (CLAUDE.md). The bare noun form "NEXT cap 3" is NOT matched on purpose:
+    the open TK128 row's frontmatter brief quotes the defect in exactly that form. And the
+    fence / FROZEN escapes still apply to caps, as they do to censuses.
+    """
+    for line in ("the next cap of 3 is fine", "up to the 100,000 fan-out cap of rows",
+                 "banner says NEXT cap 3 (it is 5)"):
+        assert run_check({"docs/live.md": "# live\n\n%s\n" % line}) == [], line
+    fenced = "# live\n\n```\nNEXT is capped at 3\n```\n"
+    assert run_check({"docs/live.md": fenced}) == []
+    assert run_check({"docs/live.md": FROZEN_BANNER + "\nNEXT is capped at 3.\n"}) == []
+
+
+def test_the_cap_check_reads_the_live_constant_not_a_literal(run_check, monkeypatch):
+    """If the cap moves, the check moves with it. Raising `NEXT_MAX` to 5 on 2026-10-04g
+    is what made the banner stale; a check with a hardcoded 5 would go stale the same way
+    at the next raise. `TIER_CAPS` must also agree with `NEXT_MAX` itself."""
+    assert handoff_lint.TIER_CAPS == {"NOW": 1, "NEXT": handoff_lint.NEXT_MAX}
+    monkeypatch.setitem(handoff_lint.TIER_CAPS, "NEXT", 3)
+    assert run_check({"docs/live.md": "# live\n\nNEXT is capped at 3.\n"}) == []
+    assert len(run_check({"docs/live.md": "# live\n\nNEXT is capped at 5.\n"})) == 1
+
+
+# --------------------------------------------------------------------------- #
+# bound-first caps, wrapped caps, and the fence-toggle blind spot (fix-hk, 2026-10-07d)
+# --------------------------------------------------------------------------- #
+# The TK128 version above was reviewed and found blind to the form that had actually
+# rotted: the rule sentence "at most three `NEXT` among OPEN tasks", bound FIRST. Three such
+# lines were live in scanned docs when the check landed green, one of them wrapped across
+# two lines, and three more sat in docs/tasktool-spec.md BEHIND a prose line starting with
+# three backticks, which the walk took for a fence and which hid the rest of the file.
+# Retrospective control (2026-10-07d): the shipped check, run on HEAD e8b340b's
+# docs/tasktool-spec.md + docs/gate-runbook.md, now reports exactly the five sites a
+# reviewer and an independent census found by hand --
+#   gate-runbook.md:304 'at most three `NEXT'   gate-runbook.md:451 (wrapped, same token)
+#   tasktool-spec.md:157 '<= 3 NEXT'   :343 'NEXT<=3'   :425 'at most three `NEXT'
+# and before this change it reported none of them. Literal observed line for :425:
+#   docs/tasktool-spec.md:425 restates the NEXT cap as 3 ('at most three `NEXT'), but the
+#   live cap is 5. A cap is a rule, not a stamped measurement, ...
+#
+# MUTATION SWEEP, 2026-10-07d, each mutant exec'd in memory as `scripts.handoff_lint`, this
+# module run against it (unmutated: 25 passed). 7/7 caught:
+#
+#   M1 bound-first pattern never matches     3 failed  bound_first, wrapped, prose_line
+#   M2 no join (per-line only)               1 failed  wrapped  (AssertionError: [], 0 == 1)
+#   M3 join re-reports non-crossing matches  6 failed  every single-line cap test (doubled)
+#   M4 fence = any line starting with ```    1 failed  prose_line  (AssertionError: [])
+#   M5 walk never passes the next line       1 failed  wrapped
+#   M6 bound words narrowed to "at most"     1 failed  bound_first
+#   M7 join takes next-line-only matches     6 failed  every single-line cap test (doubled)
+#
+# Not tested, on purpose: a fence / `## Log` guard on the join. No such line can COMPLETE
+# a crossing match (neither starts with a number or a tier name), so a guard would be an
+# untestable branch; the walk carries a comment saying so instead.
+BOUND_FIRST_LINE = "5. exactly one `NOW` and at most three `NEXT` among OPEN tasks;"
+WRAPPED_LINES = ("  exactly one `NOW` row and at\n"
+                 "  most three `NEXT`, zero retired glyphs, the trap budget\n")
+BACKTICK_PROSE = "  ``` or `~~~` fence is skipped, so a worked example of the banner shape\n"
+
+
+def test_a_bound_first_cap_is_caught_and_a_correct_one_is_not(run_check):
+    """The real check-5 line of docs/tasktool-spec.md, planted back; the same sentence at
+    the live value is silent (a VALUE check, as above). Every bound word is exercised so
+    one that quietly stops matching cannot pass."""
+    bad = run_check({"docs/live.md": "# live\n\n%s\n" % BOUND_FIRST_LINE})
+    assert len(bad) == 1 and "docs/live.md:3" in bad[0], bad
+    assert "NEXT cap as 3" in bad[0] and "at most three `NEXT" in bad[0], bad
+    live = handoff_lint.NEXT_MAX
+    for bound in ("at most", "<=", "≤", "up to", "no more than", "maximum of", "max"):
+        ok = "# live\n\nthere are %s %d `NEXT` rows.\n" % (bound, live)
+        assert run_check({"docs/live.md": ok}) == [], bound
+        stale = "# live\n\nthere are %s %d `NEXT` rows.\n" % (bound, live - 2)
+        assert len(run_check({"docs/live.md": stale})) == 1, bound
+    assert run_check({"docs/live.md": "# live\n\nat most two NOW rows\n"}) != []
+
+
+def test_a_cap_wrapped_across_two_lines_is_caught_once(run_check):
+    """docs/gate-runbook.md 4f as it stood: "at" ends one line, "most three `NEXT`" starts
+    the next. Reported ONCE, on the line the claim starts on -- not zero times (a per-line
+    walk), and not twice (a join that re-reports what one line already shows)."""
+    bad = run_check({"docs/live.md": "# live\n\n" + WRAPPED_LINES})
+    assert len(bad) == 1, bad
+    assert "docs/live.md:3" in bad[0] and "at most three `NEXT" in bad[0], bad
+    one_line = run_check({"docs/live.md": "# live\n\n%s\nnext line\n" % BOUND_FIRST_LINE})
+    assert len(one_line) == 1, one_line
+    # a claim wholly on the NEXT line is reported there, not on this one
+    later = run_check({"docs/live.md": "# live\n\nintro\n%s\n" % BOUND_FIRST_LINE})
+    assert len(later) == 1 and "docs/live.md:4" in later[0], later
+
+
+def test_a_prose_line_starting_with_backticks_does_not_blind_the_walk(run_check):
+    """docs/tasktool-spec.md's "``` or `~~~` fence is skipped" line, planted above a real
+    fenced example and a stale cap. CommonMark: a backtick fence's info string may not
+    contain a backtick, so that line is prose. Before fix-hk it toggled the fence state,
+    the real fence after it was read as an OPENER, and every line after that -- here the
+    stale cap -- was never scanned. A real fence still hides its body."""
+    text = ("# live\n\n" + BACKTICK_PROSE + "\n```json\n{\"NEXT\": 3}\n```\n\n"
+            + BOUND_FIRST_LINE + "\n")
+    bad = run_check({"docs/live.md": text})
+    assert len(bad) == 1 and "docs/live.md:9" in bad[0], bad
+    assert handoff_lint._is_fence("```") and handoff_lint._is_fence("  ```json")
+    assert not handoff_lint._is_fence(BACKTICK_PROSE)

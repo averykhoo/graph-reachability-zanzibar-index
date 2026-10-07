@@ -32,6 +32,92 @@ from here.
 
 ---
 
+## 2026-10-07d — context housekeeping `TK128`-`TK131` closed: caps on `CLAUDE.md` / `HANDOFF.md`, prunes
+
+rows: TK128, TK129, TK130, TK131 (all closed), TK126 (scouted)
+
+`task lint: clean (13 checks, 248 task file(s) parsed), 29 warning(s)`
+
+`read: board + note` -- the user named the work (TK128-TK131, then TK127); rows read with `show`.
+
+**One workflow did the four context-audit items** (`docs/context-audit-2026-10-07.md`): a
+sequential chain of implementers (TK128+129 -> TK130 -> TK131 `CLAUDE.md`), one implementer
+in parallel on `formal/HANDOFF.md`, two adversarial reviewers, and one fixer. The fixer
+confirmed all 8 reviewer findings and fixed them. Sizes before -> after (2026-10-07):
+`CLAUDE.md` 45.5 KB -> ~31.7 KB, `HANDOFF.md` 18.8 KB -> 3.4 KB, `formal/HANDOFF.md`
+520 -> 241 lines (text moved verbatim to `formal/history/handoff-retired-2026-10-07.md`).
+New caps live in `scripts/handoff_lint.py` (`MAX_BYTES`, banner line width, a `CLAUDE.md`
+slack ratchet, `formal/HANDOFF.md` ratcheted), and the tier-cap value check is in
+`check_restated_counts`. All of them run in the `lean` phase, and every one has a permanent
+sabotage test. What the reviewers caught:
+- The first tier-cap lint missed the phrasing that actually rots ("at most three `NEXT`").
+- A code-fence misdetection meant `docs/tasktool-spec.md:144-522` was never scanned.
+- A test reading `CLAUDE.md` did not stale the tiles, so `scripts/gate_status.py::CODE_SCOPE_MD_KEEP` now keeps it.
+
+The user's 2026-09-22c goal moved off the banner into `docs/architecture/decision-log.md`,
+plus one `CLAUDE.md` line.
+Every moved passage, with its surviving home quoted, is in
+[`docs/history/context-caps-housekeeping-2026-10-07.md`](../context-caps-housekeeping-2026-10-07.md)
+(the seven agent reports, transcribed). I re-checked it first-hand by grepping the pruned
+`CLAUDE.md` for about 40 rule keywords; none was lost.
+
+**`TK126` scouted, read-only, for `TK127`:**
+[`docs/tk126-ttu-target-boolean-name-2026-10-07.md`](../tk126-ttu-target-boolean-name-2026-10-07.md)
+(ACTIVE-PLAN). It recommends design (a), type-aware admission checks, and serving B/C/D. Its
+probes found no mismatches on any path tried.
+
+Residual: `scripts/task.py::CONFIG_DEFAULTS` still defaults `NEXT` to 3. That default is never
+reached with the shipped `tasks/config.json`.
+
+Still owed: none (the 2026-10-07c uncommitted records are committed with this entry).
+
+---
+
+## 2026-10-07c — `zanzibar-index` 0.0.2 is live; its install trial found 3 bugs -> `TK127` (NOW)
+
+rows: TK122 (closed), TK127 (new, NOW), TK123/TK124/TK125/TK126 (new), TK102 (NOW -> NEXT)
+
+`task lint: clean (13 checks, 244 task file(s) parsed), 29 warning(s)`
+
+`read: board only` -- same session as `2026-10-07` / `2026-10-07b`.
+
+**0.0.2 shipped.** `master` and tag `v0.0.2` were pushed (`578d5f4`) as two commands, after a
+fetch. A CI-babysitter subagent reported both runs green on every job, including `conf (2)`
+and the first trusted-publishing upload. Its smoke-test line was `wheel smoke test OK: 0.0.2
+(2 checks)`, and build provenance was attested. PyPI first-hand: wheel + sdist,
+`Apache-2.0`, `>=3.13`. `TK122` CLOSED. (The user asked why 0.0.2 and not a re-tagged 0.0.1.
+Nothing forces it, since 0.0.1 was never uploaded, but a pushed tag is not moved; the user
+was fine with that.)
+
+**The first fresh-user install trial** (a subagent: blank conda env, `pip install
+zanzibar-index==0.0.2`, PyPI page only) found three BROKEN items. All were re-run first-hand
+against `src/` and reproduced. B1: the graph index refuses `x from parent` when `x` names a
+boolean relation on ANY type, which is the ordinary OpenFGA idiom; the set engine accepts it,
+and a second form crashes both backends with an internal-object `ValueError`. B2: `schema=""`
+bricks a store id. B3: a `None` predicate leaks `IntegrityError`. Plus a long CONFUSING/DOC-GAP
+list. Transcribed the same hour: [`docs/pypi-trial-0.0.2-2026-10-07.md`](../pypi-trial-0.0.2-2026-10-07.md).
+
+User decisions in chat: put an item at `NOW` to fix everything broken in 0.0.2 -> `TK127`,
+the umbrella for `TK126` (B1, L), `TK124` (B2) and `TK125` (B3). Naming and ergonomics
+(`zanzibar.connectedstore`, opaque `lookup` ids, docstrings) are parked for later -> `TK123`.
+`TK102` moved NOW -> NEXT to make room, and `TK126` is at LATER under its NOW parent, because
+NEXT was full.
+
+**Process, user instruction:** the post-release install trial is now a standing rule beside the
+CI babysitter, in `~/.claude/CLAUDE.md` sec "Git: gate, commit, push" (machine-wide).
+
+A concurrent session committed `e8b340b` (context-framework audit, `HANDOFF.md` + one doc) on
+top of `578d5f4`, unpushed. Its `HANDOFF.md` lines were kept. This session commits by path only.
+
+The concurrent session's audit (`docs/context-audit-2026-10-07.md`) had recorded five fixes as
+a doc plus a Still-owed bullet, but with no rows. Items 1-4 were minted as `TK128`-`TK131` (LATER).
+On item 5 the owner chose to promote `TK97` to NEXT. The audit doc is now FROZEN by its own
+rule, and its bullet was removed.
+
+Still owed: see `HANDOFF.md` sec "Still owed" (2026-10-07c).
+
+---
+
 ## 2026-10-07b — `TK122`: v0.0.1's first CI run found a Linux-only test bug; fixed, releasing 0.0.2
 
 rows: TK122

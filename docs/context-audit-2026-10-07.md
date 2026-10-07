@@ -1,7 +1,9 @@
 # Context-framework audit: fixes owed in this repo (cross-repo audit, 2026-10-07)
 
-**ACTIVE-PLAN** until every item below is minted into the tree (`task.py new`) or done, then
-FROZEN. Written by a cross-repo audit session run from outside this repo (not a session here);
+**FROZEN 2026-10-07c (every item minted or answered).** Items 1-4 are `TK128`-`TK131`. Item 5:
+the owner promoted `TK97` to NEXT and left `HS-5` / `TK86` at LATER. Live state is
+`python scripts/task.py show <id>`, never this file. It was an ACTIVE-PLAN until every item
+below was minted into the tree (`task.py new`) or done. Written by a cross-repo audit session run from outside this repo (not a session here);
 its working notes were in the gitignored `PycharmProjects/.scratch/context-framework/`, so this
 file is the only tracked copy. Owner's instruction: deal with these. All figures measured
 2026-10-07.

@@ -13,6 +13,12 @@ profile. The rest of this file is the **durable guidance** any round must read
 first: the fence, the confirmed dead-ends, an open correctness note, and the
 measurement/gate hygiene.
 
+> **Read this before any perf work: perf is DEPRIORITIZED by the user's 2026-09-22c goal
+> decision, not abandoned.** There is no performance target, so a win cannot yet be shown
+> to be worth anything outside the repo. When perf reopens, **the first move is `TK34`**
+> (the regression canary), not an `R6-N` row. Reasoning: `python scripts/task.py show R6`,
+> note 2026-09-22c; the decision: `docs/architecture/decision-log.md` § "The project goal".
+
 - Round 3 (P12-M, P12a/b, N4–N9, the P1 follow-up, P13) landed and pushed; retired
   verbatim in [`docs/history/perf-round3-2026-07.md`](history/perf-round3-2026-07.md).
 - Round 4 (R4-BF, N15, N16, M2 + follow-up, N17, N10, N18, the zanzibar.graphindex grab-bag

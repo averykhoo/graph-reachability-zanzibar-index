@@ -156,7 +156,7 @@ ranking argument happens once at write time instead of being re-derived every se
 requirement to gather, a priority call — as opposed to an engineering decision the model
 should simply take (`CLAUDE.md` § "Who decides"). It sits at `LATER` by default; promoting
 one to `NEXT` means **the session must raise it with the user, in chat, at least once that
-session**. `NEXT`'s cap of 5 therefore bounds the standing nags at five, and an `ASK-*`
+session**. `NEXT`'s cap (`tasks/config.json` `budgets`) therefore bounds the standing nags, and an `ASK-*`
 competes for those slots on the same terms as any other row. The nag is enforced, not
 remembered: while an ask sits at `NEXT` (or `NOW`, which never silences it), the ledger
 entry names it on an `asked:` line (§7 step 1). Filing rules and the `asks` view:
@@ -191,8 +191,9 @@ refuses any other (`′`, `✅`, `📌`, `🔍` are the ones that have been past
 **⚠ overflow is a defined move, not an invention.** At budget, the trap demotes to the
 owning task file's `## Traps` section (`python scripts/task.py show <id> --section traps`)
 and the banner keeps at most a pointer. If that feels wrong, the trap was load-bearing
-enough to belong in `CLAUDE.md` — which is auto-loaded every session, so it costs the
-reader nothing.
+enough to belong in `CLAUDE.md` — which is auto-loaded every session, so the reader cannot
+miss it. It is also byte-capped (`handoff_lint.py::MAX_BYTES`), so a promotion lands as the
+rule plus one line of why and a pointer, and may have to compress something else.
 
 ## 5. Stable keys, never positions
 
@@ -282,10 +283,12 @@ trace is how the last accretion started.
    § "The `ASK-*` series".
 2. **Rewrite the `## Banner` of [`HANDOFF.md`](../HANDOFF.md)** — the single copy: gate
    state as observed, the entry key just created on its FIRST line, the headline, what
-   the next session must not repeat. At most `task.py::BANNER_MAX_LINES` lines, only
-   glyphs `ASCII_FOLD` maps (§4); check 12 enforces all three. Then rewrite the rest of
-   the note: `## Still owed` (verbatim skipped actions, or "Nothing") and the next-session
-   pointer. The whole file stays under `handoff_lint.py::MAX_LINES`.
+   the next session must not repeat. At most `task.py::BANNER_MAX_LINES` lines of at most
+   `task.py::BANNER_MAX_WIDTH` characters, only glyphs `ASCII_FOLD` maps (§4); check 12
+   enforces each of these. Rewrite old lines, never append a layer to one (§6). Then rewrite
+   the rest of the note: `## Still owed` (verbatim skipped actions, or "Nothing") and the
+   next-session pointer. The whole file stays under `handoff_lint.py::MAX_LINES` and
+   `MAX_BYTES`.
 3. **Edit the tree, by op, in the same session.** `promote <id> <PRI>` for every re-rank;
    `touch <id>` for every task you progressed and did not otherwise write (never edit
    `moved` by hand — it is what `board` reads to warn about neglect); `close <id> -m`
@@ -305,8 +308,9 @@ trace is how the last accretion started.
    repo-wide. The banner carries a pointer at most.
 
 ⚠ Editing any `*.md` changes the `t2a` tree id and stales the `lean` verdict, and
-`t2c` includes `tasks/*.md` and `HANDOFF.md` (`gate_status.py::CODE_SCOPE_MD_KEEP`), so
-a tree or note edit stales the pytest tiles too. Write the records FIRST, then run the
+`t2c` includes the markdown collected tests read -- `tasks/*.md`, `HANDOFF.md` and the
+rest of `gate_status.py::CODE_SCOPE_MD_KEEP` (the list lives there only) -- so a tree or
+note edit stales the pytest tiles too. Write the records FIRST, then run the
 gate, then commit. Before starting anything: `bash formal/verify.sh lean` should be green
 in ~60 s warm; if it is not, fix that first — it is the fastest signal in the repo.
 
@@ -317,7 +321,7 @@ Moved here from `HANDOFF.md` at the 2026-09-06 cutover. `CLAUDE.md` is auto-load
 
 | doc | what it is | when to read |
 |---|---|---|
-| [`CLAUDE.md`](../CLAUDE.md) | durable rules: env, the gate, layout, testing conventions, invariants, the four footguns | every session (auto-loaded) |
+| [`CLAUDE.md`](../CLAUDE.md) | durable rules: env, the gate, layout, testing conventions, invariants, the standing footguns (listed there, not counted here). Byte-capped (`handoff_lint.py::MAX_BYTES`): each rule carries one line of why and a pointer; its case history goes to `history/session-log.md`, its detail to the doc that owns it | every session (auto-loaded) |
 | [`HANDOFF.md`](../HANDOFF.md) | the one-hop note: the banner, `## Still owed`, the next-session pointer — nothing a query can derive | every session, after `python scripts/task.py board` |
 | [`../tasks/README.md`](../tasks/README.md) · [`tasktool-spec.md`](tasktool-spec.md) | the task tree: layout, reading protocol, the rules `lint` cannot enforce / the tool's full contract and op semantics | before your first write op; when an op refuses |
 | this file | doc-system conventions: liveness, banners, ledger format, citation keys, signals, the Rhythm | before restructuring any doc; at write-back |

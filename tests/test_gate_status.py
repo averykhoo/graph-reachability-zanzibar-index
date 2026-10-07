@@ -98,6 +98,7 @@ Two of the failures, verbatim:
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -651,3 +652,72 @@ def test_green_phases_matches_each_row_against_its_own_scope(repo: Path) -> None
     assert "conf-tile:1/5" in green
     # recorded under the wrong scope -> must NOT count
     assert "tests-tile:1/4" not in green
+
+
+
+# --------------------------------------------------------------------------- #
+# the markdown the suite READS stays in the code scope (fix-hk, 2026-10-07d)
+# --------------------------------------------------------------------------- #
+# The 2026-09-03c lesson recurred: three test modules joined the gate reading LIVE
+# markdown (PYPI_README.md, CHANGELOG.md, formal/CORRESPONDENCE.md, plus one day of
+# CLAUDE.md) and nobody re-ran the survey, so an edit to any of them could redden a
+# tests tile while `gate_status.py` reported it COVERED. Two tests close it: a PAIR
+# (each kept file moves `t2c`, and its excluded neighbour does not), and a literal
+# survey of the test modules themselves, so the next module that reads a root .md
+# is red on arrival instead of found by a reviewer.
+# SABOTAGE 2026-10-07d (in memory, `.scratch/hk-2026-10-07d/fixhk_sweep3.py`):
+#   drop b"PYPI_README.md" from CODE_SCOPE_MD_KEEP -> 2 failed (both tests below)
+#   drop b"formal/CORRESPONDENCE.md"               -> 1 failed (the pair test only:
+#       "formal/CORRESPONDENCE.md is read by a collected test; t2c must move") --
+#       the survey test's stated limit, an indirect read, observed rather than assumed.
+# And the survey's regex, fed the line the TK131 module carried for one day,
+# `(REPO_ROOT / 'CLAUDE.md').read_text(...)` (double-quoted there; single-quoted here so
+# this module's own survey does not read its comment), resolves `CLAUDE.md` -> red.
+_KEPT_MD = ("tasks/T1-x.md", "HANDOFF.md", "PYPI_README.md", "CHANGELOG.md",
+            "formal/CORRESPONDENCE.md")
+_EXCLUDED_MD = ("docs/notes.md", "formal/HANDOFF.md", "CLAUDE.md", "README.md")
+
+
+def test_markdown_a_collected_test_reads_moves_the_code_scoped_id(repo: Path) -> None:
+    for rel in _KEPT_MD + _EXCLUDED_MD:
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_bytes(b"first\n")
+    for rel in _KEPT_MD:
+        before = _code_id(repo)
+        (repo / rel).write_bytes(b"first\nedited\n")
+        assert _code_id(repo) != before, f"{rel} is read by a collected test; t2c must move"
+    for rel in _EXCLUDED_MD:
+        before = _code_id(repo)
+        (repo / rel).write_bytes(b"first\nedited\n")
+        assert _code_id(repo) == before, f"{rel} is read by no collected test"
+
+
+_ROOT_PATH = re.compile(r'\b(?:ROOT|REPO_ROOT|REPO)((?:\s*/\s*"[^"]+")+)')
+
+
+def test_every_md_a_test_module_names_from_the_repo_root_is_in_the_code_scope() -> None:
+    """Literal survey: `<ROOT> / "a" / "b.md"` in any collected test module must resolve
+    to a path `t2c` covers. Its LIMIT, stated so nobody over-trusts it: an INDIRECT read
+    -- a module constant like `claim_rot.DOC` read by tests/test_claim_rot_gate.py -- is
+    invisible to it; that one was found by following the import, and is pinned by the
+    pair test above instead.
+
+    Observed red with b"PYPI_README.md" dropped from CODE_SCOPE_MD_KEEP (2026-10-07d)::
+
+        AssertionError: tests/test_tk122_release_metadata.py reads PYPI_README.md, which
+        t2c does not cover ...
+    """
+    mods = sorted(REPO_ROOT.glob("tests/test_*.py")) + sorted(
+        REPO_ROOT.glob("formal/conformance/test_*.py"))
+    seen = 0
+    for mod in mods:
+        for m in _ROOT_PATH.finditer(mod.read_text(encoding="utf-8")):
+            rel = "/".join(re.findall(r'"([^"]+)"', m.group(1)))
+            if not rel.endswith(".md"):
+                continue
+            seen += 1
+            assert gate_status._in_scope(rel.encode(), gate_status.SCOPE_CODE), (
+                f"{mod.relative_to(REPO_ROOT).as_posix()} reads {rel}, which t2c does not "
+                f"cover: add it to scripts/gate_status.py::CODE_SCOPE_MD_KEEP (and re-do "
+                f"the survey there), or stop reading the live file")
+    assert seen >= 2, f"the survey found only {seen} root-relative .md read(s); it went blind"

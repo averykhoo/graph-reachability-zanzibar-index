@@ -13,7 +13,7 @@ source_hash:
 created: 2026-10-07
 moved: 2026-10-07b
 updated: 2026-10-07b
-closed:
+closed: 2026-10-07b
 ---
 
 Publish the library to PyPI as `zanzibar-index` (Alpha; import name `zanzibar`). The
@@ -75,3 +75,5 @@ User registered the PyPI trusted publisher and asked for tag-only deploys as in 
 ### 2026-10-07b
 
 v0.0.1 pushed (master 5d9c92f, tag pushed separately after a first combined push rejected master but accepted the tag; that stray tag was deleted, nothing published). CI first run, babysat by a subagent: lean, tests 1-4, conf 1/3/4/5 and all five fuzz modules GREEN on GitHub; conf (2) RED in both the master gate run and the publish run -- formal/conformance/test_runner_retry.py::test_spawn_oserror_retried_then_succeeds, 1 failed / 217 passed. Cause verified first-hand: only Windows CPython maps OSError 4th arg to .winerror, so on Linux the retry never fired (and the no-retry test passed vacuously). Fixed in the stub; a Linux-modelling control (del e.winerror) reproduces 1 failed / 6 passed. Deploy was skipped, PyPI 404: 0.0.1 is tagged, never published. Bumped to 0.0.2 per user instruction.
+
+DONE: zanzibar-index 0.0.2 is live on PyPI (wheel + sdist, Apache-2.0, >=3.13), published by publish.yml from tag v0.0.2 via trusted publishing; both GitHub runs green on every job; wheel smoke test OK; build provenance attested. 0.0.1 tagged, never published (Linux-only test-stub bug, fixed in 0.0.2). The fresh-user install trial ran (docs/pypi-trial-0.0.2-2026-10-07.md) and found three BROKEN items, filed as TK124/TK125/TK126 under the NOW umbrella TK127; ergonomics deferred to TK123 (user). Post-release install trial + CI babysitter are now standing rules in ~/.claude/CLAUDE.md sec Git.

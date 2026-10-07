@@ -436,6 +436,25 @@ helper rather than to a claim, treat the run as incomplete and ask what the help
 shielding.** Under the repo's durability ranking that is also the fix — the two refusal
 pins are now permanent tests, not a docstring note about a limitation.
 
+**Four more, promoted from the `HANDOFF.md` banner on 2026-10-07d (`TK130`), where they had
+no other home:**
+* **A green needs a CEILING control** (`P6` step 1, 2026-09-13b): an arm that does strictly
+  more than the mechanism under test can. With it, a nonzero residual reads as "these nodes
+  were never reached"; without it, it reads as "the mechanism is incomplete", and step 1's
+  residual nearly re-planned step 3 for nothing. Worked example:
+  `docs/tk77-crossable-census-2026-09-19.md` (`_ensure_own_bridges`).
+* **A red on a PROOF is not a pin; ask which CLAIM went red** (`P6` step 3a, 2026-09-13d).
+  Two mutations reddened only the proof of `structInv_writeBridgedOne`, so rewriting that
+  proof would have retired the only evidence for two of the definition's three assertions.
+  Behavioural witnesses were added first.
+* **An arm instantiated at a CONCRETE witness is defeq-blind** to a mutation that preserves
+  the witness's value (`TK68`, 2026-09-13e), so its silence under such a mutation is not
+  evidence.
+* **When two candidate fixes both turn the witness green, the witness cannot choose between
+  them** (`TK73`, 2026-09-17): sabotage the thing the fix is supposed to DETECT and watch
+  each candidate. The cheap one (one more cascade round) silently repaired genuine staleness
+  and reported success. Record: `docs/tk73-cascade-quiesce-gc-2026-09-17.md`.
+
 ### A check that PARSES before it compares has two halves, and the easy sabotage tests one (2026-08-24c)
 
 Most checks in this repo are *extract, then compare*. A sabotage input chosen in a shape

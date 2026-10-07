@@ -1131,7 +1131,7 @@ run_lean() {
 
   # -------------------------------------------------------------------------- #
   # 4f. THE HANDOFF LINT. The board files carry capacities that are prose until
-  # something checks them: exactly one NOW row, at most three NEXT rows, a trap
+  # something checks them: exactly one NOW row, the NEXT cap (tasks/config.json), a trap
   # budget, line ceilings, a liveness declaration on every history file, and the
   # bold-caps ratchets. It rides the `lean` phase for the same reason 4d/4e do --
   # pure Python, no Lean toolchain, well under a second -- and NOT as an eleventh

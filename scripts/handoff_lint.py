@@ -12,8 +12,8 @@ Exit 0 = clean, exit 1 = at least one violation, exit 2 = a file it needs is mis
 WHY THIS EXISTS
 ---------------
 The 2026-08-16 handoff redesign replaced a 986-line accreted status file with a compact
-board. Every capacity in that design -- one ``NOW`` row, at most three ``NEXT`` rows, a
-bounded trap budget, a line ceiling -- was prose, and this repo's own record shows what
+board. Every capacity in that design -- one ``NOW`` row, a ``NEXT`` cap (live value:
+``NEXT_MAX``), a bounded trap budget, a line ceiling -- was prose, and this repo's own record shows what
 happens to a capacity nobody checks: ``HANDOFF.md`` restated gate counts in prose three
 separate times after a rule forbade it (``ZT-P3-5``), and ``formal/HANDOFF.md`` still
 claimed "~250 lines top to bottom" at 1005 lines. An unenforced size claim rots exactly
@@ -158,9 +158,86 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 #   formal/HANDOFF.md was 1005 lines with a 1105 ceiling that the script itself called
 #                    "not a guard". HS-3 (the deep half) landed 2026-08-16: 1010 -> 471,
 #                    so the ceiling drops to 520 as the same landed+10% rule prescribes.
+#                    TK131 (2026-10-07d) pruned it 520 -> 241 lines (the retired blocks are
+#                    verbatim in formal/history/handoff-retired-2026-10-07.md), so the same
+#                    rule gives 241 * 1.1 = 265. Leaving 520 would have handed the next
+#                    sessions 279 free lines, i.e. undone the prune before it was committed.
 MAX_LINES = {
     'HANDOFF.md': 60,
-    'formal/HANDOFF.md': 520,
+    'formal/HANDOFF.md': 265,
+}
+
+# BYTE ceilings (TK130, 2026-10-07d). A line cap alone is evadable by line LENGTH: on
+# 2026-10-07 HANDOFF.md sat inside its 60 lines and its banner inside its 14
+# (scripts/task.py::BANNER_MAX_LINES) while single banner lines ran to ~3.7k chars and the
+# file had grown from 3285 B at the cutover commit (8a9e642, 2026-09-07) to 18803 B, by
+# accreting dated banner layers that docs/README.md section 6 bans. The per-line half of
+# the fix is scripts/task.py::BANNER_MAX_WIDTH (lint check 12); this is the whole-file half.
+# Measured as UTF-8 bytes of the text with LF line endings (``_read`` reads universal
+# newlines), so a Windows CRLF checkout and Linux CI measure the same number.
+#   HANDOFF.md  5000. The pruned file measured 3371 B on 2026-10-07d (TK130). The headroom
+#               is one normal write-back -- a banner of a few lines plus a still-owed
+#               bullet or two -- and no more: the file was already 5449 B two days after
+#               the cutover (af20f86, 2026-09-08), which is the first accreted layer this
+#               cap exists to fire on. Same rule as MAX_LINES: never raise it to fit the
+#               file; move the content to its home (docs/README.md section 1).
+#   CLAUDE.md   32500 (TK131, 2026-10-07d). Auto-loaded into EVERY session, so every byte is
+#               paid by every session; it was uncapped at 45483 B / 558 lines on disk (44925 B
+#               LF, 2026-10-07) and growing ~4 KB a week (docs/context-audit-2026-10-07.md
+#               item 4), mostly as case histories and "this bullet said X until <date>"
+#               provenance inside rules. Pruned to 31017 B LF / 387 lines on 2026-10-07d. The
+#               headroom (~1.5 KB) is one new rule with its one-line why, and less than a
+#               single week's measured growth, so accretion goes red within days and forces a
+#               prune instead of a raise. Model: audio-workspace
+#               src/__tests__/claudeMdShape.test.ts (a byte ceiling plus a per-row cap). The
+#               per-row half is deliberately NOT ported: CLAUDE.md has no table, so a row cap
+#               would read nothing (a check that passes by reading nothing is the house
+#               failure mode). Its analogue -- one bullet regrowing a case history -- is
+#               already bounded by this headroom. If a table is ever added, add the row cap
+#               with it.
+#   formal/HANDOFF.md  21600 (fix-hk, 2026-10-07d). TK131 pruned it to 19636 B LF / 241
+#               lines, but left it with no byte cap, so the line-LENGTH evasion closed for
+#               HANDOFF.md above stayed open here (its widest line was already 639 chars).
+#               Landed + 10%, the same rule as its MAX_LINES entry.
+MAX_BYTES = {
+    'HANDOFF.md': 5000,
+    'CLAUDE.md': 32500,
+    'formal/HANDOFF.md': 21600,
+}
+
+# Byte caps that are also RATCHETS: the headroom (cap minus the file) may not exceed this.
+# Without it a cap only bites on growth; a PRUNE that is not followed by lowering the cap
+# hands its whole size back as free accretion -- which is exactly what TK131 did to
+# formal/HANDOFF.md's caps (520 lines over a 241-line file) until a reviewer caught it.
+#   CLAUDE.md  1900 (fix-hk, 2026-10-07d): below the 1970 B LF footgun-1 case history the
+#              TK131 prune removed (tests/test_tk131_claude_md_cap.py::REGROWN_CASE_HISTORY),
+#              so re-adding one such paragraph to a file at maximal legal headroom is red.
+#              This used to be a pytest assertion over the LIVE CLAUDE.md, which was a gate
+#              hole: the pytest tiles key off `t2c`, which excludes CLAUDE.md
+#              (scripts/gate_status.py::CODE_SCOPE_MD_KEEP), so a CLAUDE.md-only prune could
+#              turn that test red while gate_status still reported the tiles COVERED. Here it
+#              runs in `lean` (step 4f), keyed off `t2a`, which every *.md edit moves.
+# HANDOFF.md is deliberately absent: its size swings with every write-back by design.
+MAX_BYTES_SLACK = {
+    'CLAUDE.md': 1900,
+}
+
+# What to do when a byte ceiling fires, per file: the remedy differs, and a message that
+# names the wrong file's history sends the reader to the wrong fix.
+BYTE_CAP_REMEDY = {
+    'HANDOFF.md': ('A line cap alone is evadable by line length, which is how this file '
+                   'reached 18803 B by 2026-10-07. Do not raise the ceiling to fit the file: '
+                   'delete stale banner layers (docs/README.md section 6) and move content to '
+                   'its home (section 1).'),
+    'CLAUDE.md': ('It is auto-loaded into every session, so every byte costs every session. '
+                  'Do not raise the ceiling to fit the file: cut case histories and '
+                  '"this said X until <date>" provenance to one line of why plus a pointer, '
+                  'and move detail to its home doc (docs/README.md section 8). Raise it only '
+                  'for a genuinely new rule, and say so in the commit.'),
+    'formal/HANDOFF.md': ('A line cap alone is evadable by line length. Do not raise the '
+                          'ceiling to fit the file: retire dated or closed blocks verbatim '
+                          'to formal/history/ (the handoff-retired-*.md pattern) and leave '
+                          'a pointer.'),
 }
 
 BOARD_FILES = ('HANDOFF.md', 'formal/HANDOFF.md')
@@ -229,9 +306,15 @@ STAR = u'★'      # retired from the board files
 # with them (they were lines 227/229/234 of the 2026-08-09 block). Re-measured at 6, which
 # is the ratchet's rule -- leaving it at 9 would have bought three free offenders for the
 # next session, i.e. re-created exactly the slack the original sabotage caught.
+#
+# formal/HANDOFF.md: 6 -> 1 on 2026-10-07d (fix-hk). TK131 retired five of the six offending
+# lines to formal/history/ and did NOT lower the budget -- the very slip the paragraph above
+# warns about, made by a session that had read it. So the ratchet is now MECHANICAL in both
+# directions: `check_bold_caps` is red when a file has FEWER offenders than its budget too,
+# and names the value to lower it to.
 MAX_BOLDCAPS = {
     'HANDOFF.md': 0,
-    'formal/HANDOFF.md': 6,
+    'formal/HANDOFF.md': 1,
 }
 
 # The two ledgers, and the heading forms they use. Both keys are YYYY-MM-DD[letter], which
@@ -385,6 +468,22 @@ def check_ceilings(fail):
             fail('%s is %d lines, ceiling %d. Do not raise the ceiling to fit the file: '
                  'move content to its home per docs/README.md section 1, or raise it '
                  'deliberately and say why in the commit.' % (rel, n, cap))
+    for rel, cap in sorted(MAX_BYTES.items()):
+        lines = _read(rel)
+        if lines is None:
+            fail('MISSING: %s (a ceiling on a file that does not exist guards nothing)' % rel)
+            continue
+        n = len('\n'.join(lines).encode('utf-8'))
+        if n > cap:
+            fail('%s is %d bytes, ceiling %d (MAX_BYTES; LF line endings). %s'
+                 % (rel, n, cap, BYTE_CAP_REMEDY[rel]))
+        elif rel in MAX_BYTES_SLACK and cap - n > MAX_BYTES_SLACK[rel]:
+            fail('%s is %d bytes against a ceiling of %d: %d B of headroom, more than its '
+                 'slack %d (MAX_BYTES_SLACK). The cap no longer bites on one re-accreted '
+                 'paragraph. It is a RATCHET: lower MAX_BYTES[%r] to %d or less, never '
+                 'leave a prune unratcheted.'
+                 % (rel, n, cap, cap - n, MAX_BYTES_SLACK[rel], rel,
+                    n + MAX_BYTES_SLACK[rel]))
 
 
 def _tree_open_pris():
@@ -580,6 +679,12 @@ def check_bold_caps(fail):
                  'that emphasis still ranks. The budget is a RATCHET: clean a line and '
                  'lower it, never raise it to fit.'
                  % (rel, len(hits), budget, hits[:8]))
+        elif len(hits) < budget:
+            fail('%s: only %d line(s) with bold ALL-CAPS outside a trap paragraph, but the '
+                 'budget is %d. The budget is a RATCHET, not an allowance: lower '
+                 'MAX_BOLDCAPS[%r] to %d in the same change that cleaned the line(s), or '
+                 'the slack is free accretion for the next session.'
+                 % (rel, len(hits), budget, rel, len(hits)))
 
 
 def _entry_keys(rel, pattern):
@@ -1069,6 +1174,123 @@ _COUNT_QUOTED = re.compile(u'`[^`]*`|"[^"]*"|“[^”]*”')
 _COUNT_DATED = re.compile(r'\b\d{4}-\d\d-\d\d[a-z]?\b')
 _COUNT_APPEND_ONLY = re.compile(r'\*\*LIVING\b[^\n*]*append-only', re.I)
 
+# --- Restated priority-tier CAPS (added 2026-10-07d, task ``TK128``) ----------------------
+# THE ROT THAT MOTIVATED IT (the "say which rot" rule above). ``HANDOFF.md``'s banner said
+# "`NEXT`'s cap of 3 bounds the standing nags at three" for three days after the cap was
+# raised to 5 (2026-10-04g), and this check passed it -- twice over: no pattern spoke of
+# caps, and the line carried a ``2026-09-22`` key, so the dated escape would have silenced
+# one anyway. The same census (2026-10-07, first-hand) found ``docs/tasktool-spec.md``'s op
+# table still saying ``NEXT<=3``. Both fixed in the landing change by deleting the number.
+#
+# WHY A VALUE CHECK AND NOT A CENSUS REFUSAL. A census (``N tests``) has no live value this
+# script can read, so the only enforceable rule is "do not write it". A tier cap does: it is
+# ``check_priority_capacities``' own constant. So a cap that AGREES passes, and one that
+# disagrees is red with the live value in the message.
+#
+# WHY IT IGNORES THE ``dated`` ESCAPE (and only that one). A date stamps a MEASUREMENT as
+# of its day; a cap is a rule, and a line that restates it is read as current whatever
+# else the line is dated for -- which is exactly how the banner line above survived. A
+# historically-true cap still has a way out: quote it (```3```) or put it in a FROZEN /
+# append-only file. Fence, quote, banner and task-``## Log`` escapes all still apply.
+#
+# The live values are this script's OWN constants, not a read of ``tasks/config.json``:
+# the script imports nothing from the tool it cross-checks, and NEXT_MAX is already pinned
+# equal to ``budgets.NEXT`` by
+# tests/test_handoff_lint_b_prime.py::test_next_cap_matches_the_shipped_tree_budget. NOW's
+# 1 is ``check_priority_capacities``' ``len(now) != 1``.
+TIER_CAPS = {'NOW': 1, 'NEXT': NEXT_MAX}
+CAP_HOME = '`tasks/config.json` `budgets` (mirrored by `handoff_lint.py::NEXT_MAX`)'
+_CAP_WORDS = ('one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten')
+_CAP_NUM = r'(?<![\w.,\-])(?P<num>\d+|(?i:%s))\b' % '|'.join(_CAP_WORDS)
+# Two phrasings, both measured against the live scope on 2026-10-07 (3 hits, 2 of them
+# stale, 0 false). The tier name is CASE-SENSITIVE -- "next" is an ordinary English word
+# and the tier is always written NOW / NEXT. Up to three short words may sit between the
+# tier and "cap" ("NEXT tier has a cap of 3", "NEXT is capped at 5"); the bare noun form
+# "NEXT cap 3" is deliberately NOT matched (the open TK128 row's own frontmatter brief
+# quotes the defect in that form, and a row describing a rot must stay writable).
+#
+# ⚠ CORRECTION 2026-10-07d (fix-hk review): the two tier-FIRST phrasings above missed the
+# form that had actually rotted -- the BOUND-FIRST rule sentence, "at most three `NEXT`
+# among OPEN tasks" (docs/tasktool-spec.md check 5, its field table's "<= 3 NEXT", and
+# docs/gate-runbook.md 4f, which was additionally WRAPPED: "at" / "most three `NEXT`" on
+# two lines, so no per-line scan could see it). The 3-hit "census" behind the first version
+# used this check's own patterns as its instrument, so it could not see what they could
+# not see. The independent census (a tier token within 30 chars of a number in either
+# order, over joined line pairs, all first-party .md/.py/.sh/.json) found those 4 live
+# stale sites plus 3 in code comments; all were fixed by deleting the number. Hence the
+# third pattern, and `_restated_caps`' ``nxt`` argument: a match that STARTS on this line
+# and runs onto the next one is reported here (a match wholly inside the next line is
+# reported when the walk reaches it, so nothing is reported twice).
+# Still deliberately unmatched (measured: no live instance on 2026-10-07): "NEXT budget of
+# 3", "NEXT (cap 3)", "the NEXT-cap of 3", "NEXT's cap: 3", "NEXT < 4". Widen when one rots.
+_CAP_PATTERNS = (
+    ('prose', re.compile(
+        r"\b(?P<tier>NOW|NEXT)\b[`\"'s]{0,4}(?:\s+[A-Za-z']+){0,3}?\s+[Cc]ap(?:ped|s)?\s+"
+        r"(?:of|at|is|=)\s+" + _CAP_NUM)),
+    ('comparison', re.compile(
+        r"\b(?P<tier>NOW|NEXT)\b`?\s*(?:<=|≤|==?)\s*`?(?P<num>\d+)\b")),
+    ('bound-first', re.compile(
+        r"(?:\b[Aa]t\s+most|<=|≤|\b[Uu]p\s+to|\b[Nn]o\s+more\s+than|\b[Mm]ax(?:imum)?"
+        r"(?:\s+of)?)\s*" + _CAP_NUM + r"\s+`?(?P<tier>NOW|NEXT)\b")),
+)
+
+
+def _keep_tier_names(m):
+    """The quoted-span blanker, except a quoted TIER NAME survives.
+
+    The tier is conventionally backticked (```NEXT`'s cap of 3``), and blanking it would
+    blind the cap patterns to every real instance. A quoted NUMBER is still blanked, so
+    quoting the figure remains the citation escape.
+    """
+    span = m.group(0)
+    return span if span[1:-1] in TIER_CAPS else ' ' * len(span)
+
+
+_NUM_WORD_VALUES = dict((w, i) for i, w in enumerate(_CAP_WORDS, 1))
+
+
+def _restated_caps(ln, nxt=None):
+    """[(tier, stated, live, token)] for every tier cap on ``ln`` that DISAGREES.
+
+    ``nxt`` is the following line, when the walk may join it: a cap that starts on ``ln``
+    and wraps onto ``nxt`` is reported here. Only matches that CROSS the join are taken
+    from the joined text; everything wholly on ``ln`` comes from ``ln`` alone, so a stray
+    backtick on the next line cannot pair with one here and blank a claim this line makes.
+    """
+    found = []
+    tiered = _COUNT_QUOTED.sub(_keep_tier_names, ln)
+    for _label, pat in _CAP_PATTERNS:
+        found.extend(pat.finditer(tiered))
+    if nxt is not None:
+        joined = _COUNT_QUOTED.sub(_keep_tier_names, ln + ' ' + nxt)
+        for _label, pat in _CAP_PATTERNS:
+            found.extend(m for m in pat.finditer(joined)
+                         if m.start() < len(ln) < m.end())
+    out = []
+    for m in found:
+        tier, raw = m.group('tier'), m.group('num')
+        stated = int(raw) if raw.isdigit() else _NUM_WORD_VALUES[raw.lower()]
+        if stated != TIER_CAPS[tier]:
+            out.append((tier, stated, TIER_CAPS[tier], ' '.join(m.group(0).split())))
+    return out
+
+
+_FENCE_OPEN = re.compile(r'(`{3,})([^`]*)$')
+
+
+def _is_fence(ln):
+    """True if ``ln`` opens or closes a backtick code fence (CommonMark's rule).
+
+    A backtick fence's info string may not itself contain a backtick, so a PROSE line that
+    merely starts with three backticks -- docs/tasktool-spec.md's "``` or `~~~` fence is
+    skipped" -- is not a fence. Before 2026-10-07d (fix-hk) the walk toggled on any line
+    starting with them, and that one prose line inverted the fence state for the rest of
+    the file: every line from its next real fence onward (field table, op table, lint
+    contract) was read as code and never scanned, which is how three stale ``NEXT`` caps
+    there survived a check that was supposed to see them.
+    """
+    return _FENCE_OPEN.match(ln.lstrip()) is not None
+
 
 def _count_scan_files():
     """(rel, lines) for every file in scope, in a stable order."""
@@ -1156,6 +1378,12 @@ def check_restated_counts(fail):
     directions the walk can go blind. Read it before editing anything here -- it carries a
     ten-mutation sweep in which the obvious widening of the ``checks`` pattern broke this
     check while every test still passed, and the test that now closes that hole says so.
+
+    TIER CAPS (2026-10-07d, ``TK128``). The same walk also judges a restated ``NOW`` /
+    ``NEXT`` cap ("`NEXT`'s cap of 3", ``NEXT<=3``) against ``TIER_CAPS`` -- a VALUE check,
+    not a refusal, and one that does not honour the dated escape. Why both, and the rot
+    that motivated it: the comment block above ``_CAP_PATTERNS``. Pinned by
+    ``tests/test_handoff_lint_count_guard.py`` (the ``tier cap`` section).
     """
     scanned = 0
     for rel in _count_scan_files():
@@ -1171,12 +1399,25 @@ def check_restated_counts(fail):
         is_task = rel.startswith(TASKS_DIR + '/')
         fence = False
         for i, ln in enumerate(lines, 1):
-            if ln.lstrip().startswith('```'):
+            if _is_fence(ln):
                 fence = not fence
                 continue
             if is_task and ln.startswith('## Log'):
                 break
-            if fence or _COUNT_DATED.search(ln):
+            if fence:
+                continue
+            # Tier caps BEFORE the dated escape, on purpose (see _CAP_PATTERNS, TK128).
+            # The next line is joined so a wrapped cap is seen. It needs no fence / `## Log`
+            # guard: only a match that CROSSES the join is taken from it, and a fence or
+            # Log line cannot complete one (neither starts with a number or a tier name).
+            nxt = lines[i] if i < len(lines) else None
+            for tier, stated, live, token in _restated_caps(ln, nxt):
+                fail('%s:%d restates the %s cap as %d (%r), but the live cap is %d. A cap '
+                     'is a rule, not a stamped measurement, so a date on the line does not '
+                     'excuse it. DELETE the number and point at its home (%s); if the line '
+                     'deliberately quotes an old cap, put the number in backticks.'
+                     % (rel, i, tier, stated, token, live, CAP_HOME))
+            if _COUNT_DATED.search(ln):
                 continue
             bare = _COUNT_QUOTED.sub(lambda m: ' ' * len(m.group(0)), ln)
             for label, pat, home in _COUNT_PATTERNS:
