@@ -28,21 +28,16 @@ All this is to help with indexing permissions in [Google Zanzibar](https://zanzi
 
 ## How does it work
 
-Please read the the code to understand how it works.
-~~If it doesn't work then this repo will probably be archived.~~
+~~Please read the the code to understand how it works.
+If it doesn't work then this repo will probably be archived.~~
 
-Okay fine, there are docs now. Start at
-[`docs/architecture/overview.md`](./docs/architecture/overview.md) for the module map
-and the short version of everything. The actual *why* lives in
-[`docs/architecture/theory.md`](./docs/architecture/theory.md) (path-counting
-closure, split wildcard nodes, stratified fixpoints, the star-closed set algebra)
-and [`docs/architecture/correctness.md`](./docs/architecture/correctness.md) (what's
-proved by construction vs pinned by redundant implementations, and the known gaps).
-The full design specs (with the rejected alternatives) are in
-[`docs/specs/`](./docs/specs/), decisions distilled in
+Claude helped to write explainer docs and update some of this readme.
+Start at [`docs/architecture/overview.md`](./docs/architecture/overview.md) for the module map and the short version of everything.
+The actual *why* lives in [`docs/architecture/theory.md`](./docs/architecture/theory.md) (path-counting closure, split wildcard nodes, stratified fixpoints, the star-closed set algebra)
+and [`docs/architecture/correctness.md`](./docs/architecture/correctness.md) (what's proved by construction vs pinned by redundant implementations, and the known gaps).
+The full design specs (with the rejected alternatives) are in [`docs/specs/`](./docs/specs/), decisions distilled in
 [`docs/architecture/decision-log.md`](./docs/architecture/decision-log.md).
-The code cites the specs by section number (`spec §N` / `boolean spec §N`), so they're
-reference material, not just history.
+The code cites the specs by section number (`spec §N` / `boolean spec §N`), so they're reference material, not just history.
 
 ## Repo layout
 
@@ -301,9 +296,15 @@ and cross-store ordering — deliberately out of scope here.
 
 ### `*` wildcard entities (materialized)
 
+Materialization is inevitable in a graph index because the only way to support o(1) reads
+of a permissions graph that might be infinitely nested is to un-nest and have it right there to read when needed.
+This does mean that userset rewrites take a lot of db rows, but that's the cost of an index - space for speed.
+Also wildcards are actually fully supported, both for subjects and objects, whereas OpenFGA only suppots usersets.
+I think Claude may have hallucinated something about "registry objects" so take a pinch of salt with some of the docs below.
+
 Wildcards are supported as a first-class, **materialized** feature in `zanzibar.graphindex`
 (`src/zanzibar/graphindex/wildcard.py`, the `WildcardIndex` façade). We support the OpenFGA subject
-wildcard `user:*`, and — as deliberate extensions beyond OpenFGA — wildcard **usersets**
+wildcard `user:*` syntax, and — as deliberate extensions beyond OpenFGA — wildcard **usersets**
 like `group:*#member`, star **tuplesets** (a stored `doc:d1#parent@folder:*` walked by
 `viewer from parent`), and wildcard **objects** like `folder:*`. `check()` stays constant time (≤4 point lookups
 on a unique index) regardless of data size, nesting depth, or fan-out: all wildcard hops
@@ -411,9 +412,9 @@ goals:
 * causality
 * correctness / consistency
 * generality / expressiveness
-* perforamnce
-* (real) availability <-- why real? might have misread the handwriting on my notes
-* multi-tenancy
+* performance
+* real availability <-- why real? gemini ocr might have misread the handwriting on my notes, i probably wrote "reasonable"
+* multi-tenancy <-- can handled by a single meta permissions store guarding the other stores
 * cross-namespace relations?
     * (2026-09-10) whatever this turns into is a schema-*shape* change, and schemas here are
       static and write-once — a new schema means a new store and index built from the tuples,
@@ -424,8 +425,7 @@ goals:
       the DSL itself on purpose, so sharing one parser fix across both would let a single
       parser bug corrupt both sides of the validation matrix.
 * shared tuples / state?
-* acyclic check
-
+* acyclic checks
 * conditional transitions?
 * default condition exists?
 
