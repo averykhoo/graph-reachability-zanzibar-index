@@ -10,4 +10,4 @@ sharing the schema layer `zanzibar.schema`, and composed with a tuple log in
 you need.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.0.1"

@@ -659,7 +659,11 @@ MIN_CONF_ALL=1087
 #   parametrization went from 3 fixed files to the globbed schema package (12 files x 2
 #   per-file tests + 3 group floors + 1 anti-vacuity test = 28, was 9). 1717 + 23 = 1740,
 #   re-measured: `pytest tests/ -q --collect-only` -> 1740.
-MIN_TESTS_ALL=1740
+# RAISED 1740 -> 1749 on 2026-10-07 (TK122). +6 are the new
+#   tests/test_tk122_table_namespace.py (collect-only: 6); +3 are the new
+#   tests/test_tk122_release_metadata.py (collect-only: 3). 1740 + 9 = 1749, re-measured:
+#   `pytest tests/ -q --collect-only` -> 1749. No drift.
+MIN_TESTS_ALL=1749
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

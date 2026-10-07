@@ -272,6 +272,21 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
   `python scripts/gate_status.py` reports which phases are green **on the current
   tree**, so "did I already run the tiles?" is no longer a memory question. Details
   and the sabotage evidence: [`docs/gate-runbook.md`](docs/gate-runbook.md) §4.
+- **GitHub Actions runs the same gate (`TK122`, 2026-10-07)**: `.github/workflows/gate.yml`
+  is one job per `verify.sh` phase on Linux (the `lean` job hands `zcli` to the conformance
+  tiles), and `.github/workflows/fuzz.yml` is the multi-seed sweep, **on demand and before a
+  release only, never scheduled** (user decision). The workflows only provision and call
+  `verify.sh`; floors and budgets stay there. CI does NOT replace the local gate before a
+  commit or push: CI installs the newest dependency versions, the local env the pinned ones.
+  **Releases deploy ONLY from a `v*` tag** (`.github/workflows/publish.yml`, the same
+  pattern as the sibling repos `ngram-movers-distance` and `python-peass`). It checks that
+  the tag is on master, matches `__version__`, and is not already on PyPI. It then calls
+  `gate.yml` and `fuzz.yml`, smoke-tests the built wheel by running `PYPI_README.md`'s
+  quickstart, attests, and uploads. `workflow_dispatch` is a dry run that skips the upload.
+  ⚠ The file name `publish.yml` and the environment `pypi` are registered on PyPI as the
+  trusted publisher (2026-10-07), so renaming either breaks the upload at its last step.
+  A tag is a RELEASE: push one only on the user's explicit word. Every push, tag or not,
+  gets a CI-babysitter subagent (rule in `~/.claude/CLAUDE.md` § Git).
 - **The PostgreSQL leg is opt-in and therefore easy to think you ran.**
   `bash scripts/pg_local.sh start` prints a DSN; export it as `ZANZIBAR_TEST_DSN` to
   re-run the HA/concurrency modules against a real server plus
@@ -286,7 +301,14 @@ judgement. Read it there. What follows is only what is true HERE and nowhere els
 
 ## Layout / mental model
 - **The library is ONE package, `src/zanzibar/` (`TK120`, 2026-10-06), distribution name
-  `zanzibar` (`pyproject.toml`).** `tests/`, `formal/` (Lean + conformance), `benchmarks/`,
+  `zanzibar-index` (`pyproject.toml`, `TK122` 2026-10-07; the import name stays `zanzibar`).**
+  Apache-2.0. The PyPI long description is `PYPI_README.md`, NOT `README.md`, and its
+  quickstart is executed by `tests/test_tk122_release_metadata.py`; the version lives ONLY
+  in `src/zanzibar/__init__.py::__version__`, and `CHANGELOG.md`'s newest heading must match it.
+  **Every table, explicit constraint and explicit index is named `zanzibar_*` / `ix_zanzibar_*`,
+  and no table sets `extend_existing`** (`TK122`): a consumer's clashing table must fail
+  loudly, never merge (`tests/test_tk122_table_namespace.py`). A new model follows both
+  rules. `tests/`, `formal/` (Lean + conformance), `benchmarks/`,
   `scripts/`, `docs/` sit OUTSIDE it on purpose: Lean is the evidence, not the library, and
   `tests/oracle.py` must import nothing from it. Before TK120 the code lived at the root under
   versioned names (`zanzibar_utils_v1.py`, `index_v4/`, `setengine/`, `connectedstore/`,

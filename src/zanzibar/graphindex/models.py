@@ -20,8 +20,7 @@ class Store(SQLModel, table=True):
     Represents a discrete graph index environment (e.g., a specific Tenant or App).
     Allows attaching arbitrary metadata to the graph boundary.
     """
-    __tablename__ = "store"
-    __table_args__ = {'extend_existing': True}
+    __tablename__ = "zanzibar_store"
 
     id: str = Field(primary_key=True)
     description: str = Field(default="")
@@ -29,18 +28,17 @@ class Store(SQLModel, table=True):
 
 
 class Node(SQLModel, table=True):
-    __tablename__ = "node"
+    __tablename__ = "zanzibar_node"
     __table_args__ = (
         UniqueConstraint('store_id', 'predicate', 'type', 'name', 'wildcard',
-                         name='node_unique_constraint'),
-        {'extend_existing': True},
+                         name='zanzibar_node_unique_constraint'),
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    store_id: str = Field(foreign_key="store.id", index=True)
+    store_id: str = Field(foreign_key="zanzibar_store.id", index=True)
     # The per-column indexes were dropped (N5 audit 2026-07-14): every Node query
     # filters a `(store_id, predicate, type[, name][, wildcard])` leftmost prefix or by
-    # id, all served by `node_unique_constraint`. `store_id` is kept for the FK.
+    # id, all served by `zanzibar_node_unique_constraint`. `store_id` is kept for the FK.
     predicate: str
     type: str
     name: str
@@ -59,14 +57,13 @@ class Node(SQLModel, table=True):
 
 
 class Edge(SQLModel, table=True):
-    __tablename__ = "edge"
+    __tablename__ = "zanzibar_edge"
     __table_args__ = (
-        UniqueConstraint('store_id', 'subject_id', 'object_id', name='edge_unique_constraint'),
+        UniqueConstraint('store_id', 'subject_id', 'object_id', name='zanzibar_edge_unique_constraint'),
         # Object-keyed scans (`core.py:320,617`, `processor.py:260`) filter
         # `(store_id, object_id)` without `subject_id`, so the unique constraint's
         # prefix cannot serve them; this composite does (N5 audit 2026-07-14).
-        Index('ix_edge_store_object', 'store_id', 'object_id'),
-        {'extend_existing': True},
+        Index('ix_zanzibar_edge_store_object', 'store_id', 'object_id'),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -75,9 +72,9 @@ class Edge(SQLModel, table=True):
     # `(store_id, subject_id, ...)` unique-constraint prefix; object-keyed scans use
     # the composite above -- a real per-insert win on both supported backends
     # (SQLite, PostgreSQL), neither of which conjures an index back for an FK column.
-    store_id: str = Field(foreign_key="store.id")
-    subject_id: int = Field(foreign_key="node.id")
-    object_id: int = Field(foreign_key="node.id")
+    store_id: str = Field(foreign_key="zanzibar_store.id")
+    subject_id: int = Field(foreign_key="zanzibar_node.id")
+    object_id: int = Field(foreign_key="zanzibar_node.id")
     direct_edge_count: int = Field(default=0)
     indirect_edge_count: int = Field(default=0)
     # True iff the direct edge was written by the delta processor into a derived-public
@@ -101,15 +98,14 @@ class Residue(SQLModel, table=True):
     shapes / list of concrete subject node ids) -- layout adaptable per spec §4;
     cursor-free, one row per object. Empty residues are deleted, never stored.
     """
-    __tablename__ = "residue"
+    __tablename__ = "zanzibar_residue"
     __table_args__ = (
-        UniqueConstraint('store_id', 'object_node_id', name='residue_unique'),
-        {'extend_existing': True},
+        UniqueConstraint('store_id', 'object_node_id', name='zanzibar_residue_unique'),
     )
 
     id: int | None = Field(default=None, primary_key=True)
     store_id: str = Field(index=True)
-    object_node_id: int = Field(foreign_key="node.id", index=True)
+    object_node_id: int = Field(foreign_key="zanzibar_node.id", index=True)
     relation: str  # unindexed: denormalized for inspection only (N5 audit 2026-07-14)
     stars: str = Field(default='[]')     # JSON: [[type, predicate], ...]
     neg: str = Field(default='[]')       # JSON: [subject_node_id, ...]
@@ -144,18 +140,17 @@ class ResidueRef(SQLModel, table=True):
     PostgreSQL) or silently ignore (on SQLite, where FK enforcement is off by default)
     the very state the checker must be able to see.
     """
-    __tablename__ = "residue_ref"
+    __tablename__ = "zanzibar_residue_ref"
     __table_args__ = (
         # Serves the subject-keyed lookup (`store_id AND subject_node_id`) as a
         # leftmost prefix, which is the whole point of the table; no separate
         # single-column index is added, per the N5 audit 2026-07-14 house rule.
         UniqueConstraint('store_id', 'subject_node_id', 'object_node_id',
-                         name='residue_ref_unique'),
+                         name='zanzibar_residue_ref_unique'),
         # Object-keyed maintenance (`_sync_residue_refs` rewrites one residue's rows)
         # filters `(store_id, object_node_id)`, which the unique constraint's prefix
-        # cannot serve -- same shape as `ix_edge_store_object` above.
-        Index('ix_residue_ref_store_object', 'store_id', 'object_node_id'),
-        {'extend_existing': True},
+        # cannot serve -- same shape as `ix_zanzibar_edge_store_object` above.
+        Index('ix_zanzibar_residue_ref_store_object', 'store_id', 'object_node_id'),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -175,13 +170,12 @@ class DeltaOutbox(SQLModel, table=True):
     processor must still be able to map the flip to its derived key (see
     docs/spec-deviations.md P4).
     """
-    __tablename__ = "delta_outbox"
+    __tablename__ = "zanzibar_delta_outbox"
     __table_args__ = (
         # Composite replaces the single `store_id` index (N5 audit 2026-07-14): serves
         # both the keyset drain (`store_id AND id > ? ORDER BY id`) and the watermark
         # (`store_id ... ORDER BY id DESC LIMIT 1`) as index-only seeks.
-        Index('ix_delta_outbox_store_id_id', 'store_id', 'id'),
-        {'extend_existing': True},
+        Index('ix_zanzibar_delta_outbox_store_id_id', 'store_id', 'id'),
     )
 
     id: int | None = Field(default=None, primary_key=True)

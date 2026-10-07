@@ -32,6 +32,68 @@ from here.
 
 ---
 
+## 2026-10-07 — `TK122`: `zanzibar-index` 0.0.1 (Apache-2.0, `zanzibar_*` tables, CI, tag-only publish)
+
+rows: TK122 (new, NEXT)
+
+`task lint: clean (13 checks, 239 task file(s) parsed), 29 warning(s)`
+
+`read: board only` -- plus `task.py show TK102` to answer "what were we doing"; the note was
+read at write-back only.
+
+The user set `TK102` aside: "lets get pypi publishing settled this session". A readiness scout
+(build, `twine check`, clean-venv install and smoke test, PyPI name probes) found three
+blockers. The worst was B2: ten generic table names (`node`, `edge`, `store`, ...) on SQLModel's
+global metadata, all with `extend_existing=True`. Declaring an application `node` table and
+then importing `zanzibar.graphindex` silently MERGED our columns into it (RAN against the
+installed wheel). User decisions in chat: Apache-2.0; rename the tables; settle everything
+except the upload; full gate in CI; fuzz before a release, never nightly; do not claim the bare
+`zanzibar` name (the model picked `zanzibar-index`; the import name stays `zanzibar`). After
+registering the trusted publisher, the user asked for tag-only deploys as in the sibling repos,
+and for a standing rule that every push gets a CI-babysitter subagent.
+
+- **Tables:** all `zanzibar_*` (constraints too, indexes `ix_zanzibar_*`), no
+  `extend_existing`. Pinned by `tests/test_tk122_table_namespace.py`, sabotages S1-S3 in its
+  docstring. `tests/test_reads.py` went red on the rename before its SQL filters followed
+  (recorded there). Five `models.py` anchor-pin bodies moved. The cited `CORRESPONDENCE.md`
+  rows were re-read (none names a table) and the pin regenerated.
+- **Package:** `LICENSE` (canonical Apache-2.0), PEP 639 metadata, classifiers, URLs,
+  dependency floors at the gate env's versions, `py.typed`, `MANIFEST.in` (no tests in the
+  sdist), `CHANGELOG.md`, `PYPI_README.md`. The version has one source,
+  `zanzibar.__version__`. `tests/test_tk122_release_metadata.py` runs the README quickstart
+  and pins the version (sabotages Q1-Q3). `MIN_TESTS_ALL` 1740 -> 1749, with provenance.
+- **CI:** `.github/workflows/gate.yml` runs the ten `verify.sh` phases on Linux, and the `lean`
+  job hands `zcli` to the conformance tiles. `fuzz.yml` is the multi-seed sweep, on demand or
+  via `workflow_call`. `publish.yml` is on a `v*` tag only and mirrors
+  `ngram-movers-distance/.github/workflows/publish-to-pypi.yml`: tag guards, then gate and
+  fuzz, then a wheel smoke test, attestation and upload. All actions are SHA-pinned, and
+  `actionlint` is clean on all three. **None had run on GitHub when this entry was written.**
+  All four tests tiles were run through `verify.sh` on Linux under WSL (uv-managed Python
+  3.13.16, sqlmodel 0.0.48 / SQLAlchemy 2.1.3, i.e. the newest deps CI will install): green,
+  `438 + 437 + 437 + 437 passed`. The first tile-2 attempt was red for two reasons, both mine:
+  a CRLF `verify.sh` copied into Linux (a sync artifact; git stores LF, `i/lf`), and then
+  `tests/test_tasktool.py::test_sabotage_live_enums_open_blank` catching the dead `gate.yml` /
+  `fuzz.yml` read-first pointers on `TK122` from a sync made before they were fixed.
+- **CI babysitter:** `~/.claude/CLAUDE.md` § "Git: gate, commit, push" (machine-wide, user
+  instruction), with a pointer in this repo's `CLAUDE.md`.
+
+Map: [`docs/pypi-readiness-2026-10-07.md`](../pypi-readiness-2026-10-07.md) (ACTIVE-PLAN; sec 0
+is what landed). `CLAUDE.md` gained the distribution name, the table-namespace rule, the CI
+bullet and the tag-only release rule.
+
+Gate: all ten phases run after this entry is written; see `python scripts/gate_status.py`.
+
+**Release:** the user said to ship **0.0.1** as a pipeline trial (version bumped from the
+planned 0.1.0), push `master` and tag `v0.0.1`. Every push is babysat by a subagent, and an
+agent installs the release from PyPI into a blank conda env and tries it. Anything broken is
+fixed and shipped as 0.0.2, and once the trial has run, the install check is written into
+CLAUDE.md as part of the push process. The outcome lands in `TK122`'s log and the next entry.
+
+Still owed: the CI and install-test outcome of `v0.0.1`, and the CLAUDE.md post-release install
+rule (same session, follow-up commit).
+
+---
+
 ## 2026-10-06 — `TK120` CLOSED: the code is one `src/zanzibar/` package, versions gone, `legacy/` deleted
 
 rows: TK120 (closed), TK102 (-> NOW)

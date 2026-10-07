@@ -22,8 +22,7 @@ from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
 class SchemaRecord(SQLModel, table=True):
-    __tablename__ = "schema_record"
-    __table_args__ = {'extend_existing': True}
+    __tablename__ = "zanzibar_schema_record"
 
     store_id: str = Field(primary_key=True)
     schema_text: str
@@ -32,14 +31,13 @@ class SchemaRecord(SQLModel, table=True):
 
 
 class TupleLog(SQLModel, table=True):
-    __tablename__ = "tuple_log"
+    __tablename__ = "zanzibar_tuple_log"
     __table_args__ = (
         # Composite replaces the single `store_id` index (N5 audit 2026-07-14):
         # `log_rows` (`store_id AND id > ? ORDER BY id`, per sync write) and
         # `log_watermark` (`store_id ... ORDER BY id DESC`) are keyset/max-id shapes;
         # the log is append-only forever, so this is asymptotic protection as it grows.
-        Index('ix_tuple_log_store_id_id', 'store_id', 'id'),
-        {'extend_existing': True},
+        Index('ix_zanzibar_tuple_log_store_id_id', 'store_id', 'id'),
     )
 
     id: int | None = Field(default=None, primary_key=True)   # the token / cursor domain
@@ -55,14 +53,13 @@ class TupleLog(SQLModel, table=True):
 
 
 class IndexCursor(SQLModel, table=True):
-    __tablename__ = "index_cursor"
+    __tablename__ = "zanzibar_index_cursor"
     __table_args__ = (
-        UniqueConstraint('index_store_id', name='index_cursor_unique'),
-        {'extend_existing': True},
+        UniqueConstraint('index_store_id', name='zanzibar_index_cursor_unique'),
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    # `index_store_id` index dropped (N5 audit 2026-07-14): `index_cursor_unique`
+    # `index_store_id` index dropped (N5 audit 2026-07-14): `zanzibar_index_cursor_unique`
     # already indexes it (it's the sole constraint column).
     index_store_id: str
     source_store_id: str = Field(index=True)

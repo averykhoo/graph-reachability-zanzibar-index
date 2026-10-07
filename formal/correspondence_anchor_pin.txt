@@ -310,11 +310,11 @@ src/zanzibar/graphindex/invariants.py::_check_derived_invariants	py:function	ebd
 src/zanzibar/graphindex/invariants.py::_check_outbox_sanity	py:function	a5f3721548e45bd9
 src/zanzibar/graphindex/invariants.py::_check_residue_rows	py:function	98e5fc9fde041bcf
 src/zanzibar/graphindex/invariants.py::check_invariants	py:function	ba2c078d87d6f829
-src/zanzibar/graphindex/models.py::DeltaOutbox	py:class-shell	2d3da9e13a74e850
-src/zanzibar/graphindex/models.py::Edge	py:class-shell	0ce9896bc1530ebd
-src/zanzibar/graphindex/models.py::Node	py:class-shell	b9fb1fe6d9cd87c3
-src/zanzibar/graphindex/models.py::Residue	py:class-shell	f1fbd7f4da925f8a
-src/zanzibar/graphindex/models.py::ResidueRef	py:class-shell	0b121359fc17d6c0
+src/zanzibar/graphindex/models.py::DeltaOutbox	py:class-shell	9fdcd3a205cd3c4e
+src/zanzibar/graphindex/models.py::Edge	py:class-shell	a7aba0dc9206effd
+src/zanzibar/graphindex/models.py::Node	py:class-shell	6dd9e8cbd44fffef
+src/zanzibar/graphindex/models.py::Residue	py:class-shell	9a14108ea48fb557
+src/zanzibar/graphindex/models.py::ResidueRef	py:class-shell	dc2ad859ac35c0ad
 src/zanzibar/graphindex/outbox.py::drain_deltas	py:function	698465c012a62486
 src/zanzibar/graphindex/outbox.py::outbox_rows	py:function	8c3cdfc58c528e6c
 src/zanzibar/graphindex/outbox.py::outbox_watermark	py:function	b1cf76ad7df43ff6

@@ -1,6 +1,10 @@
-# Packaging for the `zanzibar` library (TK120, 2026-10-06). The library is everything
-# under src/zanzibar/; tests/, formal/ (Lean proofs + conformance suite), benchmarks/,
-# scripts/ and docs/ are deliberately NOT part of it.
+# Packaging for the `zanzibar` library (TK120, 2026-10-06; release metadata TK122,
+# 2026-10-07). The library is everything under src/zanzibar/; tests/, formal/ (Lean proofs
+# + conformance suite), benchmarks/, scripts/ and docs/ are deliberately NOT part of it,
+# in the wheel OR the sdist (MANIFEST.in).
+#
+# The DISTRIBUTION is `zanzibar-index`; the IMPORT package stays `zanzibar` (TK122: the
+# bare PyPI name `zanzibar` was free, but the user preferred not to claim it).
 #
 # The GATE does not depend on this file or on an install: pytest.ini sets
 # `pythonpath = src` and formal/verify.sh exports PYTHONPATH=<repo>/src, so every
@@ -9,23 +13,54 @@
 # (it also lists the test tools).
 
 [build-system]
-requires = ["setuptools>=68"]
+# >=77 for the PEP 639 `license` / `license-files` fields below.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "zanzibar"
-version = "0.1.0"
+name = "zanzibar-index"
+dynamic = ["version"]
 description = "Zanzibar-style relationship/permission evaluation: a set engine and a materialized graph index with identical semantics."
-readme = "README.md"
+readme = "PYPI_README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Avery Khoo" }]
+# 3.13 is the only interpreter the gate runs; lower it only with a test leg that proves it.
 requires-python = ">=3.13"
+# Floors are the versions the gate runs on (conda env, read 2026-10-07). No upper caps.
 dependencies = [
-    "sqlmodel",
-    "pyroaring",
+    "sqlmodel>=0.0.39",
+    "pyroaring>=1.1.0",
 ]
+keywords = ["zanzibar", "rebac", "authorization", "permissions", "openfga", "acl"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/averykhoo/graph-reachability-zanzibar-index"
+Source = "https://github.com/averykhoo/graph-reachability-zanzibar-index"
+Documentation = "https://github.com/averykhoo/graph-reachability-zanzibar-index/blob/master/docs/architecture/overview.md"
+Changelog = "https://github.com/averykhoo/graph-reachability-zanzibar-index/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
 postgres = ["psycopg2-binary"]
 test = ["pytest", "hypothesis"]
 
+[tool.setuptools.dynamic]
+# ONE copy of the version: src/zanzibar/__init__.py::__version__.
+version = { attr = "zanzibar.__version__" }
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+zanzibar = ["py.typed"]

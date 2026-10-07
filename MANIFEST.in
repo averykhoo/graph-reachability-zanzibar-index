@@ -1,0 +1,14 @@
+# sdist contents (TK122). The library is src/zanzibar/; the test suite, the Lean proofs,
+# benchmarks, scripts and docs live in the repository, not the sdist -- the tests need
+# formal/ and the root conftest.py to run, so shipping them alone would ship a broken suite.
+include LICENSE
+include PYPI_README.md
+include CHANGELOG.md
+prune tests
+prune formal
+prune benchmarks
+prune scripts
+prune docs
+prune tasks
+global-exclude __pycache__
+global-exclude *.py[cod]

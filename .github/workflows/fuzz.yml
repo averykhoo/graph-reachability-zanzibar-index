@@ -1,0 +1,88 @@
+# The multi-seed hypothesis sweep (TK122, 2026-10-07): `docs/gate-runbook.md` sec 3,
+# "Fuzzing before an algorithm change", run in CI. ON DEMAND and BEFORE A RELEASE only --
+# deliberately NOT on a schedule (user decision 2026-10-07: a nightly run nobody reads is
+# not assurance). The per-commit floor is the `ci` hypothesis profile, which already runs
+# inside gate.yml's tests tiles.
+#
+# Seeds go through `--hypothesis-seed=N`. The HYPOTHESIS_SEED environment variable does
+# NOTHING (tests/conftest.py refuses it), and a sweep written with it runs one seed N times.
+name: fuzz
+
+on:
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: "Space-separated hypothesis seeds"
+        default: "7 19 31 53 71 97"
+        type: string
+      profile:
+        description: "Hypothesis profile (ci = per-commit size; deep = 10x examples, much slower)"
+        default: ci
+        type: choice
+        options: [ci, deep]
+  workflow_call:
+    inputs:
+      seeds:
+        default: "7 19 31 53 71 97"
+        type: string
+      profile:
+        default: ci
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - tests/test_hypothesis.py
+          - tests/test_lookup_hypothesis.py
+          - tests/test_lookup_oracle.py
+          - tests/test_irrelevant_alternatives.py
+          - tests/test_generator_coverage.py
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      - name: Sweep ${{ matrix.module }}
+        env:
+          HYPOTHESIS_PROFILE: ${{ inputs.profile }}
+          SEEDS: ${{ inputs.seeds }}
+          MODULE: ${{ matrix.module }}
+        run: |
+          failed=""
+          echo "### \`$MODULE\` (profile \`$HYPOTHESIS_PROFILE\`)" >> "$GITHUB_STEP_SUMMARY"
+          for s in $SEEDS; do
+            log="$(mktemp)"
+            python -m pytest "$MODULE" --hypothesis-seed="$s" -q -p no:cacheprovider > "$log" 2>&1
+            rc=$?
+            tail_line="$(tail -n 1 "$log")"
+            echo "seed $s: rc=$rc  $tail_line"
+            echo "- seed \`$s\`: rc=$rc -- \`$tail_line\`" >> "$GITHUB_STEP_SUMMARY"
+            # A run that passes nothing is not a pass (the gate's own rule).
+            if [ "$rc" -ne 0 ] || ! grep -Eq '[1-9][0-9]* passed' "$log"; then
+              failed="$failed $s"
+              cat "$log"
+            fi
+          done
+          if [ -n "$failed" ]; then
+            echo "RED: seeds$failed"
+            exit 1
+          fi
+          echo "GREEN: all seeds"

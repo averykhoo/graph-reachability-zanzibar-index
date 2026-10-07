@@ -171,11 +171,11 @@ class StmtCounter:
                 return
             self.total += 1
             s = ' '.join(statement.split())
-            # word-bounded: the tables were node_v4/edge_v4 until TK120 (2026-10-06), and a
+            # word-bounded: the tables were node_v4/edge_v4 until TK120, node/edge until TK122; a
             # bare 'node' substring would also match columns like object_node_id
-            if re.search(r'\bnode\b', s) and not re.search(r'\bedge\b', s):
+            if re.search(r'\bzanzibar_node\b', s) and not re.search(r'\bzanzibar_edge\b', s):
                 self.counts['node'] += 1
-            elif re.search(r'\bedge\b', s):
+            elif re.search(r'\bzanzibar_edge\b', s):
                 self.counts['edge'] += 1
             elif 'residue' in s:
                 self.counts['residue'] += 1

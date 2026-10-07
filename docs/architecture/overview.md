@@ -112,6 +112,14 @@ Constraint and index names follow their tables (`node_v4_unique_constraint` ->
 symbol: the plan doc `docs/tk120-repo-restructure-2026-10-05.md` records which submodule
 each top-level name went to.
 
+**Tables renamed again in TK122 (2026-10-07):** every table name in the right-hand
+column above now carries a `zanzibar_` prefix (`node` -> `zanzibar_node`, ...), and so do the
+explicit constraint names (`zanzibar_node_unique_constraint`) and index names
+(`ix_zanzibar_edge_store_object`). Class names did not change. The tables no longer set
+`extend_existing`, so a clash with a consumer's own table is a loud `InvalidRequestError`,
+never a silent merge (`tests/test_tk122_table_namespace.py`). Why:
+`docs/pypi-readiness-2026-10-07.md` sec 2 B2.
+
 ## Key semantics (pinned -- see decision-log.md for why)
 
 * **Strict ∀⇒∃**: no vacuous grants; a star grant reaches concretes only if instances

@@ -30,8 +30,11 @@ from tests.test_matrix import _boolean_pool, _boolean_grid, _demorgan_pool
 
 def _mentions_table(table: str, sql: str) -> bool:
     """Does `sql` name TABLE as a whole word? The tables were `node_v4`/`edge_v4` until
-    TK120 (2026-10-06); a bare substring test on `node` would also match columns such as
-    `object_node_id`, so the filter is word-bounded."""
+    TK120 (2026-10-06) and `node`/`edge` until TK122 (2026-10-07); a bare substring test on
+    `node` would also match columns such as `object_node_id`, so the filter is
+    word-bounded. A rename that leaves the names here behind makes the filters match
+    nothing, and `test_untainted_check_is_one_edge_statement` goes red (observed
+    2026-10-07, TK122: `1 failed` before these names were updated)."""
     return re.search(r'\b' + table + r'\b', sql.lower()) is not None
 from tests.wildcard_helpers import make_wildcard_index
 
@@ -76,7 +79,7 @@ def test_untainted_check_is_one_edge_statement(load_fga_schema):
     ]:
         with _count_statements(session) as stmts:
             assert widx.check(*q) is expected, q
-        edge_probes = [s for s in stmts if _mentions_table('edge', s)]
+        edge_probes = [s for s in stmts if _mentions_table('zanzibar_edge', s)]
         assert len(edge_probes) <= 1, \
             f'{q}: expected at most one edge-probe statement, got {len(edge_probes)}:\n' \
             + '\n'.join(edge_probes)
@@ -186,14 +189,14 @@ def _r66_index(store_id='r66'):
 
 
 def _node_statements(stmts):
-    return [s for s in stmts if _mentions_table('node', s) and not _mentions_table('edge', s)]
+    return [s for s in stmts if _mentions_table('zanzibar_node', s) and not _mentions_table('zanzibar_edge', s)]
 
 
 def test_untainted_check_resolves_its_node_ids_in_one_statement():
     """R6-6: ONE node statement per untainted check, not one per identity.
 
     The floor is derived, not tuned: `check` needs up to four node ids and they are
-    independent, so one row-value IN over `node_unique_constraint` answers all of
+    independent, so one row-value IN over `zanzibar_node_unique_constraint` answers all of
     them (`ReachabilityIndex.resolve_node_ids`). Asserting `== 1` rather than `<= 4`
     is the point -- the pre-R6-6 code passed `<= 4`.
 

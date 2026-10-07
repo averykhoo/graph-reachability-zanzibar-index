@@ -1081,7 +1081,7 @@ class ReachabilityIndex:
         two wildcard variants), measured at **4.00 ``node`` statements per
         ``check``** against the 0.75 its already-batched edge probe pays. The four are
         independent, so they go into one row-value ``IN`` served by
-        ``node_unique_constraint`` (``models.py::Node.__table_args__``) -- the
+        ``zanzibar_node_unique_constraint`` (``models.py::Node.__table_args__``) -- the
         same shape, on the same dialects, as the edge probe this feeds.
 
         CACHE-COHERENT, not cache-bypassing. It serves AND populates the per-batch

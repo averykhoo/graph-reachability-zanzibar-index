@@ -22,18 +22,17 @@ class RelationTuple(SQLModel, table=True):
     Deliberately independent of the graph index's ``store`` table (no FK): the set
     engine is a standalone backend that happens to share a database in the test harness.
     """
-    __tablename__ = "relation_tuple"
+    __tablename__ = "zanzibar_relation_tuple"
     __table_args__ = (
         UniqueConstraint('store_id', 'subject_predicate', 'subject_type', 'subject_name',
-                         'relation', 'object_type', 'object_name', name='relation_tuple_unique'),
-        {'extend_existing': True},
+                         'relation', 'object_type', 'object_name', name='zanzibar_relation_tuple_unique'),
     )
 
     id: int | None = Field(default=None, primary_key=True)
     store_id: str = Field(index=True)
     # The per-column indexes were dropped (N5 audit 2026-07-14): the only filtered
     # query (`SetEngine._row`) conjoins all seven tuple columns and is served by
-    # `relation_tuple_unique`'s prefix; `rebuild()` filters `store_id` only (index kept).
+    # `zanzibar_relation_tuple_unique`'s prefix; `rebuild()` filters `store_id` only (index kept).
     subject_predicate: str
     subject_type: str
     subject_name: str
