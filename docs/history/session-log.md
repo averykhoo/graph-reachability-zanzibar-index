@@ -89,6 +89,17 @@ agent installs the release from PyPI into a blank conda env and tries it. Anythi
 fixed and shipped as 0.0.2, and once the trial has run, the install check is written into
 CLAUDE.md as part of the push process. The outcome lands in `TK122`'s log and the next entry.
 
+**First push attempt, recorded because it nearly shipped a tag off master:** `git push origin
+master v0.0.1` REJECTED `master` (the user had pushed `5af8870`, a README edit, from GitHub) but
+ACCEPTED the tag, so `v0.0.1` briefly pointed at `54f0a7a`, a commit on no remote branch. No
+workflow run was ever created for it (Actions API: `total_count` 0 for that SHA), PyPI still
+returned 404, and `publish.yml`'s `validate-tag` would have refused it anyway. The tag was
+deleted from the remote, the commit rebased onto `5af8870` (`git diff` = `README.md` only), and
+the full ten-phase gate re-run: the rebase re-checked-out the files CRLF, and `gate_status.py`'s
+content-addressed tree id hashes worktree bytes, so the earlier green did not carry. Lesson for
+the release recipe: `git fetch` and confirm `HEAD` is ahead of `origin/master` before tagging,
+and push the branch BEFORE the tag, as two commands.
+
 Still owed: the CI and install-test outcome of `v0.0.1`, and the CLAUDE.md post-release install
 rule (same session, follow-up commit).
 
