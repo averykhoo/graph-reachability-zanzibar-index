@@ -31,6 +31,9 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 ## Still owed
 
 - (2026-10-05, re-stamped 2026-10-06: `TK120` has landed, so it is now actionable) `docs/architecture/derived-predicates.md` and `docs/architecture/r4bf-bulk-backfill-design.md` still name symbols `TK107` deleted; so does `docs/tk106-triage-2026-09-26.md` (`PDerivedTuplesetTTU`), now cited as `src/zanzibar/schema/::PDerivedTuplesetTTU`.
+- (2026-10-07, cross-repo context-framework audit — not a session here) Five doc-framework
+  fixes owed: [`docs/context-audit-2026-10-07.md`](docs/context-audit-2026-10-07.md). Mint
+  them into the tree (`task.py new`) or do them; item 5 is an owner question about ranking.
 
 A session that runs short lists its skipped Rhythm steps here verbatim
 (`docs/README.md` § 7), **stamped with its own session key**, and the next session
