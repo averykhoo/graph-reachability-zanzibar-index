@@ -1,7 +1,7 @@
 ---
 id: TK122
 title: publish the zanzibar package to PyPI (zanzibar-index, first release 0.0.1)
-brief: releasing 0.0.1 (user go 2026-10-07) as a pipeline trial; then a blank-env install test, fixes -> 0.0.2
+brief: 0.0.1 tagged, never published (Linux-only test stub bug, fixed); releasing 0.0.2, then the blank-env install test
 pri: NEXT
 size: M
 deps: []
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-10-07
-moved: 2026-10-07
-updated: 2026-10-07
+moved: 2026-10-07b
+updated: 2026-10-07b
 closed:
 ---
 
@@ -71,3 +71,7 @@ Scouted 2026-10-07 (user: settle PyPI publishing this session). Map: docs/pypi-r
 Settled everything except publishing (user: Apache-2.0, rename tables, full gate + fuzz-before-release in CI, not nightly; dist name zanzibar-index picked by the model). LANDED: see docs/pypi-readiness-2026-10-07.md sec 0. NEW PINS: tests/test_tk122_table_namespace.py (6, sabotages S1-S3), tests/test_tk122_release_metadata.py (3, sabotages Q1-Q3), MIN_TESTS_ALL 1740 -> 1749. UNVERIFIED: gate.yml / fuzz.yml have never run on GitHub. Trusted-publisher values fixed: publish.yml, environments pypi / testpypi.
 
 User registered the PyPI trusted publisher and asked for tag-only deploys as in the sibling repos. publish.yml written (ngram-movers-distance pattern: validate-tag -> gate.yml + fuzz.yml via workflow_call -> build/twine/wheel smoke = PYPI_README quickstart/attest/upload on tag only; workflow_dispatch = dry run). Environment pypi as registered. All actions SHA-pinned; actionlint clean. CI-babysitter rule added to ~/.claude/CLAUDE.md (user instruction).
+
+### 2026-10-07b
+
+v0.0.1 pushed (master 5d9c92f, tag pushed separately after a first combined push rejected master but accepted the tag; that stray tag was deleted, nothing published). CI first run, babysat by a subagent: lean, tests 1-4, conf 1/3/4/5 and all five fuzz modules GREEN on GitHub; conf (2) RED in both the master gate run and the publish run -- formal/conformance/test_runner_retry.py::test_spawn_oserror_retried_then_succeeds, 1 failed / 217 passed. Cause verified first-hand: only Windows CPython maps OSError 4th arg to .winerror, so on Linux the retry never fired (and the no-retry test passed vacuously). Fixed in the stub; a Linux-modelling control (del e.winerror) reproduces 1 failed / 6 passed. Deploy was skipped, PyPI 404: 0.0.1 is tagged, never published. Bumped to 0.0.2 per user instruction.

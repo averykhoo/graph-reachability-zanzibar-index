@@ -8,10 +8,21 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
 
 ## [Unreleased]
 
+## [0.0.2]
+
+First release published to PyPI. Same library as 0.0.1.
+
+### Fixed
+- `formal/conformance/test_runner_retry.py`'s spawn-error stub now sets `.winerror`
+  explicitly. Only Windows CPython derives it from `OSError`'s fourth argument, so on the
+  Linux CI runner the retry test failed and the no-retry test passed for the wrong reason.
+  Test-only; no library change.
+
 ## [0.0.1]
 
-First packaged release: a trial of the release pipeline (tag -> gate -> fuzz -> PyPI),
-not a stability promise.
+Tagged but never published: the release gate failed on the Linux CI runner (the test
+above), so the upload was skipped. A trial of the release pipeline (tag -> gate -> fuzz ->
+PyPI), not a stability promise.
 
 ### Added
 - The `zanzibar` package: `zanzibar.schema` (OpenFGA-DSL parser and compiler, including

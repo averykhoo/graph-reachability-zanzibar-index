@@ -10,6 +10,15 @@
 
 ## 0. Progress, 2026-10-07 (same session, after the user's answers) -- newest first
 
+**2026-10-07b, first GitHub CI run (via the `v0.0.1` tag):** RAN on GitHub, babysat by a
+subagent. GREEN: Lean (elan, `lake exe cache get`, `verify.sh lean`, zcli artifact), `tests`
+1-4, `conf` 1/3/4/5, and the fuzz sweep (5 modules). RED: `conf (2)`, with one test,
+`formal/conformance/test_runner_retry.py::test_spawn_oserror_retried_then_succeeds`. The cause
+is in the test stub, not the library: `.winerror` is set from `OSError`'s fourth argument on
+Windows only. The stub was fixed and a control reproduced the CI failure. Deploy was skipped,
+so 0.0.1 was never published, and **0.0.2** is the release. The sec 4 assumption that the Lean
+job was the risky one turned out wrong: it worked on its first run.
+
 **Release decision (user, 2026-10-07):** the first release is **0.0.1**, not 0.1.0, "since
 we're testing for now". Push it, tag it, then have an agent install it from PyPI into a blank
 conda env and try it out. Anything broken is fixed and bumped (0.0.2), and the install check

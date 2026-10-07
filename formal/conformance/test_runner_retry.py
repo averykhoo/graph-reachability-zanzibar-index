@@ -36,7 +36,16 @@ def _cp(rc: int, out: str = "", err: str = "") -> subprocess.CompletedProcess:
 
 def _os_err(winerror: int) -> OSError:
     # The 4-arg Windows form: OSError(errno, strerror, filename, winerror).
-    return OSError(0, "spawn failure", None, winerror)
+    # Only Windows CPython turns that 4th argument into `.winerror`; on Linux it
+    # is dropped and the attribute does not exist, so `invoke_zcli`'s
+    # `getattr(e, "winerror", None)` read None there. The retry test then failed on
+    # the Linux CI runner, and the no-retry test passed for the wrong reason (TK122,
+    # 2026-10-07: GitHub Actions, conf-tile:2/5, `1 failed, 217 passed`). Set the
+    # attribute explicitly so the stub models a Windows CreateProcess error on
+    # every OS.
+    e = OSError(0, "spawn failure", None, winerror)
+    e.winerror = winerror
+    return e
 
 
 @pytest.fixture

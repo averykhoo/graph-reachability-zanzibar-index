@@ -5,10 +5,15 @@ name: Publish to PyPI
 #
 #     # bump __version__ in src/zanzibar/__init__.py AND the newest CHANGELOG.md heading
 #     # (tests/test_tk122_release_metadata.py pins them equal), run the local gate, commit
-#     git tag -a vX.Y.Z -m vX.Y.Z && git push origin master vX.Y.Z
+#     git fetch origin master && git log --oneline HEAD..origin/master   # must print nothing
+#     git push origin master                     # the BRANCH first, on its own
+#     git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z
 #
-# Push the tag by name: --follow-tags pushes annotated tags only, so a lightweight
-# `git tag vX.Y.Z` would stay on the laptop and this workflow would never fire.
+# Two pushes, branch first (2026-10-07): a combined `git push origin master vX.Y.Z` can
+# REJECT the branch (remote moved) yet ACCEPT the tag, leaving a release tag on a commit
+# that is on no remote branch. validate-tag below refuses that, but it is still a tag to
+# clean up. Push the tag by name: --follow-tags pushes annotated tags only, so a
+# lightweight `git tag vX.Y.Z` would stay on the laptop and this workflow would never fire.
 #
 # ⚠ THE FILE NAME (`publish.yml`) AND THE ENVIRONMENT NAME (`pypi`) ARE REGISTERED ON PYPI as
 # this project's trusted publisher (2026-10-07). Renaming either breaks the upload, and only

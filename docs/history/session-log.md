@@ -32,6 +32,41 @@ from here.
 
 ---
 
+## 2026-10-07b — `TK122`: v0.0.1's first CI run found a Linux-only test bug; fixed, releasing 0.0.2
+
+rows: TK122
+
+`task lint: clean (13 checks, 239 task file(s) parsed), 29 warning(s)`
+
+`read: board only` -- same session as `2026-10-07`; this entry exists because that one was
+already pushed and entries are never retro-edited.
+
+`master` (`5d9c92f`) and then the tag `v0.0.1` were pushed as two commands. The CI babysitter
+subagent (the new machine-wide rule) watched both runs. **First GitHub run of the three
+workflows:** the Lean job (elan, Mathlib cache, `verify.sh lean`, the zcli artifact hand-off),
+`tests` 1-4, `conf` 1/3/4/5 and all five fuzz modules were GREEN. `conf (2)` was RED in both the
+`master` gate run and the publish run: `formal/conformance/test_runner_retry.py::test_spawn_oserror_retried_then_succeeds`,
+`1 failed, 217 passed`. Deploy was skipped and PyPI returned 404, so **0.0.1 is tagged but was
+never published.**
+
+Cause, verified first-hand: the stub `_os_err` builds `OSError(0, msg, None, winerror)`, and only
+Windows CPython turns the fourth argument into `.winerror`. On Linux the attribute is absent, so
+`runner.py::invoke_zcli`'s `getattr(e, "winerror", None)` never matched and the retry never fired.
+The sibling no-retry test passed vacuously for the same reason. The product behaviour is right:
+the retry is a Windows `CreateProcess` workaround. The stub now sets `.winerror` explicitly. A
+Linux-modelling control (`del e.winerror` on Windows) reproduces CI exactly: `1 failed, 6
+passed`. A skip was not an option, because `verify.sh` tolerates zero. Per the user, a fix is a
+version bump: **0.0.2**, with the CHANGELOG recording 0.0.1 as never published.
+`publish.yml`'s release recipe now fetches first and pushes the branch and the tag as two
+commands.
+
+Gate: all ten phases run after this entry is written; see `python scripts/gate_status.py`.
+
+Still owed: the 0.0.2 CI outcome, the blank-conda-env install test of the published package, and
+the CLAUDE.md post-release install rule (same session, after the trial).
+
+---
+
 ## 2026-10-07 — `TK122`: `zanzibar-index` 0.0.1 (Apache-2.0, `zanzibar_*` tables, CI, tag-only publish)
 
 rows: TK122 (new, NEXT)
