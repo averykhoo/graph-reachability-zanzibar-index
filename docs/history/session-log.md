@@ -32,6 +32,61 @@ from here.
 
 ---
 
+## 2026-10-08b — 0.0.3 released; its install trial now runs a smoke script, found 1 bug (`TK136`)
+
+rows: TK127 (closed), TK135, TK136 (new; TK136 at NOW), TK123 (commented)
+
+`task lint: clean (13 checks, 253 task file(s) parsed), 31 warning(s)`
+
+`read: board only`
+
+**The release, on the user's word.**
+- `git fetch` first: nothing on `origin/master` was missing from HEAD.
+- The gate was COVERED on `7449537` (`gate_status.py`). `master` was pushed on its own.
+- The `gate.yml` run on `7449537` passed (run 37705328041, all 10 jobs; AGENT babysitter).
+- The first attempt to push the tag was refused by the Claude Code auto-mode classifier. The
+  session did not work around it; the user then said to push it.
+- Annotated `v0.0.3` on `7449537`. `publish.yml` run 37707383937 passed all 17 jobs (AGENT).
+- FIRST-HAND: `https://pypi.org/pypi/zanzibar-index/0.0.3/json` returns 200, with the wheel
+  and the sdist.
+
+**New this session (user instruction): the install trial must EXECUTE code paths in seconds,
+not run the fuzz suite.** [`scripts/installed_smoke.py`](../../scripts/installed_smoke.py) covers:
+- the README quickstart, then a reopen;
+- a seeded 120-op differential on two schemas (the per-type `viewer from parent` idiom and
+  TK126's second form). At three checkpoints, the full 198-cell check grid must agree across
+  the sync graph index (paranoia `residue`), both `SetOps`, and async before and after
+  `catch_up`;
+- hand-written expectations;
+- bad input: TK124, TK125, identifiers, `SchemaMismatch`, and the fan-out cap.
+
+It refuses to run unless `zanzibar` imports from site-packages.
+
+Evidence for the script (FIRST-HAND, against `src/`):
+- `67 checks passed, 0 failed` in about 20 s.
+- Sabotage: `SetEngine.check` was made to invert one cell. The script went red at every
+  checkpoint on both schemas. The literal output is on `TK127`.
+
+**The trial** (AGENT; blank env, Python 3.13.16, env removed afterwards). The full transcript
+is [`docs/pypi-trial-0.0.3-2026-10-08.md`](../pypi-trial-0.0.3-2026-10-08.md).
+- The smoke script ran against the installed wheel: `67 checks passed, 0 failed, 18.8s`.
+- All three 0.0.2 bugs now WORK.
+- One new BROKEN, CONFIRMED first-hand: reopening a store with `schema=` compares the text
+  byte for byte, so a trailing newline or a CRLF checkout refuses the store's own schema.
+  Filed as `TK136` and promoted to NOW. The design decision (compare parsed semantics, keep
+  the text) is on the row. Per the release rule it ships as 0.0.4.
+- PyPI README gaps went to `TK135` (LATER). The ergonomics items are logged on the parked
+  `TK123`.
+- The smoke script's own `ResourceWarning` noise and leftover temp dir are fixed: engines are
+  disposed, and the temp dir is removed on success.
+
+Method lesson: a fresh upload can look "not found" for a while, because pip serves a cached
+index page. Confirm a new release with `pip install --no-cache-dir`.
+
+Still owed: none.
+
+---
+
 ## 2026-10-08 — `TK127`: the 0.0.2 install trial's three bugs fixed (`TK124`/`TK125`/`TK126`); 0.0.3
 
 rows: TK124, TK125, TK126 (closed), TK127 (open until the release is confirmed), TK132, TK133, TK134 (new)
