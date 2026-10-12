@@ -375,6 +375,15 @@ type doc
         raises(('SchemaMismatch',), lambda: ConnectedStore(s, 'x', schema=SCHEMA),
                'reopen with a different schema refused')
     with Session(eng) as s:
+        # TK136: the same schema with CRLF + a trailing newline is the same schema
+        try:
+            st = ConnectedStore(s, 'x', schema=QUICK.replace('\n', '\r\n') + '\r\n')
+            err = None
+        except Exception as e:  # noqa: BLE001 -- reported as a FAIL below
+            st, err = None, f'{type(e).__name__}: {str(e)[:200]}'
+        ok(st is not None and st.check('...', 'user', 'bob', 'banned', 'doc', 'd1') is True,
+           f'TK136: reopen with CRLF / trailing-newline schema accepted ({err})')
+    with Session(eng) as s:
         os.environ['ZANZIBAR_MAX_CLOSURE_FANOUT'] = '3'
         try:
             st = ConnectedStore(s, 'cap', schema=QUICK)

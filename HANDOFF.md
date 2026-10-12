@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-08b -- **0.0.3 is released and live on PyPI (`TK127` closed). Its install trial now runs `scripts/installed_smoke.py` against the wheel (67/67 pass) and found one new bug: reopening a store with `schema=` compares bytes, so a trailing newline or Windows line endings refuse the store's own schema -> `TK136` (`NOW`), design on the row, ships as 0.0.4 (tag only on the user's word).** README gaps -> `TK135`; ergonomics on the parked `TK123`. ANOTHER SESSION works in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-12 -- **`TK136` closed: reopening a store with `schema=` now compares the parsed schema (Windows line endings, trailing newline, indent, comments, type order accepted; a different schema still refused). On master, not released: 0.0.4 (version bump, tag, install trial) only on the user's word.** The entry sits under `[Unreleased]` in the changelog; `TK102` promoted to `NOW` to keep one. README gaps -> `TK135`. ANOTHER SESSION works in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

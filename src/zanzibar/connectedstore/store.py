@@ -130,7 +130,9 @@ class ConnectedStore:
         """Open (or bootstrap, when ``schema`` is given) a connected store.
 
         A passed schema is persisted write-once via ``ensure_schema``; passing one
-        that disagrees with the store's persisted schema is a loud error.
+        that disagrees with the store's persisted schema is a loud error. "Disagrees"
+        means a different PARSED schema: reopening with the same schema re-indented,
+        with CRLF line endings, comments or reordered type blocks is accepted (`TK136`).
 
         ``sync=True`` (default) inlines the apply step into every write (cursor at
         the log head). ``sync=False`` is the async schedule: writes land in the

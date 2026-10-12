@@ -8,6 +8,13 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
 
 ## [Unreleased]
 
+### Fixed
+- Reopening a store with `ConnectedStore(session, store_id, schema=...)` now compares the
+  parsed schema, not the text. Before, a trailing newline, Windows line endings, a different
+  indent, a comment, or reordered `type` / `define` blocks raised `SchemaMismatch` for the
+  store's own schema. A different schema is still refused, and the stored text is never
+  rewritten (found by the 0.0.3 install trial, `docs/pypi-trial-0.0.3-2026-10-08.md`).
+
 ## [0.0.3]
 
 Fixes everything the fresh-user install trial of the published 0.0.2 found broken

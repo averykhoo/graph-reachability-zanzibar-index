@@ -32,6 +32,31 @@ from here.
 
 ---
 
+## 2026-10-12 — `TK136` fixed: reopen with `schema=` compares the parsed schema; 0.0.4 unreleased
+
+rows: TK136 (closed), TK102 (NEXT -> NOW, to keep exactly one NOW)
+
+`task lint: clean (13 checks, 253 task file(s) parsed), 30 warning(s)`
+
+`read: board only`
+
+**User assigned the NOW row.** `ensure_schema` (and so `ConnectedStore(..., schema=)` and
+`build_index`) now accepts a passed schema whose `parse_schema_ast` equals the stored one.
+Identical text short-circuits. Shapes are still compared exactly, and the stored text is
+never rewritten.
+- FIRST-HAND READ: `SchemaAST` is a dict, so the order of type blocks and `define` lines
+  does not matter. `or` operands and `[...]` restrictions are tuples, so reordering them is
+  still REFUSED. That is pinned as a conservative refusal and was not widened.
+- Pins: [`tests/test_tk136_schema_reopen_semantic.py`](../../tests/test_tk136_schema_reopen_semantic.py),
+  with the two sabotage runs' literal output in its docstring.
+- Smoke: `scripts/installed_smoke.py` has a CRLF-reopen check. 67/67 against the checkout;
+  66 + 1 FAIL with the byte compare restored.
+- `CHANGELOG.md` `[Unreleased]` has the entry. **Not released:** 0.0.4 (version bump, tag,
+  CI babysitter, install trial) waits for the user's word.
+- Not pushed.
+
+Still owed: nothing from this session. (The 2026-10-05 bullet in `HANDOFF.md` is untouched.)
+
 ## 2026-10-08b — 0.0.3 released; its install trial now runs a smoke script, found 1 bug (`TK136`)
 
 rows: TK127 (closed), TK135, TK136 (new; TK136 at NOW), TK123 (commented)

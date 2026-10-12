@@ -18,7 +18,7 @@ from sqlmodel import Session, select
 from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
 from zanzibar.setengine import SetEngine
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
-from zanzibar.schema import RuleSet, parse_openfga_schema, validate_store_id
+from zanzibar.schema import RuleSet, parse_openfga_schema, parse_schema_ast, validate_store_id
 
 from .models import SchemaRecord
 
@@ -74,16 +74,31 @@ def ensure_schema(session: Session, store_id: str, schema_text: str,
     Returns ``(row, ruleset)``; ``ruleset`` is the freshly compiled ``RuleSet`` when
     this call bootstrapped the schema (so the caller can hand it to
     ``open_graph_index`` and avoid a second parse), else ``None`` (the schema was
-    already present and only verified, so nothing was compiled)."""
+    already present and only verified, so nothing was compiled).
+
+    "Agrees" means the same PARSED schema (`TK136`): both texts parse to an equal
+    ``SchemaAST``, so whitespace, line endings, comments, header lines and the order of
+    type blocks or of ``define`` lines do not matter. Everything either backend compiles
+    is derived from ``(SchemaAST, object_wildcard_shapes)``, so an equal AST is the same
+    schema. The persisted text stays the source of truth and is never rewritten."""
     row = session.get(SchemaRecord, store_id)
     if row is None:
         return save_schema(session, store_id, schema_text, object_wildcard_shapes)
     stored_shapes = frozenset(tuple(s) for s in json.loads(row.object_wildcard_shapes))
-    if row.schema_text != schema_text or stored_shapes != object_wildcard_shapes:
+    if stored_shapes != object_wildcard_shapes or not _same_schema(row.schema_text, schema_text):
         raise SchemaMismatch(
             f"explicit schema for store {store_id!r} disagrees with its persisted "
             f"schema; schemas are static (write-once)")
     return row, None
+
+
+def _same_schema(stored_text: str, schema_text: str) -> bool:
+    """True when the passed text parses to the stored text's ``SchemaAST``. Identical text
+    short-circuits, so a stored schema is never re-parsed just to be reopened verbatim. A
+    passed text that does not parse raises the parser's own ``ValueError``."""
+    if stored_text == schema_text:
+        return True
+    return parse_schema_ast(stored_text) == parse_schema_ast(schema_text)
 
 
 def open_set_engine(session: Session, store_id: str, *,
