@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-12c -- **`TK79` and `TK102` closed.** `TK79`: a `drain_deltas` replica needs the late GC outbox rows (pinned). `TK102`: the exhaustive enum arm gains `derived_userset_subject`; no divergence. Next per the user's ask: `TK44` (now NOW), via subagents. No rush to release 0.0.4 (`TK136` + `TK118` sit under `[Unreleased]`; `TK134`/`TK135` are LATER). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-12c -- **`TK79`, `TK102` and `TK44` closed.** `TK79`: a `drain_deltas` replica needs the late GC outbox rows (pinned). `TK102`: the exhaustive enum arm gains `derived_userset_subject`; no divergence. `TK44`: no generator gap left in the pair cells; the rest is reported as a derived refused-only class. Next: `TK134` (NOW, the model's pick; the user may re-rank). No rush to release 0.0.4 (`TK136` + `TK118` sit under `[Unreleased]`; `TK134`/`TK135` are LATER). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

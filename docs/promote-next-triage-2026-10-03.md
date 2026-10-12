@@ -5,6 +5,8 @@ Freeze when the promotion decision it feeds is made and recorded on the rows.
 
 **2026-10-06 (`TK120`):** the code moved into the `src/zanzibar/` package and lost its version suffixes after this doc was written; its paths and class names are the OLD ones. Key: `docs/architecture/overview.md` § "Renamed in TK120".
 
+**2026-10-12c (`TK44`):** sec 3's "the unexplained residue of pair cells is still unadjudicated" / "What remains is a decision (attack the residue or publish it)" is superseded: it was decided 2026-10-12c, see [`tk44-generator-coverage-census-2026-10-12.md`](tk44-generator-coverage-census-2026-10-12.md) § "Decision (2026-10-12c)", enforced by `tests/test_generator_coverage.py::test_every_pair_of_hit_features_is_reached_together` and `::test_refused_only_features_are_tupleset_shapes`. Its 51-feature / 1275-cell figures are pre-`TK107`.
+
 ## 1. Question, method, provenance
 
 **Question (user, 2026-10-03c):** which `LATER` row, promoted to `NEXT`, would most increase

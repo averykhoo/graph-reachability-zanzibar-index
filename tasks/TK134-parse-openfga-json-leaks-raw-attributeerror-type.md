@@ -2,7 +2,7 @@
 id: TK134
 title: parse_openfga_json leaks raw AttributeError/TypeError/KeyError on malformed model shapes
 brief: None/list model, type_definitions not a list, a definition without "type": refuse with REFUSED SHAPE
-pri: LATER
+pri: NOW
 size: S
 deps: []
 related: [TK124]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-10-08
-moved: 2026-10-08
-updated: 2026-10-08
+moved: 2026-10-12c
+updated: 2026-10-12c
 closed:
 ---
 
@@ -32,3 +32,9 @@ regression). `zanzibar.schema.parse_openfga_json` leaks raw `AttributeError` / `
 ## Read first
 
 - `src/zanzibar/schema/json_frontend.py::_validate_json_declares_a_type` (the TK124 guard on the same lines).
+
+## Log
+
+### 2026-10-12c
+
+PROMOTED LATER -> NOW 2026-10-12c at write-back, because closing TK44 left NOW empty and task lint requires exactly one. Why TK134 (model decision, CLAUDE.md Who decides): it is the only small open row with a known user-visible defect (malformed OpenFGA JSON leaks raw AttributeError/TypeError/KeyError instead of a REFUSED SHAPE refusal), it fits the current goal (the refusal surface says WHY), and it is size S. TK97 and TK135 stay LATER per the 2026-10-12b re-rank. No release is implied: the user said no rush to 0.0.4. The user may re-rank.

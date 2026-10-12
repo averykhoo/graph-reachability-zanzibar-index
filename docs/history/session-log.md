@@ -32,9 +32,9 @@ from here.
 
 ---
 
-## 2026-10-12c — `TK79` + `TK102` closed: late GC outbox rows pinned; derived usersets in the enum arm
+## 2026-10-12c — `TK79` + `TK102` + `TK44` closed: GC outbox rows pinned; derived-userset enum; no generator gap
 
-rows: TK79 (NOW, closed), TK102 (NEXT -> NOW, closed), TK44 (LATER -> NOW, the user's ask)
+rows: TK79 (NOW, closed), TK102 (NEXT -> NOW, closed), TK44 (LATER -> NOW, closed), TK134 (LATER -> NOW)
 
 `task lint: clean (13 checks, 253 task file(s) parsed), 28 warning(s)`
 
@@ -90,6 +90,36 @@ Still owed: nothing from the `TK79` stage.
   0 changed, 0 removed.
 
 Still owed: nothing from the `TK102` stage.
+
+**`TK44` stage** (census, executive decision, implementation, three adversarial reviews
+with two fix rounds, then closed).
+- CENSUS (READ, measured 2026-10-12 at `8a76ff4`): the denominator is 1128 cells since
+  `TK107`, not 1275. Every UNKNOWN cell was explained: a generator gap (class G, all
+  reachable) or a feature carried only by parse-refusal witnesses (class S). Zero cells were
+  unexplained.
+- DECIDED (the model's, under "Who decides"): attack G; report S as a DERIVED class, never
+  as an exemption list; the newly reached configs must be DRIVEN through ParityEngine.
+- LANDED: `tests/genswarm.py::witness` re-wires the arms that collided with `body_boolean`
+  onto a fresh untainted referent; `SWARM_SWITCHES` gains `body_ttu` (a dead arm revived)
+  and the witness-only `derived_star`; new `tests/genswarm.py::DANGLING_REFERENCE`. In
+  `tests/test_generator_coverage.py`: `::test_enumerator_cell_coverage_floor` raised (zero
+  headroom), new `::test_every_pair_of_hit_features_is_reached_together` (G is 0, derived by
+  `::_unknown_classes`), new `::test_refused_only_features_are_tupleset_shapes`.
+- RESULT: every newly reached accepted config was driven sparse and dense, with 0
+  divergences, so no Python fix was needed. The live residue is printed only by
+  `::test_report_cell_coverage -s`.
+- FLOOR LOWERED (reviewed): the deep swarm floor in
+  `::test_swarm_campaign_reaches_cells_and_never_starves_a_switch` went from 670 to 527. It
+  was already red at `8a76ff4`; the provenance is in the test comment.
+- SABOTAGE: each new check went red; the literal output is in the test docstrings and the
+  census doc. Residual (disclosed in the tests): `ttu.ts:Union` / `ttu.ts:multitype` going
+  un-HIT is caught only by the HIT floor, and dropping the all-ON swarm stratum is caught by no
+  floor. Doc (FROZEN):
+  [`docs/tk44-generator-coverage-census-2026-10-12.md`](../tk44-generator-coverage-census-2026-10-12.md).
+- RE-RANK: closing `TK44` left NOW empty, so `TK134` went LATER -> NOW (the model's pick;
+  the reason is on the row).
+
+Still owed: nothing from the `TK44` stage.
 
 ## 2026-10-12b — `TK118` closed: `residue` paranoia now aborts an I14 regression (delta-scoped)
 

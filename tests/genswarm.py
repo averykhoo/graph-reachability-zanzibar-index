@@ -384,6 +384,18 @@ SWARM_SWITCHES = (
     'multi_type',        # a second object type (folder) participates
     'self_ttu',          # a TTU whose target is its own head relation
     'owc',               # object-wildcard shapes declared on some relation
+    # TK44 (2026-10-12c): a POSITIVE TTU inside a body expression. The swarm grammar has
+    # tested `'body_ttu' in sw` since the design, but the switch was missing from this
+    # tuple, so that arm was dead code (census: docs/tk44-generator-coverage-census-2026-10-12.md
+    # § 3 "Second finding"). `witness` gives it its own arm (`r14`).
+    'body_ttu',
+    # TK44 (2026-10-12c): the star-ish arms share the TAINTED referent r1  [expect REJECT].
+    # `witness` re-points owc / self_ttu / body_wc_userset / ts_wildcard at an UNTAINTED
+    # referent whenever `body_boolean` is on (that is what reaches the class-G cells), so
+    # the four decision-15 scope refusals that used to come from those same pairs need a
+    # switch of their own to stay LIVE, as `ts_undeclared` / `ts_userset` do. Witness-only:
+    # the swarm grammar ignores it, like `ts_undeclared`.
+    'derived_star',
 )
 
 
@@ -540,7 +552,22 @@ def swarm_configs(draw):
 
 def witness(sw) -> tuple[dict, frozenset]:
     """``(ast, owc)`` for a switch subset. ``r0`` = plain base, ``parent`` = the tupleset
-    under test, ``r1``/``r2`` = consumers."""
+    under test, ``r1``/``r2`` = consumers.
+
+    TK44 (2026-10-12c): ``r1`` is TAINTED under ``body_boolean`` or ``derived_star``.
+    Under ``body_boolean`` WITHOUT ``derived_star`` (``split`` below) the star-ish arms
+    (``owc``, ``self_ttu``, ``body_wc_userset``, ``ts_wildcard``) are wired to a SECOND,
+    untainted referent -- a fresh ``r15: [user]`` through a second tupleset ``parent2``
+    (``r10: r15 from parent2``; the self-TTU uses its own ``r11``) -- instead of to
+    ``r1`` / ``parent``. NOT ``r0``: under ``body_boolean`` ``r0`` feeds the derived
+    ``r8``, so an object wildcard on it is refused (see the comment above the ``r15``
+    block). Wired to ``r1`` they are correct decision-15 refusals, so before
+    this every {``body_boolean``, star-ish} pair was refused and the derived-target x
+    star-ish cells (census class G) were unreachable. ``derived_star`` keeps the old
+    shared-referent wiring so those four refusals stay live."""
+    derived_star = 'derived_star' in sw
+    tainted = 'body_boolean' in sw or derived_star
+    split = 'body_boolean' in sw and not derived_star
     negonly = 'ts_negonly' in sw
     if negonly and ('ts_multitype' in sw or 'multi_type' in sw):
         ts_rs = [Restriction('folder', '...', False)]          # base [folder] / neg [doc]
@@ -550,7 +577,11 @@ def witness(sw) -> tuple[dict, frozenset]:
         ts_rs = [Restriction('doc', '...', False)]
         if 'ts_multitype' in sw or 'multi_type' in sw:
             ts_rs.append(Restriction('folder', '...', False))
-    if 'ts_wildcard' in sw and Restriction('doc', '...', True) not in ts_rs:
+    if ('ts_wildcard' in sw and not split
+            and Restriction('doc', '...', True) not in ts_rs):
+        # Under `split` the star goes on `parent2` (over the untainted r15) instead: a
+        # star `parent` over the tainted r1 is the `star-tupleset-over-derived-target`
+        # refusal, which `derived_star` + `ts_wildcard` keeps live.
         ts_rs.append(Restriction('doc', '...', True))
     if 'ts_userset' in sw:
         ts_rs.append(Restriction('doc', 'r0', False))
@@ -571,7 +602,7 @@ def witness(sw) -> tuple[dict, frozenset]:
     if 'body_wildcard' in sw:
         b0.append(Restriction('user', '...', True))
     r1 = Direct(tuple(b0))
-    if 'body_boolean' in sw:
+    if tainted:
         # r1 becomes TAINTED here, which is what makes r4/r5 below compile to
         # derived-computed / derived-userset leaves rather than plain closure ones.
         r1 = Exclusion(r1, Direct((Restriction('user', '...', False),)))
@@ -615,12 +646,28 @@ def witness(sw) -> tuple[dict, frozenset]:
         # PDerivedUserset / userset-storage family.
         ast[('doc', 'r5')] = Union((Direct((Restriction('user', '...', False),)),
                                     Direct((Restriction('doc', 'r1', False),))))
+        # TK44 (2026-10-12c, census § 5 item 3): ALSO a userset over a referent that is
+        # ALWAYS tainted (`r13: [user] but not r0`), so the derived-userset arm
+        # (`leaf:derived-userset`, `plan:PDerivedUserset`, `family:userset-storage`,
+        # `via:userset`) is a SINGLE switch, and its pairs with every other axis are in
+        # the `ci` pair space instead of needing the triple {body_boolean, body_userset, X}.
+        ast[('doc', 'r13')] = Exclusion(Direct((Restriction('user', '...', False),)),
+                                        Computed('r0'))
+        ast[('doc', 'r12')] = Union((Direct((Restriction('user', '...', False),)),
+                                     Direct((Restriction('doc', 'r13', False),))))
     if 'body_wc_userset' in sw:
         # `[doc:*#r1]` -- the wildcard-userset modality. Its own switch because over a
         # DERIVED relation this is a decision-15 scope refusal, and folding it into
         # body_userset would make that whole switch reject rather than compile.
+        # Under `split` (TK44) it targets the untainted r15 instead.
         ast[('doc', 'r6')] = Union((Direct((Restriction('user', '...', False),)),
-                                    Direct((Restriction('doc', 'r1', True),))))
+                                    Direct((Restriction('doc', 'r15' if split else 'r1',
+                                                        True),))))
+    if 'body_ttu' in sw:
+        # TK44 (2026-10-12c): a POSITIVE TTU as an ARM of a body expression (r2 is a bare
+        # TTU). Over a tainted r1 this is a derived union over a derived TTU.
+        ast[('doc', 'r14')] = Union((Direct((Restriction('user', '...', False),)),
+                                     TTU('r1', 'parent')))
     if 'ts_undeclared' in sw:
         # A TTU whose tupleset relation is NOT declared on the object type. Since ASK-1
         # (2026-09-26) the parser REFUSES it (the `dangling-reference` witness); until
@@ -628,12 +675,41 @@ def witness(sw) -> tuple[dict, frozenset]:
         # enumerator keeps proving that refusal is live.
         ast[('doc', 'r7')] = Union((Direct((Restriction('user', '...', False),)),
                                     TTU('r1', 'nodecl')))
+    # TK44 (2026-10-12c): the second, untainted referent for the star-ish arms under
+    # `split` -- `r15: [user]`, `parent2: [doc]` (plus `doc:*` under `ts_wildcard`) and
+    # the TTU `r10: r15 from parent2` (census § 3 "Constructive check"). NOT r0, which
+    # the census named: under `body_boolean` r0 feeds the derived r8, and an object
+    # wildcard on (doc, r0) is then refused ("expands onto the compiled leaf predicate
+    # (doc, r8.1)" -- MEASURED 2026-10-12c, unmatched {body_boolean, owc}). r15 feeds
+    # nothing derived, by construction.
+    if split and ({'owc', 'self_ttu', 'ts_wildcard', 'body_wc_userset'} & set(sw)):
+        ast[('doc', 'r15')] = Direct((Restriction('user', '...', False),))
+    if split and ({'owc', 'self_ttu', 'ts_wildcard'} & set(sw)):
+        p2 = [Restriction('doc', '...', False)]
+        if 'ts_wildcard' in sw:
+            p2.append(Restriction('doc', '...', True))
+        ast[('doc', 'parent2')] = Direct(tuple(p2))
+        ast[('doc', 'r10')] = TTU('r15', 'parent2')
     if 'self_ttu' in sw:
-        ast[('doc', 'r2')] = Union((ast[('doc', 'r2')], TTU('r2', 'parent')))
+        if split:
+            # Self-TTU over the untainted r11: `r2` (over the tainted r1) would make
+            # `r2 -> r2` a DERIVED dependency cycle (`derived_star` keeps that refusal).
+            ast[('doc', 'r11')] = Union((Direct((Restriction('user', '...', False),)),
+                                         TTU('r11', 'parent2')))
+        else:
+            ast[('doc', 'r2')] = Union((ast[('doc', 'r2')], TTU('r2', 'parent')))
     if 'multi_type' in sw:
         ast[('folder', 'r1')] = Direct((Restriction('user', '...', False),))
     owc = set()
-    if 'owc' in sw:
+    if 'owc' in sw and split:
+        # TK44: object-wildcard the second tupleset and ITS target (the TK77 crossable
+        # pair, below), never `parent`: `parent` is the tupleset of a TTU in the derived
+        # r2 (`owc-on-a-ttu-tupleset`, kept live by `derived_star` + `owc`). The
+        # `body_wc_userset` exclusion is the same DoublyBridgedShapeError as below.
+        owc.add(('doc', 'parent2'))
+        if 'body_wc_userset' not in sw:
+            owc.add(('doc', 'r15'))
+    elif 'owc' in sw:
         owc.add(('doc', 'parent'))                     # the `ttu.ts:owc` feature
         # TK77 (2026-09-19e): ALSO object-wildcard the TTU's TARGET. `crossable_shapes` is
         # `bridged_in & bridged_out` (src/zanzibar/schema/rules.py::SchemaInfo), and the star
@@ -650,7 +726,8 @@ def witness(sw) -> tuple[dict, frozenset]:
         #     decision-15 scope refusal (UnsupportedByGraphIndex);
         #   * `body_wc_userset` puts the LITERAL `[doc:*#r1]` restriction on r6, which would
         #     make ('doc','r1') doubly bridged (DoublyBridgedShapeError).
-        if 'body_boolean' not in sw and 'body_wc_userset' not in sw:
+        #   (TK44: `derived_star` taints r1 too, hence `tainted`, not `body_boolean`.)
+        if not tainted and 'body_wc_userset' not in sw:
             owc.add(('doc', 'r1'))
     return ast, frozenset(owc)
 
@@ -692,6 +769,11 @@ TUPLESET_MUST_BE_DIRECT = 'tupleset must be direct'
 #: The TK108 parse refusal's stable message substring (same function): a tupleset may
 #: not restrict to a userset (`[folder#member]`, `[folder:*#member]`).
 TUPLESET_NO_USERSET = 'tupleset may not restrict to a userset'
+
+#: The ASK-1 parse refusal's stable message substring for a dangling relation reference
+#: (`src/zanzibar/schema/parser.py::_validate_ast_consistency`); its only witness is the
+#: undeclared TUPLESET `r0 from nodecl` (`ttu.ts:undeclared`).
+DANGLING_REFERENCE = 'undeclared relation'
 
 
 REJECTION_WITNESSES: tuple[Rejection, ...] = (
@@ -823,7 +905,7 @@ REJECTION_WITNESSES: tuple[Rejection, ...] = (
                      '    define r7: [user] or r0 from nodecl\n'),
         frozenset(),
         ValueError,
-        'undeclared relation'),
+        DANGLING_REFERENCE),
     Rejection(
         # A derived cycle through a TTU TARGET. Until ASK-1 (2026-09-26) this witness was
         # the same-type computed cycle `a: (...) or b`, `b: [user] and a`; the parser now

@@ -823,9 +823,16 @@ markdown for restated *census* counts (`N checks`, `N tests`, `N open tasks`), s
 it is open work in the tree (`GC-1`), and is not free: that check was landed only after a
 census showed it arrived red on six real lines and no legitimate ones, and a fourth pattern
 is required by its own contract to name the rot that motivated it. Note what this settles, though: a practice, not
-the question. Whether that UNKNOWN residue is worth *attacking* — or whether publishing it
-was always the whole intended answer — has never been decided, and that decision is open
-work living in the tree, not here.
+the question of whether that UNKNOWN residue is worth *attacking*. **That was decided
+2026-10-12c (`TK44`)**, reasoning in
+[`tk44-generator-coverage-census-2026-10-12.md`](tk44-generator-coverage-census-2026-10-12.md)
+§ "Decision (2026-10-12c)": attack the part a generator can reach, publish the part no
+accepted schema can carry, and derive the split rather than list it.
+`tests/test_generator_coverage.py::_unknown_classes` computes the classes;
+`::test_every_pair_of_hit_features_is_reached_together` holds the reachable gap at zero,
+and `::test_refused_only_features_are_tupleset_shapes` fences the published refused-only
+class to the tupleset-shape parse refusals. The residue's size still has one home,
+`test_report_cell_coverage -s`.
 
 And it says nothing about the **plan** you are executing. Treat a scope/design document the
 way you treat a check: E-chain legs 2/3/4 each landed a correction to their own plan — two

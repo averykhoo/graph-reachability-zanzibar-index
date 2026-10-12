@@ -179,7 +179,7 @@ from tests import genswarm as G
 # ---------------------------------------------------------------------------
 DEEP = os.environ.get('HYPOTHESIS_PROFILE', 'ci') == 'deep'
 
-ENUM_K = 3 if DEEP else 2       # compile-only width: 136 configs at K<=2, 696 at K<=3
+ENUM_K = 3 if DEEP else 2       # compile-only width (MEASURED 2026-10-12c, 18 switches): 171 configs at K<=2, 987 at K<=3
 DRIVE_K = 2                     # DRIVEN width: pairs, at BOTH profiles -- see below
 SWARM_DRAWS = 400 if DEEP else 120
 SPARSE_SUBSETS = 4 if DEEP else 2
@@ -605,9 +605,21 @@ def test_every_alphabet_feature_is_hit_or_rejection_explained():
 # via features for a compile path TK107 deleted. The graph compiler now refuses that AST
 # too, so those features describe nothing. A witness now carries its AST features plus
 # `ttu.ts:tainted` (`genswarm._witness_features`).
-_CELL_FLOOR_CI = 650        # measured 685 (enumerator K<=2, compile-only), 2026-09-26
-_CELL_FLOOR_DEEP = 665      # measured 701 (enumerator K<=3), 2026-09-26
-_CELL_FLOOR_WITH_REJ = 720  # measured 760 (K<=2 + rejection witnesses), 2026-10-05
+#
+# RAISED 2026-10-12c by TK44, and deliberately to ZERO headroom (like `MIN_TESTS_ALL`).
+# MEASURED that day on 8a76ff4 + the TK44 `genswarm.witness` change, with `_enumerate(2)`
+# / `_enumerate(3)` and `genswarm.rejection_explained_cells()` (probe recipe in
+# docs/tk44-generator-coverage-census-2026-10-12.md): enumerator 741 at K<=2 AND at K<=3
+# (ci now reaches what deep reaches), 816 with witnesses, out of 1128. The WHOLE TK44 change
+# is +56 at ci / +40 at deep (HEAD 8a76ff4's genswarm: 685 at K<=2, 701 at K<=3, 760 with
+# witnesses -- re-measured 2026-10-12c). Its second-referent wiring ALONE is worth only 20
+# cells (721 / 796 with `split` forced off and every other TK44 edit kept), so the old
+# "~5% under" margin (~37 cells) would have left that wiring UNPINNED: a floor the
+# sabotage cannot redden is decoration. A deliberate scope change that loses cells lowers
+# these as TK106 / TK107 did -- an edit, reviewed, with its measurement.
+_CELL_FLOOR_CI = 741        # measured 741 (enumerator K<=2, compile-only), 2026-10-12c
+_CELL_FLOOR_DEEP = 741      # measured 741 (enumerator K<=3), 2026-10-12c
+_CELL_FLOOR_WITH_REJ = 816  # measured 816 (K<=2 + rejection witnesses), 2026-10-12c
 _BASELINE_CELLS = 514       # `git show HEAD:tests/test_hypothesis.py`, 400 draws each
 # Re-measured 2026-10-05 (TK107) in the 1128-cell universe: the 2026-08-10 baseline
 # generators (`tests/test_hypothesis.py` at 1cbaad0, the zz_measure.py recipe, derandomized)
@@ -618,7 +630,9 @@ _BASELINE_CELLS = 514       # `git show HEAD:tests/test_hypothesis.py`, 400 draw
 # ratio was 871/514 = 1.69 (2026-08-10) and still 866/514 = 1.68 after TK106. TK107 took
 # it to 760/514 = 1.48: the 106 lost cells were rejection-witness cells built from the
 # deleted unchecked compile (see the floors above), and the enumerator's own 685 did not
-# move. ~5% under the measured 1.48, like the floors.
+# move. ~5% under the measured 1.48, like the floors. TK44 (2026-10-12c) took the ratio to
+# 816/514 = 1.59; this knob was left at 1.4 on purpose, because `_CELL_FLOOR_WITH_REJ`
+# (816 > 1.4 * 514 = 720) is now the binding pin and this one only guards the comparison.
 _MIN_GAIN_OVER_BASELINE = 1.4
 
 
@@ -628,7 +642,9 @@ def test_enumerator_cell_coverage_floor():
     A FLOOR WITH PROVENANCE (rank 3 on the durability ranking), used deliberately here
     rather than an exact number, because the enumerator's cell count moves whenever the
     compiler mints a feature and an exact pin would turn every compiler change into a
-    spurious failure. The floors are set ~5% under the measured values.
+    spurious failure. The floors were set ~5% under the measured values until TK44
+    (2026-10-12c), which raised them to the measured values: see the provenance block
+    above for why the margin had to go.
 
     The number that matters is the comparison, so it is asserted rather than narrated:
     the enumerator must beat the BASELINE generators by a wide margin, or the whole
@@ -639,17 +655,193 @@ def test_enumerator_cell_coverage_floor():
         FAILED tests/test_generator_coverage.py::test_enumerator_cell_coverage_floor
         E   AssertionError: enumerator cell coverage 736/1275 is below the floor 800
             (measured 841 on 2026-08-10)
+
+    SABOTAGE 2 (TK44, 2026-10-12c, literal output) -- revert the TK44 second-referent
+    wiring ALONE (`split = False` in `genswarm.witness`, every other TK44 edit kept)::
+
+        FAILED tests/test_generator_coverage.py::test_enumerator_cell_coverage_floor
+        E   AssertionError: enumerator cell coverage 721/1128 is below the floor 741
+            (measured 741 at K<=2 and at K<=3 on 2026-10-12c)
+        E   assert 721 >= 741
+        1 failed, 32 deselected in 0.59s
+
+    Same edit under `HYPOTHESIS_PROFILE=deep`: the identical `721/1128 ... floor 741`.
+    Restored from a temp copy, `cmp` clean.
     """
     cells, feats, refusals, unmatched = _enumerate(ENUM_K)
     floor = _CELL_FLOOR_DEEP if DEEP else _CELL_FLOOR_CI
     assert len(cells) >= floor, (
         f'enumerator cell coverage {len(cells)}/{len(_UNIVERSE)} is below the floor '
-        f'{floor} (measured 685 at K<=2 / 701 at K<=3 on 2026-09-26)')
+        f'{floor} (measured 741 at K<=2 and at K<=3 on 2026-10-12c)')
     with_rej = cells | G.rejection_explained_cells()
-    assert len(with_rej) >= _CELL_FLOOR_WITH_REJ
+    assert len(with_rej) >= _CELL_FLOOR_WITH_REJ, (
+        f'enumerator + rejection-witness coverage {len(with_rej)}/{len(_UNIVERSE)} is '
+        f'below the floor {_CELL_FLOOR_WITH_REJ} (measured 816 on 2026-10-12c)')
     assert len(with_rej) > _BASELINE_CELLS * _MIN_GAIN_OVER_BASELINE, (
         f'the new machinery reaches {len(with_rej)} cells vs the baseline generators\' '
         f'{_BASELINE_CELLS} -- that is not enough of a gain to justify the runtime')
+
+
+def _unknown_classes(cells, feats):
+    """Split the UNKNOWN cells (neither HIT nor rejection-explained) into DERIVED classes.
+
+    Nothing here is a list of cells or features: every class is computed from the
+    enumerator's own HIT set and `genswarm.REJECTION_WITNESSES` (through
+    `rejection_features`), the way `UNACCOUNTED` is, so a cell's class moves on its own
+    when the generator or a witness changes (TK44, 2026-10-12c,
+    docs/tk44-generator-coverage-census-2026-10-12.md § Decision):
+
+      * ``refused_only`` -- the cells pairing a feature that some rejection witness
+        carries but NO accepted enumerated config HITs. That is ALL the code checks: it
+        does NOT check that the feature is refused in every schema that could carry it,
+        so a future generator gap on a legal feature that some witness happens to carry
+        would land here instead of in ``gap``. The fence against that is
+        `test_refused_only_features_are_tupleset_shapes` (every refused-only feature must
+        be a `ttu.ts:` / `ttu.ts.restr:` shape, the family the TK106 / TK108 / ASK-1
+        parse refusals remove, and be carried ONLY by witnesses refused with one of
+        those three messages). It is NOT an exemption: the day a generator HITs that feature, or
+        a witness stops being refused (`test_rejection_witness_is_still_refused`), its
+        cells leave this class and reappear as `gap` or `other`.
+      * ``gap`` -- both features are HIT, just never together: a generator gap
+        (census class G), held at zero by
+        `test_every_pair_of_hit_features_is_reached_together`.
+      * ``other`` -- the rest, i.e. cells with a feature that is neither HIT nor
+        witnessed. `test_every_alphabet_feature_is_hit_or_rejection_explained` keeps it
+        empty.
+    """
+    unknown = _UNIVERSE - cells - G.rejection_explained_cells()
+    witnessed = set().union(*G.rejection_features().values())
+    refused_only_feats = witnessed - feats
+    refused_only = {c for c in unknown if c & refused_only_feats}
+    gap = {c for c in unknown - refused_only if c <= feats}
+    return dict(unknown=unknown, refused_only=refused_only, gap=gap,
+                other=unknown - refused_only - gap,
+                refused_only_feats=refused_only_feats)
+
+
+def test_every_pair_of_hit_features_is_reached_together():
+    """Property guarded: if the enumerator HITs feature `a` and feature `b`, some
+    enumerated config HITs them TOGETHER, or a rejection witness explains the pair.
+
+    This is the TK44 close condition made mechanical (census class G: "both features
+    HIT individually, never together"). Before TK44 there were 56 such cells at `ci`
+    (40 at `deep`), all from one wiring choice in `genswarm.witness` (every star-ish arm
+    on the one taintable referent), and nothing failed. A new gap here is a GENERATOR
+    finding: reach it (a witness edit) or, if the pair is genuinely impossible, add a
+    REJECTION WITNESS whose refusal is asserted -- never a hand-written exemption.
+
+    SABOTAGE (literal output, 2026-10-12c) -- revert the TK44 second-referent wiring
+    alone (`split = False` in `genswarm.witness`)::
+
+        FAILED tests/test_generator_coverage.py::test_every_pair_of_hit_features_is_reached_together
+        E   AssertionError: 20 cell(s) pair two features the enumerator HITs, but never
+            in one config (a generator gap, TK44 class G): [['leaf:derived-ttu',
+            'restr:wildcard-userset'], ['leaf:derived-ttu', 'schema:owc'],
+            ['leaf:derived-ttu', 'ttu.ts.restr:subject-wildcard'], ['leaf:derived-ttu',
+            'ttu.ts:owc'], ['leaf:derived-ttu', 'ttu:self-target'], ['plan:PDerivedTTU',
+            'restr:wildcard-userset']]
+        1 failed, 1 passed, 32 deselected in 4.38s
+
+    Restored from a temp copy, `cmp` clean. (20, not 56: the other TK44 edits -- the
+    always-tainted userset referent and `body_ttu` -- stay in under this sabotage.)
+    """
+    cells, feats, refusals, unmatched = _enumerate(ENUM_K)
+    assert cells and feats, 'ANTI-VACUITY: the enumerator produced nothing'
+    gap = _unknown_classes(cells, feats)['gap']
+    assert not gap, (
+        f'{len(gap)} cell(s) pair two features the enumerator HITs, but never in one '
+        f'config (a generator gap, TK44 class G): '
+        f'{sorted(sorted(c) for c in gap)[:6]}')
+
+
+def test_refused_only_features_are_tupleset_shapes():
+    """Property guarded: the derived ``refused_only`` class of `_unknown_classes` cannot
+    silently absorb a generator gap outside the tupleset-shape refusals.
+
+    ``refused_only`` is "carried by a rejection witness, HIT by no accepted enumerated
+    config". That is the right test for a feature a parse refusal removes from the
+    accepted space, but it also matches a LEGAL feature the generator simply stopped
+    building, if some witness happens to carry it -- and then neither
+    `test_every_pair_of_hit_features_is_reached_together` (which only sees HIT x HIT)
+    nor `test_every_alphabet_feature_is_hit_or_rejection_explained` would notice. The
+    only parse refusals that remove a feature from the accepted space are the TUPLESET
+    shapes (TK106 direct-only, TK108 no userset restriction, ASK-1 no dangling
+    tupleset), so every refused-only feature must be a ``ttu.ts:`` / ``ttu.ts.restr:``
+    feature. This is a FAMILY rule, not a list: the nine members are derived each run
+    (2026-10-12c: ``ttu.ts:{Computed,Exclusion,Intersection,TTU,neg-only-type,tainted,
+    undeclared}`` and ``ttu.ts.restr:{userset,wildcard-userset}``), and a new refusal
+    family that legitimately removes a non-tupleset feature is a reviewed edit here.
+
+    SABOTAGE (literal output, 2026-10-13, TK44 fix-1) -- stop building the
+    wildcard-userset arm (`genswarm.witness`: guard the ``r6`` block with ``False and``),
+    so ``restr:wildcard-userset`` is HIT by no accepted config while the
+    `wildcard-userset-over-derived` witnesses still carry it::
+
+        FAILED tests/test_generator_coverage.py::test_refused_only_features_are_tupleset_shapes
+        E   AssertionError: 1 feature(s) are carried ONLY by rejection witnesses but are
+            not tupleset shapes, so their cells would be filed as refused-only rather
+            than as a generator gap: ['restr:wildcard-userset']
+        1 failed, 34 deselected in 0.49s
+
+    CONTROL, same sabotage: `test_every_pair_of_hit_features_is_reached_together` and
+    `test_every_alphabet_feature_is_hit_or_rejection_explained` stay GREEN (``2 passed,
+    33 deselected``) -- the gap this test exists for was invisible to both. Restored
+    from a temp copy, `cmp` clean.
+
+    The prefix rule alone is a FAMILY fence, and the family also holds legal features
+    (`ttu.ts:owc`, `ttu.ts.restr:subject-wildcard`, ...), so a second, per-feature
+    assertion requires every witness carrying a refused-only feature to refuse with a
+    tupleset-shape message (`genswarm.TUPLESET_MUST_BE_DIRECT` / `TUPLESET_NO_USERSET` /
+    `DANGLING_REFERENCE`). SABOTAGE (literal output, 2026-10-13, TK44 fix-2) -- stop
+    object-wildcarding any tupleset (`genswarm.witness`: both `owc.add(('doc',
+    'parent2'))` and `owc.add(('doc', 'parent'))` replaced by `pass`), so ``ttu.ts:owc``
+    is HIT by no accepted config while `owc-on-a-ttu-tupleset` still carries it::
+
+        FAILED tests/test_generator_coverage.py::test_refused_only_features_are_tupleset_shapes
+        E   AssertionError: 1 refused-only feature(s) are also carried by a witness whose
+            refusal is NOT a tupleset-shape refusal, so the feature is legal and its cells
+            would be filed as refused-only rather than as a generator gap:
+            [('ttu.ts:owc', ['owc-on-a-ttu-tupleset'])]
+
+    CONTROL, same sabotage, this test as it stood before fix-2 (prefix rule only):
+    ``1 passed, 34 deselected`` -- `ttu.ts:owc` starts with ``ttu.ts:``. (Under this
+    sabotage `test_every_pair_of_hit_features_is_reached_together` also goes red, on
+    `schema:owc` x `restr:wildcard-userset`, because `schema:owc` loses its split arm;
+    that is incidental to the sabotage, not a second fence for this property.) Residual,
+    stated rather than hidden: ``ttu.ts:Union`` and ``ttu.ts:multitype`` are legal but
+    carried ONLY by TK106 witnesses, so if the generator stopped HITting either, neither
+    assertion here would see it; the zero-headroom cell floors
+    (`test_enumerator_cell_coverage_floor`) would. Restored from a temp copy, `cmp` clean.
+    """
+    cells, feats, refusals, unmatched = _enumerate(ENUM_K)
+    assert cells and feats, 'ANTI-VACUITY: the enumerator produced nothing'
+    ro = _unknown_classes(cells, feats)['refused_only_feats']
+    assert ro, ('ANTI-VACUITY: no refused-only feature at all -- the TK106/TK108/ASK-1 '
+                'witnesses should carry some; check rejection_features()')
+    stray = sorted(f for f in ro if not f.startswith(('ttu.ts:', 'ttu.ts.restr:')))
+    assert not stray, (
+        f'{len(stray)} feature(s) are carried ONLY by rejection witnesses but are not '
+        f'tupleset shapes, so their cells would be filed as refused-only rather than as '
+        f'a generator gap: {stray}')
+    # The prefix rule is a FAMILY rule, and the family holds LEGAL features too
+    # (`ttu.ts:owc`, `ttu.ts.restr:subject-wildcard`, `ttu.ts:Direct`, ...). Tighten it
+    # per feature (TK44 fix-2, 2026-10-13): a refused-only feature must be carried ONLY
+    # by witnesses whose refusal IS a tupleset-shape refusal. A legal tupleset feature
+    # that stops being HIT is still carried by some other witness (`ttu.ts:owc` by
+    # `owc-on-a-ttu-tupleset`, refused for the owc, not for the tupleset's shape), so it
+    # goes red here instead of being filed as refused-only.
+    tupleset_refusals = {G.TUPLESET_MUST_BE_DIRECT, G.TUPLESET_NO_USERSET,
+                         G.DANGLING_REFERENCE}
+    msg = {w.name: w.message for w in G.REJECTION_WITNESSES}
+    off_family = sorted(
+        (f, sorted(n for n, fs in G.rejection_features().items()
+                   if f in fs and msg[n] not in tupleset_refusals))
+        for f in ro)
+    off_family = [(f, ws) for f, ws in off_family if ws]
+    assert not off_family, (
+        f'{len(off_family)} refused-only feature(s) are also carried by a witness whose '
+        f'refusal is NOT a tupleset-shape refusal, so the feature is legal and its cells '
+        f'would be filed as refused-only rather than as a generator gap: {off_family}')
 
 
 # ===========================================================================
@@ -774,7 +966,18 @@ def test_swarm_campaign_reaches_cells_and_never_starves_a_switch():
     assert not missing, f'switch(es) never enabled in {n_draws[0]} swarm draws: {missing}'
     # Measured 2026-08-10, derandomized: 482 cells at 120 draws, 749 at 400.
     # Floors ~10% under.
-    floor = 670 if DEEP else 430
+    # DEEP floor LOWERED 670 -> 527 on 2026-10-13 (TK44 fix-1), deliberately: it had been
+    # RED under `HYPOTHESIS_PROFILE=deep` since before TK44, unnoticed because the gate runs
+    # `ci`. MEASURED first-hand with this test (floor constant swapped in co_consts, so the
+    # derandomized draws are byte-identical; probe
+    # .scratch/uc-2026-10-12c/tk44-fix1/swarm_count.py): HEAD 8a76ff4 592 at 400 draws, the
+    # TK44 tree 586 (two new switches, `body_ttu` / `derived_star`, dilute the draw); ci
+    # 529 at 120 draws. The universe shrank 1275 -> 1128 at TK107 (2026-10-05), which is
+    # where most of the 749 -> 592 went. Re-based ~10% under 586, the convention above.
+    # SABOTAGE (2026-10-13): `swarm_subset`'s 1/3 composition coin made never-true
+    # (`== 99`) -> deep reaches 115 cells, red against 527. Dropping the all-ON stratum
+    # for a focus-only one costs only 586 -> 559 and is NOT caught by either floor.
+    floor = 527 if DEEP else 430
     assert len(cells) >= floor, (
         f'swarm campaign reached {len(cells)} cells at {SWARM_DRAWS} draws, floor {floor}')
 
@@ -841,6 +1044,7 @@ def _sweep(regime, k):
     """Drive every enumerated config under one regime. Returns a report dict."""
     cells: set = set()
     comparisons = attempted = accepted = driven = 0
+    undriven: list = []
     fail_open: dict = {}
     fail_closed: dict = {}
     for sw in G.enumerate_configs(DRIVE_K):
@@ -859,12 +1063,14 @@ def _sweep(regime, k):
         if r.driven:
             driven += 1
             cells |= G.cells_of(fs)          # a cell counts only when actually DRIVEN
+        else:
+            undriven.append(sorted(sw))
         for d in r.fail_open:
             fail_open.setdefault(tuple(sorted(sw)), d)
         for d in r.fail_closed:
             fail_closed.setdefault(tuple(sorted(sw)), d)
     return dict(cells=cells, comparisons=comparisons, attempted=attempted,
-                accepted=accepted, driven=driven,
+                accepted=accepted, driven=driven, undriven=undriven,
                 fail_open=fail_open, fail_closed=fail_closed)
 
 
@@ -882,6 +1088,24 @@ def _assert_non_vacuous(rep, regime):
         f'generator and this sweep is measuring the ADMISSION-REJECTION path, not the '
         f'shape under test')
     assert rep['cells'], f'{regime}: no cell was recorded as DRIVEN'
+    # TK44 (2026-10-12c): EVERY compiling config is driven, not merely some. A config
+    # that compiles but makes zero comparisons reaches its cells COMPILE-ONLY, and the
+    # cell floor in `test_enumerator_cell_coverage_floor` counts compiled cells, so this
+    # is what makes that floor a statement about DRIVEN input classes at `K<=DRIVE_K`.
+    # Measured 2026-10-12c: 100/100 compiling K<=2 configs driven in both regimes.
+    # SABOTAGE (literal output, 2026-10-12c) -- `genswarm.drive_config` handed an EMPTY
+    # pool for any schema of 9+ relations (a plausible "the big witnesses are slow"
+    # tweak; it silently drops exactly the TK44 configs). The three floors above stayed
+    # GREEN (95 other configs were still driven); only this line saw it::
+    #     FAILED tests/test_generator_coverage.py::test_sparse_regime_finds_no_fail_closed_divergence
+    #     E   AssertionError: sparse: 5 config(s) COMPILE but were never driven (zero
+    #         comparisons), so their cells are compile-only: [['body_userset',
+    #         'ts_boolean'], ['body_boolean', 'ts_wildcard'], ['body_boolean',
+    #         'body_userset'], ['body_boolean', 'self_ttu'], ['body_boolean', 'owc']]
+    #     1 failed, 32 deselected in 63.65s
+    assert not rep['undriven'], (
+        f'{regime}: {len(rep["undriven"])} config(s) COMPILE but were never driven '
+        f'(zero comparisons), so their cells are compile-only: {rep["undriven"][:5]}')
 
 
 def test_sparse_regime_finds_no_fail_closed_divergence():
@@ -1196,7 +1420,7 @@ def test_non_vacuity_floors_fire_when_the_comparison_set_is_emptied():
     """
     # (1) empty pool -> the driven floor fires
     empty = dict(comparisons=0, attempted=0, accepted=0, driven=0, cells=set(),
-                 fail_open={}, fail_closed={})
+                 undriven=[], fail_open={}, fail_closed={})
     with pytest.raises(AssertionError, match='NO config was driven'):
         _assert_non_vacuous(empty, 'probe')
     with pytest.raises(AssertionError, match='VACUOUS'):
@@ -1205,13 +1429,22 @@ def test_non_vacuity_floors_fire_when_the_comparison_set_is_emptied():
     # (2) an all-invalid pool -> the acceptance-rate floor fires, and the comparison
     #     counter alone does NOT (comparisons are nonzero: the grid still sweeps).
     bad_rate = dict(comparisons=500, attempted=100, accepted=20, driven=5,
-                    cells={frozenset({'a', 'b'})}, fail_open={}, fail_closed={})
+                    cells={frozenset({'a', 'b'})}, undriven=[], fail_open={},
+                    fail_closed={})
     with pytest.raises(AssertionError, match='acceptance rate'):
         _assert_non_vacuous(bad_rate, 'probe')
 
     # ... and the same shape with a healthy rate must PASS, so the floor is not simply
     # rejecting everything (control on the control).
     _assert_non_vacuous(dict(bad_rate, accepted=90), 'probe')
+
+    # (2b) TK44 (2026-10-12c): a HEALTHY sweep that left one compiling config undriven
+    #      -- every older floor passes (control above), only the undriven check fires.
+    #      SABOTAGE (literal, 2026-10-12c): `assert True or not rep['undriven']` in
+    #      `_assert_non_vacuous` -> "E   Failed: DID NOT RAISE AssertionError",
+    #      1 failed, 33 deselected in 0.42s.
+    with pytest.raises(AssertionError, match='COMPILE but were never driven'):
+        _assert_non_vacuous(dict(bad_rate, accepted=90, undriven=[['owc']]), 'probe')
 
     # (3) an empty grid -> `grid_for` refuses rather than returning []
     with pytest.raises(AssertionError, match='ANTI-VACUITY'):
@@ -1568,8 +1801,16 @@ def test_report_cell_coverage(capsys):
     print(f'[genswarm] alphabet {len(_ALPHABET)} features -> {total} pair cells')
     print(f'[genswarm] HIT      {len(cells):5d}  ({100*len(cells)/total:.1f}%)')
     print(f'[genswarm] +REJ     {len(both):5d}  ({100*len(both)/total:.1f}%)')
+    cls = _unknown_classes(cells, feats)
     print(f'[genswarm] UNKNOWN  {total-len(both):5d}  ({100*(total-len(both))/total:.1f}%)'
-          f'   <- the honest remaining blind spot')
+          f'   = the three DERIVED classes below (TK44)')
+    print(f'[genswarm]   refused-only {len(cls["refused_only"]):5d}   <- a feature carried '
+          f'ONLY by refusal witnesses ({len(cls["refused_only_feats"])} such features): no '
+          f'accepted enumerated config carries that feature')
+    print(f'[genswarm]   gap          {len(cls["gap"]):5d}   <- both features HIT, never '
+          f'together (generator gap; must be 0)')
+    print(f'[genswarm]   other        {len(cls["other"]):5d}   <- the honest remaining '
+          f'blind spot')
     print(f'[genswarm] baseline generators (git HEAD, 400 draws each): '
           f'{_BASELINE_CELLS} ({100*_BASELINE_CELLS/total:.1f}%)')
     print(f'[genswarm] refusals by family: {dict(refusals)}')
