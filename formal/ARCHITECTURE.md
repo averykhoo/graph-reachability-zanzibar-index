@@ -394,11 +394,18 @@ differential comparisons break down as:
   (K=4, 163), two_stratum_cascade (K=3, 299), boolean_star_exclusion (K=4, 57),
   wildcard_group_member (K=3, 176), ttu (K=4, 163); **1021 stores total, per-shape space
   size / K / store count all asserted** so the bounds cannot
-  silently drift. spec × oracle × set engine over the shared grid; zero disagreements.
+  silently drift. spec × oracle × set engine × the real graph index (in the ANSWER
+  enumeration since 2026-07-18, §4(e) increment (a), over the proved graph query scope)
+  over the shared grid; zero disagreements.
   `test_conformance_enum_state.py` adds a state-level leg over a deterministic stride-4
-  sample — **257 of those 1021 stores** (~25 %), sample size asserted. The
-  graph backend is deliberately not in the ANSWER enumeration (it stays pinned by the
-  curated-corpora graph + state gates), and the bounds are deliberately tiny.
+  sample — **257 of those 1021 stores** (~25 %), sample size asserted. The bounds are
+  deliberately tiny. **A seventh, OUT-of-fragment shape (`TK102`, 2026-10-12c):**
+  `derived_userset_subject` at K=3 (697 stores): oracle x set engine on all 697, spec +
+  graph on 119 renaming-orbit representatives (the quotient leaves 116 of the 697 stores'
+  own write orders, 44 write-sequence classes, undriven through the graph; measured
+  2026-10-12c and pinned by `test_conformance_enum.py::_ORBIT_ORDER_UNDRIVEN`), the graph leg a declared
+  Python-only differential (`test_conformance_enum.py::_GRAPH_PY_DIFFERENTIAL`) that the
+  state leg excludes. `docs/tk102-derived-userset-enum-2026-10-12.md`.
 - **Remove-path conformance** (`test_conformance_remove.py` — exactly the `conf-heavy`
   gate phase; its test count is in the generated per-file table): the REAL `SetEngine`
   driven through seeded

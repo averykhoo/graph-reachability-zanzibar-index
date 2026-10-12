@@ -2,7 +2,7 @@
 id: TK44
 title: ~30% of the generator pair-cell space is unreached even at deep budget, with UNKNOWN residue
 brief:
-pri: LATER
+pri: NOW
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-10-12b
-updated: 2026-10-12b
+moved: 2026-10-12c
+updated: 2026-10-12c
 closed:
 ---
 
@@ -59,3 +59,7 @@ Note (pre-TK120 scratch sweep, 2026-10-05b): the 2026-08-21b body still says "Th
 ### 2026-10-12b
 
 Re-ranked 2026-10-12b (user approved the order in chat): TK118 NOW, then TK79, then TK102 (NEXT); TK97 and TK44 down to LATER (process tooling / coverage research with no known bug); TK134+TK135 stay LATER, user says no rush to release 0.0.4. Why TK118 first: it is the only row about a fail-OPEN, and it bears on what we tell production users about residue today.
+
+### 2026-10-12c
+
+PROMOTED LATER -> NOW 2026-10-12c: the user asked in chat for TK79, TK102 and TK44 to be done in this session via subagents, in that order. TK79 and TK102 are closed; TK44 is the remaining item. Suggested first step stands (2026-10-04): a time-boxed census of the UNKNOWN unreached cells, recorded in a tracked ACTIVE-PLAN doc; re-measure via tests/test_generator_coverage.py::test_report_cell_coverage (-s) before quoting any figure.

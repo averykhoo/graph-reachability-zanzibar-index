@@ -464,7 +464,16 @@ GATE_LOCK_HELD=1
 #   formal/conformance/test_graphadmission_scope_pin.py::test_ttudirect_probe_is_refused_by_
 #   the_graph_compiler_on_the_unchecked_ast (two rows); test_conformance_nary_strata.py is
 #   net 0 (one test renamed). 1087 - 2 = 1085, so no drift.
-MIN_CONF_ALL=1087
+# Re-measured 2026-10-12c (TK102) with the same command: 1093 (first-hand). DRIFT REPAIR
+#   + GROWTH: HEAD 4d24031 already collected 1089, two over this floor, so two tests
+#   could have been deleted with the gate green. The +2 are TK127 (7449537, 2026-10-07):
+#   test_w4fragment_scope_pin.py went from 7 to 9 test functions. The +4 are TK102:
+#   test_conformance_enum.py +2 (the `derived_userset_subject` shape and
+#   test_every_shape_declares_its_graph_leg) +1 (the write-order pin), and
+#   test_conformance_enum_state.py +1 (test_state_leg_excludes_exactly_the_py_differential;
+#   the state parametrization stays at six). 1093 - 4 - 2 = 1087. The floor mechanism is
+#   unchanged, so the 2026-09-24 instrument check stands.
+MIN_CONF_ALL=1093
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -741,8 +750,10 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 #   --ignore construction; 135 + 946 == 1081 == MIN_CONF_ALL. All +43 are REST.
 # 2026-10-05 (TK107): HEAVY re-measured at 135 (unchanged), REST at 952 by the same
 #   --ignore construction; 135 + 952 == 1087 == MIN_CONF_ALL. Both new tests are REST.
+# 2026-10-12c (TK102 + the TK127 drift): HEAVY re-measured at 135 (unchanged), REST at
+#   958 by the same --ignore construction; 135 + 958 == 1093 == MIN_CONF_ALL. All REST.
 MIN_CONF_HEAVY=135
-MIN_CONF_REST=952
+MIN_CONF_REST=958
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

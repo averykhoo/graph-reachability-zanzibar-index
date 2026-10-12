@@ -261,6 +261,7 @@ formal/conformance/extractor.py::lean_graph_state	py:function	844ebaf63f1c7589
 formal/conformance/extractor.py::python_graph_state	py:function	4b08ad349fbe3261
 formal/conformance/grid.py::grid	py:function	69537961dee72f8b
 formal/conformance/test_conformance_bulk_state.py::test_state_bulkbuild_vs_pythongraph	py:function	7098e79ae9b46357
+formal/conformance/test_conformance_enum.py::_ORBIT_ORDER_UNDRIVEN	py:assign	443a5683a21867d4
 formal/conformance/test_conformance_fragment.py::test_production_report_equals_lean	py:function	ddc5ce93afcb4854
 formal/conformance/test_conformance_fragment.py::test_reported_failures_are_refused_by_both_parsers	py:function	d444a8e497cb3123
 formal/conformance/test_conformance_fragment.py::test_silent_field_mirror_equals_lean	py:function	2303bc7dc271383a

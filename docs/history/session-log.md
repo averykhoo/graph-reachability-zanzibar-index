@@ -32,9 +32,9 @@ from here.
 
 ---
 
-## 2026-10-12c — `TK79` closed: a `drain_deltas` replica needs the late GC rows (true), now pinned
+## 2026-10-12c — `TK79` + `TK102` closed: late GC outbox rows pinned; derived usersets in the enum arm
 
-rows: TK79 (NOW, closed), TK102 (NEXT -> NOW, the user-approved order)
+rows: TK79 (NOW, closed), TK102 (NEXT -> NOW, closed), TK44 (LATER -> NOW, the user's ask)
 
 `task lint: clean (13 checks, 253 task file(s) parsed), 28 warning(s)`
 
@@ -62,6 +62,34 @@ in turn.** This entry covers `TK79`; later items of this session append below th
   [`docs/tk79-outbox-replica-2026-10-12.md`](../tk79-outbox-replica-2026-10-12.md).
 
 Still owed: nothing from the `TK79` stage.
+
+**`TK102` stage** (implemented, two adversarial-review fix rounds, then closed).
+- LANDED: `formal/conformance/test_conformance_enum.py::_SHAPES` gains
+  `derived_userset_subject` (16-tuple space, K=3, 697 stores). Oracle x set engine run on
+  all 697; zcli spec and the graph index run once per pool-renaming orbit
+  (`::_ORBIT_REDUCED` = 119), with the soundness precondition pinned by
+  `::_assert_renaming_closed`. The graph leg is a declared Python-only differential
+  (`::_GRAPH_PY_DIFFERENTIAL`), deliberately NOT added to `GRAPH_FRAGMENT` (the `ZT-P3-3`
+  mistake), and `::test_every_shape_declares_its_graph_leg` plus the n_driven / n_graph /
+  n_cheap_only pins stop it being skipped silently. The orbit quotient's write-order cost is
+  pinned by `::_ORBIT_ORDER_UNDRIVEN` (116 undriven stores, 44 classes; 163 = 119 + 44).
+  `test_conformance_enum_state.py::_STATE_SHAPES` excludes exactly the Python-only set.
+  Floors `MIN_CONF_ALL` / `MIN_CONF_REST` raised in `formal/verify.sh`.
+- RESULT (RUN 2026-10-12c): no divergence, so no Python fix was needed.
+- SABOTAGE S1-S7 and S11, all red; literal output is in the test docstrings and doc §4.1.
+  S1 (a derived edge add drops the object's descendants) is caught by no pre-existing enum
+  shape (re-run in an isolated copy: 6 passed), though the `TK94` remove arm also catches it.
+- NOT TAKEN: K=4, the reverse write order, the 44 undriven sequence classes, `P16`.
+  Doc (FROZEN): [`docs/tk102-derived-userset-enum-2026-10-12.md`](../tk102-derived-userset-enum-2026-10-12.md).
+- Open tile cost: this shape adds ~105 s to one conf tile; conf-tile:5/5 already ran 925 s.
+  The tile K was left as is (the phases run in the background, with no per-command cap).
+
+- Closing-stage catch: the first `lean` run went RED on the anchor CONTENT pin
+  (`_ORBIT_ORDER_UNDRIVEN` anchored in CORRESPONDENCE.md but not pinned). The row was
+  re-read and is true, so `formal/conformance/claim_rot.py --generate` was run: 1 added,
+  0 changed, 0 removed.
+
+Still owed: nothing from the `TK102` stage.
 
 ## 2026-10-12b — `TK118` closed: `residue` paranoia now aborts an I14 regression (delta-scoped)
 

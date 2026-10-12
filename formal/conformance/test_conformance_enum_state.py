@@ -29,17 +29,25 @@ outside those documented projection classes, is an ADJUDICATION EVENT to record
 (plan §8.2) — never a golden/oracle/projection to edit.
 
 --------------------------------------------------------------------------- #
-SHAPE COVERAGE — all six enum shapes get the state gate; none excluded.
+SHAPE COVERAGE — every IN-FRAGMENT enum shape gets the state gate.
 --------------------------------------------------------------------------- #
-The six enum shapes (`test_conformance_enum._SHAPES`) are all inside
+(TK102, 2026-10-12c) `_SHAPES` now also holds `derived_userset_subject`, which
+is OUTSIDE W4Fragment and is declared in
+`test_conformance_enum._GRAPH_PY_DIFFERENTIAL`. This leg compares against the
+LEAN graph model, so running it there would compare two models no theorem
+relates (the ZT-P3-3 mistake): it parametrizes over `_STATE_SHAPES` (the
+`_SHAPES` names in GRAPH_FRAGMENT) and `test_state_leg_excludes_exactly_the_
+py_differential` pins that the excluded names are EXACTLY that declared set.
+The six in-fragment enum shapes are all inside
 `GRAPH_FRAGMENT`, so the state extractor + zcli `"graph-state"` mode support
 every one (the curated `test_conformance_state.py` runs the exact same
 machinery over all of `GRAPH_FRAGMENT`, `two_stratum_cascade`'s 2-stratum
 derived state and the star/residue state of the wildcard/TTU shapes included).
 Probed 2026-07-18 over the full stride-4 sample below: ZERO Lean
 admission/drain errors (rc 2/3) on any sampled store, so the graph-state mode
-admits and drains every one — no shape is unsupported, and there is no
-documented shape-exclusion for this leg.
+admits and drains every one — no in-fragment shape is unsupported, and the
+ONLY documented shape-exclusion for this leg is the out-of-fragment TK102
+shape above (a scope exclusion, not an unsupported shape).
 
 --------------------------------------------------------------------------- #
 SAMPLING — deterministic, documented; NO silent caps.
@@ -71,6 +79,10 @@ What is state-checked vs answer-only (the honest fraction):
     wildcard_group_member     176 (3)        44            all 176
     ------------------------------------------------------------------
     total                    1021           257            all 1021
+    derived_userset_subject   697 (3)   EXCLUDED    oracle x SE all 697;
+                                       (TK102)     spec+graph 119 orbit reps
+    (the seventh enum shape is outside W4Fragment: no Lean graph-state
+    comparison is meaningful there, see SHAPE COVERAGE above)
 
 So 257 of the 1021 enumerated stores (~25%) are compared at STATE level here;
 the remaining ~75% are compared at ANSWER level by `test_conformance_enum`
@@ -97,7 +109,7 @@ from __future__ import annotations
 import pytest
 
 from formal.conformance import runner
-from formal.conformance.corpus import SCHEMAS
+from formal.conformance.corpus import SCHEMAS, GRAPH_FRAGMENT
 from formal.conformance.extractor import (
     derived_relations,
     diff_states,
@@ -105,6 +117,7 @@ from formal.conformance.extractor import (
     python_graph_state,
 )
 from formal.conformance.test_conformance_enum import (
+    _GRAPH_PY_DIFFERENTIAL,
     _SHAPES,
     _all_stores,
     _tuple_space,
@@ -127,7 +140,30 @@ _STATE_SAMPLE: dict[str, int] = {
 }
 
 
-@pytest.mark.parametrize("name", sorted(_SHAPES))
+# The in-fragment enum shapes only (TK102): see the SHAPE COVERAGE block.
+_STATE_SHAPES: tuple[str, ...] = tuple(
+    sorted(n for n in _SHAPES if n in GRAPH_FRAGMENT))
+
+
+def test_state_leg_excludes_exactly_the_py_differential():
+    """The state leg skips an enum shape ONLY when that shape is declared a
+    Python-only graph differential, and skips every such shape. Without this a
+    `_SHAPES` name dropped from GRAPH_FRAGMENT would leave the state leg
+    silently, and a py-only name added here would compare against the Lean
+    model outside its fragment (ZT-P3-3).
+
+    SABOTAGE (2026-10-12c, S6): `_STATE_SHAPES = tuple(sorted(_SHAPES))` ->
+    `state leg excludes [] but the declared Python-only set is
+    ['derived_userset_subject']`, 1 failed in 1.02s. Restored byte-exact."""
+    excluded = set(_SHAPES) - set(_STATE_SHAPES)
+    assert excluded == set(_GRAPH_PY_DIFFERENTIAL), (
+        f"state leg excludes {sorted(excluded)} but the declared Python-only "
+        f"set is {sorted(_GRAPH_PY_DIFFERENTIAL)}")
+    assert set(_STATE_SHAPES) == set(_STATE_SAMPLE), (
+        sorted(set(_STATE_SHAPES) ^ set(_STATE_SAMPLE)))
+
+
+@pytest.mark.parametrize("name", _STATE_SHAPES)
 def test_enum_state_leangraph_vs_pythongraph(name):
     """Final materialized STATE, Lean graph model == Python graph index, over a
     deterministic stride-4 SAMPLE of the enumerated stores, under the documented
