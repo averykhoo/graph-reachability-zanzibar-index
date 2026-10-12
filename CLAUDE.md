@@ -330,8 +330,8 @@ Module map and pointers: `docs/architecture/overview.md`.
   key is the stable surrogate. State is in-memory — `rebuild()` replays from `RelationTuple`.
 - **Operational knobs** (all default to the historical behaviour):
   * `ZANZIBAR_PARANOIA=residue` — recommended in production (the runtime detector for the
-    `ZT-P0-1` escalation class); it does NOT catch an I14 regression, only `full`/`fixpoint`
-    do (`TK118`).
+    `ZT-P0-1` escalation class, and since `TK118` of an I14 regression, delta-scoped to the
+    entities a write touches; whole-store I13/I14 stay `full`/`fixpoint` only).
   * `ZANZIBAR_MAX_CLOSURE_FANOUT` (`0` disables) — a SYNC-ADMISSION bound only (`TK112`):
     every sync edge ADD is capped whatever it does to access, revocation-shaped adds under
     `but not` included, and the refusal (`ClosureFanoutExceeded`) is atomic across log, set

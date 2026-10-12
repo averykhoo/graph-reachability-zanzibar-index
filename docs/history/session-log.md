@@ -32,6 +32,35 @@ from here.
 
 ---
 
+## 2026-10-12b — `TK118` closed: `residue` paranoia now aborts an I14 regression (delta-scoped)
+
+rows: TK118 (NOW, closed), TK79 (NEXT -> NOW), TK102 (NOW -> NEXT), TK97 + TK44 (NEXT -> LATER)
+
+`task lint: clean (13 checks, 253 task file(s) parsed), 29 warning(s)`
+
+`read: board only`
+
+**The user asked to list and prioritize the open tasks, approved this order, and said there
+is no rush to release 0.0.4:** TK118 first, then TK79, then TK102. TK97 and TK44 moved down
+to LATER. TK134 and TK135 stay LATER until a release is wanted. Then the session worked
+TK118.
+- DECISION (model): add a delta-scoped I14 to the `residue` tier rather than only
+  documenting the gap. Reasoning, scouting, mutation sweep and the cost run are in
+  [`docs/tk118-residue-i14-2026-10-12.md`](../tk118-residue-i14-2026-10-12.md) (FROZEN).
+- LANDED: `src/zanzibar/graphindex/invariants.py::check_i14_delta` reuses the full
+  checker's clause through `_check_i14`, and `ParanoiaGuard.note_flush` (`after_flush`)
+  collects the touched entities. Pins: `tests/test_tk118_residue_i14.py`, and
+  `tests/test_p12_severity_sign.py` with residue now `abort`. Probe:
+  `benchmarks/probe_tk118_residue_i14.py`.
+- MEASURED: on `owc_star_ttu`, the I14 share of write cost is +12.0% at 160 writes and
+  +5.7% at 480, shrinking with store size. On a plain schema it is noise.
+- Side observation, UNVERIFIED and not filed: the `residue` tier itself read +14% to +19%
+  over `off` at 160 writes here, against +4.3% recorded 2026-07-26. The instrument noise is
+  too wide to call that a regression.
+- `CHANGELOG.md` `[Unreleased]` has a "Changed" entry. Not pushed, not released.
+
+Still owed: nothing from this session. (The 2026-10-05 bullet in `HANDOFF.md` is untouched.)
+
 ## 2026-10-12 — `TK136` fixed: reopen with `schema=` compares the parsed schema; 0.0.4 unreleased
 
 rows: TK136 (closed), TK102 (NEXT -> NOW, to keep exactly one NOW)

@@ -25,6 +25,12 @@ AND growing with store size (its scan is O(residue rows)) -- worth switching on
 deliberately, not worth imposing silently. If anyone widens the cheap tier's clause
 set, RE-MEASURE with the same interleaved method and update these numbers and
 ``ConnectedStore.DEFAULT_PARANOIA``.
+
+2026-10-12b (``TK118``): the cheap tier WAS widened, by a delta-scoped I14. It was
+re-measured with ``benchmarks/probe_tk118_residue_i14.py``. The I14 share is noise on a
+plain schema and +12.0% / +5.7% at 160 / 480 writes on a crossable one (it shrinks with the
+store). The numbers above are the 2026-07-26 run and were not re-taken. Full record:
+``docs/tk118-residue-i14-2026-10-12.md`` § 3.2.
 """
 
 import json

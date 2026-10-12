@@ -15,6 +15,13 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
   store's own schema. A different schema is still refused, and the stored text is never
   rewritten (found by the 0.0.3 install trial, `docs/pypi-trial-0.0.3-2026-10-08.md`).
 
+### Changed
+- `ZANZIBAR_PARANOIA=residue` (`paranoia='residue'`) now also checks crossing-middle
+  completeness (invariant I14), but only for the entities each write touches. A regression
+  of the 2026-08-09 crossing-middle fix used to grant access silently at this level. It now
+  aborts the write with `InvariantViolation`. The check costs nothing on a schema without
+  object wildcards (`object_wildcard_shapes`).
+
 ## [0.0.3]
 
 Fixes everything the fresh-user install trial of the published 0.0.2 found broken

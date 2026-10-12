@@ -28,8 +28,8 @@ number INTO it over restating it.
 | quantity | value |
 |---|---|
 | `formal/conformance/` collected | **1089** |
-| `tests/` collected | **2263** |
-| whole-repo suite | **3352** |
+| `tests/` collected | **2273** |
+| whole-repo suite | **3362** |
 | differential conformance tests | **1006** across **17** files |
 | gate-tooling conformance tests | **83** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **715** |

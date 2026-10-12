@@ -40,6 +40,14 @@ production at all -- leaving every runtime corruption detector dark:
                  BFS. This is the tier that owns the dangling
                  ``upos``/``neg`` id class, i.e. the ZT-P0-1 authorization
                  escalation (pin: ``tests/test_reg14_residue_gc_elision.py``).
+                 PLUS I14 crossing-middle completeness, DELTA-SCOPED to the entities
+                 the transaction touched (``check_i14_delta``, TK118): a regression of
+                 the 2026-08-09 middle fix is a fail-OPEN under a negated consumer
+                 (``tests/test_p12_severity_sign.py``), and this tier used to serve it.
+                 Vacuous on a schema with no crossable shape (every plain OpenFGA
+                 schema). An untouched entity's I14 state, and an I13 refcount
+                 corruption, stay full-tier only
+                 (``tests/test_tk118_residue_i14.py``).
                  Pre-commit only, so a violation ABORTS the writing transaction.
   ``'full'``     everything above: ``check_invariants`` (I1/I2/I3/I13/I14 + I4-I7 +
                  I10) plus the delta-scoped BFS verifier, pre-commit AND post-commit
@@ -80,7 +88,7 @@ from typing import NamedTuple, TYPE_CHECKING
 
 import json
 
-from sqlalchemy import event
+from sqlalchemy import event, tuple_
 from sqlmodel import Session, select
 
 from .models import DeltaOutbox, Edge, Node, ResidueRef, Residue
@@ -340,36 +348,13 @@ def check_invariants(session: Session, store_id: str,
     # == exactly the bridges); such nodes witness nothing, or the middles would keep
     # each other alive forever. Maintained by WildcardIndex._ensure_entity_middles /
     # _sync_entity_middles; sabotage-verified (tests/test_i14_crossing_middles.py).
-    if schema_info is not None:
-        crossable = schema_info.crossable_shapes
-        if crossable:
-            concrete_by_key = {(n.type, n.name, n.predicate): n
-                               for n in nodes if n.wildcard == ''}
-            wildcard_by_variant = {(n.type, n.predicate, n.wildcard): n
-                                   for n in nodes if n.wildcard != ''}
-
-            def _is_bridge_middle(n: Node) -> bool:
-                return (n.implicit and (n.type, n.predicate) in crossable
-                        and n.reference_count == 2)
-
-            witnessed = {(n.type, n.name) for n in concrete_by_key.values()
-                         if not _is_bridge_middle(n)}
-            for (t, x) in sorted(witnessed):
-                for (ct, p) in sorted(crossable):
-                    if ct != t:
-                        continue
-                    mid = concrete_by_key.get((t, x, p))
-                    if mid is None:
-                        _fail(f'I14: entity {t}:{x} exists but its crossing middle '
-                              f'{t}:{x}#{p} for crossable shape {(t, p)} is missing')
-                    w_any = wildcard_by_variant.get((t, p, 'any'))
-                    w_all = wildcard_by_variant.get((t, p, 'all'))
-                    if w_any is None or (mid.id, w_any.id) not in direct_edge_set:
-                        _fail(f'I14: crossing middle {mid} is missing its '
-                              f'concrete->w_any bridge')
-                    if w_all is None or (w_all.id, mid.id) not in direct_edge_set:
-                        _fail(f'I14: crossing middle {mid} is missing its '
-                              f'w_all->concrete bridge')
+    # The clause itself is _check_i14, shared with the cheap tier's delta-scoped
+    # check_i14_delta (TK118), so the two tiers cannot drift.
+    if schema_info is not None and schema_info.crossable_shapes:
+        _check_i14(schema_info.crossable_shapes,
+                   [n for n in nodes if n.wildcard == ''],
+                   [n for n in nodes if n.wildcard != ''],
+                   direct_edge_set)
 
     # I13 (blind-audit C5): reference_count is exactly the node's direct-edge degree
     # (each direct edge increments both endpoints on add and decrements on remove).
@@ -392,6 +377,123 @@ def check_invariants(session: Session, store_id: str,
                                   residue_versions)
 
     _check_outbox_sanity(session, store_id)
+
+
+def _check_i14(crossable, concrete_nodes, wildcard_nodes, direct_edge_set) -> None:
+    """The I14 clause (see ``check_invariants``), over the entities the given concrete
+    nodes witness. ``concrete_nodes`` must hold EVERY concrete node of each entity it
+    mentions (a partial entity could look unwitnessed, or lack a middle it has);
+    ``wildcard_nodes`` the wildcard nodes of the crossable shapes' types; and
+    ``direct_edge_set`` at least the direct ``(subject_id, object_id)`` pairs among
+    those nodes. Shared by the full checker and the cheap tier's ``check_i14_delta``."""
+    concrete_by_key = {(n.type, n.name, n.predicate): n for n in concrete_nodes}
+    wildcard_by_variant = {(n.type, n.predicate, n.wildcard): n for n in wildcard_nodes}
+
+    def _is_bridge_middle(n) -> bool:
+        return (n.implicit and (n.type, n.predicate) in crossable
+                and n.reference_count == 2)
+
+    witnessed = {(n.type, n.name) for n in concrete_by_key.values()
+                 if not _is_bridge_middle(n)}
+    for (t, x) in sorted(witnessed):
+        for (ct, p) in sorted(crossable):
+            if ct != t:
+                continue
+            mid = concrete_by_key.get((t, x, p))
+            if mid is None:
+                _fail(f'I14: entity {t}:{x} exists but its crossing middle '
+                      f'{t}:{x}#{p} for crossable shape {(t, p)} is missing')
+            w_any = wildcard_by_variant.get((t, p, 'any'))
+            w_all = wildcard_by_variant.get((t, p, 'all'))
+            if w_any is None or (mid.id, w_any.id) not in direct_edge_set:
+                _fail(f'I14: crossing middle {mid} is missing its '
+                      f'concrete->w_any bridge')
+            if w_all is None or (w_all.id, mid.id) not in direct_edge_set:
+                _fail(f'I14: crossing middle {mid} is missing its '
+                      f'w_all->concrete bridge')
+
+
+class _I14NodeFacts(NamedTuple):
+    """The node columns the I14 clause reads, without the ORM instance."""
+    id: int
+    type: str
+    name: str
+    predicate: str
+    wildcard: str
+    implicit: bool
+    reference_count: int
+
+    def __str__(self) -> str:                            # for violation messages
+        return f'{self.type}:{self.name}#{self.predicate}'
+
+
+_I14_COLS = (Node.id, Node.type, Node.name, Node.predicate, Node.wildcard,
+             Node.implicit, Node.reference_count)
+
+
+def check_i14_delta(session: Session, store_id: str, schema_info: 'SchemaInfo',
+                    entities: 'set[tuple[str, str]]', types: 'set[str]') -> None:
+    """The cheap tier's I14 (TK118): the full checker's clause, scoped to the
+    entities a transaction touched instead of the whole store.
+
+    ``entities`` are ``(type, name)`` pairs with a concrete ``Node`` row created,
+    modified or deleted in the transaction; ``types`` are crossable types whose
+    WILDCARD node was created or deleted, so every entity of that type is re-checked.
+    Both are collected by ``ParanoiaGuard``'s ``after_flush`` listener. Cost:
+    O(touched entities' nodes + their bridge edges), plus O(entities of T) only on the
+    rare wildcard-node create/delete -- never O(store). Vacuous (no query at all) when
+    the schema has no crossable shape, i.e. on every plain OpenFGA schema.
+
+    Blind spot, by design: a bridge ``Edge`` row changed WITHOUT its endpoints'
+    ``reference_count`` moving touches no node; that is I13 corruption, which only the
+    full tier sees (``tests/test_paranoia_wiring.py::test_tier_boundary_is_what_it_says_it_is``).
+    """
+    crossable = schema_info.crossable_shapes
+    if not crossable:
+        return
+    crossable_types = {t for (t, _p) in crossable}
+    types = types & crossable_types
+    entities = {(t, x) for (t, x) in entities if t in crossable_types and t not in types}
+    if not entities and not types:
+        return
+
+    concrete: list[_I14NodeFacts] = []
+    for t in sorted(types):
+        concrete += [_I14NodeFacts(*r) for r in session.exec(
+            select(*_I14_COLS).where(Node.store_id == store_id)
+            .where(Node.type == t).where(Node.wildcard == '')).all()]
+    keys = sorted(entities)
+    # Chunked: SQLite's default bound-parameter limit is 999.
+    for i in range(0, len(keys), 400):
+        chunk = keys[i:i + 400]
+        concrete += [_I14NodeFacts(*r) for r in session.exec(
+            select(*_I14_COLS).where(Node.store_id == store_id)
+            .where(Node.wildcard == '')
+            .where(tuple_(Node.type, Node.name).in_(chunk))).all()]
+    if not concrete:
+        return
+    wildcards = [_I14NodeFacts(*r) for r in session.exec(
+        select(*_I14_COLS).where(Node.store_id == store_id)
+        .where(Node.wildcard != '')
+        .where(Node.type.in_(sorted(crossable_types)))).all()]
+
+    # Only the bridge pairs the clause asks about: (middle -> w_any), (w_all -> middle).
+    wildcard_ids = [n.id for n in wildcards]
+    mid_ids = sorted({n.id for n in concrete if (n.type, n.predicate) in crossable})
+    direct_edge_set: set[tuple[int, int]] = set()
+    if wildcard_ids:
+        for i in range(0, len(mid_ids), 400):
+            chunk = mid_ids[i:i + 400]
+            for s, o in session.exec(
+                    select(Edge.subject_id, Edge.object_id)
+                    .where(Edge.store_id == store_id)
+                    .where(Edge.direct_edge_count > 0)
+                    .where(((Edge.subject_id.in_(chunk))
+                            & (Edge.object_id.in_(wildcard_ids)))
+                           | ((Edge.object_id.in_(chunk))
+                              & (Edge.subject_id.in_(wildcard_ids))))).all():
+                direct_edge_set.add((s, o))
+    _check_i14(crossable, concrete, wildcards, direct_edge_set)
 
 
 def _check_derived_invariants(session: Session, store_id: str, schema_info,
@@ -763,6 +865,46 @@ class ParanoiaGuard:
         # I7: last-seen residue versions, monotone across the run. Only advanced by
         # the post-commit pass so rolled-back bumps don't poison the baseline.
         self.committed_versions: dict[int, int] = {}
+        # TK118: what this transaction touched, for the cheap tier's delta-scoped I14.
+        # Filled by note_flush, emptied only by a COMMIT: an entry surviving a rollback
+        # merely re-checks an entity next time, while emptying on a savepoint rollback
+        # could drop the outer transaction's entries.
+        self.i14_entities: set[tuple[str, str]] = set()
+        self.i14_types: set[str] = set()
+
+    def _crossable_types(self) -> frozenset[str]:
+        # Cached per schema_info: this runs on EVERY flush, and on a plain schema the
+        # whole listener must cost one lookup (the schema is static per store).
+        si = self.schema_info
+        if si is None:
+            return frozenset()
+        cached = getattr(self, '_crossable_cache', None)
+        if cached is None or cached[0] is not si:
+            cached = (si, frozenset(t for (t, _p) in si.crossable_shapes))
+            self._crossable_cache = cached
+        return cached[1]
+
+    def note_flush(self, sess: Session) -> None:
+        """``after_flush``: record the I14-relevant nodes this flush wrote (the
+        pre-flush ``new`` / ``dirty`` / ``deleted`` sets are still populated here).
+        A concrete node touches its entity; a crossable type's WILDCARD node matters
+        only when created or deleted -- its refcount moves on every bridge add, and
+        treating that as a touch would re-scan the whole type on every write."""
+        if self.level == PARANOIA_OFF:
+            return
+        types = self._crossable_types()
+        if not types:
+            return
+        for bucket, structural in ((sess.new, True), (sess.deleted, True),
+                                   (sess.dirty, False)):
+            for obj in bucket:
+                if (not isinstance(obj, Node) or obj.store_id != self.store_id
+                        or obj.type not in types):
+                    continue
+                if obj.wildcard == '':
+                    self.i14_entities.add((obj.type, obj.name))
+                elif structural:
+                    self.i14_types.add(obj.type)
 
     def raise_to(self, level: str, schema_info: 'SchemaInfo | None') -> 'ParanoiaGuard':
         if _LEVEL_RANK[level] > _LEVEL_RANK[self.level]:
@@ -784,8 +926,13 @@ class ParanoiaGuard:
                 verify_outbox_deltas(sess, self.store_id, self.wm)
             else:                                   # PARANOIA_RESIDUE
                 check_residue_hygiene(sess, self.store_id, self.schema_info)
+                if self.schema_info is not None:
+                    check_i14_delta(sess, self.store_id, self.schema_info,
+                                    self.i14_entities, self.i14_types)
 
     def after_commit(self, sess: Session) -> None:
+        self.i14_entities.clear()
+        self.i14_types.clear()
         # Post-commit re-checking is a FULL-tier facility only: it cannot abort
         # anything (the commit already landed), so the cheap tier -- whose whole job
         # is to fail closed on the write path -- does not pay for it.
@@ -857,5 +1004,9 @@ def install_paranoia(session: Session, store_id: str,
     @event.listens_for(session, 'after_commit')
     def _post_commit_check(sess: Session) -> None:
         guard.after_commit(sess)
+
+    @event.listens_for(session, 'after_flush')
+    def _note_flush(sess: Session, _flush_context) -> None:
+        guard.note_flush(sess)
 
     return guard

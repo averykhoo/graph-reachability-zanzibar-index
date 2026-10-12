@@ -46,9 +46,10 @@ D and E split the same way (``access`` OPEN 6 / 6; ``viewer`` CLOSED 24 / 24; E'
 exactly -- ``divergences=36``, OPEN 12, CLOSED 24 -- and the unsabotaged tree gave
 ``divergences=0``. That equality is what makes a simulated pin honest here.
 
-``test_which_paranoia_level_catches_the_simulated_revert`` records a finding of its own:
-``residue`` -- the production level ``CLAUDE.md`` recommends -- does NOT catch this
-regression (I14 lives in ``check_invariants``, ``full`` and up), measured::
+``test_which_paranoia_level_catches_the_simulated_revert`` recorded a finding of its own:
+``residue`` -- the production level ``CLAUDE.md`` recommends -- did NOT catch this
+regression (I14 lived in ``check_invariants``, ``full`` and up). ``TK118`` (2026-10-12b) closed
+that: ``residue`` now aborts with the same I14 message. As measured on 2026-09-27::
 
     B-computed residue  positive: oracle=True graph=False  negated: oracle=False graph=True
     B-computed full     RAISED InvariantViolation: store='g' [pre-commit] I14: entity
@@ -211,16 +212,17 @@ def test_simulated_revert_heals_when_the_middle_is_interned_by_data(consumer, mo
 
 @pytest.mark.parametrize('level,outcome', [
     ('off', 'fail-OPEN'),
-    ('residue', 'fail-OPEN'),     # ★ the level CLAUDE.md recommends for production
+    ('residue', 'abort'),         # ★ TK118: was fail-OPEN until 2026-10-12b
     ('full', 'abort'),
     ('fixpoint', 'abort'),
 ])
 def test_which_paranoia_level_catches_the_simulated_revert(level, outcome, monkeypatch):
-    """Today's severity per paranoia level, measured. I14 runs only in ``check_invariants``
-    (``full`` and up), so at ``full``/``fixpoint`` the regression is a refused write, but at
-    ``residue`` -- ``ZANZIBAR_PARANOIA=residue``, the tier ``CLAUDE.md`` recommends in
-    production -- and at the library default ``off`` it is the silent fail-OPEN above.
-    A detector at the test default, not a mitigation in production."""
+    """Today's severity per paranoia level, measured. At ``residue`` (the tier ``CLAUDE.md``
+    recommends in production) and up the regression is a refused write; at the library
+    default ``off`` it is the silent fail-OPEN above. ``residue`` served the fail-OPEN too
+    until ``TK118`` (2026-10-12b) gave it a delta-scoped I14
+    (``src/zanzibar/graphindex/invariants.py::check_i14_delta``;
+    ``tests/test_tk118_residue_i14.py``)."""
     schema, owc, extra, neg_q = _CONSUMERS['B-computed']
     _simulate_pre_fix(monkeypatch)
     tuples = [_WITNESS, _OWC_GRANT, _STAR_PARENT] + extra

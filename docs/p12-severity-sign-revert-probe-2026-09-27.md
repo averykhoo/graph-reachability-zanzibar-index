@@ -5,6 +5,11 @@ below are as-of-then and several may now be false; live state: `HANDOFF.md` + th
 ledger (`python scripts/task.py board`). Corrections are appended dated at the top, never
 edited into the body.
 
+**Correction 2026-10-12b (`TK118`):** § 3.4's finding and § 6's open decision are resolved.
+`residue` now carries a delta-scoped I14 (`src/zanzibar/graphindex/invariants.py::check_i14_delta`)
+and ABORTS the simulated revert; `test_which_paranoia_level_catches_the_simulated_revert`
+pins `residue -> abort`. Cost and reasoning: `docs/tk118-residue-i14-2026-10-12.md`.
+
 **ACTIVE-PLAN 2026-09-27 (session `2026-09-27d`).** Living while `P12` is open; FROZEN at its
 close. Corrections are appended dated at the top, never edited into the body. Every figure
 below was measured on 2026-09-27; the base is master `d4ea804`.

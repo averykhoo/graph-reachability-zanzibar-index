@@ -2,7 +2,7 @@
 id: TK79
 title: the late-GC rows' design justification (a drain_deltas replica must see them) is pinned by nothing
 brief: processor.py:1611 states it; no test asserts it; there is no in-tree outbox consumer at all
-pri: NEXT
+pri: NOW
 size: S
 deps: []
 related: [TK73, TK74]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-18
-moved: 2026-10-04g
-updated: 2026-10-04g
+moved: 2026-10-12b
+updated: 2026-10-12b
 closed:
 ---
 
@@ -39,3 +39,7 @@ FIRST ACTION: write the missing consumer-side property -- drain the outbox acros
 ### 2026-10-04g
 
 PROMOTED LATER -> NEXT 2026-10-04g (user: NEXT raised to 5, ranked by correctness certainty). Why (READ 2026-10-04g): drain_deltas is called only from src/zanzibar/graphindex/outbox.py, src/zanzibar/graphindex/processor.py and three test modules (test_outbox, test_graphindex, test_boolean_compile); no consumer replays the drained stream, so the design premise that late-GC rows must reach a replica is unpinned. Cheap shape: replay the drained rows into a replica and compare it with the primary AND the oracle. Independent of TK120 ordering.
+
+### 2026-10-12b
+
+Re-ranked 2026-10-12b (user approved the order in chat): TK118 NOW, then TK79, then TK102 (NEXT); TK97 and TK44 down to LATER (process tooling / coverage research with no known bug); TK134+TK135 stay LATER, user says no rush to release 0.0.4. Why TK118 first: it is the only row about a fail-OPEN, and it bears on what we tell production users about residue today.

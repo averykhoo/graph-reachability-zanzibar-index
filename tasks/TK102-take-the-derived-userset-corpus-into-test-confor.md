@@ -2,7 +2,7 @@
 id: TK102
 title: take the derived-userset corpus into test_conformance_enum._SHAPES (the combinatorial arm)
 brief: the one widening TK94 declined: _SHAPES is a fixed six-name dict, and its cost IS combinatorial
-pri: NOW
+pri: NEXT
 size: M
 deps: []
 related: [TK94]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-22d
-moved: 2026-10-12
-updated: 2026-10-12
+moved: 2026-10-12b
+updated: 2026-10-12b
 closed:
 ---
 
@@ -77,3 +77,7 @@ asserted store count, so the sizing is mechanical: build `_tuple_space(schema)` 
 ### 2026-10-04g
 
 PROMOTED LATER -> NEXT 2026-10-04g (user: NEXT raised to 5, ranked by correctness certainty). Ranked FIRST of the five. Why (READ 2026-10-04g): formal/conformance/test_conformance_enum.py::_SHAPES is the only exhaustive every-store arm and has no derived_userset shape; its graph leg runs only when name in GRAPH_FRAGMENT (run_graph, :243), so a shape outside the fragment silently skips the graph. REASONED: the bigger win is a separate flag running the graph against the agreed spec/oracle answer wherever the graph ADMITS the schema, without adding the name to GRAPH_FRAGMENT. Fold P16 (widen the bounds) in here. Independent of TK120 ordering.
+
+### 2026-10-12b
+
+Re-ranked 2026-10-12b (user approved the order in chat): TK118 NOW, then TK79, then TK102 (NEXT); TK97 and TK44 down to LATER (process tooling / coverage research with no known bug); TK134+TK135 stay LATER, user says no rush to release 0.0.4. Why TK118 first: it is the only row about a fail-OPEN, and it bears on what we tell production users about residue today.
