@@ -32,6 +32,37 @@ from here.
 
 ---
 
+## 2026-10-12c — `TK79` closed: a `drain_deltas` replica needs the late GC rows (true), now pinned
+
+rows: TK79 (NOW, closed), TK102 (NEXT -> NOW, the user-approved order)
+
+`task lint: clean (13 checks, 253 task file(s) parsed), 28 warning(s)`
+
+`read: board + note`
+
+`asked: none`
+
+**The user asked for `TK79`, `TK102` and `TK44` to be done through subagents (ultracode),
+in turn.** This entry covers `TK79`; later items of this session append below this line.
+- VERDICT (READ): the `processor.py` comment's justification is TRUE, so it is pinned, not
+  corrected. `core.py::ReachabilityIndex._emit` emits ADDED/REMOVED exactly on Edge row
+  create/delete, so the drained stream is a changelog of the Edge pair set; a replica that
+  applies every drained row equals the primary after every commit on the `TK73` witness.
+- LANDED: `tests/test_tk79_outbox_replica.py` pins all three late-emission sites:
+  `_maybe_remove_bridges` in `DeltaProcessor._gc_subject_node`, and `_sync_entity_middles`
+  at the end of both `_gc_public_node` and `_gc_subject_node` (the last needed a new
+  witness, `SUBJECT_GC_SCHEMA`, found by the adversarial review). A replica fed the stream
+  minus the GC rows keeps a stale pair, and once SQLite recycles the freed node id it answers
+  a wrong ALLOW that the primary and the oracle deny. `processor.py::DeltaProcessor._run_cascade`
+  gained a comment pointer only (no algorithm change).
+- SABOTAGE (each a product change, each red, literal output in the module docstring and the
+  doc): S1 drop the `_maybe_remove_bridges` rows; S2 / S2sub drop the strip-arm rows; S3 / S4
+  instrument controls. Restored from a temp copy; `src/` clean after.
+- REASONED only: the id-reuse half on PostgreSQL. Doc (FROZEN):
+  [`docs/tk79-outbox-replica-2026-10-12.md`](../tk79-outbox-replica-2026-10-12.md).
+
+Still owed: nothing from the `TK79` stage.
+
 ## 2026-10-12b — `TK118` closed: `residue` paranoia now aborts an I14 regression (delta-scoped)
 
 rows: TK118 (NOW, closed), TK79 (NEXT -> NOW), TK102 (NOW -> NEXT), TK97 + TK44 (NEXT -> LATER)

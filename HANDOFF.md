@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-12b -- **`TK118` closed: `ZANZIBAR_PARANOIA=residue` now aborts an I14 crossing-middle regression, checking only the entities each write touches (it costs nothing without object wildcards).** The user approved the order: `TK79` NOW, then `TK102`; there is no rush to release 0.0.4 (`TK136` + `TK118` sit under `[Unreleased]`; `TK134`/`TK135` are LATER until a release is wanted). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-12c -- **`TK79` closed: a `drain_deltas` replica really needs the late garbage-collection outbox rows; all three late-emission sites are now pinned by `tests/test_tk79_outbox_replica.py`.** Next per the user-approved order: `TK102` (now NOW), then `TK44`, both in this session via subagents. No rush to release 0.0.4 (`TK136` + `TK118` sit under `[Unreleased]`; `TK134`/`TK135` are LATER). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

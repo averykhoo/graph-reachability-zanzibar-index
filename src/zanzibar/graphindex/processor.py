@@ -1476,7 +1476,9 @@ class DeltaProcessor:
         # contracts ref-counted closure edges and EMITS outbox rows -- after this
         # round's frontier snapshot was taken, and on the last budgeted round there is
         # no further round to drain them. Those rows are honest, balanced retractions
-        # (an external ``drain_deltas`` replica must see them), but they are membership-
+        # (an external ``drain_deltas`` replica must see them -- without them it keeps
+        # the GC'd node's pairs, which a recycled SQLite id then inherits; pinned by
+        # tests/test_tk79_outbox_replica.py, TK79), but they are membership-
         # NEUTRAL, so the derived key they map back to is already at its fixpoint.
         #
         # The old check tested a SYNTACTIC proxy -- "no outbox row above the final
