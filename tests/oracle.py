@@ -705,8 +705,9 @@ class Oracle:
                     if g.subject_name == '*' and g.subject_type == s_type and g.subject_predicate == s_pred:
                         return True
                 # ...or flow-through: '*' resolves through granted usersets like any
-                # other subject (blind-audit D1: OpenFGA literal-subject semantics;
-                # the graph closure cannot express per-branch-only for userset flow)
+                # other subject (blind-audit D1: a literal-subject reading, unverified
+                # against OpenFGA; the graph closure cannot express per-branch-only for
+                # userset flow)
                 return _member_of_granted(grants)
 
             if s_pred == '...':

@@ -299,8 +299,10 @@ and cross-store ordering — deliberately out of scope here.
 Materialization is inevitable in a graph index because the only way to support o(1) reads
 of a permissions graph that might be infinitely nested is to un-nest and have it right there to read when needed.
 This does mean that userset rewrites take a lot of db rows, but that's the cost of an index - space for speed.
-Also wildcards are actually fully supported, both for subjects and objects, whereas OpenFGA only suppots usersets.
-I think Claude may have hallucinated something about "registry objects" so take a pinch of salt with some of the docs below.
+Also wildcards are actually fully supported, both for subjects and objects, whereas OpenFGA only supports them
+as a subject (`user:*`), never as an object or inside a userset.
+"Registry object" below is this repo's name, not OpenFGA's: OpenFGA's multi-tenant guide has every resource
+declare a `parent` relation pointing at an organization object, and that is the idiom meant.
 
 Wildcards are supported as a first-class, **materialized** feature in `zanzibar.graphindex`
 (`src/zanzibar/graphindex/wildcard.py`, the `WildcardIndex` façade). We support the OpenFGA subject
@@ -685,8 +687,9 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
   would just call it on a timer
 * symmetric subject-keyed residues, to lift the two remaining scope rejections
   (object wildcards on derived relations; wildcard usersets over derived relations)
-  — low priority: the OpenFGA DSL doesn't support these either (it rejects `<type>:*`
-  in a tuple's object field and rejects wildcard usersets), so it's a deliberate
-  boundary, not a gap
+  — low priority: no concrete need has appeared and the refusal is loud at compile time.
+  (OpenFGA has neither construct: a tuple's object may not be `<type>:*`, and
+  `<type>:*#<relation>` is not a valid subject. Both are this repo's own extensions, so
+  "OpenFGA lacks it" is not a reason to leave them unfinished; see `formal/FINAL_REVIEW.md`.)
 * a real service wrapper (deliberately skipped: the store is a plain callable API)
 * log compaction, if the tuple log ever outgrows "humans wrote this"

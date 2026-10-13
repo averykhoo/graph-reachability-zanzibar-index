@@ -1141,7 +1141,8 @@ TTU_USERSET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # OpenFGA does). NOT a conformance family: no consumer may compare answers on these.
 #
 # A relation used as a TTU tupleset must be DIRECT-ONLY (`[folder]`, `[folder, doc]`,
-# `[folder] or [doc]`, wildcards allowed). Anything else is refused at parse time by
+# `[folder] or [doc]`, wildcards allowed -- the last two beyond OpenFGA, which refuses
+# them). Anything else is refused at parse time by
 # `src/zanzibar/schema/parser.py::_validate_tuplesets_direct` and by the oracle's independent twin
 # `tests/oracle.py::_validate_tuplesets_direct`, so `parse_openfga_schema`, `SetEngine`
 # and `Oracle` all raise `ValueError` ("tupleset must be direct"). The UNCHECKED parsers
@@ -1247,8 +1248,8 @@ REFUSED_TUPLESET_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
 # Self-referential-tuple corpora — SPEC-SIDE ONLY (spec `sem` × oracle × set engine).
 #
 # Anchors `sem` on self-referential tuples (subject entity == object entity), which
-# OpenFGA supports (the `IsSelfDefining` concept / self-defining attribute-marker
-# idiom). This is the trust-root confirmation for the 2026-07-13 self-referential
+# OpenFGA supports (its self-referential attribute-marker idiom,
+# https://openfga.dev/docs/best-practices/modeling-abac). This is the trust-root confirmation for the 2026-07-13 self-referential
 # fix (zanzibar.graphindex node-GC/implicit canonicalization; docs/spec-deviations.md): the fix
 # followed the oracle, and `sem` agrees. Probed 2026-07-13: sem == oracle == set
 # engine on every grid query, including the self-referential rows.
@@ -1296,7 +1297,7 @@ DIRECT_ARM_NAMES: tuple[str, ...] = ("direct_arm_exclusion",)
 
 
 SELF_REFERENTIAL_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
-    # OpenFGA self-defining / attribute-marker idiom: a self-referential tuple as a
+    # OpenFGA self-referential attribute-marker idiom: a self-referential tuple as a
     # boolean flag, gating a derived (exclusion) relation. `resource:r1 activated
     # resource:r1` sets the flag; `usable = activated but not deprecated` reads it.
     "self_flag": (

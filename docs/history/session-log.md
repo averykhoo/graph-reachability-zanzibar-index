@@ -33,6 +33,43 @@ from here.
 
 ---
 
+## 2026-10-13c — OpenFGA claims audit before the 0.0.4 tag: 2 WRONG + 12 MISLEADING/UNVERIFIABLE corrected
+
+rows: TK137 (new, LATER), TK138 (new, LATER), TK123 (comment)
+
+`task lint: clean (13 checks, 255 task file(s) parsed), 24 warning(s)`
+
+`read: board only`
+
+`asked: none`
+
+**The user asked to "check that all the docs are updated and correct then push 0.0.4",
+then, first, "check that anything mentioned about openfga/spicedb is accurate".** Three
+read-only opus agents audited living docs, shipped code and tests against openfga.dev and
+the OpenFGA source. The session re-fetched every external fact a correction rests on
+before editing. The record, with the sources quoted, is
+[`docs/openfga-claims-audit-2026-10-13.md`](../openfga-claims-audit-2026-10-13.md) (FROZEN
+at landing).
+- SpiceDB / Authzed: never mentioned outside skipped history.
+- WRONG, corrected: README said OpenFGA "only suppots usersets" as wildcards (backwards:
+  OpenFGA's wildcard is subject-only); several tests, `corpus.py` and `spec-deviations.md`
+  cited OpenFGA `IsSelfDefining` as the attribute-marker idiom (it is the implicit
+  reflexive USERSET, whose tuple OpenFGA refuses to store).
+- MISLEADING, corrected: "OpenFGA DSL" for what is a subset; "as in OpenFGA" beside the
+  `[a] or [b]` and `[T:*]` tupleset forms OpenFGA refuses; `group:*#member` listed as if
+  standard; "the OpenFGA literal-subject reading" (unverified, and OpenFGA errors on
+  `user:*` under `but not`); `"metadata": null` credited to the API (it is the transformer).
+  One user-visible string changed: the TK108 refusal's "(OpenFGA rule)" tag moved onto the
+  refusal clause (witness text unchanged). The README's "registry object" note now names
+  the OpenFGA multi-tenant `parent` idiom the word stands for.
+- Behaviour gaps, PROBED and filed, not fixed: `TK137` (both parsers accept a `schema 1.2`
+  header, `[a] or [b]`, and an unparenthesised `or ... but not`), `TK138` (a userset is not
+  related to itself here; OpenFGA treats it as implicit).
+
+Still owed: Nothing.
+
+---
+
 ## 2026-10-13b — 0.0.4 release-ready: `TK134` + `TK135` closed, version bumped, `HS-5` to NOW
 
 rows: TK134 (closed), TK135 (closed), HS-5 (LATER -> NOW)

@@ -169,7 +169,10 @@ def _validate_declared_name(kind: str, name: str) -> None:
 
 
 def parse_schema_ast(schema: str) -> SchemaAST:
-    """Parse an OpenFGA DSL string into ``{(object_type, relation): Expr}`` (spec §2.2).
+    """Parse an OpenFGA-style DSL string into ``{(object_type, relation): Expr}`` (spec §2.2).
+
+    The language is a subset of the OpenFGA schema 1.1 DSL (no conditions, modules or
+    ``extend type``) plus this library's wildcard extensions (``UnprovenExtensionWarning``).
 
     Succeeds for well-formed, SELF-CONSISTENT syntax (`_validate_ast_consistency`),
     including boolean (``and`` / ``but not``) definitions -- refusing booleans is
@@ -467,9 +470,11 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
 def _validate_tuplesets_direct(ast: SchemaAST) -> None:
     """A relation used as a TTU tupleset (the ``parent`` in ``viewer from parent``) must be
     DIRECT-ONLY: ``[folder]``, ``[folder, doc]`` or ``[folder] or [doc]`` (TK106, user
-    decision 2026-09-26). OpenFGA refuses the rest: "the relation is referenced in at least
-    one tupleset and thus must be a direct relation"
-    (`pkg/typesystem/typesystem.go::isUsersetRewriteValid`).
+    decision 2026-09-26). OpenFGA refuses every other shape too: "the relation is referenced
+    in at least one tupleset and thus must be a direct relation"
+    (`pkg/typesystem/typesystem.go::isUsersetRewriteValid`). OpenFGA is stricter still: it
+    takes a single ``[...]`` list of concrete types there, so ``[folder] or [doc]`` and a
+    ``[folder:*]`` tupleset are this library's extensions.
 
     ``from`` walks the STORED tuples of the tupleset, never its computed membership. So a
     boolean arm (``[folder] but not blocked``), a computed arm (``[folder] or other``) or
@@ -479,7 +484,8 @@ def _validate_tuplesets_direct(ast: SchemaAST) -> None:
     set engine degraded past it, and nothing refused the tainted form. The behaviour-
     preserving rewrite is ``parent_link: [<every type parent names>]``, used by the ``from``.
 
-    Wildcard restrictions (``[folder:*]``, star tuplesets, ASK-2) stay legal here.
+    Wildcard restrictions (``[folder:*]``, star tuplesets, ASK-2) stay legal here, though
+    OpenFGA refuses them on a tupleset.
 
     A USERSET restriction on a tupleset (``parent: [folder#member]`` or
     ``[folder:*#member]``) is refused too (TK108, user decision 2026-09-27); see the second
@@ -528,11 +534,12 @@ def _validate_tuplesets_direct(ast: SchemaAST) -> None:
                             raise ValueError(
                                 f'{object_type}#{relation}: {ttu.target_rel!r} from '
                                 f'{ttu.tupleset_rel!r}: a tupleset may not restrict to a '
-                                f'userset, but {object_type}#{ttu.tupleset_rel} allows '
+                                f'userset (OpenFGA rule), but '
+                                f'{object_type}#{ttu.tupleset_rel} allows '
                                 f'[{r.type}{star}#{r.predicate}]; "from" would ignore '
                                 f'the #{r.predicate}. Use [{r.type}{star}] for the link '
                                 f'and "{r.predicate} from {ttu.tupleset_rel}" where the '
-                                f'userset itself is meant (OpenFGA rule)')
+                                f'userset itself is meant')
 
 
 def _validate_stratified_negation(ast: SchemaAST) -> None:

@@ -110,8 +110,9 @@ def test_the_table_covers_the_rows_four_repros():
 
 
 def test_null_optional_fields_read_as_absent():
-    """OpenFGA's API emits ``"metadata": null`` for a type with no direct relations; the
-    front end must keep accepting it. ``relations`` / ``directly_related_user_types`` as
+    """OpenFGA's DSL-to-JSON transformer (openfga/language, behind ``fga model transform``)
+    emits ``"metadata": null`` for a type with no relations; the front end must keep
+    accepting it. ``relations`` / ``directly_related_user_types`` as
     ``null`` read as absent too, which can only narrow the schema."""
     model = _model([
         {'type': 'user', 'relations': None, 'metadata': None},

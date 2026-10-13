@@ -125,7 +125,8 @@ never a silent merge (`tests/test_tk122_table_namespace.py`). Why:
 * **Strict ∀⇒∃**: no vacuous grants; a star grant reaches concretes only if instances
   exist. Object-side `'*'` queries are intensional, per branch; subject-side `'*'`
   queries are **flow-through** (a `user:*` subject resolves through granted usersets,
-  the OpenFGA literal-subject reading — blind-audit D1).
+  a literal-subject reading — blind-audit D1; unverified against OpenFGA, whose check
+  refuses a `user:*` subject on a `but not` relation).
 * **TTU parents are STORED tupleset tuples**, never computed membership (the oracle's
   `ttu_leaf` reads raw tuples -- authentic Zanzibar). A TTU over a derived relation
   with no direct restrictions is constantly empty.

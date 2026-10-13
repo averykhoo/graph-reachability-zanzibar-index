@@ -44,7 +44,10 @@ internal `Rule`). So `viewer from parent` with `parent: [folder]` and a plain
 the 0.0.2 install trial, `docs/pypi-trial-0.0.2-2026-10-07.md` sec 1 B1), and
 `define viewer: ([user] or viewer from parent) but not banned` (variant D) crashed BOTH
 backends, because `SetEngine.__init__` compiles the graph `RuleSet` and lets a bare
-`ValueError` surface. The set engine and OpenFGA serve all three.
+`ValueError` surface. The set engine and OpenFGA serve all three. [2026-10-13: OpenFGA
+has announced that models recursing through `and` / `but not`, as variant D does, will
+fail to build once its weighted-graph fallback is removed, date not yet set
+(https://openfga.dev/blog/weighted-graph-upcoming-changes).]
 **What the code does since 2026-10-08:** a TTU rule's produced subject type is the stored
 tupleset tuple's type, which admission pins to the tupleset's restriction types; both
 checks now ask whether `(t, target)` is derived for such a `t`. The compiler check reads
@@ -2156,8 +2159,11 @@ divergence: for a star that reaches a relation only *through a granted userset*
 (`user:*` member of `group:g`, `g#member` granted viewer), the graph answered True
 while oracle + set engine answered False ("per-branch only"). Per-branch was
 structurally unimplementable in the graph (the closure cannot distinguish how the
-star arrived), and the flow-through reading matches OpenFGA's literal-subject
-treatment (`user:*` is a subject like any other; membership composes). Oracle and
+star arrived), and the flow-through reading is a literal-subject treatment (`user:*`
+is a subject like any other; membership composes). [Corrected 2026-10-13: this said the
+reading "matches OpenFGA's"; no OpenFGA doc states that, and OpenFGA's check refuses a
+`user:*` subject on a `but not` relation
+(https://openfga.dev/blog/weighted-graph-upcoming-changes), where this repo answers.] Oracle and
 set engine now flow through; the graph was already correct. The wildcard spec's
 "intensional, per branch" wording (§7) now applies to **object**-side stars only.
 
@@ -2437,9 +2443,11 @@ falsifying example was discovered and persisted to the (gitignored) `.hypothesis
 DB. Pre-existing — reproduced on a clean tree; not introduced by the surrounding
 session's work.
 
-**Self-referential tuples ARE supported** (OpenFGA `IsSelfDefining`; the
-self-defining / attribute-marker idiom — `document:1#viewer@document:1#viewer`, or
-a `resource:r1 activated resource:r1` flag). The bug was a canonicalization drift,
+**Self-referential tuples ARE supported** (OpenFGA's attribute-marker idiom — a
+`resource:r1 activated resource:r1` flag). [Corrected 2026-10-13: this cited OpenFGA
+`IsSelfDefining` and `document:1#viewer@document:1#viewer`; that function is about a
+userset being implicitly related to itself, and OpenFGA's API refuses to store that
+tuple "because they are implicit".] The bug was a canonicalization drift,
 not an evaluation error, so the fix keeps accepting them (does NOT reject).
 
 **Shape.** A self-referential tupleset tuple `doc:d1 parent doc:d1` (d1 is its own

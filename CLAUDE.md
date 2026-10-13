@@ -295,7 +295,7 @@ Module map and pointers: `docs/architecture/overview.md`.
   `_parse_schema_ast_unchecked`. Map: `docs/ask1-schema-self-consistency-2026-09-26.md`.
 - **A `from`-tupleset must be DIRECT-ONLY (user decision 2026-09-26, `TK106`), as in
   OpenFGA.** The relation after `from` may only be Directs or a union of Directs (wildcards
-  allowed); both parsers refuse the rest at parse time
+  allowed; both looser than OpenFGA); both parsers refuse the rest at parse time
   (`src/zanzibar/schema/parser.py::_validate_tuplesets_direct`, oracle twin of the same
   name), because `from` walks STORED tuples and a boolean or computed arm there was silently
   ignored. The rewrite is `parent_link: [<types>]`, used by the `from`. So a tupleset is

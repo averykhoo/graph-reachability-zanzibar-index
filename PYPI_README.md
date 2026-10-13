@@ -1,8 +1,8 @@
 # zanzibar-index
 
 Zanzibar-style relationship-based access control (ReBAC) for Python, on top of SQLModel.
-Schemas are written in the [OpenFGA](https://openfga.dev) modelling DSL, including the
-`and` / `but not` operators. The package is not affiliated with Google or OpenFGA.
+Schemas are written in a subset of the [OpenFGA](https://openfga.dev) modelling DSL
+(schema 1.1, including the `and` / `but not` operators; no conditions or modules). The package is not affiliated with Google or OpenFGA.
 
 Two evaluation backends give the **same answers** with **opposite cost models**:
 
@@ -103,9 +103,10 @@ object's relation?) return a `LookupResult` with three fields:
   `ZANZIBAR_PARANOIA=residue` environment variable turns on a cheap runtime corruption
   detector for the index. It is off by default and recommended for anything
   security-sensitive.
-* **Schema shapes.** Some valid OpenFGA shapes are refused with an explanation of what to
-  write instead: for example, a `from` tupleset must be a direct relation. Wildcard
-  usersets (`[group:*#member]`) and object wildcards go beyond OpenFGA. They work, but
+* **Schema shapes.** Conditions (`with`) and modules are not supported. Refused shapes
+  come with an explanation of what to write instead; for example, as in OpenFGA, a `from`
+  tupleset must be a direct relation. Wildcard usersets (`[group:*#member]`), wildcard
+  tuplesets (`parent: [folder:*]`) and object wildcards go beyond OpenFGA. They work, but
   they are outside the proved fragment and emit `UnprovenExtensionWarning`.
 * **No recursion through `and` / `but not`.** A relation that reaches itself through an
   operator, such as `define viewer: ([user] or viewer from parent) but not blocked`, is

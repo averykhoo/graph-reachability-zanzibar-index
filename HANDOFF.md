@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-13b -- **0.0.4 release-ready**: `TK134` (malformed OpenFGA JSON refused with a named field) and `TK135` (PyPI README gaps; cycle message names only the cycle) closed; `__version__` + CHANGELOG are 0.0.4. This commit is pushed to master; the `v0.0.4` TAG is NOT pushed (needs the user's word), then the install trial. Next: `HS-5` (NOW). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-13c -- **0.0.4 release-ready, OpenFGA claims audited**: every OpenFGA statement in living docs, code and tests checked against OpenFGA's docs/source; 2 WRONG + 12 misleading corrected (`docs/openfga-claims-audit-2026-10-13.md`); behaviour gaps filed as `TK137` / `TK138`. `__version__` + CHANGELOG are 0.0.4; the `v0.0.4` tag push (user-requested) and the install trial follow this commit. Next: `HS-5` (NOW). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

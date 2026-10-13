@@ -1192,7 +1192,8 @@ class SetEngine:
                         self.interner.get(s_type, '*', s_pred)):
                     return True
                 # ...or flow-through: '*' resolves through granted usersets like any
-                # subject (blind-audit D1 -- the OpenFGA literal-subject reading; the
+                # subject (blind-audit D1 -- a literal-subject reading, unverified against
+                # OpenFGA, whose check refuses a `user:*` subject on a `but not` relation; the
                 # graph closure and this engine's own expand already behave this way,
                 # and per-branch-only is structurally unimplementable in the graph)
                 return (yield member_via_usersets(nodes, restr))

@@ -1,16 +1,19 @@
 """Self-referential tuples (subject entity == object entity) are SUPPORTED.
 
-OpenFGA explicitly allows self-referential relationship tuples — it even has an
-`IsSelfDefining` concept (e.g. `document:1#viewer@document:1#viewer`) — and the
-documented idiom is the **self-defining / attribute-marker relation**: an object
-points to *itself* on a relation to represent a boolean attribute ("activated",
-"public", "archived", ...). We match that: a self-referential tuple is accepted
-and evaluated correctly, on every backend, and (post-fix) add/remove of one is an
-exact state round trip.
+OpenFGA documents self-referential relationship tuples as an **attribute marker**: an
+object points to *itself* on a relation to represent a boolean attribute
+(`organization:acme#sso_enabled@organization:acme`; "activated", "public",
+"archived", ...). We match that: a self-referential tuple is accepted and evaluated
+correctly, on every backend, and (post-fix) add/remove of one is an exact state
+round trip.
 
-Refs: OpenFGA `tuple.IsSelfDefining`
-(https://pkg.go.dev/github.com/openfga/openfga/pkg/tuple); Update Tuples /
-Concepts docs (https://openfga.dev/docs/concepts).
+Not to be confused with OpenFGA's `tuple.IsSelfDefining`, which is about a USERSET
+being implicitly related to itself: its API refuses to store
+`document:1#viewer@document:1#viewer` "because they are implicit".
+
+Refs: https://openfga.dev/docs/best-practices/modeling-abac (the attribute marker);
+https://openfga.dev/docs/api/service/relationship-tuples/add-or-delete-tuples (the
+implicit-tuple refusal).
 
 This file pins two things:
   1. the self-defining "activated" flag pattern works across oracle + set engine
@@ -33,7 +36,7 @@ from tests.test_hypothesis import build, _state
 
 
 # --------------------------------------------------------------------------- #
-# 1. The OpenFGA self-defining / attribute-marker pattern: a self-referential
+# 1. The OpenFGA attribute-marker pattern: a self-referential
 #    tuple as a boolean flag, gating a derived (exclusion) relation.
 # --------------------------------------------------------------------------- #
 

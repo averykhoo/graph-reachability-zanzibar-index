@@ -606,7 +606,8 @@ def parse_openfga_schema(
         *,
         enable_boolean: bool = True,
 ) -> RuleSet:
-    """Parse + compile an OpenFGA schema into a graph-index RuleSet (spec §2.1/§2.3).
+    """Parse + compile an OpenFGA-style schema (see ``parse_schema_ast``) into a graph-index
+    RuleSet (spec §2.1/§2.3).
 
     Pipeline: ``parse_schema_ast`` -> ``derive_schema_info`` -> ``compile_ruleset``.
     ``object_wildcard_shapes`` are ``(object_type, relation)`` pairs enabling wildcard

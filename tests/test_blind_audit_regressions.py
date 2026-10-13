@@ -167,8 +167,9 @@ type doc
 
 def test_star_subject_flows_through_granted_usersets_3way():
     """D1 (semantic decision): `check(user:* viewer doc:d)` where user:* is a
-    member of a granted userset answers True on ALL backends -- the OpenFGA
-    literal-subject reading. The live bug: graph said True, oracle/set said
+    member of a granted userset answers True on ALL backends -- a literal-subject
+    reading (unverified against OpenFGA, whose check refuses a `user:*` subject on a
+    `but not` relation). The live bug: graph said True, oracle/set said
     False (per-branch-only), a standing 3-way divergence."""
     tuples = [
         ('member', 'group', 'g', 'viewer', 'doc', 'd'),

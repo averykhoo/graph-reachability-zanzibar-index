@@ -12,7 +12,7 @@ REAL fixture schemas at increasing data sizes and reports, per backend:
       - ``check``          -- one (subject, relation, object) point query,
       - ``lookup``         -- everything a subject can reach,
       - ``lookup_reverse`` -- everything that can reach an object,
-  * whether each stays FLAT or DEGRADES as N grows (the OpenFGA question).
+  * whether each stays FLAT or DEGRADES as N grows.
 
 Three schema-complexity tiers:
   * ``simple``   -- a direct-only ``define viewer: [user]`` floor: no hierarchy,

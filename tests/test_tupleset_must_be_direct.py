@@ -2,8 +2,10 @@
 
 The relation after `from` (``parent`` in ``viewer from parent``) may only be type
 restrictions -- ``[folder]``, ``[folder, doc]``, ``[folder] or [doc]``, wildcards included.
-OpenFGA refuses anything else: "the relation is referenced in at least one tupleset and
-thus must be a direct relation" (``pkg/typesystem/typesystem.go::isUsersetRewriteValid``).
+That is a superset of OpenFGA, which takes only a single list of concrete types there (no
+``[a] or [b]``, no ``T:*``, no ``T#r``). OpenFGA refuses every computed or boolean arm too:
+"the relation is referenced in at least one tupleset and thus must be a direct relation"
+(``pkg/typesystem/typesystem.go::isUsersetRewriteValid``).
 
 WHY. ``from`` walks the STORED tuples of the tupleset, never its computed membership
 (CLAUDE.md, oracle-pinned). So any other arm on a tupleset was silently IGNORED by every

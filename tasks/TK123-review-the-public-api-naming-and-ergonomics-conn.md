@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-07b
-moved: 2026-10-08b
-updated: 2026-10-08b
+moved: 2026-10-13c
+updated: 2026-10-13c
 closed:
 ---
 
@@ -59,3 +59,7 @@ decided yet. The 0.0.2 install trial supplies most of the agenda.
 ### 2026-10-08b
 
 Input from the 0.0.3 install trial (AGENT, docs/pypi-trial-0.0.3-2026-10-08.md), no action taken (row stays parked per the user): `zanzibar` has no `__all__`; ConnectedStore.add_tuple/remove_tuple/check/watermark have no docstrings and lookup/lookup_reverse do not say what they return; `LookupResult` has no docstring; docstrings and messages cite repo-only ids/files (ZT-P1-3, ZT-P1-8b, TK111/112, docs/...md, "boolean spec sec 8.1"); `connectedstore.__all__` exports internal-looking names (log_gap, ensure_cursor, log_rows); a missing store raises bare KeyError; store ids are not held to the identifier charset ('bad id!', 'a:b', 300 chars accepted); `at_least='abc'` -> raw TypeError, -1/True accepted; a never-issued token's StaleRead says "retry", which cannot succeed; sync mode is not persisted (reopening an async store without sync=False gives a sync instance); the `schema X.Y` header value is ignored; ClosureFanoutExceeded points at ReachabilityIndex(max_closure_fanout=...), unreachable from ConnectedStore; the async over-cap warning is a logging record and the README's "lands in neither backend" does not cover async; paranoia level `fixpoint` is undocumented; UnprovenExtensionWarning fires twice per construction. The PyPI-README gaps went to TK135, the BROKEN reopen byte-compare to TK136.
+
+### 2026-10-13c
+
+Partial progress on the "unsupported-OpenFGA-features list" doc gap (2026-10-13c, OpenFGA claims audit, docs/openfga-claims-audit-2026-10-13.md): PYPI_README.md now says the schema language is a subset of the OpenFGA DSL (schema 1.1, no conditions or modules) and lists all three wildcard extensions. A full feature list is still owed; the parser leniencies that list would need are TK137.

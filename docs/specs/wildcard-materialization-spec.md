@@ -2,7 +2,7 @@
 
 **Audience:** a coding agent working in this repository with no access to prior design discussion. Everything needed is in this document plus the repo. Read `README.md`, `zanzibar_utils_v1.py`, `index_v4/core.py`, `index_v4/models.py`, and `tests/test_integration.py` before writing code. Run `pytest` first and record the baseline (one test is `xfail`; that is expected and out of scope).
 
-**Objective:** support wildcard entities (`user:*`, `group:*#member`, and — as a deliberate extension beyond OpenFGA — wildcard *objects* like `folder:*`) such that `check()` remains constant time: at most 4 point lookups on a unique index, independent of data size, nesting depth, or fan-out. All wildcard hops that can occur in the **interior** of a path are materialized as real edges at write time. Only the two hops touching the literal query endpoints stay virtual, covered by fixed probes.
+**Objective:** support wildcard entities (`user:*`, and — as deliberate extensions beyond OpenFGA — wildcard usersets like `group:*#member` and wildcard *objects* like `folder:*`) such that `check()` remains constant time: at most 4 point lookups on a unique index, independent of data size, nesting depth, or fan-out. All wildcard hops that can occur in the **interior** of a path are materialized as real edges at write time. Only the two hops touching the literal query endpoints stay virtual, covered by fixed probes.
 
 **Non-negotiable invariant:** no read path may ever recurse, walk the graph, or issue a data-size-dependent query. If an implementation choice forces that, the choice is wrong — materialize instead.
 

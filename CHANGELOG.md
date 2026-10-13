@@ -13,9 +13,9 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
   the model given as `null` or a list, `type_definitions` that is not an array, a type
   definition with no `"type"`, a `computedUserset` with no `"relation"`, a union with no
   `"child"`, and so on. `parse_openfga_json` used to leak a bare `AttributeError`,
-  `TypeError` or `KeyError`. An optional object or array given as `null` (OpenFGA's API
-  emits `"metadata": null`) still reads as absent; a non-object `metadata` such as `[]`,
-  previously ignored, is now refused.
+  `TypeError` or `KeyError`. An optional object or array given as `null` (OpenFGA's
+  DSL-to-JSON transformer emits `"metadata": null`) still reads as absent; a non-object
+  `metadata` such as `[]`, previously ignored, is now refused.
 - The `CyclicDerivedDependency` message names only the relations on the cycle, not every
   relation that depends on it. It no longer cites an internal spec, and it says what to
   write instead and how that rewrite differs.
@@ -37,6 +37,11 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
   through `and` / `but not` (refused by `ConnectedStore`, accepted by `SetEngine`, with a
   rewrite and how it differs), acyclic tuple data, lenient reads, and how to read a
   `LookupResult` (resolving node ids, markers, exclusions). `LookupResult` has a docstring.
+- Statements about OpenFGA were checked against its documentation and source, and the
+  inaccurate ones corrected. The schema language is described as a subset of the OpenFGA
+  DSL (no conditions or modules). Wildcard tuplesets (`parent: [folder:*]`) are listed with
+  the other extensions beyond OpenFGA. The userset-tupleset refusal message now tags only
+  the refusal itself as the OpenFGA rule, not its suggested rewrite.
 
 ## [0.0.3]
 
