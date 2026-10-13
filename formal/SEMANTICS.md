@@ -576,6 +576,13 @@ elsewhere: I9 is `processor.audit_fixpoint` (`processor.py::DeltaProcessor._reco
 run only `check_invariants` + `verify_outbox_deltas`). I11/I12 (read purity,
 rejection cleanliness) are differential/harness-only. **This is the single most
 important cross-cutting fact for the proof (§9, §11-A1).**
+*(Corrected 2026-10-13, `TK3`: the whole-store `audit_fixpoint` is still test-only,
+but I9 is no longer test-only as a whole. `TK82` added the opt-in `'fixpoint'` paranoia
+tier, `src/zanzibar/graphindex/invariants.py::PARANOIA_FIXPOINT`: at that tier
+`DeltaProcessor.run_cascade` ends with `DeltaProcessor._check_cascade_fixpoint`, which
+re-reconciles every key the cascade SCHEDULED. It catches execution-side misses inside
+a cascade that ran; a key never scheduled, and a cascade never called, are outside it.
+The tier table is the module docstring of `invariants.py`.)*
 
 ### 7.8 IVM cascade — the perfect model, incrementally (`processor.py`)
 
@@ -603,7 +610,10 @@ important cross-cutting fact for the proof (§9, §11-A1).**
   *does* call it (`src/zanzibar/connectedstore/apply.py::advance_index`; `GraphBackend.apply` in the test
   matrix), and `build_index` uses `backfill`. The graph model in Lean will bake the
   cascade into each write op (so the model is always consistent); the honesty note
-  (§11-A1) records that the *Python* relies on convention here.
+  (§11-A1) records that the *Python* relies on convention here. *(Re-checked
+  2026-10-13: still true. The composed `ConnectedStore` path always cascades; the
+  exposure is a caller of the exported `zanzibar.graphindex.WildcardIndex` on a boolean
+  schema. The decision is in §11-A1.)*
 
 ### 7.9 Multigraph / dedup boundary (must model edges as counters, not sets)
 
@@ -918,7 +928,7 @@ oracle.
 ## 11. Ambiguities & resolutions (for the checkpoint)
 
 Each must be resolved or escalated before Phase 1 Lean. Proposed resolutions given;
-**A1, A4 want explicit user sign-off.**
+**A1, A4 want explicit user sign-off.** *(2026-10-13: A1 is decided, see its entry.)*
 
 - **A1 — Cascade-as-precondition vs invariant.** The Python relies on *convention*
   that every boolean write runs `run_cascade` in-txn; I9 (the only fixpoint check)
@@ -929,6 +939,20 @@ Each must be resolved or escalated before Phase 1 Lean. Proposed resolutions giv
   *algorithm* correct; it does **not** prove the Python never forgets to call it.
   **Escalate: is that scope boundary acceptable, or do you want a Phase-7-style check
   that the write paths always cascade?**
+  *Decided 2026-10-13 (`TK3`). The user delegated decisions of this kind to the model
+  on 2026-09-12 (`CLAUDE.md` "Who decides"), so this is no longer waiting on sign-off.
+  Both halves of the question get an answer.* (1) The proof scope boundary is
+  accepted. Lean cannot speak to whether Python calls a function, so baking the
+  cascade into each modelled write op is the only faithful model, and the README
+  honesty section states the limit. (2) A check that a boolean write cascaded is
+  wanted. A skipped cascade makes the graph index silently disagree with the set
+  engine, and the exported `WildcardIndex` API lets a caller skip it, so a mechanical
+  refusal beats a documented convention. The intended shape is an O(1) per-transaction
+  check, outside the paranoia tiers. It is not a whole-store audit, and it is not an
+  "outbox head equals drained frontier" comparison: the cascade's own reconcile-time
+  GC emits outbox rows late (`tests/test_tk79_outbox_replica.py`), so that comparison
+  is REASONED to misfire. The check is not built yet; `TK3` carries it. The
+  never-SCHEDULED half of I9 (a production entry point for `audit_fixpoint`) is `TK85`.
 - **A2 — Provisional-False recursion vs stratum iteration.** The oracle uses
   Tarjan-lowlink provisional-False; the plan proposes per-stratum fixpoint iteration.
   *Proposed:* define the executable `sem` by stratum iteration (cleaner to prove

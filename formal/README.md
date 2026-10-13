@@ -106,14 +106,23 @@ constructor — the default `build_index` path, with no Lean model at all**,
 non-stratifiable schemas, `expand`/`lookup`, and the fidelity of the model-to-code
 correspondence itself. `FINAL_REVIEW.md` §3 is the full list and governs.
 One of those residuals is a *convention* rather than a missing model (added
-2026-09-10, `TK3`): nothing structural forces a boolean write to run the cascade
-in the same transaction. `src/zanzibar/graphindex/invariants.py::install_paranoia` deliberately
-wires the invariant checker and the delta-scoped verifier but **not** I9, the
-fixpoint audit — `src/zanzibar/graphindex/processor.py::DeltaProcessor.audit_fixpoint` has no
-production call site, only test ones. The Lean model bakes the cascade into every
-write op, so the theorems prove the *algorithm* correct and say nothing about the
-Python forgetting to call it. `SEMANTICS.md` §11-A1 records exactly this, flags it
-as wanting explicit sign-off, and that sign-off has never been given.
+2026-09-10, `TK3`; corrected 2026-10-13): nothing structural forces a boolean write
+to run the cascade in the same transaction. The Lean model bakes the cascade into
+every write op, so the theorems prove the *algorithm* correct and say nothing about
+the Python forgetting to call it. The composed path always calls it
+(`src/zanzibar/connectedstore/apply.py::advance_index`); the exposure is the bare,
+exported `zanzibar.graphindex.WildcardIndex` API, where the caller must run
+`DeltaProcessor.run_cascade` itself and nothing notices if it does not. What I9 covers
+at runtime is narrower than "the fixpoint": the opt-in `'fixpoint'` paranoia tier
+(`src/zanzibar/graphindex/invariants.py::PARANOIA_FIXPOINT`, `TK82`) re-reconciles
+every key a cascade SCHEDULED, via `DeltaProcessor._check_cascade_fixpoint`, so it
+sees execution-side misses inside a cascade that ran. It cannot see a cascade that
+never ran, and it cannot see a key that was never scheduled; the whole-store
+`src/zanzibar/graphindex/processor.py::DeltaProcessor.audit_fixpoint` is the only
+detector for the second class and still has no production call site (`TK85`).
+`SEMANTICS.md` §11-A1 records the decision on this boundary (2026-10-13): the proof
+scope is accepted as is, and a check that a boolean write cascaded is wanted and is
+open as `TK3`.
 
 **This never rounds up to "the code is formally verified."**
 
