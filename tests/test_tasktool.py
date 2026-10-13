@@ -2668,6 +2668,151 @@ def test_lint_check_12_catches_the_three_banner_failures():
     assert rc == 0, out_text(out) + err
 
 
+def fenced_note(banner_body, before='', after_banner=''):
+    """A note whose `## Banner` section holds `banner_body` RAW (not blockquoted), so a
+    ``` fence in it is a real fence to `extract_banner`'s `_FENCE_RE`. `note_text`
+    blockquotes every line, and a `> ```` line is not a fence (see clause G)."""
+    return (u'# HANDOFF -- fixture one-hop note\n\n%s\n%s\n\n> %s -- head line.\n\n%s\n'
+            u'## Still owed\n\n- STILL-OWED-MARKER\n%s\n## Next session\n\n'
+            u'NEXT-SESSION-MARKER\n'
+            % (before, TM.BANNER_HEADING, KEY, banner_body, after_banner))
+
+
+def test_lint_check_12_a_fence_inside_the_banner_section():
+    """`TK100` (2026-10-13): a ``` fence INSIDE the `## Banner` section. `TT-8` pinned
+    fences ABOVE the section (the test before this one); what happens inside it was
+    observed and never pinned, and `extract_banner` is SHARED by `board` and check 12.
+
+    DECISION (recorded on the row): a CLOSED fence inside the section is banner CONTENT --
+    its delimiters and its lines count toward BANNER_MAX_LINES, and a `## ` line inside
+    it is a code line that does not end the section (CommonMark). That is correct, not an
+    accident to be fixed: the cap bounds what `board` PRINTS, and `board` prints those
+    lines, so failing the cap is the honest outcome; truncating would hide text the
+    author wrote. An UNCLOSED fence opened inside the section is REFUSED by
+    `extract_banner` (so `board` rc 2 and a check-12 failure), because every later `## `
+    line is then a code line, the section runs to EOF, and `## Still owed` / `## Next
+    session` became banner text -- printed by `board`, linted CLEAN while the total stayed
+    under the cap. There is no safe truncation (which `## ` line was meant as a heading is
+    a guess), the same reason two banners refuse.
+
+    Pre-fix probe (2026-10-13, `extract_banner` on clause C's shape), literal::
+
+        ['2026-10-13 -- head', '```', 'example', '## Still owed', '- x',
+         '## Next session', 'y']
+
+    Clauses A and B pin behaviour that already held pre-fix (pre-fix probe: clause A's note
+    -> `['2026-08-21 -- head line.', '```', '## not a heading', 'INSIDE-FENCE-MARKER',
+    '```']`; clause B's note -> 15 lines). C and D are the fix. E and G are the controls
+    that keep the refusal from over-firing; F pins that the hidden-heading case stays red.
+
+    Mutation sweep (2026-10-13), this test run against a mutated copy of `task.py` via
+    `against()`; literal first failure per mutant::
+
+        CONTROL_real                 GREEN
+        N0_prefix (HEAD task.py)     RED: C: an unclosed fence swallowed the rest of the
+                                          note into the banner and lint was clean:
+        N1 refusal deleted           RED: C: (same)
+        N2 refuse ANY unclosed fence RED: E: an unclosed fence AFTER the banner was
+                                          refused:
+        N3 fence_at = first opener   RED: D: an unclosed fence swallowed the rest of the
+                                          note into the banner and lint was clean:
+        N4 fence delimiters dropped  RED: B: fenced banner lines did not count toward
+                                          the cap:
+        N5 section stops at a fenced RED: A: board dropped the fenced lines of the
+           `## ` line                     banner:
+        N6 drop the `start <` bound  GREEN -- EQUIVALENT: a fence open at EOF that was
+                                          opened above the section has swallowed the
+                                          `## Banner` heading, so `banners` is empty and
+                                          extract_banner returns None first (clause F)
+        N7 check_banner swallows the RED: C: (same as N0)
+           Refused silently
+    """
+    root = good_tree('bannerfence')
+    note = banner_path(root)
+    fence_body = u'```\n## not a heading\nINSIDE-FENCE-MARKER\n```\n'
+
+    # A. A closed fence inside the section: accepted, and `board` prints all of it --
+    #    the delimiters, the fenced `## ` line, and the line AFTER it (a fenced heading
+    #    does not end the section) -- and nothing from the next real section.
+    write(note, fenced_note(fence_body))
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, ('A: a closed fence inside the banner was refused:\n%s'
+                     % (out_text(out) + err))
+    rc, out, err = run(root, 'board')
+    assert rc == 0, err
+    shown = out_text(out)
+    assert '## not a heading' in shown and 'INSIDE-FENCE-MARKER' in shown, (
+        'A: board dropped the fenced lines of the banner:\n%s' % shown)
+    assert 'STILL-OWED-MARKER' not in shown, (
+        'A: board printed the next section as banner text:\n%s' % shown)
+
+    # B. ...and those lines COUNT toward the cap. The head line + filler is exactly
+    #    BANNER_MAX_LINES - 3; the fence adds 4 lines (2 delimiters + 2 content), so the
+    #    section is BANNER_MAX_LINES + 1. A scan that skipped fenced lines would see
+    #    BANNER_MAX_LINES - 3 and lint clean.
+    filler = u''.join(u'filler %d\n' % n for n in range(TM.BANNER_MAX_LINES - 4))
+    write(note, fenced_note(filler + u'\n' + fence_body))
+    rc, out, err = run(root, 'lint')
+    text = out_text(out) + err
+    assert rc == 1, ('B: fenced banner lines did not count toward the cap:\n%s' % text)
+    assert first_match(text, r'is %d lines, cap %d'
+                       % (TM.BANNER_MAX_LINES + 1, TM.BANNER_MAX_LINES)) is not None, text
+
+    # C/D. An UNCLOSED fence opened inside the section REFUSES, in lint and in `board`,
+    #    naming the file and the opening line. D is C with a CLOSED fence above the
+    #    section too: the refusal must track the fence that is still open, not the first
+    #    one the scan met.
+    unclosed = u'```\nexample\n'
+    for label, before in [('C', ''), ('D', FENCED_BANNER_EXAMPLE)]:
+        write(note, fenced_note(unclosed, before=before))
+        rc, out, err = run(root, 'lint')
+        text = out_text(out) + err
+        assert rc == 1, ('%s: an unclosed fence swallowed the rest of the note into the '
+                         'banner and lint was clean:\n%s' % (label, text))
+        line = first_match(text, r'is never closed')
+        assert line is not None, text
+        assert 'HANDOFF.md' in line and 'line ' in line, line
+        rc, out, err = run(root, 'board')
+        assert rc == 2, ('%s: board rendered a banner with an unclosed fence (rc=%d):\n%s'
+                         % (label, rc, out_text(out)))
+        assert 'REFUSED' in err and 'is never closed' in err, err
+        assert 'STILL-OWED-MARKER' not in out_text(out), out_text(out)
+
+    # E. Control: an unclosed fence AFTER the banner section is not the banner's business
+    #    -- the section has already ended at `## Still owed`. A refusal that fired on any
+    #    unclosed fence in the note would make `board` refuse over unrelated prose.
+    write(note, fenced_note(u'', after_banner=u'\n```\nunclosed in Still owed\n'))
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, ('E: an unclosed fence AFTER the banner was refused:\n%s'
+                     % (out_text(out) + err))
+    rc, out, err = run(root, 'board')
+    assert rc == 0, err
+    assert 'unclosed in Still owed' not in out_text(out), out_text(out)
+
+    # F. An unclosed fence ABOVE the section swallows the `## Banner` heading itself, so
+    #    there is no banner: already red (pinned here so it stays red).
+    write(note, fenced_note(u'', before=u'```\nunclosed above\n\n'))
+    rc, out, err = run(root, 'lint')
+    text = out_text(out) + err
+    assert rc == 1, ('F: an unclosed fence above the banner linted clean:\n%s' % text)
+    assert first_match(text, r'has no `## Banner` heading') is not None, text
+
+    # G. Control: the live banner is a BLOCKQUOTE, and a `> ```` line is not a fence to
+    #    `_FENCE_RE` (in CommonMark the blockquote's end closes it anyway), so an
+    #    "unclosed" quoted fence does not swallow `## Still owed` and is not refused.
+    write_banner(root, BANNER_TEXT + u'```\nquoted example\n')
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, ('G: a blockquoted fence was refused:\n%s' % (out_text(out) + err))
+    rc, out, err = run(root, 'board')
+    assert rc == 0, err
+    assert 'quoted example' in out_text(out), out_text(out)
+
+    # Restore control.
+    write_banner(root, BANNER_TEXT)
+    rc, out, err = run(root, 'lint')
+    assert rc == 0, out_text(out) + err
+
+
 def test_lint_check_12_refuses_a_reappearing_tasks_banner_file():
     """`tasks/BANNER.md` is a TOMBSTONE since the 2026-09-06 cutover: the banner lives
     only in the `## Banner` section of `<root>/HANDOFF.md`, and a `tasks/BANNER.md`

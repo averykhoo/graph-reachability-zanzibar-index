@@ -1931,17 +1931,31 @@ def extract_banner(text, where='the note'):
     chosen by file order, with nothing on screen to say a choice was made. There is no
     safe default here -- picking either is picking the possibly-stale one -- so this
     raises `Refused` and both consumers stop.
+
+    A FENCE INSIDE THE SECTION (`TK100`, 2026-10-13). A CLOSED fence is banner content:
+    its delimiters and lines are printed by `board` and so count toward BANNER_MAX_LINES,
+    and a `## ` line inside it does not end the section. That is the intended reading,
+    not an accident -- the cap bounds what `board` prints, and truncating would hide text
+    the author wrote. An UNCLOSED fence opened inside the section REFUSES: every later
+    `## ` line is then a code line, so pre-fix the section ran to EOF and `## Still owed`
+    / `## Next session` were printed as banner text and linted clean under the cap.
+    Pre-fix probe, literal: `['2026-10-13 -- head', '```', 'example', '## Still owed',
+    '- x', '## Next session', 'y']`. A `> ```` line (the banner is a blockquote) is not
+    a fence to `_FENCE_RE`, which is harmless: the blockquote's end closes it in
+    CommonMark, and `> ## x` is not a heading either. Pin and mutation sweep:
+    `tests/test_tasktool.py::test_lint_check_12_a_fence_inside_the_banner_section`.
     """
     lines = text.replace('\r\n', '\n').split('\n')
     heads, fence = [], None       # heads: (index, is_the_banner_heading), fences skipped
+    fence_at = None               # index of the line that opened the fence still open
     for i, line in enumerate(lines):
         match = _FENCE_RE.match(line)
         if match:
             marker, rest = match.group(1), match.group(2)
             if fence is None:
-                fence = marker
+                fence, fence_at = marker, i
             elif marker[0] == fence[0] and len(marker) >= len(fence) and not rest.strip():
-                fence = None
+                fence, fence_at = None, None
             continue
         if fence is None and line.startswith('## '):
             heads.append((i, line.rstrip() == BANNER_HEADING))
@@ -1960,6 +1974,17 @@ def extract_banner(text, where='the note'):
     start = banners[0]
     after = [i for i, _ in heads if i > start]
     stop = after[0] if after else len(lines)
+    if fence is not None and start < fence_at < stop:
+        # TK100 (2026-10-13): a fence opened INSIDE the banner section is never closed.
+        # Every `## ` line after it is then a code line, so the section runs to EOF and
+        # `## Still owed` / `## Next session` become banner text -- printed by `board`,
+        # and linted clean while the total stays under BANNER_MAX_LINES. There is no safe
+        # truncation: which `## ` line the author meant as a heading is a guess.
+        raise Refused(
+            '%s: a ``` fence opened inside the `%s` section (line %d) is never closed, so '
+            'every heading after it is a code line and the rest of the note would print '
+            'as banner text. Close the fence with a bare `%s` line before the section '
+            'ends.' % (where, BANNER_HEADING, fence_at + 1, fence))
     out = []
     for line in lines[start + 1:stop]:
         if not line.strip():
