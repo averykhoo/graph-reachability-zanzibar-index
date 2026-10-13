@@ -473,6 +473,11 @@ GATE_LOCK_HELD=1
 #   test_conformance_enum_state.py +1 (test_state_leg_excludes_exactly_the_py_differential;
 #   the state parametrization stays at six). 1093 - 4 - 2 = 1087. The floor mechanism is
 #   unchanged, so the 2026-09-24 instrument check stands.
+# MECHANICAL FROM 2026-10-13 (TK99): `doc_counts --generate` ratchets HEAVY and REST
+#   independently to their live counts (never lower) and writes this floor as their
+#   SUM; see the MIN_TESTS_ALL comment and doc_counts.py::ratchet_floors for why ALL is
+#   derived rather than ratcheted on its own. Measured 2026-10-13: 1093 == live, zero
+#   headroom, so the ratchet changes nothing here on landing.
 MIN_CONF_ALL=1093
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
@@ -672,7 +677,16 @@ MIN_CONF_ALL=1093
 #   tests/test_tk122_table_namespace.py (collect-only: 6); +3 are the new
 #   tests/test_tk122_release_metadata.py (collect-only: 3). 1740 + 9 = 1749, re-measured:
 #   `pytest tests/ -q --collect-only` -> 1749. No drift.
-MIN_TESTS_ALL=1749
+# MECHANICAL FROM 2026-10-13 (TK99): `python -m formal.conformance.doc_counts --generate`
+#   raises this floor (and MIN_CONF_HEAVY / MIN_CONF_REST / MIN_CONF_ALL) to the live
+#   collected count, UPWARD ONLY (doc_counts.py::ratchet_floors, max(floor, live), the
+#   scripts/task.py::ratchet_min_parsed rule), and `--check` (step 4e) refuses a floor
+#   below its live count (doc_counts.py::floor_headroom). Pinned with sabotage in
+#   tests/test_tk99_floor_ratchet.py. Measured 2026-10-13 before it landed: this floor
+#   1749 vs `pytest tests/ -q --collect-only` -> 2283, i.e. 534 tests of headroom (the
+#   2026-10-12/13 sessions' tests/ additions, not broken down per file). Do not hand-
+#   raise it any more; LOWERING stays a deliberate hand edit, followed by --generate.
+MIN_TESTS_ALL=2342
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -752,6 +766,10 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 #   --ignore construction; 135 + 952 == 1087 == MIN_CONF_ALL. Both new tests are REST.
 # 2026-10-12c (TK102 + the TK127 drift): HEAVY re-measured at 135 (unchanged), REST at
 #   958 by the same --ignore construction; 135 + 958 == 1093 == MIN_CONF_ALL. All REST.
+# 2026-10-13 (TK99): from here on doc_counts --generate ratchets HEAVY and REST, each to
+#   max(floor, live), and sets MIN_CONF_ALL to their sum, so the identity below holds by
+#   construction. A test moving from REST into HEAVY_CONF leaves REST's floor where it
+#   was, so the gate goes red: lower REST by hand if that move was intended.
 MIN_CONF_HEAVY=135
 MIN_CONF_REST=958
 

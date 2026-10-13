@@ -22,16 +22,29 @@ now an authoritative, machine-checked place to check them against. Extending the
 block is cheap — add a row to `measure()` — and that is the intended way to bring
 another number under the pin.
 
+THE FLOOR RATCHET (TK99, 2026-10-13). `--generate` ALSO raises the collection
+floors in `formal/verify.sh` -- `MIN_TESTS_ALL`, `MIN_CONF_HEAVY`, `MIN_CONF_REST`
+and `MIN_CONF_ALL` -- to the live collected counts, UPWARD ONLY, exactly as
+`scripts/task.py::ratchet_min_parsed` does for `min_tasks_parsed`. Before this,
+those floors were raised by hand and every re-measurement found headroom (1, 17,
+62, 70, 86, 160, and 534 on 2026-10-13: 534 `tests/` cases deletable with every
+tile green). Adding a test already turns `lean` red here (the block carries the
+collected counts) until `--generate` runs, so making that same command close the
+headroom costs nothing new. See `ratchet_floors` for the HEAVY/REST rule, and
+`floor_headroom` for the `--check` refusal that keeps the floors from drifting
+below the live counts by any other route.
+
 Usage::
 
     python -m formal.conformance.doc_counts --check      # gate (verify.sh step 4e)
-    python -m formal.conformance.doc_counts --generate   # rewrite the block
+    python -m formal.conformance.doc_counts --generate   # ratchet floors + rewrite the block
     python -m formal.conformance.doc_counts --print      # just show the measurement
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import re
 import subprocess
@@ -39,6 +52,14 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 TARGET = REPO / "formal" / "FINAL_REVIEW.md"
+VERIFY_SH = REPO / "formal" / "verify.sh"
+
+#: Environment variables that ADD tests at collection time (`tests/conftest.py`
+#: keeps `test_postgres_ha.py` only when one is set). The counts here describe the
+#: DEFAULT gate, so they are scrubbed from every collection subprocess: otherwise a
+#: `--generate` run in a shell that still has a DSN exported would ratchet
+#: `MIN_TESTS_ALL` past what the SQLite gate collects and turn every tests-tile red.
+_GATE_ADDITIVE_ENV = ("ZANZIBAR_TEST_DSN", "ZANZIBAR_PG_REQUIRED")
 
 BEGIN = "<!-- BEGIN GENERATED COUNTS (formal/conformance/doc_counts.py) -->"
 END = "<!-- END GENERATED COUNTS -->"
@@ -68,9 +89,10 @@ TOOLING_FILES = {
 
 def _collect(path: str) -> int:
     """Number of tests pytest collects under `path` (no execution)."""
+    env = {k: v for k, v in os.environ.items() if k not in _GATE_ADDITIVE_ENV}
     out = subprocess.run(
         [sys.executable, "-m", "pytest", path, "-q", "--collect-only"],
-        cwd=REPO, capture_output=True, text=True)
+        cwd=REPO, capture_output=True, text=True, env=env)
     m = re.search(r"(\d+) tests? collected", out.stdout)
     if not m:
         raise SystemExit(
@@ -87,12 +109,120 @@ def _collect_per_file(directory: pathlib.Path) -> dict[str, int]:
     return counts
 
 
-def _verify_sh_floor(name: str) -> int:
-    text = (REPO / "formal" / "verify.sh").read_text(encoding="utf-8")
+def _verify_sh_floor(name: str, path: pathlib.Path | None = None) -> int:
+    text = (path or VERIFY_SH).read_text(encoding="utf-8")
     m = re.search(rf"^{re.escape(name)}=(\d+)", text, re.M)
     if not m:
         raise SystemExit(f"doc_counts: floor {name} not found in formal/verify.sh")
     return int(m.group(1))
+
+
+# --------------------------------------------------------------------------- #
+# The floor ratchet (TK99, 2026-10-13)
+# --------------------------------------------------------------------------- #
+#: The collection floors `ratchet_floors` owns. MIN_CONF_ALL is NOT ratcheted on
+#: its own: it is DERIVED as HEAVY + REST, see `ratchet_floors`.
+RATCHETED_FLOORS = ("MIN_TESTS_ALL", "MIN_CONF_HEAVY", "MIN_CONF_REST", "MIN_CONF_ALL")
+
+
+def _floor_spans(text: str, name: str) -> re.Match:
+    """The ONE `^NAME=<int>` assignment in verify.sh. Zero or several matches mean
+    the file is not the shape this understands, and a ratchet that guesses which
+    assignment wins is worse than none -- refuse, leave the file alone."""
+    ms = list(re.finditer(rf"^({re.escape(name)}=)(\d+)", text, re.M))
+    if len(ms) != 1:
+        raise SystemExit(
+            f"doc_counts: expected exactly one `{name}=<int>` line in verify.sh, "
+            f"found {len(ms)}; refusing to ratchet a file of an unknown shape.")
+    return ms[0]
+
+
+def heavy_conf_name(text: str) -> str:
+    """Basename of verify.sh's `HEAVY_CONF="formal/conformance/<file>"`."""
+    m = re.search(r'^HEAVY_CONF="formal/conformance/([^"/]+\.py)"', text, re.M)
+    if not m:
+        raise SystemExit("doc_counts: HEAVY_CONF=\"formal/conformance/<file>.py\" "
+                         "not found in formal/verify.sh")
+    return m.group(1)
+
+
+def ratchet_floors(verify_sh: pathlib.Path, live_tests: int, live_heavy: int,
+                   live_rest: int) -> list[tuple[str, int, int]]:
+    """Raise verify.sh's collection floors to the live counts; NEVER lower one.
+    Returns `(name, old, new)` for each floor that moved ([] == file untouched).
+
+    THE RULE, per floor, is `scripts/task.py::ratchet_min_parsed`'s:
+    `max(floor, live)`. HEADROOM (floor < live, i.e. tests that could be deleted
+    with the gate green) is closed; a BREACH (floor > live, tests were lost) is left
+    exactly as it is, so the gate stays red on it. A ratchet that lowered a floor
+    to make a run green would be the thing the floor exists to catch.
+
+    THE HEAVY/REST DECISION (TK99, 2026-10-13). verify.sh asserts
+    `MIN_CONF_HEAVY + MIN_CONF_REST == MIN_CONF_ALL` (the two legacy tiles must tile
+    the directory). HEAVY and REST are ratcheted INDEPENDENTLY against their own
+    live counts (HEAVY = the `HEAVY_CONF` file, REST = the directory minus it), and
+    ALL is then DEFINED as their sum -- never ratcheted on its own. Why not
+    `ALL := max(ALL, live_all)` and split the growth:
+      * any split rule (all-to-REST, proportional) can LOWER a component: tests
+        moving from REST into the heavy file keep `live_all` flat, so a derived
+        `REST = ALL - HEAVY` would fall -- a ratchet silently lowering a floor;
+      * per-component maxima can never lower anything (each is a max, and the sum
+        of two non-decreasing numbers is non-decreasing), keep the identity true by
+        construction, and leave ALL == live_all whenever no component is breached.
+    The price is deliberate: in that REST->HEAVY shift case ALL rises above
+    live_all and the gate goes red. That is CORRECT -- REST lost tests -- and an
+    intended move is resolved by hand-lowering MIN_CONF_REST (and ALL) in a
+    reviewed edit, exactly like any other deliberate floor cut.
+
+    The edit is a targeted substitution of the digits on the raw BYTES (verify.sh is
+    CRLF in a Windows working tree and LF in the repo; a text-mode round-trip would
+    rewrite every line ending). A broken identity on input is refused outright:
+    the gate is already red on it and this tool must not choose which side wins.
+    """
+    raw = verify_sh.read_bytes()
+    text = raw.decode("utf-8")
+    spans = {n: _floor_spans(text, n) for n in RATCHETED_FLOORS}
+    old = {n: int(m.group(2)) for n, m in spans.items()}
+    if old["MIN_CONF_HEAVY"] + old["MIN_CONF_REST"] != old["MIN_CONF_ALL"]:
+        raise SystemExit(
+            f"doc_counts: verify.sh floors already violate MIN_CONF_HEAVY + "
+            f"MIN_CONF_REST == MIN_CONF_ALL ({old['MIN_CONF_HEAVY']} + "
+            f"{old['MIN_CONF_REST']} vs {old['MIN_CONF_ALL']}); fix that by hand "
+            f"first, refusing to ratchet.")
+    new = {
+        "MIN_TESTS_ALL": max(old["MIN_TESTS_ALL"], live_tests),
+        "MIN_CONF_HEAVY": max(old["MIN_CONF_HEAVY"], live_heavy),
+        "MIN_CONF_REST": max(old["MIN_CONF_REST"], live_rest),
+    }
+    new["MIN_CONF_ALL"] = new["MIN_CONF_HEAVY"] + new["MIN_CONF_REST"]
+    moved = [(n, old[n], new[n]) for n in RATCHETED_FLOORS if new[n] != old[n]]
+    if not moved:
+        return []
+    # Substitute right-to-left so earlier spans stay valid.
+    for n, m in sorted(spans.items(), key=lambda kv: kv[1].start(2), reverse=True):
+        text = text[:m.start(2)] + str(new[n]) + text[m.end(2):]
+    verify_sh.write_bytes(text.encode("utf-8"))
+    return moved
+
+
+def floor_headroom(m: dict) -> list[str]:
+    """One complaint per collection floor sitting BELOW its live count (`--check`).
+
+    `--generate` closes headroom, but the floors are also hand-editable, and a
+    hand-lowered floor plus a regenerated block would otherwise pass the block
+    comparison (the block renders whatever the floors say). CLAUDE.md's contract is
+    ZERO headroom; this makes it a refusal instead of a sentence. A floor ABOVE live
+    is not reported here -- the collection-floor check in `run_conf` already fails
+    that phase, which is the loud place for a breach."""
+    pairs = (("MIN_TESTS_ALL", m["min_tests_all"], m["tests_total"], "tests/"),
+             ("MIN_CONF_HEAVY", m["min_conf_heavy"], m["conf_heavy_live"],
+              f"HEAVY_CONF ({m['heavy_conf']})"),
+             ("MIN_CONF_REST", m["min_conf_rest"], m["conf_rest_live"],
+              "formal/conformance/ minus HEAVY_CONF"),
+             ("MIN_CONF_ALL", m["min_conf_all"], m["conf_total"], "formal/conformance/"))
+    return [f"{name}={floor} but {what} collects {live}: {live - floor} test(s) "
+            f"could be deleted with the gate green"
+            for name, floor, live, what in pairs if floor < live]
 
 
 def measure() -> dict:
@@ -132,6 +262,11 @@ def measure() -> dict:
     n_lean = sum(1 for (_ln, f, _sym) in anchors if f.endswith(".lean"))
     n_py = len(anchors) - n_lean
 
+    heavy = heavy_conf_name(VERIFY_SH.read_text(encoding="utf-8"))
+    if heavy not in per_file:
+        raise SystemExit(f"doc_counts: HEAVY_CONF {heavy} is not a collected "
+                         f"formal/conformance/ file")
+
     tooling = {k: v for k, v in per_file.items() if k in TOOLING_FILES}
     differential = {k: v for k, v in per_file.items() if k not in TOOLING_FILES}
 
@@ -147,6 +282,13 @@ def measure() -> dict:
         "proj": proj,
         "conf_total": conf_total,
         "tests_total": tests_total,
+        # Live sizes of the two legacy tiles (not rendered; the ratchet and the
+        # headroom refusal read them). REST is the --ignore construction, done by
+        # subtraction: the anti-vacuity check above guarantees the per-file sum IS
+        # the directory collection.
+        "heavy_conf": heavy,
+        "conf_heavy_live": per_file[heavy],
+        "conf_rest_live": conf_total - per_file[heavy],
         "repo_total": conf_total + tests_total,
         "per_file": per_file,
         "differential_files": len(differential),
@@ -363,19 +505,18 @@ def check_corpus_count_prose() -> list[str]:
     return bad
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--check", action="store_true")
     g.add_argument("--generate", action="store_true")
     g.add_argument("--print", dest="show", action="store_true")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     m = measure()
-    block = render(m)
 
     if args.show:
-        print(block)
+        print(render(m))
         return 0
 
     text = TARGET.read_text(encoding="utf-8")
@@ -386,9 +527,18 @@ def main() -> int:
             raise SystemExit(
                 f"doc_counts: no generated-counts block found in {TARGET.name}. "
                 f"Insert the marker pair first:\n  {BEGIN}\n  {END}")
-        TARGET.write_text(text.replace(current, block), encoding="utf-8")
+        # Ratchet FIRST, then re-read the floors, so the block renders the floors
+        # the gate will actually enforce (TK99).
+        for name, old, new in ratchet_floors(VERIFY_SH, m["tests_total"],
+                                             m["conf_heavy_live"], m["conf_rest_live"]):
+            print(f"doc_counts: ratcheted {name} {old} -> {new} in formal/verify.sh")
+        for name in RATCHETED_FLOORS:
+            m[name.lower()] = _verify_sh_floor(name)
+        TARGET.write_text(text.replace(current, render(m)), encoding="utf-8")
         print(f"doc_counts: regenerated the counts block in {TARGET.name}")
         return 0
+
+    block = render(m)
 
     # --check
     if current is None:
@@ -409,6 +559,16 @@ def main() -> int:
             if a != b:
                 print(f"      doc:  {a}")
                 print(f"      tree: {b}")
+        return 1
+    headroom = floor_headroom(m)
+    if headroom:
+        print("FAIL: formal/verify.sh collection floors sit BELOW the live counts "
+              "(TK99). Their contract is ZERO headroom: a floor below the live count "
+              "lets that many tests be deleted with every phase green.")
+        print("      Fix: python -m formal.conformance.doc_counts --generate "
+              "(raises the floors, never lowers them).")
+        for h in headroom:
+            print(f"      {h}")
         return 1
     stale = check_corpus_count_prose()
     if stale:
