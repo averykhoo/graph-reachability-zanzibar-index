@@ -2,7 +2,7 @@
 id: HS-5
 title: always-living docs declare no liveness state; enumeration+method now in docs/README.md sec 2
 brief:
-pri: NOW
+pri: NEXT
 size: S
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [docs]
 source: board
 source_hash: 31c0d00522ce
 created: 2026-08-20b
-moved: 2026-10-13b
-updated: 2026-10-13b
+moved: 2026-10-13c
+updated: 2026-10-13c
 closed:
 ---
 
@@ -58,3 +58,7 @@ REMAINING SCOPE (evidence: assurance triage agent-B, 2026-10-13, re-checked firs
 (d) READ, same TK107 residue class as the HANDOFF Still-owed bullet but outside its three docs: `formal/SEMANTICS.md` sec 5.5 (~l.356, 2026-10-13) cites `processor.py` `_ts_leaf_predicates` as live, and `formal/ARCHITECTURE.md` (~l.277) cites `processor.py::_EvalContext.tupleset_ttu_check`. Both symbols have 0 hits under src/ (grep -w, 2026-10-13). Also comment-only: src/zanzibar/schema/boolean.py (PClosureLeaf docstring; plan-builder comment ~l.474) still gives the pre-TK107 reason for storage leaves.
 
 SIZE: M, not S. SINGLE NEXT ACTION: freeze the ACTIVE-PLAN docs in (c) whose rows are closed, using the same sec 3 banner. Then extend `handoff_lint.py::check_frozen_banners` (or add a sibling) to RED on an ACTIVE-PLAN doc whose row id is closed, with a sabotage test. Only after that, adjudicate (a) and write the exemption rule into docs/README.md sec 2.
+
+### 2026-10-13c
+
+Bumped NOW -> NEXT by the user (2026-10-13c): TK141 (verify.sh start banner) goes first next session, then this.

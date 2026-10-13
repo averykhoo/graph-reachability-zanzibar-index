@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-13c -- **0.0.4 release-ready, OpenFGA claims audited**: every OpenFGA statement in living docs, code and tests checked against OpenFGA's docs/source; 2 WRONG + 12 misleading corrected (`docs/openfga-claims-audit-2026-10-13.md`); behaviour gaps filed as `TK137` / `TK138`. `__version__` + CHANGELOG are 0.0.4; the `v0.0.4` tag push (user-requested) and the install trial follow this commit. Next: `HS-5` (NOW). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-13c -- **0.0.4 released** (tag `v0.0.4` at `0ec7fed`, CI green, live on PyPI) after an OpenFGA claims audit (`docs/openfga-claims-audit-2026-10-13.md`; gaps `TK137` / `TK138`). Its install trial found 3 BROKEN, all confirmed first-hand (`docs/pypi-trial-0.0.4-2026-10-13.md`): `TK139` + `TK140` (NEXT) are the 0.0.5 patch. Next: `TK141` (NOW, the `verify.sh` start banner; patch in its body; land it FIRST, it stales every phase), then `TK139` / `TK140`, then `HS-5` (NEXT). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

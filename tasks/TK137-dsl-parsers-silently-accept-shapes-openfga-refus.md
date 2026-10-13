@@ -37,3 +37,7 @@ schemas that parse today, so it wants a CHANGELOG line.
 - `src/zanzibar/schema/parser.py::parse_schema_ast`; oracle twin `tests/oracle.py::parse_schema_ast`.
 
 ## Log
+
+### 2026-10-13c
+
+0.0.4 install trial (docs/pypi-trial-0.0.4-2026-10-13.md, p15/p16, p16 re-run first-hand): (a) a restriction naming an undeclared type, `define viewer: [usr]` with no `type usr`, parses, and both backends then admit a `usr:x` write and check says True; OpenFGA validates restriction types against declared types, and the PyPI README sentence "a write naming an undeclared type ... raises AdmissionRejected" is only true for a typo in the write, not in the schema. (b) DSL conditions and modules are refused, but with generic messages (`invalid subject type in restriction user with c`, `unrecognized schema line: module core`); the JSON path names conditions. Both belong in this row decision.

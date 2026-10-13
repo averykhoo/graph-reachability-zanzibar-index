@@ -35,9 +35,9 @@ from here.
 
 ## 2026-10-13c — OpenFGA claims audit before the 0.0.4 tag: 2 WRONG + 12 MISLEADING/UNVERIFIABLE corrected
 
-rows: TK137 (new, LATER), TK138 (new, LATER), TK123 (comment)
+rows: TK137 (new, LATER), TK138 (new, LATER), TK139 (new, NEXT), TK140 (new, NEXT), TK141 (new, NOW), HS-5 (NOW -> NEXT), TK123 (comment)
 
-`task lint: clean (13 checks, 255 task file(s) parsed), 24 warning(s)`
+`task lint: clean (13 checks, 258 task file(s) parsed), 24 warning(s)`
 
 `read: board only`
 
@@ -65,6 +65,26 @@ at landing).
 - Behaviour gaps, PROBED and filed, not fixed: `TK137` (both parsers accept a `schema 1.2`
   header, `[a] or [b]`, and an unparenthesised `or ... but not`), `TK138` (a userset is not
   related to itself here; OpenFGA treats it as implicit).
+
+**Released 0.0.4** on the user's word ("then push 0.0.4"): `master` then the annotated
+`v0.0.4` tag, both at `0ec7fed`. CI babysitter (haiku): gate 10/10 jobs and Publish to PyPI
+17/17 jobs succeeded; the session re-checked both conclusions and PyPI's 200 first-hand.
+
+**Install trial of the published 0.0.4** (opus agent, fresh conda env, smoke script 68 passed /
+0 failed, env removed): 3 BROKEN, 24 CONFUSING / DOC GAP, 27 WORKS. Every 0.0.4 CHANGELOG
+claim held. All three BROKEN repros re-run first-hand against `src/` and CONFIRMED; transcribed
+to [`docs/pypi-trial-0.0.4-2026-10-13.md`](../pypi-trial-0.0.4-2026-10-13.md). Filed `TK139`
+(`SetEngine.lookup_reverse` drops `but not` exclusions) and `TK140` (a standalone `SetEngine`
+and a `ConnectedStore` can share a store id: fail-open remove, adopted store), both NEXT, for
+0.0.5. The undeclared-type-in-a-restriction leniency went to `TK137`; ergonomics to `TK123`.
+
+**A `verify.sh` start banner was built, tried, and rolled back** (user request, then the
+user's word): each phase would print its start time plus an ETA from the newest `PASSED`
+ledger row of the same phase. It worked, but a `verify.sh` edit stales every phase, and the
+user chose not to pay a full rerun at session end. Filed as `TK141` at NOW with the exact
+patch and its observed output in the body; `HS-5` NOW -> NEXT. Trap found on the way, now in
+`TK141`: a phase backgrounded with `&` survives a TaskStop (4 `bash` + 1 `pytest` orphans
+and a held `.gate-runs/gate.lock`, cleared by PID and `gate_lock.py release --owner`).
 
 Still owed: Nothing.
 
