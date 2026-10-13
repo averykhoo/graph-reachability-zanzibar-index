@@ -30,6 +30,7 @@ import pytest
 from hypothesis import HealthCheck, Phase, assume, example, given, settings, strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, initialize, invariant, rule
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.graphindex.invariants import snapshot_rows
 from zanzibar.graphindex.outbox import outbox_watermark
 from zanzibar.graphindex.processor import DeltaProcessor
@@ -482,7 +483,7 @@ def test_op_pool_is_schema_valid_and_co_varies_with_the_grid():
         for raw in pool:
             try:
                 se.add_tuple(*raw)
-            except ValueError:
+            except AdmissionRejected:
                 refused.append(raw)
         assert not refused, (
             f'tupleset kind {kind!r}: the set engine REFUSED {len(refused)}/{len(pool)} '
@@ -974,7 +975,7 @@ def test_add_then_remove_restores_row_multiset(ast, data):
         try:
             write('add', raw)
             applied.append(raw)
-        except ValueError:
+        except AdmissionRejected:
             session.rollback()
     extra = data.draw(st.sampled_from(pool))
     assume(extra not in applied)
@@ -982,7 +983,7 @@ def test_add_then_remove_restores_row_multiset(ast, data):
     before = _state(session, widx)
     try:
         write('add', extra)
-    except ValueError:
+    except AdmissionRejected:
         session.rollback()
         assume(False)                      # rejected op: nothing to round-trip
     write('remove', extra)
@@ -1006,7 +1007,7 @@ def test_permutation_invariance(ast, data):
         for raw in sequence:
             try:
                 write('add', raw)
-            except ValueError:
+            except AdmissionRejected:
                 session.rollback()
                 rejected.add(raw)
         states.append((_state(session, widx), frozenset(rejected)))
@@ -1038,7 +1039,7 @@ def test_cascade_replay_from_zero(ast, data):
         try:
             live_write('add', raw)
             accepted.append(raw)
-        except ValueError:
+        except AdmissionRejected:
             live_session.rollback()
 
     from zanzibar.schema import Entity, RelationalTriple
@@ -1096,7 +1097,7 @@ def test_pderived_userset_self_ref_cascade_replay_drift():
     for raw in writes:
         try:
             live_write('add', raw)
-        except ValueError:
+        except AdmissionRejected:
             live_session.rollback()
 
     rs = parse_openfga_schema(schema)

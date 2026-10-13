@@ -14,6 +14,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from tests.test_wildcard_property import _candidate_raw_tuples, _query_grid, OBJECT_WC
+from zanzibar.schema import AdmissionRejected
 from zanzibar.setengine import SetEngine, ALL_SETOPS
 from zanzibar.setengine.setops import PySets
 
@@ -58,7 +59,7 @@ def test_expand_agrees_with_check(load_fga_schema, ops, seed):
             else:
                 se.add_tuple(*raw); present.add(raw)
             session.commit()
-        except ValueError:
+        except AdmissionRejected:
             session.rollback()
 
     # group grid queries by (relation, o_type, o_name); expand once, compare all subjects
@@ -99,7 +100,7 @@ def test_open_replay_equivalence_answers(load_fga_schema, seed):
             else:
                 se.add_tuple(*raw); present.add(raw)
             session.commit()
-        except ValueError:
+        except AdmissionRejected:
             session.rollback()
 
     before = {q: se.check(*q) for q in grid}

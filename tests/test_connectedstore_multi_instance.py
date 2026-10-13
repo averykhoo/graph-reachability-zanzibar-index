@@ -34,6 +34,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.connectedstore import (ConnectedStore, StaleRead, TupleSource,
                             log_rows, log_watermark)
 from zanzibar.setengine import SetEngine, RelationTuple
@@ -433,15 +434,15 @@ def test_write_path_ordering(tmp_path, monkeypatch):
 # --------------------------------------------------------------------------- #
 
 def _write_retry(cs, op, raw, attempts=300):
-    """SQLITE_BUSY and shared-node IntegrityErrors are safe to retry; a ValueError
-    is a genuine rejection. ConnectedStore already rolls back + rebuilds its
+    """SQLITE_BUSY and shared-node IntegrityErrors are safe to retry; an AdmissionRejected
+    is a genuine rejection (any other ValueError propagates; TK110, 2026-10-13). ConnectedStore already rolls back + rebuilds its
     evaluator on the retryable errors (see ConnectedStore._write)."""
     fn = cs.add_tuple if op == 'add' else cs.remove_tuple
     for _ in range(attempts):
         try:
             fn(*raw)
             return True
-        except ValueError:
+        except AdmissionRejected:
             return False
         except (OperationalError, IntegrityError):
             time.sleep(0.005)

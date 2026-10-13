@@ -132,6 +132,7 @@ import random
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.setengine import ALL_SETOPS, SetEngine
 from zanzibar.setengine.engine import LookupResult
 from tests.test_lookup_oracle import _names_by_type, _subject_candidates
@@ -190,7 +191,7 @@ def test_owc_bridge_walk_vs_sweep(corpus, ops, seed):
             try:
                 (se.add_tuple if op == 'add' else se.remove_tuple)(*raw)
                 session.commit()
-            except ValueError:
+            except AdmissionRejected:
                 session.rollback()
                 continue
             (present.add if op == 'add' else present.discard)(raw)

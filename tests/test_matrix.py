@@ -19,6 +19,7 @@ from types import EllipsisType
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.graphindex.outbox import outbox_watermark
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.schema import parse_openfga_schema, Entity, RelationalTriple
@@ -82,7 +83,7 @@ class GraphBackend:
                 self.proc.run_cascade(wm)               # synchronous v1: same txn
             self.session.commit()
             return True
-        except ValueError:
+        except AdmissionRejected:
             self.session.rollback()
             return False
 
@@ -110,7 +111,7 @@ class SetBackend:
             (self.se.add_tuple if op == 'add' else self.se.remove_tuple)(*raw)
             self.session.commit()
             return True
-        except ValueError:
+        except AdmissionRejected:
             self.session.rollback()
             return False
 
@@ -157,7 +158,7 @@ class ConnectedBackend:
         try:
             (self.cs.add_tuple if op == 'add' else self.cs.remove_tuple)(*raw)
             return True
-        except ValueError:
+        except AdmissionRejected:
             return False        # ConnectedStore rolled back + self-healed already
 
     def check(self, q):
@@ -541,7 +542,7 @@ def test_demorgan_oracle_equals_setengine_equals_graph(load_fga_schema, fixture,
         for raw in sorted(present):
             try:
                 se.add_tuple(*raw)
-            except ValueError:
+            except AdmissionRejected:
                 present.discard(raw)
                 continue
             assert graph.apply(raw, 'add'), f'graph rejected what the set engine took: {raw}'

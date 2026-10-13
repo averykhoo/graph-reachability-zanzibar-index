@@ -3,7 +3,10 @@ ParityEngine (boolean spec §8.4): one façade over oracle + set engine (both Se
 graph backend simultaneously, asserting semantic lockstep after every operation.
 
 Per op:
-  * identical accept/reject on every stateful backend (same error family: ValueError);
+  * identical accept/reject on every stateful backend (same error family:
+    AdmissionRejected -- narrowed from ValueError by TK110, 2026-10-13, so a
+    non-refusal ValueError on every backend at once propagates instead of reading
+    as a unanimous refusal);
   * on reject: I12 -- each backend's row multiset (ids ignored) is unchanged;
   * on accept: check-parity over the query grid (universe ∪ ghosts ∪ '*'), all
     backends vs the oracle (ground truth).
@@ -30,6 +33,7 @@ from collections import Counter
 
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.graphindex.invariants import snapshot_rows
 from zanzibar.setengine import SetEngine, ALL_SETOPS
 from zanzibar.setengine.models import RelationTuple
@@ -82,7 +86,7 @@ class _GraphSide:
                 self.proc.run_cascade(wm)                # synchronous v1: same txn
             self.session.commit()
             return True
-        except ValueError:
+        except AdmissionRejected:
             self.session.rollback()
             return False
 
@@ -114,7 +118,7 @@ class _SetSide:
             (self.se.add_tuple if op == 'add' else self.se.remove_tuple)(*raw)
             self.session.commit()
             return True
-        except ValueError:
+        except AdmissionRejected:
             self.session.rollback()
             return False
 

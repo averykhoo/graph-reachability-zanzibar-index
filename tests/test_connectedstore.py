@@ -15,6 +15,7 @@ import random
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.connectedstore import ConnectedStore, TupleLog, log_rows
 from zanzibar.graphindex.invariants import install_paranoia, snapshot_rows
 from zanzibar.setengine import RelationTuple
@@ -69,7 +70,7 @@ def test_connected_store_parity_walk(session, load_fga_schema, seed):
 
         try:
             (cs.add_tuple if op == 'add' else cs.remove_tuple)(*raw)
-        except ValueError:
+        except AdmissionRejected:
             continue                                   # rejected: nothing landed anywhere
         (present.add if op == 'add' else present.discard)(raw)
         history.append((op, raw))

@@ -13,6 +13,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from tests.oracle import Oracle, OracleTuple
 from tests.test_wildcard_property import _candidate_raw_tuples, _query_grid, OBJECT_WC
+from zanzibar.schema import AdmissionRejected
 from zanzibar.setengine import SetEngine, ALL_SETOPS
 
 
@@ -45,7 +46,7 @@ def test_setengine_check_vs_oracle(load_fga_schema, ops, seed):
         try:
             (se.add_tuple if op == 'add' else se.remove_tuple)(*raw)
             session.commit()
-        except ValueError:
+        except AdmissionRejected:
             session.rollback()
             continue
 

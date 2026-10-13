@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.connectedstore import TupleSource, build_index, save_schema
 from zanzibar.graphindex.invariants import check_invariants, snapshot_rows
 from zanzibar.graphindex.models import DeltaOutbox, Edge, Node, Residue
@@ -522,7 +523,7 @@ def _seed_source(session: Session, store_id: str, schema: str, object_wc, tuples
     for raw in tuples:
         try:
             src.add(*raw)
-        except ValueError:
+        except AdmissionRejected:
             # a tuple the admission validator rejects (e.g. a cycle from an
             # unordered pool) simply does not land; the read-back below is truth.
             pass

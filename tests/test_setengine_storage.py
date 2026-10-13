@@ -12,6 +12,7 @@ import random
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.schema import parse_openfga_schema, Entity, RelationalTriple
 from zanzibar.setengine import SetEngine, RelationTuple, ALL_SETOPS
 from zanzibar.setengine.setops import PySets
@@ -66,7 +67,7 @@ def test_replay_equivalence(load_fga_schema, ops):
                 se.add_tuple(*raw)
                 present.add(raw)
             session.commit()
-        except ValueError:
+        except AdmissionRejected:
             session.rollback()
 
     live = _membership_edges(se)
@@ -97,7 +98,7 @@ def _graph_accepts(sess, widx, ruleset, raw) -> bool:
                            d.subject.type, d.subject.name, d.relation, d.object.type, d.object.name)
         sess.commit()
         return True
-    except ValueError:
+    except AdmissionRejected:
         sess.rollback()
         return False
 
@@ -107,7 +108,7 @@ def _set_accepts(sess, se, raw) -> bool:
         se.add_tuple(*raw)
         sess.commit()
         return True
-    except ValueError:
+    except AdmissionRejected:
         sess.rollback()
         return False
 

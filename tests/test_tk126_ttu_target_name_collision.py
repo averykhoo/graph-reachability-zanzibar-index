@@ -111,6 +111,7 @@ import warnings
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.connectedstore import (ConnectedStore, TupleSource, build_index,
                                      rebuild_index, save_schema)
 from zanzibar.schema import (CyclicDerivedDependency, UnsupportedByGraphIndex,
@@ -406,7 +407,7 @@ def test_connected_store_and_build_paths_match_the_oracle(name):
         for op, t in ops:
             try:
                 (live.add_tuple if op == 'add' else live.remove_tuple)(*t)
-            except ValueError:
+            except AdmissionRejected:
                 # Refused by the sync graph (a data cycle); nothing was written, so the
                 # other paths must not see it either.
                 s_live.rollback()

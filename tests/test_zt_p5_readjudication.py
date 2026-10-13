@@ -32,6 +32,7 @@ import json
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.setengine import ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from zanzibar.schema import parse_openfga_schema, UnsupportedByGraphIndex
@@ -651,7 +652,7 @@ def _live_state(schema, owc, seq):
         try:
             cs.add_tuple(*w)
             landed.append(w)
-        except ValueError:
+        except AdmissionRejected:
             pass
     session.commit()
     return session, landed, cs.widx.schema_info

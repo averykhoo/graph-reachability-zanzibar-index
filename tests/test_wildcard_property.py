@@ -13,6 +13,7 @@ from types import EllipsisType
 
 import pytest
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.graphindex.outbox import outbox_watermark
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.schema import Entity, RelationalTriple, parse_openfga_schema
@@ -143,7 +144,7 @@ def test_wildcard_property_vs_oracle(load_fga_schema, seed):
         try:
             _apply(widx, ruleset, raw, op)
             session.commit()
-        except ValueError:
+        except AdmissionRejected:
             # invalid or cycle-forming tuple: roll back this op, leave state unchanged
             session.rollback()
             continue
@@ -168,7 +169,7 @@ def test_wildcard_property_vs_oracle(load_fga_schema, seed):
             if got != exp:
                 fail(f'check mismatch: index={got} oracle={exp}', query=q)
 
-    # ANTI-VACUITY. Every `except ValueError: ... continue` above skips the rest
+    # ANTI-VACUITY. Every `except AdmissionRejected: ... continue` above skips the rest
     # of the loop body -- which is where BOTH the invariant check and the entire
     # oracle grid comparison live. A regression that makes every write raise
     # (an over-eager admission check, a cycle detector false-positive) would
@@ -525,7 +526,7 @@ def test_wildcard_property_crossable_vs_oracle(load_fga_schema, seed):
                 # an `editor` (observed 2026-09-19d, seeds 0 and 2).
                 proc.run_cascade(wm)
                 session.commit()
-            except ValueError:
+            except AdmissionRejected:
                 session.rollback()
                 continue
 

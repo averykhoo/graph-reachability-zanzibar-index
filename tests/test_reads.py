@@ -21,6 +21,7 @@ import pytest
 from sqlalchemy import event
 from sqlmodel import Session, SQLModel, create_engine
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.setengine import SetEngine, ALL_SETOPS
 from zanzibar.schema import parse_openfga_schema
 from tests.oracle import Oracle, OracleTuple
@@ -478,7 +479,20 @@ def _fresh_session() -> Session:
 def _walk_and_compare(schema, pool, grid, seed, steps=14):
     """Drive a randomized walk on the graph backend (processor-wired); mirror every
     graph-accepted op onto both set engines; compare the FULL grid on graph, both set
-    engines, and the oracle after every op."""
+    engines, and the oracle after every op.
+
+    TK110 (2026-10-13): a graph refusal must be a refusal on BOTH set engines too, and
+    the walk must accept at least ``steps - 1`` ops. Sabotage record, observed
+    2026-10-13 with ``-k boolean_wildcards``, each sabotage a pytest plugin that
+    monkeypatches the named method (no src edit):
+      * graph-only over-reject (``WildcardIndex.add_tuple`` raises AdmissionRejected on
+        every ``editor`` write): ``3 failed``, ``Failed: DID NOT RAISE AdmissionRejected``.
+      * shared over-reject of everything (``Filter.apply`` returns False, so both
+        backends refuse): ``3 failed``, ``AssertionError: seed=0: only 0/14 ops accepted``.
+      * shared over-reject of one relation (``Filter.apply`` False on ``editor``):
+        ``2 failed, 1 passed``, ``seed=0: only 10/14`` and ``seed=2: only 9/14``.
+      * pre-fix contrast (the ``HEAD`` module under the same three sabotages):
+        ``3 passed`` under EACH, so the gap was real."""
     g_session, widx, proc, write = build(schema)
     sets = []
     for ops in ALL_SETOPS:
@@ -486,7 +500,7 @@ def _walk_and_compare(schema, pool, grid, seed, steps=14):
         sets.append((SetEngine(s, 'w', schema, ops=ops), s))
 
     rng = random.Random(seed)
-    present, history = set(), []
+    present, history, refused = set(), [], []
     for _ in range(steps):
         if not present or rng.random() < 0.6:
             cands = [r for r in pool if r not in present]
@@ -496,9 +510,17 @@ def _walk_and_compare(schema, pool, grid, seed, steps=14):
 
         try:
             write(op, raw)
-        except ValueError:
+        except AdmissionRejected:
             g_session.rollback()
-            continue        # graph rejected (e.g. userset cycle): keep all backends in sync by skipping
+            # graph refused (e.g. a userset cycle). The op is NOT silently dropped: both
+            # set engines must refuse it too (TK110 -- before 2026-10-13 a graph-only
+            # over-reject just shrank the compared store), and nothing lands anywhere.
+            for se, s in sets:
+                with pytest.raises(AdmissionRejected):
+                    (se.add_tuple if op == 'add' else se.remove_tuple)(*raw)
+                s.rollback()
+            refused.append((op, raw))
+            continue
         for se, s in sets:
             (se.add_tuple if op == 'add' else se.remove_tuple)(*raw)
             s.commit()
@@ -518,6 +540,15 @@ def _walk_and_compare(schema, pool, grid, seed, steps=14):
                     pytest.fail(f'set/oracle mismatch seed={seed} q={q} set={got_s} '
                                 f'oracle={expected}')
 
+    # ANTI-VACUITY (TK110). A walk whose ops are all refused compares an empty store on
+    # every step and passes. Floor: at most ONE refused op per walk. MEASURED 2026-10-13
+    # (Random(seed) is deterministic): boolean_wildcards seeds 0/1/2 accepted 13/14 (one
+    # refusal, refused by all three backends), 14/14, 14/14; every demorgans
+    # fixture x seeds 0/1 accepted 10/10. The worst case sits ON the floor, so a SHARED
+    # over-reject (the refusal-parity check above cannot see one: every backend agrees)
+    # of two or more ops goes red here.
+    assert len(history) >= steps - 1, (
+        f'seed={seed}: only {len(history)}/{steps} ops accepted; refused={refused}')
     proc.audit_fixpoint()
     g_session.close()
     for _, s in sets:

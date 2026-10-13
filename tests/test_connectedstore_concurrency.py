@@ -33,6 +33,7 @@ from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import Session, SQLModel, create_engine
 
+from zanzibar.schema import AdmissionRejected
 from zanzibar.connectedstore import ConnectedStore
 from zanzibar.graphindex.invariants import snapshot_rows
 from tests.dbengine import rdbms_dsn, shared_engine
@@ -73,14 +74,15 @@ sqlite_only_pinned_snapshot = pytest.mark.skipif(
 
 
 def _write_retry(cs, op, raw, attempts=300):
-    """SQLITE_BUSY and shared-node IntegrityErrors are safe to retry; a ValueError
-    is a genuine rejection (validity), not contention."""
+    """SQLITE_BUSY and shared-node IntegrityErrors are safe to retry; an AdmissionRejected
+    is a genuine rejection (validity), not contention. Any other ValueError is a bug
+    and propagates (narrowed from ValueError by TK110, 2026-10-13)."""
     fn = cs.add_tuple if op == 'add' else cs.remove_tuple
     for _ in range(attempts):
         try:
             fn(*raw)
             return True
-        except ValueError:
+        except AdmissionRejected:
             return False
         except (OperationalError, IntegrityError):
             # ConnectedStore already rolled back + rebuilt its evaluator
