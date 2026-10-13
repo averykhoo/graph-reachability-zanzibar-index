@@ -28,8 +28,8 @@ number INTO it over restating it.
 | quantity | value |
 |---|---|
 | `formal/conformance/` collected | **1093** |
-| `tests/` collected | **2283** |
-| whole-repo suite | **3376** |
+| `tests/` collected | **2342** |
+| whole-repo suite | **3435** |
 | differential conformance tests | **1010** across **17** files |
 | gate-tooling conformance tests | **83** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **715** |
@@ -39,7 +39,7 @@ number INTO it over restating it.
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 27 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1093 (=135+958), `MIN_TESTS_ALL`=1749, `EXPECTED_MIN_AUDITS`=460 |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1093 (=135+958), `MIN_TESTS_ALL`=2342, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
 Driven fresh over all **25** `GRAPH_FRAGMENT` corpora through the real graph
@@ -723,7 +723,7 @@ spec-side, where the set engine is proved to compute `sem` at full scope (T1).
 audit found this section ranking work [`HANDOFF.md`](../HANDOFF.md) did not list at all —
 the board's charter claims to rank *every* open item, so the omission made that charter
 false): (c)(i) → `P5` (DONE 2026-09-23), on the leg-7 chain `P3`/`P4`/`P14`; (c)(ii) → `P15`, its
-remove-guard half → `P9`; (d)'s suspected under-claim → `AW-1`; (e) → `P16`; (g) → `P19`;
+remove-guard half → `P9`; (d)'s scope wording → `AW-1` (DONE 2026-10-13); (e) → `P16`; (g) → `P19`;
 (h) → `P17`; (i) → `P18`; (j) → `SD-1`. The board's `pri` column is what *ranks* them; the
 descending value-per-effort argument below is the reasoning behind that ranking, and the
 two must not be allowed to disagree.
@@ -762,11 +762,21 @@ scope: the `remove` constructor now lives on `ReachedByW3d2`/`C`/`E`, so T2a
 — cover retraction of a tuple that is in the store (`t ∈ T`) from a drained prior
 state (`cascadeKeys = []`), with the PRE-remove store's `StoreValidRules` /
 `BareStarStore` / `TtuStarFree` / `htermT` disciplines carried on the guard
-(faithful to `TupleSource.remove`, which only retracts validly-admitted tuples;
-these are exactly the `W4Fragment` carries `graph_correct` already assumes). So
-the Lean model IS now a post-remove reference under that precondition — the honest
-claim is "correct after removing a VALIDLY-STORED tuple from a drained state,"
-never more. The Exec driver / zcli graph mode now DRIVES removes end-to-end too
+(faithful to `TupleSource.remove`, which only retracts validly-admitted tuples).
+The last three ARE `W4Fragment` carries (`bareStar` / `ttuStarFree` / `term`), but the
+first is NOT the admission `graph_correct` assumes: the guard takes the plain
+`RulesSound.lean::StoreValidRules`, while `FullScope.lean::GraphAdmission.storeValid` is
+the widened `StoreValidRulesD`. Inside `W4Fragment` the plain form is strictly STRONGER
+(`CascadeStrataSettle.lean::storeValidRulesD_of_storeValidRules_directArmsBare` gives ⇒;
+`FullScope.lean::W4WitnessDirect.outside_old_admission` refutes ⇐), and because
+`W4Fragment.noUnionDirects` empties `exprDirects` on every derived def, it forbids ANY
+stored tuple on a derived key — which is exactly why the guard fail-closes on
+`direct_arm_exclusion` (`P9` owns widening it to `StoreValidRulesD`; re-read this
+sentence when it lands). So the Lean model IS now a post-remove reference under that
+precondition — the honest claim is "correct after removing a VALIDLY-STORED tuple from
+a drained state whose store holds no tuple on a derived key," never more (re-derived
+from the constructor's hypotheses 2026-10-13, `AW-1`: the wording had over-claimed
+parity with `graph_correct`'s admission, not under-claimed). The Exec driver / zcli graph mode now DRIVES removes end-to-end too
 (2026-07-19, `5a35ec3`): `graphRunOps` runs one runtime-gated `remove` chain leg
 (`removeGateB`, fail-closed) per op, zcli graph/graph-state modes take an optional
 `"ops"` add/remove stream, and `test_conformance_remove_graph.py` differential-gates
@@ -778,16 +788,6 @@ fail-closes there (§1's remove row, §3 item 3)**. The guard's
 validly-stored scope decision (it strengthens an audited inductive) was reviewed
 and **APPROVED by Avery (2026-07-19)** as the honest, faithful framing — no longer
 an open flag;
-
-⚠ **This item's scope wording is suspected to UNDER-claim (open, board row `AW-1`, small).**
-It was written 2026-07-19f and has not been re-read since the remove leg closed, so the
-"validly-stored + drained-prior" hedging may now be narrower than what is actually proved.
-**Plausibly subsumed by the `ZT-P3-4` / `ZT-P3-5` sweeps — never confirmed either way.**
-**Completion criterion:** re-derive the claim from the current `remove` constructor's
-hypotheses and either tighten this paragraph or record that it was already correct. Do
-**not** widen the wording without re-reading the guard, since §1's remove row and §3
-item 3 depend on it. Note `_REMOVE_EXCLUDED` (board row `P9`) is a *different*, still-live
-gap.
 
 (e) widening the enumeration/state bounds — **partly DONE**: the enumeration now
 runs six shapes (a userset/wildcard shape and a TTU shape added), K = 4 on four of
