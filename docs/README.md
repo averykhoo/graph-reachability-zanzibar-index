@@ -167,7 +167,7 @@ entry names it on an `asked:` line (§7 step 1). Filing rules and the `asks` vie
 | badge | meaning | budget |
 |---|---|---|
 | 🟢 / 🔴 | gate state — banner only | 1 |
-| ⚠ | a trap: acting without reading this line produces WRONG work | at most 10 in `HANDOFF.md` (`handoff_lint.py::WARN_BUDGET`) |
+| ⚠ | a trap: acting without reading this line produces WRONG work | at most `handoff_lint.py::WARN_BUDGET` in `HANDOFF.md`, counting BOTH spellings — the glyph and `(!)`, which is what `board` folds it to; a badge inside code (a backticked span, a fence) is free (`TK86`) |
 | 🧭 | points at an open `ASK-*` row — the ROW carries the question, the line carries the id | at most 5 (one per `NEXT` ASK) |
 
 ⚠ **The compass badge DRIFTED, and the cause is this section's own heading.** It read
@@ -273,8 +273,11 @@ trace is how the last accretion started.
    session, no exceptions. Ledger first, so the banner has a key to cite. The entry
    carries two literal lines, and `handoff_lint.py::check_session_receipt` reddens
    `lean` when the newest entry lacks either: the output of `python scripts/task.py
-   lint`, and `read: board only` or `read: board + note` — an honest report of whether
-   the board query was the whole session-start read, or the note was needed as well.
+   lint`, and `read: board only`, `read: board + note` or `read: show <id>[, <id>]` — an
+   honest report of where the session ENTERED: the board query alone, the board plus the
+   note, or a named row's `task.py show` because the user assigned the work (`TK98`; each
+   id must be one the tree knows). There is no free-text or continuation token: a
+   continuation entered by one of these three, and writes that one.
    **A third line is conditional** (`TK96`, 2026-09-27): while any open `ASK-*` row sits
    at `NEXT` or `NOW`, `asked: ASK-<n>[, ASK-<m>]` naming every one of them — the receipt
    that the session raised each with the user in chat. `asked: none` is red while an ask
@@ -287,8 +290,11 @@ trace is how the last accretion started.
    `task.py::BANNER_MAX_WIDTH` characters, only glyphs `ASCII_FOLD` maps (§4); check 12
    enforces each of these. Rewrite old lines, never append a layer to one (§6). Then rewrite
    the rest of the note: `## Still owed` (verbatim skipped actions, or "Nothing") and the
-   next-session pointer. The whole file stays under `handoff_lint.py::MAX_LINES` and
-   `MAX_BYTES`.
+   next-session pointer. Every Still-owed bullet carries the writing session's key, and
+   `handoff_lint.py::check_still_owed_fresh` (`TK97`) reddens one whose OLDEST key is
+   older than the previous ledger entry: it survived a handoff, so it is backlog — do it
+   or file it as a row. Re-stamping does not reset its age. The whole file stays under
+   `handoff_lint.py::MAX_LINES` and `MAX_BYTES`.
 3. **Edit the tree, by op, in the same session.** `promote <id> <PRI>` for every re-rank;
    `touch <id>` for every task you progressed and did not otherwise write (never edit
    `moved` by hand — it is what `board` reads to warn about neglect); `close <id> -m`

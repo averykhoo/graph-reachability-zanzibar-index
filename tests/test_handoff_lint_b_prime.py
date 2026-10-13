@@ -246,6 +246,10 @@ READ_SHAPES = (
     "`read: board only`",
     "**read: board + note.**",
     "read: board + note (the board query first, then `HANDOFF.md`, the one-hop note)",
+    # TK98 (2026-10-13): the session entered at a named row's `task.py show`.
+    "read: show TK57",
+    "`read: show TK128, TK129`",
+    "read: show HS-5 (the user named the work in chat)",
 )
 
 
@@ -300,6 +304,66 @@ def test_receipt_is_red_when_either_line_is_missing_from_the_newest_entry(tmp_pa
     assert len(out) == 1 and "has no `read:" in out[0], out
 
 
+READ_SHOW_NEAR_MISSES = (
+    "read: show",                 # no id: the token is closed, not a free-text escape
+    "read: show <id>",            # the placeholder pasted verbatim
+    "read: show everything",
+    "read: show tk57",            # ids are upper-case in the tree
+    "read: show TK57b",           # not an id shape the tree uses
+    "read: shown TK57",
+    "read: none",                 # considered and NOT added (TK98 decision)
+    "read: same session as 2026-10-07d",  # no continuation token (TK98 decision)
+)
+
+
+@pytest.mark.parametrize("line", READ_SHOW_NEAR_MISSES)
+def test_read_show_token_is_closed(tmp_path, monkeypatch, line):
+    """`TK98` (2026-10-13). The third token widened what passes by exactly one shape:
+    `show` plus a list of row ids. Everything else that LOOKS like it stays red, so an
+    entry with no true token is still red (the row's sabotage requirement).
+
+    SABOTAGE 2026-10-13: `_READ_ID` widened to `\\S+` (any word after `show`) -- observed::
+
+        FAILED tests/test_handoff_lint_b_prime.py::test_read_show_token_is_closed[read: show <id>]
+        FAILED tests/test_handoff_lint_b_prime.py::test_read_show_token_is_closed[read: show everything]
+        FAILED tests/test_handoff_lint_b_prime.py::test_read_show_token_is_closed[read: show tk57]
+        FAILED tests/test_handoff_lint_b_prime.py::test_read_show_token_is_closed[read: show TK57b]
+        FAILED tests/test_handoff_lint_b_prime.py::test_read_show_names_a_row_the_tree_knows
+
+    And the other direction, the `show` alternative deleted from `_READ_RECEIPT`: every
+    `read: show` shape in READ_SHAPES goes red in
+    `test_receipt_accepts_every_shape_the_ledger_actually_uses` (18 cases, 19 failed with
+    the tree test). Run on a temp-dir COPY after a clean baseline.
+    """
+    monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
+    _write_ledger(tmp_path, "task lint: clean (12 checks, 162 task file(s) parsed)\n" + line,
+                  older_body="read: board only")
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "has no `read:" in out[0], out
+    assert "show <id>[, <id>]" in out[0], out
+
+
+def test_read_show_names_a_row_the_tree_knows(tmp_path, monkeypatch):
+    """A typo guard, the `asked:` receipt's twin: an open or a CLOSED row is accepted (a
+    session may close the row it entered at), an id the tree does not know is red.
+
+    SABOTAGE 2026-10-13: the unknown-id block disabled (`unknown_shown = []`) -- observed::
+
+        FAILED tests/test_handoff_lint_b_prime.py::test_read_show_names_a_row_the_tree_knows
+    """
+    monkeypatch.setattr(handoff_lint, "REPO", str(tmp_path))
+    _write_tasks(tmp_path, {"TK1": "NOW", "TK2": "LATER"})
+    _write_closed(tmp_path, "TK7", "LATER")
+    lint = "task lint: clean (13 checks, 3 task file(s) parsed)\n"
+
+    _write_ledger(tmp_path, lint + "read: show TK2, TK7")
+    assert _run(handoff_lint.check_session_receipt) == []
+
+    _write_ledger(tmp_path, lint + "read: show TK2, TK9")
+    out = _run(handoff_lint.check_session_receipt)
+    assert len(out) == 1 and "says `read: show TK9`" in out[0], out
+
+
 def test_receipt_refuses_a_ledger_with_no_entries(tmp_path, monkeypatch):
     """Non-vacuity: a ledger the entry regex cannot find a heading in is a broken
     instrument, not a clean one."""
@@ -330,7 +394,8 @@ def test_the_two_checks_are_in_the_list_and_nothing_was_inserted():
     assert names[1] == "check_priority_capacities", names
     assert names[10] == "check_session_receipt", names
     assert names[11] == "check_restated_counts", names
-    assert len(names) == 12, names
+    assert names[12] == "check_still_owed_fresh", names  # TK97, appended 2026-10-13
+    assert len(names) == 13, names
 
 
 # --- check_session_receipt: the conditional `asked:` receipt (TK96, 2026-09-27) ----------

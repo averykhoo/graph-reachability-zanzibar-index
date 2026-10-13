@@ -124,6 +124,12 @@ contributions, and a ten-mutation sweep of its own test module all live in
 ``tests/test_handoff_lint_count_guard.py``, where they RUN. Everything above this
 paragraph is a transcript that nothing re-executes -- accurate on its date, and unable to
 notice the day it stops being true.
+
+The 2026-10-13 batch follows that model: ``check_still_owed_fresh`` (``TK97``) is pinned by
+``tests/test_handoff_lint_still_owed.py``, the hardened ``check_warn_budget`` (``TK86``) by
+``tests/test_handoff_lint_warn_budget.py``, and the ``read: show <id>`` receipt token
+(``TK98``) by ``tests/test_handoff_lint_b_prime.py``; each module's docstring carries the
+literal output of the sabotage that certified it.
 """
 
 import io
@@ -575,15 +581,55 @@ def check_no_stars(fail):
                  % (rel, len(hits), hits[:8]))
 
 
+# The badge's two spellings (`TK86`, decided 2026-10-13). `task.py board` prints the note
+# through `task.py::ASCII_FOLD`, which folds U+26A0 to `(!)`, so at the read surface the two
+# ARE the same badge and a reader cannot tell which one the author typed. Counting only the
+# glyph made the budget satisfiable by changing a character (observed 2026-09-19d: a line
+# with the glyph went RED at 11, the same line with `(!)` was green). Copied, not imported,
+# for the TASKS_NON_TASK_MD reason.
+WARN_SPELLINGS = (WARN, '(!)')
+_CODE_SPAN_BADGE = re.compile(r'`[^`\n]*`')
+
+
+def _badge_count(lines):
+    """Trap badges in ``lines``, either spelling, outside code.
+
+    The ONE escape is code: a fenced block (``_is_fence``) or a backticked span. It exists
+    because the 2026-09-19d filing session could not NAME the badge in a pointer without
+    spending budget (``11 trap badges, budget 10`` on a line whose only new occurrence was
+    inside backticks), which pushed authors toward the ASCII spelling -- the evasion this
+    count now closes. Double quotes are deliberately NOT an escape (unlike
+    ``_COUNT_QUOTED``): a quoted badge still reads as a badge in the folded banner. The
+    residual evasion -- wrapping a real trap's badge in backticks -- is accepted and
+    visible: it renders as code, not as a badge.
+    """
+    n, in_fence = 0, False
+    for ln in lines:
+        if _is_fence(ln):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        bare = _CODE_SPAN_BADGE.sub('', ln)
+        n += sum(bare.count(s) for s in WARN_SPELLINGS)
+    return n
+
+
 def check_warn_budget(fail):
+    """At most ``WARN_BUDGET`` trap badges in the root note, counting BOTH spellings.
+
+    Pinned in both directions by ``tests/test_handoff_lint_warn_budget.py`` (`TK86`): an
+    ASCII-spelled overflow is RED, a quoted badge is free.
+    """
     lines = _read(ROOT_BOARD)
     if lines is None:
         return
-    n = sum(ln.count(WARN) for ln in lines)
+    n = _badge_count(lines)
     if n > WARN_BUDGET:
-        fail('%s: %d trap badges, budget %d. Overflow is a DEFINED move, not a judgement '
-             'call: demote the trap to its item\'s scope-doc "Traps" section and leave the '
-             'pointer -- or, if it is durable and repo-wide, put it in CLAUDE.md.'
+        fail('%s: %d trap badges (U+26A0 or `(!)`, outside code), budget %d. Overflow is a '
+             'DEFINED move, not a judgement call: demote the trap to its item\'s "Traps" '
+             'section and leave the pointer -- or, if it is durable and repo-wide, put it '
+             'in CLAUDE.md. Re-spelling the badge does not help: both spellings count.'
              % (ROOT_BOARD, n, WARN_BUDGET))
 
 
@@ -941,12 +987,27 @@ def check_doc_links(fail):
 # ledger and none of them wrong: a bare line, a backticked one, `lint: <backticked>`, and
 # `` `python scripts/task.py lint` -> <backticked> ``. A check that rejected three of the
 # four would have been commented out by the second session it bit.
+#
+# THE THIRD READ TOKEN, `read: show <id>[, <id>]` (`TK98`, decided 2026-10-13). What the
+# receipt MEASURES is the session's ENTRY POINT: which bounded surface it started from --
+# the board query alone, the board plus the note, or a named row's `task.py show` (a
+# user-assigned task overrides the ranking, CLAUDE.md "Start here", so that entry is a
+# sanctioned one). With two tokens that third, legitimate entry had no true answer: 4 of the
+# 10 entries from 2026-10-06 to 2026-10-12c wrote the nearest FALSE token and caveated it
+# (2026-10-06, -07, -07d, -08; census in the TK98 row). The token stays CLOSED: `show` must
+# be followed by one comma-separated list of row ids, each known to the tree (open, closed
+# or retired -- a session may close the row it entered at), so `read: show`, `read: show
+# everything` and `read: show <unknown id>` stay red. NO continuation token (`same session as
+# ...`): a continuation started from one of these three surfaces too, and writes that one.
 READ_VOCAB = ('board only', 'board + note')
+READ_SHOW_TOKEN = 'show <id>[, <id>]'
+_READ_ID = r'(?:ZT-[A-Z0-9]+(?:-[A-Z0-9]+)*|[A-Z]{1,3}\d+(?:-\d+)?|[A-Z]{1,3}-\d+)'
 _LINT_RECEIPT = re.compile(
     r'task lint: (?:clean \(\d+ checks?, \d+ task file\(s\) parsed(?:, \d+ warning\(s\))?\)'
     r'|\d+ violation\(s\))')
-_READ_RECEIPT = re.compile(r'(?:^|\W)read: (%s)(?:\W|$)'
-                           % '|'.join(re.escape(v) for v in READ_VOCAB))
+_READ_RECEIPT = re.compile(r'(?:^|\W)read: (%s|show %s(?:\s*,\s*%s)*(?![\w-]))(?:\W|$)'
+                           % ('|'.join(re.escape(v) for v in READ_VOCAB), _READ_ID, _READ_ID))
+_READ_SHOW_IDS = re.compile(r'^show (.*)$')
 
 # THE THIRD RECEIPT, CONDITIONAL (`TK96`, 2026-09-27). An `ASK-<n>` row is a question only
 # the USER can answer; at NEXT it is a standing nag, and the rule decided with the user on
@@ -1025,7 +1086,8 @@ def _newest_entry_lines(rel, pattern):
 
 def check_session_receipt(fail):
     """The newest root-ledger entry carries both receipts: a `task lint:` result line
-    and a `read: <vocab>` line.
+    and a `read: <vocab>` line (`board only` | `board + note` | `show <id>[, <id>]`, the
+    last added by `TK98` with every named id checked against the tree).
 
     Why it is mechanical rather than a rule in CLAUDE.md: the rule IS in CLAUDE.md, and
     the C1 tally (trial week two) found 2 of 35 entries with neither line and one with
@@ -1060,11 +1122,24 @@ def check_session_receipt(fail):
              'output of `python scripts/task.py lint` -- it is the proof the tree was '
              'linted before the commit (CLAUDE.md, the receipt rule).'
              % (ROOT_LEDGER, head[:80]))
-    if not any(_READ_RECEIPT.search(ln) for ln in norm):
+    reads = [m.group(1) for ln in norm for m in _READ_RECEIPT.finditer(ln)]
+    if not reads:
         fail('%s: the newest entry (%s) has no `read: %s` line. It is the honest '
-             'self-report of what was actually read to start work: whether the board '
-             'query was enough, or the one-hop note was needed as well.'
-             % (ROOT_LEDGER, head[:80], ' | '.join(READ_VOCAB)))
+             'self-report of where the session entered: the board query alone, the board '
+             'plus the one-hop note, or a named row\'s `task.py show` (TK98).'
+             % (ROOT_LEDGER, head[:80], ' | '.join(READ_VOCAB + (READ_SHOW_TOKEN,))))
+    shown = set()
+    for r in reads:
+        m = _READ_SHOW_IDS.match(r)
+        if m:
+            shown.update(re.findall(_READ_ID, m.group(1)))
+    tree = _tree_ids()
+    unknown_shown = sorted(shown - tree) if (shown and tree is not None) else []
+    if unknown_shown:
+        fail('%s: the newest entry (%s) says `read: show %s`, which the task tree does not '
+             'know (open, closed or retired). The `show` receipt names the row the session '
+             'entered at; a row nobody filed is a typo or a fiction -- fix the id.'
+             % (ROOT_LEDGER, head[:80], ', '.join(unknown_shown)))
 
     next_asks = _tree_next_asks()
     if next_asks is None:
@@ -1438,6 +1513,116 @@ def check_restated_counts(fail):
              'the floor.' % (scanned, MIN_COUNT_SCANNED))
 
 
+# --- Still-owed freshness (check_still_owed_fresh, added 2026-10-13, task ``TK97``) ------
+# NOT "check 15": that number belongs to `task.py`'s numbered lint series. This file's
+# checks are unnumbered and cited by NAME (see the comment in ``CHECKS``).
+_STILL_OWED_HEAD = re.compile(r'^## Still owed\s*$')
+_SESSION_KEY = re.compile(r'(?<![\w-])(\d{4}-\d\d-\d\d[a-z]?)(?![\w-])')
+_BULLET = re.compile(r'^[-*] (.*)$')
+_NOTHING = re.compile(r'^nothing\.?$', re.I)
+STILL_OWED_SESSIONS = 2   # the current ledger entry and the one before it
+
+
+def _still_owed_bullets(lines):
+    """[(lineno, text)] for each top-level bullet of ``## Still owed``, or None if the
+    section is absent. A bullet's text includes its indented continuation lines; a blank
+    line, a new bullet or unindented prose ends it. Fenced lines are skipped, and a fenced
+    ``## `` line does not end the section (CommonMark, as ``_is_fence``)."""
+    start = None
+    for i, ln in enumerate(lines):
+        if _STILL_OWED_HEAD.match(ln):
+            start = i
+            break
+    if start is None:
+        return None
+    out, cur, in_fence = [], None, False
+    for i in range(start + 1, len(lines)):
+        ln = lines[i]
+        if _is_fence(ln):
+            in_fence = not in_fence
+            cur = None
+            continue
+        if in_fence:
+            continue
+        if ln.startswith('## '):
+            break
+        m = _BULLET.match(ln)
+        if m:
+            cur = [i + 1, m.group(1)]
+            out.append(cur)
+        elif cur is not None and ln[:1] in (' ', '\t') and ln.strip():
+            cur[1] += ' ' + ln.strip()
+        else:
+            cur = None
+    return [(n, t) for n, t in out]
+
+
+def check_still_owed_fresh(fail):
+    """Every ``## Still owed`` bullet in the root note is stamped with a session key, and
+    its OLDEST key is no older than the previous root-ledger entry.
+
+    THE DEFECT (`TK97`). ``## Still owed`` is a CONSUME section -- session N writes it for
+    N+1, which executes it and deletes it, a work queue of depth one (spec
+    docs/tree-sole-authority-spec-2026-08-29.md sec (ii); docs/README.md sec 7) -- and it was
+    the one section of the note with no checker. Censused 2026-09-22: five bullets, three
+    with no key, the oldest fifteen days, all byte-identical across two consecutive
+    sessions. Again 2026-10-13: one bullet stamped 2026-10-05 had survived ten sessions,
+    and had been RE-STAMPED (2026-10-06) instead of acted on.
+
+    THE BOUND IS IN SESSIONS, NOT DAYS (decided 2026-10-13). The stamp must be one of the
+    newest ``STILL_OWED_SESSIONS`` ledger keys or newer: the writing session and the one
+    after it, which must consume it. A day count would redden a bullet over a quiet
+    weekend and let it survive a busy day of five sessions; the ledger is the clock this
+    rule is about. Keys compare as strings (``2026-10-12`` < ``2026-10-12b``), which is the
+    ledger's own order.
+
+    RE-STAMPING DOES NOT RESET AGE. A bullet's age is its OLDEST key, so ``(2026-10-05,
+    re-stamped 2026-10-06)`` is as old as 2026-10-05. A side effect, accepted: a bullet
+    that CITES an older entry reads as old. A baton is "do X", and anything that needs
+    history to explain belongs on a task row -- which is the remedy anyway.
+
+    A missing section is RED (the spec names it; deleting it must not be the way to pass),
+    and a bullet with NO key is RED (3 of the 5 censused bullets were in that state, and a
+    check that only judged keys it could parse would pass them). A bare ``- Nothing`` is
+    allowed: docs/README.md sec 7 prescribes "Nothing" for an empty section.
+    Pinned by ``tests/test_handoff_lint_still_owed.py``.
+    """
+    lines = _read(ROOT_BOARD)
+    if lines is None:
+        return
+    bullets = _still_owed_bullets(lines)
+    if bullets is None:
+        fail('%s: no `## Still owed` section. The one-hop note has three sections (spec '
+             'docs/tree-sole-authority-spec-2026-08-29.md sec (ii)); write "Nothing" under '
+             'the heading when nothing is owed.' % ROOT_BOARD)
+        return
+    bullets = [(n, t) for n, t in bullets if not _NOTHING.match(t.strip())]
+    if not bullets:
+        return
+    keys = sorted(set(_entry_keys(ROOT_LEDGER, _ROOT_ENTRY) or []), reverse=True)
+    if not keys:
+        fail('%s: %d `## Still owed` bullet(s), but %s has no `## <session-key> ` entry to '
+             'age them against -- the ledger or its entry regex is broken.'
+             % (ROOT_BOARD, len(bullets), ROOT_LEDGER))
+        return
+    floor = keys[:STILL_OWED_SESSIONS][-1]
+    for n, text in bullets:
+        stamps = _SESSION_KEY.findall(text)
+        if not stamps:
+            fail('%s:%d: a `## Still owed` bullet carries no session key (%r). Stamp it '
+                 'with the key of the session that wrote it (docs/README.md sec 7), so the '
+                 'next session can tell a baton from backlog.'
+                 % (ROOT_BOARD, n, text[:70]))
+            continue
+        oldest = min(stamps)
+        if oldest < floor:
+            fail('%s:%d: a `## Still owed` bullet is stamped %s, older than %s (the '
+                 'previous ledger entry): it has survived a handoff, so it is backlog, not '
+                 'a baton. Do it, or file it as a task row and delete the bullet. '
+                 'Re-stamping does not reset its age -- the oldest key on the bullet counts.'
+                 % (ROOT_BOARD, n, oldest, floor))
+
+
 CHECKS = (
     check_ceilings,
     check_priority_capacities,
@@ -1454,6 +1639,9 @@ CHECKS = (
     check_session_receipt,
     # Appended 2026-09-08 (task ``TK58``).
     check_restated_counts,
+    # Appended 2026-10-13 (task ``TK97``). Cited by name, never as "check 15" -- that
+    # number belongs to task.py's series.
+    check_still_owed_fresh,
 )
 
 
