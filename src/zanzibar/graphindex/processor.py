@@ -1662,7 +1662,33 @@ class DeltaProcessor:
 
     def audit_fixpoint(self) -> None:
         """I9: reconcile of every live derived key produces zero changes. On a hit,
-        ``backfill()`` is the recovery path (§5.5)."""
+        ``backfill()`` is the recovery path (§5.5).
+
+        Contract (TK85, 2026-10-13) -- this is a REPAIRING MUTATOR, not a read-only
+        check. It walks strata in topo order and calls ``reconcile`` on each live
+        derived key; on the FIRST key whose reconcile changed anything it has ALREADY
+        WRITTEN that key's repair, then raises ``InvariantViolation``. Every later key
+        is left untouched (neither checked nor repaired), and ``_bumped`` is cleared
+        only on the clean path. So:
+
+          * for DIAGNOSIS, call it inside a transaction the caller ROLLS BACK -- a
+            raise then means "at least one key was stale", nothing more;
+          * for REPAIR, call ``backfill()`` (reconciles every live derived key, no
+            raise) and COMMIT; committing after an ``audit_fixpoint`` raise keeps
+            the first stale key's repair and leaves every later stale key stale;
+          * never swallow the exception: that silently repairs the first stale key
+            and reports nothing.
+
+        Cost is O(live derived keys in the store), unbounded by the size of any write,
+        so it is never a write-path default and is deliberately absent from the
+        paranoia ladder. Execution-side missed reconciles are caught per cascade by
+        the ``'fixpoint'`` tier (``_check_cascade_fixpoint``); a key that was never
+        SCHEDULED is outside that tier by construction, and this audit is the only
+        detector for that class. Production callers: none -- it is reached from
+        ``tests/`` and, on the composed system, via the public ``ConnectedStore.proc``
+        attribute (``None`` when the schema has no boolean relation). The whole-store
+        repair ``backfill()`` does have a production caller, ``build_index(bulk=False)``.
+        """
         for stratum in self.compiled.strata:
             for (object_type, rel) in stratum:
                 for obj_name in sorted(self._live_keys_of(object_type, rel)):
