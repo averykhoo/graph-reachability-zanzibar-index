@@ -161,6 +161,9 @@ Do not re-walk these without new evidence — the alternatives were considered.
   > exist yet, so even a key-translation bridge is impossible in principle, not merely
   > expensive. `excluded_node_ids` (the derived `neg` channel) has no set-engine
   > counterpart either. The prerequisite in reason 1 is unchanged and still unbuilt.
+  > *(2026-10-13, TK139: that `neg` clause was wrong -- the set engine's `expand.neg`
+  > is the counterpart, and `SetEngine.lookup_reverse` now fills `excluded_node_ids`
+  > from it; it is still in the set engine's own id domain, so reason 1 stands.)*
   > Untokened calls are byte-identical to before. **Refusing a demand you cannot meet
   > is not the same as not offering one.**
   1. *Result domain.* `check` returns a bool, so the freshness fallback (graph when
@@ -203,6 +206,17 @@ Do not re-walk these without new evidence — the alternatives were considered.
   globally monotonic across stores** even though scoping is per-store, which is why
   `lag()` counts rows instead of subtracting ids — a sharing design that assumes
   per-store id density breaks on exactly that.
+* **One write path per store id (TK140, 2026-10-13d).** The `SchemaRecord` row is the
+  governance marker: a `SetEngine` on an id that has one is log-governed (its direct
+  writes raise `UnloggedWriteRefused`; reads stay legal), probed at construction and once
+  per transaction before a standalone write. It was not made a construction-time refusal,
+  because reads through a second engine are legitimate. And a `ConnectedStore` will not be
+  born (create its cursor) over `RelationTuple` rows the log does not account for
+  (`UnloggedTuplesPresent`); the adoption path is `save_schema` + `build_index`. The
+  concurrent case (a standalone write racing an uncommitted bootstrap under READ
+  COMMITTED) is a documented residual. A standalone engine has no lock surface, and
+  giving it one was not worth it for two write paths misused on one id.
+  `docs/tk140-one-write-path-per-store-2026-10-13.md`.
 
 ## Reads are lenient — a cross-backend contract, not a per-backend default
 

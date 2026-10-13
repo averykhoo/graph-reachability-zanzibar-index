@@ -91,12 +91,25 @@ object's relation?) return a `LookupResult` with three fields:
 * `excluded_node_ids`: subjects a marker would cover but who are refused (for example by
   `but not banned`). Subtract them from the marker yourself: "every user except mallory".
 
+A standalone `zanzibar.setengine.SetEngine` returns the same three fields, in its own id
+space: markers are `(type, predicate)` pairs, and an id is an in-memory handle that
+`engine.interner.key(id)` turns into `(type, name, predicate)`. Translate ids before they
+leave the process: `engine.result_keys(res)` for `node_ids` and `engine.excluded_keys(res)`
+for `excluded_node_ids`. Send both with the markers, and subtract the exclusions exactly as
+above; markers without their exclusions grant too much.
+
 ## Things to know before you use it
 
 * **Tables.** The library declares its tables on SQLModel's default metadata, all named
   `zanzibar_*`, so `SQLModel.metadata.create_all(engine)` creates them next to your own.
   A table of yours that reuses one of those names is a loud `InvalidRequestError`,
   whichever is declared first; the two are never silently merged.
+* **One write path per store id.** Write a `ConnectedStore`'s store through the
+  `ConnectedStore` only. A standalone `SetEngine` opened on the same id can read it, but its
+  `add_tuple` / `remove_tuple` raise `UnloggedWriteRefused`. A `ConnectedStore` will not
+  take over an id that a standalone `SetEngine` already wrote to (`UnloggedTuplesPresent`).
+  To adopt such a store, call `save_schema(session, id, schema)`, commit, then
+  `build_index(session, id)`, then open `ConnectedStore(session, id)`.
 * **Databases.** SQLite and PostgreSQL only. On PostgreSQL the session must use
   `READ COMMITTED`; any other isolation level is refused at construction.
 * **Runtime checks.** `ConnectedStore(..., paranoia="residue")` or the

@@ -104,7 +104,8 @@ class LookupSurfaceMachine(RuleBasedStateMachine):
     def surfaces_match_oracle(self):
         # Runs after initialize and after every rule (so end-of-sequence too):
         # forward lookup + lookup_reverse (graph) and forward lookup + expand +
-        # lookup_reverse (both set engines), each exact/one-sided per the fixed gate.
+        # lookup_reverse (both set engines), each exact per the gate (S3 two-sided
+        # since TK139, 2026-10-13).
         if hasattr(self, 'gate'):
             self.gate.assert_surfaces(context='hypothesis walk')
 

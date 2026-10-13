@@ -469,7 +469,7 @@ src/zanzibar/setengine/engine.py::SetEngine.expand.direct_expand	py:function	abe
 src/zanzibar/setengine/engine.py::SetEngine.expand.do	py:function	03a898e274d2c71b
 src/zanzibar/setengine/engine.py::SetEngine.expand.do_expr	py:function	6276cfba3a28c164
 src/zanzibar/setengine/engine.py::SetEngine.expand.ttu_expand	py:function	99fb80048fa7c797
-src/zanzibar/setengine/engine.py::SetEngine.lookup_reverse	py:function	b2c221457f9d9b26
+src/zanzibar/setengine/engine.py::SetEngine.lookup_reverse	py:function	bdf26f4f0f4427dd
 src/zanzibar/setengine/engine.py::SetEngine.rebuild	py:function	98b7876e0bb960ac
 src/zanzibar/setengine/memberset.py::MemberSet	py:class-shell	7883e05062c41163
 src/zanzibar/setengine/memberset.py::_ext	py:function	6c416ee58c063c80

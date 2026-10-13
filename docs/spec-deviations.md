@@ -2310,6 +2310,13 @@ then flip the xfail):
    answers it True via the from-chain rule, and the graph returns its node).
    Representational, not evaluative.
 
+> **2026-10-13 (TK139 review), refutes one clause above:** "set `lookup_reverse` drops
+> `neg`" is no longer true. Since TK139 `SetEngine.lookup_reverse` carries `expand`'s
+> `neg` as `excluded_node_ids`, and the gate's S3 check is two-sided on it
+> (`tests/test_lookup_oracle.py::_check_set_reverse` asserts `excluded_node_ids ==
+> expand.neg` and oracle exactness of marker minus exclusions). Map:
+> `docs/tk139-lookup-reverse-exclusions-2026-10-13.md`.
+
 ---
 
 ## 2026-07-13 — set-engine lookup completeness (X1 + X3 fixed)
@@ -3893,6 +3900,13 @@ list-users is exactly what a revocation UI reads. `docs/architecture/decision-lo
 "at_least is check-only" entry is revised in place rather than deleted; the
 prerequisite it names (a portable lookup key contract for both backends) is unchanged
 and still unbuilt.
+
+> **2026-10-13 (TK139), refutes one clause above:** "`excluded_node_ids` ... has no
+> set-engine counterpart at all" was wrong. `SetEngine.expand`'s `neg` IS that channel;
+> `SetEngine.lookup_reverse` dropped it (a list-users over-grant found by the 0.0.4
+> install trial) and now fills `excluded_node_ids` from it. The id-domain argument for
+> refusing rather than falling back is unchanged. Map:
+> `docs/tk139-lookup-reverse-exclusions-2026-10-13.md`.
 
 **The closure fan-out cap EXEMPTS removals.** `ZANZIBAR_MAX_CLOSURE_FANOUT` bounds what
 a single ADD may materialise while holding both per-store locks. Applying it to removes

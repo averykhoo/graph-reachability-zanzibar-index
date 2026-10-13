@@ -33,6 +33,62 @@ from here.
 
 ---
 
+## 2026-10-13d — `TK141` start banner landed; `TK139` + `TK140` (the 0.0.4 trial's 3 BROKEN) fixed, unreleased
+
+rows: TK141 (closed), TK139 (closed), TK140 (closed), TK142 (new, NOW)
+
+`task lint: clean (13 checks, 259 task file(s) parsed), 25 warning(s)`
+
+`read: show TK141, TK139, TK140`
+
+`asked: none`
+
+**The user asked to "do task 141, then 139 and 140", via an ultracode workflow in which the
+session only coordinates.** One lead agent per row, in that order, then an independent review
+and a fix lead for its findings. The coordinator read `task.py show` for the three rows and
+`task.py asks` (no open `ASK-*` rows), not the board.
+- `TK141` LANDED: every `verify.sh` phase prints `=== verify.sh: phase '<p>' started HH:MM:SS;
+  last PASSED run took Ns, so expect ~HH:MM:SS ===` from the newest `PASSED` ledger row of
+  that phase. The patch is the one in the row's body, placed after `gate_fact()`, CRLF kept;
+  `lean` was run with it in place, `PASSED` (observed output on the row). Documented in
+  `docs/gate-runbook.md` §4 "The start banner". Trap on the way: a Bash-tool heredoc ate
+  the backslashes in the `awk -F` separator (fixed with `chr(92)`, checked with `cat -A`).
+- `TK139` LANDED: `SetEngine.lookup_reverse` now copies `expand`'s `neg` into
+  `excluded_node_ids`, so both backends render the same `LookupResult` up to id domain. New
+  `SetEngine.excluded_keys` (the portable form of the exclusions). Pins:
+  `tests/test_tk139_lookup_reverse_exclusions.py`; `tests/test_lookup_oracle.py` S3 made
+  two-sided plus `test_tamper_set_reverse_is_caught`. Sabotage red, literal output in the
+  doc. Map: [`docs/tk139-lookup-reverse-exclusions-2026-10-13.md`](../tk139-lookup-reverse-exclusions-2026-10-13.md).
+- `TK140` LANDED: a `SetEngine` on a store id that has a `SchemaRecord` latches
+  `log_governed` (probed at construction and once per transaction before a standalone write),
+  so its writes raise `UnloggedWriteRefused`; reads stay legal. `ConnectedStore` refuses a
+  first open over `RelationTuple` rows the log does not account for, with the new
+  `UnloggedTuplesPresent` (rolls back; the message names the `save_schema` + `build_index`
+  adoption recipe, run first-hand). Both refusals carry REFUSED SHAPE / WHY / INSTEAD
+  blocks. Pins: `tests/test_tk140_one_write_path.py`, sabotages S1-S12 red; the PG leg was
+  run and the server stopped. Residual, documented: concurrent write skew under READ
+  COMMITTED. Map: [`docs/tk140-one-write-path-per-store-2026-10-13.md`](../tk140-one-write-path-per-store-2026-10-13.md).
+- Review fixes (all re-run first-hand by the fix lead): the claim-rot pin for
+  `SetEngine.lookup_reverse` was regenerated after re-reading `CORRESPONDENCE.md` (the claim
+  still holds); the adoption check's three COUNTs became ONE statement
+  (`store.py::_adoption_counts`; the split form gave 1 spurious refusal in 1000 PG rounds);
+  a 2026-07-12 `spec-deviations.md` entry got a dated correction.
+- Filed `TK142` at NOW: every `test_lookup_oracle_gate_*` stays green with the `TK139` fix
+  reverted (`9 passed`), so the broad lookup gates pass under a known regression; only the
+  scripted pins catch it. NOW because closing `TK141` left no NOW row (lint red) and it is
+  on the current goal; `HS-5` stays NEXT.
+- Release surface: CHANGELOG `[Unreleased]` (Added `excluded_keys`; Fixed `TK139`, `TK140`
+  x2) and `PYPI_README.md` updated; version NOT bumped. `doc_counts --generate` ratcheted
+  `MIN_TESTS_ALL`; `--check` is clean on this tree.
+- Not as asked: the `TK139` and `TK140` leads had no Agent tool, so they did their own
+  scouting, fixes and sabotage instead of delegating further.
+- The full gate is run AFTER these records (a dedicated gate agent); nothing is committed
+  by this entry's writer. Ask `python scripts/gate_status.py` for the verdict.
+
+Still owed: Nothing.
+
+---
+
 ## 2026-10-13c — OpenFGA claims audit before the 0.0.4 tag: 2 WRONG + 12 MISLEADING/UNVERIFIABLE corrected
 
 rows: TK137 (new, LATER), TK138 (new, LATER), TK139 (new, NEXT), TK140 (new, NEXT), TK141 (new, NOW), HS-5 (NOW -> NEXT), TK123 (comment)

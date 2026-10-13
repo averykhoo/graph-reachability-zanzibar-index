@@ -11,9 +11,9 @@ labels: []
 source: hand
 source_hash:
 created: 2026-10-13c
-moved: 2026-10-13c
-updated: 2026-10-13c
-closed:
+moved: 2026-10-13d
+updated: 2026-10-13d
+closed: 2026-10-13d
 ---
 
 User request 2026-10-13c: "for all test tiles, can the script print out the start
@@ -77,3 +77,12 @@ row for the same phase, a guess not a timeout; read the top of the newest
 ### 2026-10-13c
 
 Promoted to NOW by the user (2026-10-13c): land it first thing next session, before any other change, so its one full gate run is the run that session needs anyway.
+
+### 2026-10-13d
+
+LANDED (2026-10-13d, uncommitted at close; the coordinator commits after the full gate): the row's start-banner patch, inserted in formal/verify.sh directly after the gate_fact() line (ledger block, child side), CRLF kept, bash -n rc=0. docs/gate-runbook.md section 4 gained a "The start banner" paragraph after the .gate-runs/ artifact table: banner format, ETA = newest PASSED ledger row for that phase (a guess, not a timeout, nothing parses it), and read the top of the newest .gate-runs/*.log to see progress.
+OBSERVED first-hand: bash formal/verify.sh lean > /tmp/gate-lean-lXIZtj.log, rc=0. First line of that log AND of .gate-runs/20261013-222354-lean.log: === verify.sh: phase 'lean' started 22:23:54; last PASSED run took 115s, so expect ~22:25:49 === . Tail: === verify.sh: phase 'lean' PASSED === (holes=0, audits=715, pinned=715). Ledger row: 2026-10-13T22:23:54+0800, 111s, lean, PASSED.
+Trap hit while applying: a Bash-tool heredoc ate the backslashes in the awk -F separator and the line continuation (a literal TAB landed instead). Fixed with chr(92) and re-checked with cat -A before running the phase.
+RED: none. NEXT: the editing stales every phase, so the coordinator's full ten-phase gate run covers this change (the conf/tests tiles were not run here).
+
+Review fix (fix lead, 2026-10-13d): closing TK141, the only NOW row, left task.py lint RED (FAIL: found 0 open NOW row(s)), which also fails verify.sh lean and test_tasktool test_sabotage_live_*. Resolved by filing TK142 (the lookup-oracle gate gap from the TK139 review) and promoting it to NOW. task.py lint is clean (259 parsed); tests/test_tasktool.py passed in the targeted run.

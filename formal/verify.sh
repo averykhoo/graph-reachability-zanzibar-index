@@ -216,6 +216,18 @@ GATE_FACTS=""
 GATE_TREE="unknown"                     # replaced once $PY is resolved, below
 GATE_REACHED_END=0                      # set to 1 only by the final banner
 gate_fact() { GATE_FACTS="${GATE_FACTS:+$GATE_FACTS }$1"; }
+# Start banner (user request 2026-10-13, TK141): the start time, plus an ETA from the
+# duration of the last PASSED run of this same phase in the ledger, so a watcher can tell
+# how long is left. Informational only: nothing parses it, and a missing ledger just drops
+# the ETA. Child side, so it is the first line of the phase's output AND of its run log.
+GATE_LAST_DUR="$(awk -F'\t' -v p="$PHASE" '$3 == p && $4 == "PASSED" { d = $2 } END { print d }' \
+  "$GATE_RUNS_DIR/ledger.tsv" 2>/dev/null || true)"
+if [ -n "$GATE_LAST_DUR" ]; then
+  GATE_ETA="$(date -d "+${GATE_LAST_DUR} seconds" +%H:%M:%S 2>/dev/null || true)"
+  echo "=== verify.sh: phase '$PHASE' started $(date +%H:%M:%S); last PASSED run took ${GATE_LAST_DUR}s${GATE_ETA:+, so expect ~$GATE_ETA} ==="
+else
+  echo "=== verify.sh: phase '$PHASE' started $(date +%H:%M:%S); no PASSED run of this phase in the ledger to estimate from ==="
+fi
 
 # ---------------------------------------------------------------------------- #
 # THE RUN LOCK (2026-09-10, task `GL-1`). One gate run at a time. The full write-up
@@ -686,7 +698,7 @@ MIN_CONF_ALL=1093
 #   1749 vs `pytest tests/ -q --collect-only` -> 2283, i.e. 534 tests of headroom (the
 #   2026-10-12/13 sessions' tests/ additions, not broken down per file). Do not hand-
 #   raise it any more; LOWERING stays a deliberate hand edit, followed by --generate.
-MIN_TESTS_ALL=2377
+MIN_TESTS_ALL=2401
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

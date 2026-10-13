@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from itertools import chain
 from types import EllipsisType
 
+from sqlalchemy import column as _sa_column, inspect as _sa_inspect
+from sqlalchemy import select as _sa_select, table as _sa_table
 from sqlmodel import Session, select
 
 from zanzibar.schema import (
@@ -66,17 +68,62 @@ class UnloggedWriteRefused(RuntimeError):
     bypass fails LOUDLY at the call instead of corrupting the store quietly."""
 
 
-def _refuse_unlogged_write(engine: 'SetEngine', op: str) -> None:
-    """Raise ``UnloggedWriteRefused`` naming the op and the sanctioned replacement."""
+def _reject_unlogged_write(engine: 'SetEngine', op: str) -> None:
+    """Raise ``UnloggedWriteRefused`` naming the op and the sanctioned replacement.
+
+    Two ways in, one refusal: the engine a ``TupleSource`` owns (ZT-P1-8a), and since
+    TK140 ANY ``SetEngine`` on a store id that has a ``SchemaRecord`` -- a second,
+    standalone engine opened on a store a ``ConnectedStore`` owns
+    (``docs/tk140-one-write-path-per-store-2026-10-13.md``)."""
+    # REFUSED SHAPE (ZT-P1-8a, TK140): a direct SetEngine write on a log-governed store id
+    # (one a TupleSource owns, or that has a SchemaRecord).
+    # WHY: it changes RelationTuple with no TupleLog row, so the graph index, replica
+    # evaluators and at_least tokens never see it while lag() reports 0. An unlogged
+    # REMOVE leaves the grant ALLOWed by ConnectedStore.check, and ConnectedStore can then
+    # no longer revoke it (0.0.4 trial BROKEN-2, p12).
+    # INSTEAD: write through ConnectedStore.add_tuple/remove_tuple (or TupleSource.add/
+    # remove); for a standalone engine, use a store id no ConnectedStore owns.
     raise UnloggedWriteRefused(
-        f'SetEngine.{op} is refused on store {engine.store_id!r}: this engine is the '
-        f'evaluator of a tuple-LOGGED store, and a direct write mutates RelationTuple without '
-        f'appending to TupleLog -- so the graph index, replica evaluators and every '
-        f'at_least freshness token would silently miss it, permanently, while lag() '
-        f'reports 0 (zero-trust review ZT-P1-8a). Write through '
-        f'TupleSource.{"add" if op == "add_tuple" else "remove"}() '
+        f'SetEngine.{op} is refused on store {engine.store_id!r}: the store is tuple-LOGGED '
+        f'(a ConnectedStore/TupleSource owns it -- it has a SchemaRecord), and a direct '
+        f'write mutates RelationTuple without appending to TupleLog -- so the graph index, '
+        f'replica evaluators and every at_least freshness token would silently miss it, '
+        f'permanently, while lag() reports 0 (zero-trust review ZT-P1-8a, TK140). Write '
+        f'through TupleSource.{"add" if op == "add_tuple" else "remove"}() '
         f'(or ConnectedStore.{op}()), which locks, catches up, validates and appends '
-        f'the log row in the same transaction.')
+        f'the log row in the same transaction. A standalone SetEngine needs a store id '
+        f'that no ConnectedStore owns.')
+
+
+#: TK140: the connected store's ``SchemaRecord`` table, named by STRING so this package
+#: keeps importing nothing from ``zanzibar.connectedstore`` (the composition layer imports
+#: the backends, never the reverse). A ``SchemaRecord`` row is the governance marker: the
+#: first ``ConnectedStore`` / ``save_schema`` writes it, it is write-once, and it exists
+#: from the moment a store is claimed -- while its log is still EMPTY, which is why the
+#: marker is this row and not "has a TupleLog row". Pinned equal to
+#: ``SchemaRecord.__tablename__`` by ``tests/test_tk140_one_write_path.py``, so a rename
+#: cannot silently turn the probe into "never governed".
+SCHEMA_RECORD_TABLE = 'zanzibar_schema_record'
+_SCHEMA_RECORD = _sa_table(SCHEMA_RECORD_TABLE, _sa_column('store_id'))
+
+
+def store_has_schema_record(session: Session, store_id: str) -> bool:
+    """True when ``store_id`` has a ``SchemaRecord`` row, i.e. a ``ConnectedStore`` /
+    ``TupleSource`` owns it and its writes must go through the log (TK140).
+
+    ``has_table`` first: a process that only ever imported ``zanzibar.setengine`` never
+    registered the connected-store models, so ``create_all`` did not create the table, and
+    on PostgreSQL a SELECT from a missing table would ABORT the caller's transaction. No
+    table means no connected store anywhere in this database, so: not governed."""
+    if not _sa_inspect(session.connection()).has_table(SCHEMA_RECORD_TABLE):
+        return False
+    with session.no_autoflush:
+        row = session.execute(
+            _sa_select(_SCHEMA_RECORD.c.store_id)
+            .where(_SCHEMA_RECORD.c.store_id == store_id)
+            .limit(1)
+        ).first()
+    return row is not None
 
 
 def _drive(gen):
@@ -122,17 +169,23 @@ class LookupResult:
 
     ``node_ids`` are INSTANCE-LOCAL interner ids: the interner recycles int32 handles,
     so an id means nothing to another engine instance (or process) over the same
-    store. ``SetEngine.result_keys`` translates them to the stable
-    ``(type, name, predicate)`` surrogate keys -- the portable form for any service
-    boundary. ``markers`` are already portable ``(type, predicate)`` shapes."""
+    store, and the same holds for ``excluded_node_ids``. ``SetEngine.result_keys`` and
+    ``SetEngine.excluded_keys`` translate them to the stable ``(type, name, predicate)``
+    surrogate keys; ``markers`` are already portable ``(type, predicate)`` shapes. The
+    portable form for any service boundary is all three -- a marker sent without its
+    exclusions over-grants (TK139)."""
 
     def __init__(self):
         self.node_ids: set[int] = set()               # concrete result ids
         self.markers: set[tuple[str, str]] = set()    # (type, predicate) star shapes
-        # "every object of a marker's shape EXCEPT these" (the zanzibar.graphindex field's name and
-        # meaning): interned concrete ids a marker would cover but ``check`` refutes. Only
-        # a ``but not`` / ``and`` under an object wildcard fills it -- graph-refused
-        # schemas only (TK116, docs/tk116-oracle-only-setengine-2026-10-04.md sec 2).
+        # "everything of a marker's shape EXCEPT these" (the zanzibar.graphindex field's
+        # name and meaning): interned concrete ids a marker would cover but ``check``
+        # refutes. Callers subtract it from the marker. ``lookup`` fills it for a
+        # ``but not`` / ``and`` under an object wildcard -- graph-refused schemas only
+        # (TK116, docs/tk116-oracle-only-setengine-2026-10-04.md sec 2);
+        # ``lookup_reverse`` fills it from ``expand``'s ``neg`` for a ``but not`` / ``and``
+        # under a subject wildcard such as ``[user:*]`` (TK139,
+        # docs/tk139-lookup-reverse-exclusions-2026-10-13.md).
         self.excluded_node_ids: set[int] = set()
 
     def __repr__(self):
@@ -331,13 +384,20 @@ class SetEngine:
         # all). True = LOG-GOVERNED: a ``TupleSource`` has claimed this store, so the
         # log -- not this engine -- is the channel every other component reads, and a
         # direct write here would be an unlogged mutation of the source of truth. The
-        # flag is set by ``TupleSource.__init__`` (nothing else may set it) and the two
-        # public write methods refuse while it is on; the ``_*_direct`` bodies stay
-        # reachable for ``TupleSource``, which appends the log row itself.
-        # A FLAG rather than "does a TupleLog row exist for this store?": the log is
-        # empty on a freshly-bootstrapped store, so an existence probe would wave
-        # through exactly the first bypass -- and it would cost a SELECT per write.
+        # flag is set by ``TupleSource.__init__`` and, since TK140, by
+        # ``_probe_log_governance`` when the store id has a ``SchemaRecord`` (a SECOND
+        # engine on a store a ``ConnectedStore`` owns: 0.0.4 trial BROKEN-2). It only
+        # ever goes False -> True. The two public write methods refuse while it is on;
+        # the ``_*_direct`` bodies stay reachable for ``TupleSource``, which appends the
+        # log row itself.
+        # Not "does a TupleLog row exist for this store?": the log is empty on a
+        # freshly-bootstrapped store, so that probe would wave through exactly the first
+        # bypass. The ``SchemaRecord`` exists from the claim on. It is probed at
+        # construction and then at most ONCE PER TRANSACTION before a standalone write
+        # (``_governance_probed_txn``), and never again once latched, so the governed
+        # sync write path pays nothing.
         self.log_governed = False
+        self._governance_probed_txn = None
         self.ast = parse_schema_ast(schema)
         # P9: the per-Direct-node restriction key set is fully determined by the
         # (frozen, lifetime-stable) AST node -- cache it once instead of rebuilding
@@ -429,7 +489,28 @@ class SetEngine:
         self.doubly_bridged = (wildcard_userset_restriction_shapes(self.ast)
                                & frozenset(self.schema_info.bridged_out_shapes))
         self._ghost_hop_fired = False
+        # TK140: after the schema has compiled (a refused schema issues no statement),
+        # before the replay SELECT.
+        self._probe_log_governance()
         self.rebuild()
+
+    def _probe_log_governance(self) -> None:
+        """Latch ``log_governed`` if the store id has a ``SchemaRecord`` (TK140).
+
+        At most one probe per ``SessionTransaction`` -- memoised on the OBJECT, the
+        ``TupleSource._locked_txn`` idiom, so the memo can never match into a later
+        transaction. Under READ COMMITTED a claim committed by another session after this
+        transaction's probe is seen on the next transaction, not mid-transaction: that,
+        and a write concurrent with an uncommitted bootstrap, are the documented
+        residuals (``docs/tk140-one-write-path-per-store-2026-10-13.md`` sec 2)."""
+        if self.log_governed:
+            return
+        txn = self.session.get_transaction()
+        if txn is not None and txn is self._governance_probed_txn:
+            return
+        if store_has_schema_record(self.session, self.store_id):
+            self.log_governed = True
+        self._governance_probed_txn = self.session.get_transaction()
 
     # ------------------------------------------------------------------ #
     # State (rebuilt on open)
@@ -511,8 +592,9 @@ class SetEngine:
         Refused with ``UnloggedWriteRefused`` on a log-governed store (ZT-P1-8a) --
         the guard is HERE rather than on the caller's side because the attribute
         holding this engine is reachable from anywhere the ``TupleSource`` is."""
+        self._probe_log_governance()           # TK140: a second engine on an owned store
         if self.log_governed:
-            _refuse_unlogged_write(self, 'add_tuple')
+            _reject_unlogged_write(self, 'add_tuple')
         return self._add_tuple_direct(subject_predicate, s_type, s_name,
                                       relation, o_type, o_name)
 
@@ -549,8 +631,9 @@ class SetEngine:
         Refused with ``UnloggedWriteRefused`` on a log-governed store (ZT-P1-8a).
         This is the fail-OPEN half of that finding: an unlogged REMOVE leaves the
         grant materialized in the graph index, which keeps answering ALLOW."""
+        self._probe_log_governance()           # TK140: a second engine on an owned store
         if self.log_governed:
-            _refuse_unlogged_write(self, 'remove_tuple')
+            _reject_unlogged_write(self, 'remove_tuple')
         self._remove_tuple_direct(subject_predicate, s_type, s_name,
                                   relation, o_type, o_name)
 
@@ -1402,20 +1485,42 @@ class SetEngine:
         """Everything that can reach the object: expand rendered as a LookupResult (§6.4).
 
         Concretes come from the MemberSet's ``pos``; star shapes become symbolic markers
-        (never enumerated to concretes)."""
+        (never enumerated to concretes); the MemberSet's ``neg`` becomes
+        ``excluded_node_ids`` -- "every subject of a marker's shape EXCEPT these", the
+        same channel the graph index fills from a derived relation's residue. A caller
+        listing users must subtract it: under ``define viewer: [user:*] but not banned``
+        with a ``user:*`` grant and ``mallory`` banned, the result is the ``('user',
+        '...')`` marker with mallory's id excluded (TK139; before, ``neg`` was dropped
+        and the result read as "every user"). ``pos`` and ``neg`` are disjoint by
+        construction (``memberset._normalize``), so the subtraction is unambiguous."""
         m = self.expand(relation, o_type, o_name)
         result = LookupResult()
         result.node_ids = set(m.pos)
         result.markers = set(m.stars)
+        result.excluded_node_ids = set(m.neg)
         return result
 
     def result_keys(self, res: LookupResult) -> set[NodeKey]:
         """Translate ``res.node_ids`` to their stable ``(type, name, predicate)``
         surrogate keys. Interner ids are recycled instance-local handles -- only
-        valid against THIS instance, and only until the next write -- so this is
-        the portable form of a lookup result for any service boundary
-        (``res.markers`` need no translation)."""
+        valid against THIS instance, and only until the next write.
+
+        This is the CONCRETE third of a lookup result only. A result that crosses a
+        service boundary is three parts: these keys, ``res.markers`` (already
+        portable ``(type, predicate)`` shapes), and ``excluded_keys(res)`` -- the
+        subjects a marker covers but ``check`` refuses. Sending a marker without its
+        exclusions over-grants: under ``define viewer: [user:*] but not banned`` with
+        a ``user:*`` grant and ``mallory`` banned, ``lookup_reverse`` is the
+        ``('user', '...')`` marker with mallory excluded, and ``result_keys`` alone is
+        ``set()`` (TK139 review, ``docs/tk139-lookup-reverse-exclusions-2026-10-13.md``)."""
         return {self.interner.key(i) for i in res.node_ids}
+
+    def excluded_keys(self, res: LookupResult) -> set[NodeKey]:
+        """Translate ``res.excluded_node_ids`` to stable ``(type, name, predicate)``
+        keys: the portable form of "every subject of a marker's shape EXCEPT these".
+        The companion of ``result_keys``; a caller expanding ``res.markers`` must
+        subtract these (TK139)."""
+        return {self.interner.key(i) for i in res.excluded_node_ids}
 
     def _reverse_neighbors(self, oid: int) -> list[int]:
         """Candidate object nodes one reverse membership hop from a node the subject

@@ -160,8 +160,9 @@ def test_the_engine_attribute_is_read_only(session):
 def test_a_standalone_set_engine_is_untouched(session):
     """The engine is ALSO a first-class standalone backend over a store with no log at
     all (the validation matrix's SetBackend, formal/conformance's SetDriver, the
-    benchmarks). The guard must be invisible there -- it keys on a flag only
-    ``TupleSource`` sets."""
+    benchmarks). The guard must be invisible there -- it keys on a flag that
+    ``TupleSource`` sets, or that a ``SchemaRecord`` on the store id latches (TK140,
+    ``tests/test_tk140_one_write_path.py``); a store with neither is untouched."""
     se = SetEngine(session, 'solo', SCHEMA)
     assert se.log_governed is False
     writes = 0

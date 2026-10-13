@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-13c -- **0.0.4 released** (tag `v0.0.4` at `0ec7fed`, CI green, live on PyPI) after an OpenFGA claims audit (`docs/openfga-claims-audit-2026-10-13.md`; gaps `TK137` / `TK138`). Its install trial found 3 BROKEN, all confirmed first-hand (`docs/pypi-trial-0.0.4-2026-10-13.md`): `TK139` + `TK140` (NEXT) are the 0.0.5 patch. Next: `TK141` (NOW, the `verify.sh` start banner; patch in its body; land it FIRST, it stales every phase), then `TK139` / `TK140`, then `HS-5` (NEXT). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-13d -- **`TK141` landed** (each `verify.sh` phase prints its start time + ETA) and **the 0.0.4 trial's three broken repros are fixed**: `TK139` (`SetEngine.lookup_reverse` keeps `but not` exclusions; new `excluded_keys`) and `TK140` (one write path per store id; new `UnloggedTuplesPresent`). Both are in CHANGELOG `[Unreleased]`, version NOT bumped: 0.0.5 needs the user's word. Next: `TK142` (NOW: the lookup-oracle gates stay green with the `TK139` fix reverted), then `HS-5` (NEXT). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

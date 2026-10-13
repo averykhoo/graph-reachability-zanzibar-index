@@ -572,6 +572,13 @@ Every `verify.sh` phase now leaves two artifacts behind, both under a **gitignor
 | `.gate-runs/<stamp>-<phase>.log` | that phase's full output, verbatim |
 | `.gate-runs/ledger.tsv` | one appended row: started · duration · phase · `PASSED`/`FAILED`/`INCONSISTENT` · tree id · the counts it observed · the log filename |
 
+**The start banner (2026-10-13, `TK141`).** The first line of every phase's output, and
+so of its run log, is `=== verify.sh: phase '<phase>' started HH:MM:SS; last PASSED run
+took Ns, so expect ~HH:MM:SS ===` (or `no PASSED run of this phase in the ledger to
+estimate from`). The ETA is the duration of the newest `PASSED` ledger row for the same
+phase: a guess, not a timeout, and nothing parses the line. To see how far along a running
+phase is, read the top of the newest `.gate-runs/*.log`.
+
 ```bash
 python scripts/gate_status.py                  # the report (see below)
 python scripts/gate_status.py --require-green  # exit 1 unless THIS tree is covered

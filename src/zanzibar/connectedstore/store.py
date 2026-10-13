@@ -22,6 +22,7 @@ Transaction semantics: ``write`` commits on success and rolls back on rejection
 
 from __future__ import annotations
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from zanzibar.graphindex.core import probe_store_write_lock
@@ -31,7 +32,10 @@ from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import AdmissionRejected, validate_store_id
 
+from zanzibar.setengine.models import RelationTuple
+
 from .apply import advance_index, ensure_cursor
+from .models import IndexCursor, TupleLog
 from .schema_io import ensure_schema, open_graph_index
 # StaleRead lives with the evaluator that raises it first (TupleSource.check);
 # re-exported here for backward compatibility.
@@ -53,8 +57,8 @@ class LookupNotFresh(StaleRead):
       DOMAIN of a result depending on how far behind the worker happened to be;
     * markers are ``(type, predicate, variant)`` on the graph and ``(type, predicate)``
       on the set engine, and ``excluded_node_ids`` ("everyone of this shape except
-      these", the derived-relation ``neg`` channel) exists only on the graph side --
-      it cannot be reconstructed from a set-engine result at all.
+      these", the ``neg`` channel) is filled on both sides since TK139 but, like
+      ``node_ids``, in each backend's own id domain.
 
     Unifying that contract is a real, breaking API change with its own oracle-gate
     arc (``docs/architecture/decision-log.md``, round 3). Until it lands, the honest
@@ -90,6 +94,88 @@ class IndexStalled(LookupNotFresh):
     REMOVE undoes it, because that REMOVE waits behind it. Remove the tuple at the
     source, then ``connectedstore.rebuild_index`` (TK121,
     ``docs/tk121-stall-recovery-2026-10-04.md``)."""
+
+
+class UnloggedTuplesPresent(RuntimeError):
+    """``ConnectedStore`` refused to adopt a store id whose ``RelationTuple`` rows the
+    ``TupleLog`` does not account for (TK140; 0.0.4 trial BROKEN-3, p09).
+
+    A ``ConnectedStore`` open that CREATES the index's cursor starts the graph index
+    empty and advances it from the log alone. Tuples written without a log row -- by a
+    standalone ``SetEngine`` on the same id, before any ``ConnectedStore`` claimed it --
+    would be invisible to the index (``check`` False while the set engine says True), and
+    removing one would raise ``InvariantViolation`` ("corruption"). The bootstrap for a
+    store that already has tuples is ``save_schema`` + ``build_index``, which materialise
+    the index from the ``RelationTuple`` snapshot instead of from the log.
+    ``docs/tk140-one-write-path-per-store-2026-10-13.md``."""
+
+
+def _adoption_counts(session: Session, store_id: str) -> tuple[int, int, int]:
+    """``(RelationTuple rows, TupleLog ADD rows, TupleLog REMOVE rows)`` for the store,
+    read in ONE statement (three scalar subqueries).
+
+    One statement because one statement is one snapshot. PostgreSQL READ COMMITTED (the
+    only admitted level) re-snapshots per STATEMENT, and nothing serialises this read
+    against writers there (``probe_store_write_lock`` is SQLite-only). With three
+    separate COUNTs, a logged ``TupleSource`` write committing between them -- its
+    ``RelationTuple`` row and its log row land in ONE transaction -- was seen by one count
+    and not the other: a fully-logged store refused to open with a spurious
+    ``UnloggedTuplesPresent`` (RUN on PG, TK140 review 2026-10-13d), and by the same
+    arithmetic an unlogged store could be waved through. Inside one statement every
+    committed writer is seen whole or not at all, so the comparison is exact."""
+    def count(model, *where):
+        return (select(func.count()).select_from(model).where(*where)
+                .scalar_subquery())
+    row = session.exec(select(
+        count(RelationTuple, RelationTuple.store_id == store_id),
+        count(TupleLog, TupleLog.store_id == store_id, TupleLog.op == 'ADD'),
+        count(TupleLog, TupleLog.store_id == store_id, TupleLog.op == 'REMOVE'),
+    )).one()
+    return int(row[0]), int(row[1]), int(row[2])
+
+
+def _reject_unlogged_adoption(session: Session, store_id: str) -> None:
+    """Refuse a FIRST open (no ``IndexCursor`` yet) over tuples the log cannot replay.
+
+    Runs only when the open would create the cursor, so a store that has an index pays
+    nothing after its first open. "Accounted for" = the ``RelationTuple`` row count equals
+    the log's net effect (``ADD`` rows minus ``REMOVE`` rows): admission-validated logging
+    (``TupleSource.add/remove``) keeps those equal on every fully-logged store, and the
+    trial's adopted store (rows, empty log) differs. The three counts are ONE statement
+    (``_adoption_counts``), so a concurrent logged write cannot split them. Rolls back
+    before raising, so a refused open leaves no ``SchemaRecord`` behind and does not hold
+    the SQLite write lock."""
+    has_cursor = session.exec(
+        select(IndexCursor.index_store_id)
+        .where(IndexCursor.index_store_id == store_id).limit(1)).first()
+    if has_cursor is not None:
+        return
+    n_tuples, n_add, n_remove = _adoption_counts(session, store_id)
+    if n_tuples == 0:
+        return
+    if n_tuples == n_add - n_remove:
+        return
+    session.rollback()
+    # REFUSED SHAPE (TK140): a ConnectedStore born over RelationTuple rows that no
+    # TupleLog row accounts for (written by a standalone SetEngine on the same id).
+    # WHY: the index is born empty and advanced from the log only, so those tuples are
+    # invisible to it: check says False while the set engine says True, and removing one
+    # raises InvariantViolation (0.0.4 trial BROKEN-3, p09).
+    # INSTEAD: save_schema(session, id, schema) if the store has none, commit, then
+    # build_index(session, id) -- it materialises the index from the RelationTuple
+    # snapshot -- and open ConnectedStore(session, id) without schema=.
+    raise UnloggedTuplesPresent(
+        f'store {store_id!r} already has {n_tuples} RelationTuple row(s) but its tuple '
+        f'log accounts for {n_add - n_remove} (ADD {n_add} - REMOVE {n_remove}): they were '
+        f'written without the log (by a standalone SetEngine on this store id), and a '
+        f'ConnectedStore index born here would never see them -- check would answer '
+        f'False while the set engine answers True, and removing one would be reported '
+        f'as corruption (TK140). To adopt an existing tuple store: '
+        f'zanzibar.connectedstore.save_schema(session, {store_id!r}, schema) if it has '
+        f'no schema yet, session.commit(), then '
+        f'zanzibar.connectedstore.build_index(session, {store_id!r}) (it builds the index '
+        f'from the stored tuples), then ConnectedStore(session, {store_id!r}). Nothing '
+        f'was written by this refused open.')
 
 
 class ConnectedStore:
@@ -195,6 +281,9 @@ class ConnectedStore:
         # transaction on purpose (see ``probe_store_write_lock``); released by this
         # constructor's own bootstrap commit below.
         probe_store_write_lock(session, store_id)
+        # TK140 (0.0.4 trial BROKEN-3): refuse to be BORN over tuples the log cannot
+        # replay, before anything (the SchemaRecord included) is written.
+        _reject_unlogged_adoption(session, store_id)
         boot_ruleset = None
         if schema is not None:
             # On first bootstrap ensure_schema compiles the schema; reuse that

@@ -9,8 +9,9 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from zanzibar.connectedstore import (SchemaMismatch, SchemaRecord, ensure_schema, load_schema,
-                            open_graph_index, open_set_engine, save_schema)
+                            open_graph_index, open_set_engine, save_schema, TupleSource)
 from zanzibar.schema import parse_openfga_schema
+from zanzibar.setengine import UnloggedWriteRefused
 
 _SCHEMA = '''
 type user
@@ -91,10 +92,17 @@ def test_open_set_engine_self_describing(session):
     se = open_set_engine(session, 's1')
     explicit = parse_openfga_schema(_SCHEMA)
     assert se.schema_info.subject_wildcard_shapes == explicit.schema_info.subject_wildcard_shapes
-    # behaves like a normal engine
-    se.add_tuple('...', 'user', '*', 'public', 'doc', 'd1')
-    se.add_tuple('...', 'user', 'alice', 'blocked', 'doc', 'd1')
+    # TK140: a store with a SchemaRecord is LOG-GOVERNED, so the self-describing engine
+    # refuses direct (unlogged) writes; tuples go through the log (TupleSource), and the
+    # engine evaluates them like a normal engine once it has replayed them.
+    assert se.log_governed is True
+    with pytest.raises(UnloggedWriteRefused):
+        se.add_tuple('...', 'user', '*', 'public', 'doc', 'd1')
+    src = TupleSource(session, 's1')
+    src.add('...', 'user', '*', 'public', 'doc', 'd1')
+    src.add('...', 'user', 'alice', 'blocked', 'doc', 'd1')
     session.commit()
+    se.rebuild()
     assert se.check('...', 'user', 'ghost', 'viewer', 'doc', 'd1') is True
     assert se.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is False
 

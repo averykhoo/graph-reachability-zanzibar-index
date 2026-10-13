@@ -51,11 +51,22 @@ it drops information:
       shapes are exact both ways ('*' subjects: shape in stars == O).
   S2  expand component sweeps: every ``pos`` id is O-true; every ``neg`` id is
       star-covered (its own shape in ``stars``) AND O-false.
-  S3  lookup_reverse is the documented neg-dropping render of expand
-      (node_ids == pos, markers == stars; engine.py lookup_reverse) => one-sided:
-      every node id O-true (soundness); every O-true candidate subject is in
-      node_ids or marker-covered (completeness); marker-covered-but-O-false is
-      LEGAL (that is exactly the dropped neg).
+  S3  lookup_reverse is the exact render of expand (node_ids == pos, markers ==
+      stars, excluded_node_ids == neg; engine.py lookup_reverse) => two-sided like
+      G3/G4: every node id O-true; every excluded id is marker-covered, concrete and
+      O-false; for every candidate subject, [in node_ids  or  (marker-covered and
+      not excluded)] == O. TIGHTENED 2026-10-13 (TK139): this used to be one-sided,
+      calling marker-covered-but-O-false LEGAL ("the documented neg-dropping
+      render"), and that tolerance is how a `[user:*] but not banned` list-users
+      result reading "every user, no exceptions" stayed green
+      (docs/tk139-lookup-reverse-exclusions-2026-10-13.md).
+      Sabotage 2026-10-13 (engine.py lookup_reverse fix line -> ``pass``): red in
+      test_lookup_oracle_dense_boolean with "set.lookup_reverse('viewer', 'doc',
+      'd1') [py]: excluded_node_ids set() != expand.neg {7}"; with that structural
+      equality ALSO disabled, the oracle half alone went red: "... vs oracle on
+      subject (...,user,u1): set=True oracle=False (node_ids, or a marker minus
+      excluded_node_ids)". The generated-schema gate (6 examples, ci profile) did
+      NOT catch it; dense_boolean and test_tamper_set_reverse_is_caught did.
   S4  forward lookup (check-backed): every node id and every marker is O-true
       (markers against the intensional '*'-object query); exact two-sided over
       ALL candidates -- tuple-anchored object keys are write-time interned
@@ -316,24 +327,36 @@ def _check_set_expand(se, oc, subjects, obj, m):
 
 def _check_set_reverse(se, oc, subjects, obj, m, res):
     rel, ot, on = obj
-    # S3: the documented render of expand (neg dropped)
+    # S3: the exact render of expand (TK139: neg carried as excluded_node_ids)
     assert res.node_ids == set(m.pos), (
         f'set.lookup_reverse{obj} [{se.ops.name}]: node_ids != expand.pos')
     assert res.markers == set(m.stars), (
         f'set.lookup_reverse{obj} [{se.ops.name}]: markers != expand.stars')
+    assert res.excluded_node_ids == set(m.neg), (
+        f'set.lookup_reverse{obj} [{se.ops.name}]: excluded_node_ids '
+        f'{res.excluded_node_ids} != expand.neg {set(m.neg)}')
     for nid in res.node_ids:                                    # soundness
         t, n, p = se.interner.key(nid)
         assert oc(p, t, n, rel, ot, on), (
             f'set.lookup_reverse{obj} [{se.ops.name}] leaked {t}:{n}#{p}')
-    for (sp, st, sn) in subjects:                               # one-sided completeness
+    for nid in res.excluded_node_ids:                           # exclusion soundness
+        t, n, p = se.interner.key(nid)
+        assert n != '*' and (t, p) in res.markers and not oc(p, t, n, rel, ot, on), (
+            f'set.lookup_reverse{obj} [{se.ops.name}] excluded {t}:{n}#{p}, which is '
+            f'star-only, marker-uncovered, or oracle-true')
+    for (sp, st, sn) in subjects:                               # two-sided exactness
+        expected = oc(sp, st, sn, rel, ot, on)
         if sn == '*':
-            continue                                            # star: pinned via stars in S1
-        uid = se.interner.get(st, sn, sp)
-        if oc(sp, st, sn, rel, ot, on):
-            covered = (uid is not None and uid in res.node_ids) or (st, sp) in res.markers
-            assert covered, (
-                f'set.lookup_reverse{obj} [{se.ops.name}] dropped oracle-true subject '
-                f'({sp},{st},{sn}): not in node_ids and not marker-covered')
+            got = (st, sp) in res.markers
+        else:
+            uid = se.interner.get(st, sn, sp)
+            got = (uid is not None and uid in res.node_ids) or (
+                (st, sp) in res.markers
+                and not (uid is not None and uid in res.excluded_node_ids))
+        assert got == expected, (
+            f'set.lookup_reverse{obj} [{se.ops.name}] vs oracle on subject '
+            f'({sp},{st},{sn}): set={got} oracle={expected} (node_ids, or a marker '
+            f'minus excluded_node_ids)')
 
 
 def _check_set_forward(se, oc, subject, objects, res):
@@ -858,6 +881,62 @@ def test_tamper_set_expand_is_caught(ops):
     tampered = MemberSet(m.pos, m.stars, se.ops.freeze())       # drop the neg set
     with pytest.raises(AssertionError):
         _check_set_expand(se, oracle.check, subjects, obj, tampered)
+    session.close()
+
+
+@pytest.mark.parametrize('ops', ALL_SETOPS, ids=lambda o: o.name)
+def test_tamper_set_reverse_is_caught(ops):
+    """TK139: S3 must catch a ``lookup_reverse`` that drops ``excluded_node_ids``
+    even when the MemberSet it is compared with ALSO lacks the neg -- i.e. by the
+    oracle exactness, not only by the ``excluded_node_ids == expand.neg`` structural
+    equality. The second tamper is exactly the pre-TK139 render (``[user:*]`` marker,
+    nothing excluded), which the old one-sided S3 called LEGAL."""
+    from sqlmodel import Session, SQLModel, create_engine
+    engine = create_engine('sqlite:///:memory:')
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    schema = '''
+        type user
+        type doc
+          relations
+            define public: [user, user:*]
+            define blocked: [user]
+            define viewer: public but not blocked
+    '''
+    se = SetEngine(session, 'w', schema, ops=ops)
+    se.add_tuple('...', 'user', '*', 'public', 'doc', 'd1')
+    se.add_tuple('...', 'user', 'alice', 'blocked', 'doc', 'd1')
+    se.add_tuple('...', 'user', 'bob', 'public', 'doc', 'd2')   # interns bob
+    session.commit()
+    oracle = Oracle(schema, [
+        OracleTuple('...', 'user', '*', 'public', 'doc', 'd1'),
+        OracleTuple('...', 'user', 'alice', 'blocked', 'doc', 'd1'),
+        OracleTuple('...', 'user', 'bob', 'public', 'doc', 'd2')])
+    subjects = [('...', 'user', 'alice'), ('...', 'user', 'bob'),
+                ('...', 'user', GHOST_NAME), ('...', 'user', '*')]
+    obj = ('viewer', 'doc', 'd1')
+
+    m = se.expand(*obj)
+    res = se.lookup_reverse(*obj)
+    alice = se.interner.get('user', 'alice', '...')
+    assert res.excluded_node_ids == {alice}, 'anti-vacuity: the honest result excludes alice'
+    _check_set_reverse(se, oracle.check, subjects, obj, m, res)  # honest result passes
+
+    dropped = se.lookup_reverse(*obj)                            # neg dropped from result
+    dropped.excluded_node_ids.clear()
+    with pytest.raises(AssertionError, match='excluded_node_ids'):
+        _check_set_reverse(se, oracle.check, subjects, obj, m, dropped)
+
+    no_neg = MemberSet(m.pos, m.stars, se.ops.freeze())          # ... and from the expand
+    with pytest.raises(AssertionError, match=r"vs oracle on subject \(\.\.\.,user,alice\)"):
+        _check_set_reverse(se, oracle.check, subjects, obj, no_neg, dropped)
+
+    bogus = se.lookup_reverse(*obj)                              # wrong exclusion (bob)
+    bogus.excluded_node_ids.add(se.interner.get('user', 'bob', '...'))
+    with pytest.raises(AssertionError):
+        _check_set_reverse(se, oracle.check, subjects, obj,
+                           MemberSet(m.pos, m.stars, se.ops.freeze(bogus.excluded_node_ids)),
+                           bogus)
     session.close()
 
 

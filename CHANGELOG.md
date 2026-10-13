@@ -6,6 +6,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
+## [Unreleased]
+
+### Added
+- `SetEngine.excluded_keys(result)`: the portable `(type, name, predicate)` form of a
+  `LookupResult`'s `excluded_node_ids`, the companion of `result_keys`. A lookup result
+  that leaves the process is three parts: `result_keys`, `markers` and `excluded_keys`.
+  `result_keys`'s docstring had called its output alone "the portable form", which would
+  drop a `but not` exclusion at a service boundary (TK139 review).
+
+### Fixed
+- `SetEngine.lookup_reverse` now fills `excluded_node_ids` with the subjects a `but not`
+  refuses under a wildcard grant, as `ConnectedStore.lookup_reverse` already did. Before,
+  with `define viewer: [user:*] but not banned`, a `user:*` grant and `mallory` banned, it
+  returned the "every user" marker with nothing excluded, so a list-users page built on the
+  standalone set engine listed mallory although `check` refused her (TK139).
+- A standalone `SetEngine` opened on a store id that a `ConnectedStore` owns (the id has a
+  persisted schema) now refuses `add_tuple` / `remove_tuple` with `UnloggedWriteRefused`;
+  reads through it still work. Before, its writes skipped the tuple log: an unlogged
+  `remove_tuple` left the grant ALLOWed by `ConnectedStore.check` with `lag() == 0`, and
+  `ConnectedStore.remove_tuple` then refused to revoke it. The engine also refuses once the
+  id is claimed after it was opened, from its next transaction on (TK140).
+- `ConnectedStore(session, store_id, ...)` refuses, with the new
+  `zanzibar.connectedstore.UnloggedTuplesPresent`, to open a store id for the first time
+  when it holds tuples the tuple log does not account for (written by a standalone
+  `SetEngine`). Before, it adopted them silently: its index never saw them (`check` False
+  while the set engine said True), and removing one raised `InvariantViolation`. The
+  refused open writes nothing. To adopt such a store: `save_schema(session, id, schema)`,
+  commit, `build_index(session, id)`, then `ConnectedStore(session, id)` (TK140).
+
 ## [0.0.4]
 
 ### Fixed

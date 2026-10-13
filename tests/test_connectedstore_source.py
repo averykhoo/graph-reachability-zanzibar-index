@@ -73,8 +73,10 @@ def test_replaying_log_reproduces_state(env):
         (src.add if op == 'add' else src.remove)(*raw)
     session.commit()
 
-    # fresh store, replay the log verbatim
-    save_schema(session, 'replay', _SCHEMA)
+    # fresh store, replay the log verbatim. A STANDALONE engine on a store id with no
+    # SchemaRecord: since TK140 a SetEngine on an id that has one is log-governed and
+    # refuses these direct writes (UnloggedWriteRefused), and this replay never needed
+    # the schema row -- it reads only RelationTuple.
     replayed = SetEngine(session, 'replay', _SCHEMA)
     for r in log_rows(session, 's'):
         fn = replayed.add_tuple if r.op == 'ADD' else replayed.remove_tuple
