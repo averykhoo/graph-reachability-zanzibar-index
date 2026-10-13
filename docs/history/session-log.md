@@ -33,6 +33,48 @@ from here.
 
 ---
 
+## 2026-10-13b — 0.0.4 release-ready: `TK134` + `TK135` closed, version bumped, `HS-5` to NOW
+
+rows: TK134 (closed), TK135 (closed), HS-5 (LATER -> NOW)
+
+`task lint: clean (13 checks, 253 task file(s) parsed), 24 warning(s)`
+
+`read: board only`
+
+`asked: none`
+
+**The user asked what to finish before 0.0.4, then to "get it release ready, then test and
+push and babysit CI".** The model's scoping (the user did not object): a small, fix-only
+0.0.4 made of the two user-visible rows, `TK134` and `TK135`. `TK123` (API renames) is a
+deliberate breaking release of its own, and stays parked as the user left it.
+- `TK134` LANDED: `parse_openfga_json` refuses every malformed shape with a `ValueError`
+  naming the field. A first-hand probe found 23 of 26 shapes leaking bare
+  `AttributeError` / `TypeError` / `KeyError`, wider than the row's four repros. The fix is
+  three `_validate_json_*` helpers, pinned by `tests/test_tk134_json_malformed_shapes.py`
+  (sabotage red), with the refusal-comment floors ratcheted 41->44 / 29->33.
+- `TK135` LANDED: `PYPI_README.md` covers boolean recursion, acyclic data, lenient reads and
+  `LookupResult`, and its quickstart now executes a lookup decode. In code,
+  `boolean.py::_stratify` names only the cycle (`_cycle_members`) and its message gives
+  the INSTEAD and how it differs. Pinned by `tests/test_tk135_cycle_message.py`
+  (sabotage red). Every README claim was re-probed first-hand; the probe also found the
+  0.0.3 trial's "a duplicate add returns the ORIGINAL token" to be wrong (it returned the
+  head token), so that claim was left out.
+- `__version__` and the CHANGELOG heading are 0.0.4. The TAG IS NOT PUSHED: a tag is a
+  release and needs the user's explicit word (`CLAUDE.md` "Running things").
+- The previous entry's Still-owed bullet (`read: show <id>` in `CLAUDE.md`) is done.
+- **Recorded, not adopted (user question, the same conversation):** should a "session" be
+  scoped to a conversation or to a task? A fable subagent and the model agreed on a split:
+  the task record (`close -m`) per task, the gate + commit per change set, and the ledger
+  entry + banner per conversation. The one real gap is a session key stamped on rows whose
+  conversation died before writing its ledger entry: nothing checks that a key has an entry
+  (`task.py::session_key` checks shape only). Proposed: a
+  `handoff_lint.py::check_orphan_session_keys` (keys dated today exempt) plus a one-entry
+  recovery path. Not built, no row filed; the user has not decided.
+
+Still owed: Nothing.
+
+---
+
 ## 2026-10-13 — assurance batch: 10 rows closed (`TK99`, `TK97`/`TK98`/`TK86`/`TK100`, `TK110`, `GC-1` ...)
 
 rows: TK99 (closed), AW-1 (closed), TK62 (closed, declined), TK66 (closed), TK3 (narrowed, decided), TK97 (closed), TK98 (closed), TK86 (closed), TK100 (closed), HS-5 (progressed), TK110 (closed), TK85 (LATER -> SOMEDAY), GC-1 (closed)

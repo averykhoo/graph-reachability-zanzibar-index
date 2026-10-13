@@ -6,9 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
-## [Unreleased]
+## [0.0.4]
 
 ### Fixed
+- A malformed OpenFGA JSON model is refused with a `ValueError` that names the field:
+  the model given as `null` or a list, `type_definitions` that is not an array, a type
+  definition with no `"type"`, a `computedUserset` with no `"relation"`, a union with no
+  `"child"`, and so on. `parse_openfga_json` used to leak a bare `AttributeError`,
+  `TypeError` or `KeyError`. An optional object or array given as `null` (OpenFGA's API
+  emits `"metadata": null`) still reads as absent; a non-object `metadata` such as `[]`,
+  previously ignored, is now refused.
+- The `CyclicDerivedDependency` message names only the relations on the cycle, not every
+  relation that depends on it. It no longer cites an internal spec, and it says what to
+  write instead and how that rewrite differs.
 - Reopening a store with `ConnectedStore(session, store_id, schema=...)` now compares the
   parsed schema, not the text. Before, a trailing newline, Windows line endings, a different
   indent, a comment, or reordered `type` / `define` blocks raised `SchemaMismatch` for the
@@ -21,6 +31,12 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
   of the 2026-08-09 crossing-middle fix used to grant access silently at this level. It now
   aborts the write with `InvariantViolation`. The check costs nothing on a schema without
   object wildcards (`object_wildcard_shapes`).
+
+### Documentation
+- The PyPI README now covers what the 0.0.3 install trial had to discover by hand: recursion
+  through `and` / `but not` (refused by `ConnectedStore`, accepted by `SetEngine`, with a
+  rewrite and how it differs), acyclic tuple data, lenient reads, and how to read a
+  `LookupResult` (resolving node ids, markers, exclusions). `LookupResult` has a docstring.
 
 ## [0.0.3]
 

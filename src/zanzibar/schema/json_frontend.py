@@ -28,9 +28,14 @@ def parse_openfga_json(model) -> SchemaAST:
     The result is refused unless the DSL `openfga_json_to_dsl` renders from it parses back
     to the same AST (`_validate_json_round_trip`, `TK115`). Duplicate JSON keys are refused
     only for JSON TEXT input: a ``dict`` has already lost them.
+
+    A malformed model -- a field of the wrong JSON kind, or a required key missing -- raises
+    ``ValueError`` naming the field, never a bare ``AttributeError`` / ``TypeError`` /
+    ``KeyError`` (`TK134`). An optional object or array given as ``null`` reads as absent.
     """
     if isinstance(model, str):
         model = _json.loads(model, object_pairs_hook=_reject_duplicate_json_keys)
+    model = _validate_json_object(model, 'the model')
     version = model.get('schema_version')
     # REFUSED SHAPE (connected-store spec §5-S5): a schema_version other than 1.1.
     # WHY: only the 1.1 format is implemented -- its ``directly_related_user_types``
@@ -47,11 +52,13 @@ def parse_openfga_json(model) -> SchemaAST:
     if model.get('conditions'):
         raise ValueError('OpenFGA conditions are not supported')
     _validate_json_declares_a_type(model.get('type_definitions'))
+    type_definitions = _validate_json_array(model['type_definitions'], 'type_definitions')
 
     ast: SchemaAST = {}
     seen_types: set[str] = set()
-    for type_def in model.get('type_definitions', []):
-        object_type = type_def['type']
+    for i, type_def in enumerate(type_definitions):
+        type_def = _validate_json_object(type_def, f'type_definitions[{i}]')
+        object_type = _validate_json_field(type_def, 'type', f'type_definitions[{i}]')
         _validate_declared_name('type', object_type)
         # Same S-6 rule as the DSL front-end: a duplicate type_definitions entry
         # silently replaced the earlier one's relations -- the store then ran a
@@ -62,8 +69,13 @@ def parse_openfga_json(model) -> SchemaAST:
         if object_type in seen_types:
             raise ValueError(f'duplicate type declaration: {object_type!r}')
         seen_types.add(object_type)
-        relations = type_def.get('relations', {})
-        metadata = (type_def.get('metadata') or {}).get('relations', {})
+        where = f'type {object_type}'
+        relations = _validate_json_object(
+            type_def.get('relations'), f'{where}: relations', optional=True)
+        metadata = _validate_json_object(
+            type_def.get('metadata'), f'{where}: metadata', optional=True)
+        metadata = _validate_json_object(
+            metadata.get('relations'), f'{where}: metadata.relations', optional=True)
         for relation_name, rewrite in relations.items():
             # REFUSED SHAPE (boolean spec §3.2): ``.`` in a declared relation name, as in
             # the DSL front-end. WHY: ``.`` names the compiler's leaf predicates
@@ -73,9 +85,14 @@ def parse_openfga_json(model) -> SchemaAST:
                     f"relation {relation_name!r}: '.' is reserved for compiled leaf "
                     f"predicates and cannot appear in a declared relation name")
             _validate_declared_name('relation', relation_name)
+            rel_where = f'relation {object_type}#{relation_name}'
+            rel_metadata = _validate_json_object(
+                metadata.get(relation_name), f'{rel_where}: metadata', optional=True)
             restrictions = _json_restrictions(
                 object_type, relation_name,
-                (metadata.get(relation_name) or {}).get('directly_related_user_types', []))
+                _validate_json_array(rel_metadata.get('directly_related_user_types'),
+                                     f'{rel_where}: directly_related_user_types',
+                                     optional=True))
             ast[(object_type, relation_name)] = _json_rewrite(
                 rewrite, object_type, relation_name, restrictions)
     # The S-5 '.'-namespace lock applies to REFERENCED names too (restriction
@@ -118,6 +135,65 @@ def _validate_json_declares_a_type(type_definitions) -> None:
     # {"directly_related_user_types": [{"type": "user"}]}}}}]``.
     if not type_definitions:
         raise ValueError('OpenFGA JSON: the model declares no type (no type_definitions)')
+
+
+def _json_kind(value) -> str:
+    """The JSON name of a Python value's kind, for refusal messages."""
+    if value is None:
+        return 'null'
+    if isinstance(value, bool):
+        return 'a boolean'
+    for kind, name in ((dict, 'an object'), ((list, tuple), 'an array'), (str, 'a string'),
+                       ((int, float), 'a number')):
+        if isinstance(value, kind):
+            return name
+    return type(value).__name__
+
+
+def _validate_json_object(value, where: str, *, optional: bool = False) -> dict:
+    """``value`` as a JSON object; ``{}`` for an absent or ``null`` OPTIONAL one (`TK134`)."""
+    if value is None and optional:
+        return {}
+    # REFUSED SHAPE (TK134): a field the OpenFGA model format defines as an object given as
+    # some other JSON kind -- the model itself as ``null`` or a list, a type definition as a
+    # string, ``"relations": ["viewer"]``, a ``computedUserset`` body as a bare string.
+    # WHY: the front end read these with ``.get`` / ``[...]`` and leaked a bare
+    # ``AttributeError`` / ``TypeError`` that named no field. INSTEAD: the object form, e.g.
+    # ``{"type": "doc", "relations": {"viewer": {"computedUserset": {"relation": "owner"}}}}``.
+    if not isinstance(value, dict):
+        raise ValueError(f'OpenFGA JSON: {where} must be an object, got {_json_kind(value)}')
+    return value
+
+
+def _validate_json_array(value, where: str, *, optional: bool = False) -> list:
+    """``value`` as a JSON array; ``[]`` for an absent or ``null`` OPTIONAL one (`TK134`)."""
+    if value is None and optional:
+        return []
+    # REFUSED SHAPE (TK134): a field the OpenFGA model format defines as an array given as
+    # some other JSON kind -- ``"type_definitions": "user"``, ``"child": null``,
+    # ``"directly_related_user_types": "user"``. WHY: as for `_validate_json_object`; worse,
+    # a string iterates as its characters. INSTEAD: the array form, e.g.
+    # ``"directly_related_user_types": [{"type": "user"}]``.
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f'OpenFGA JSON: {where} must be an array, got {_json_kind(value)}')
+    return list(value)
+
+
+def _validate_json_field(obj: dict, key: str, where: str) -> str:
+    """The required string field ``obj[key]`` (`TK134`)."""
+    # REFUSED SHAPE (TK134): a required string field that is missing or not a string -- a
+    # type definition with no ``"type"``, a ``computedUserset`` with no ``"relation"``, a
+    # ``tupleToUserset`` with no ``"tupleset"`` relation. WHY: the front end indexed it
+    # directly and leaked a bare ``KeyError: 'type'``. INSTEAD: name it, e.g.
+    # ``{"type": "doc"}``, ``{"computedUserset": {"relation": "owner"}}``.
+    if key not in obj:
+        raise ValueError(f'OpenFGA JSON: {where} has no {key!r}')
+    value = obj[key]
+    # WHY/INSTEAD: see above.
+    if not isinstance(value, str):
+        raise ValueError(
+            f'OpenFGA JSON: {where}: {key!r} must be a string, got {_json_kind(value)}')
+    return value
 
 
 def _reject_duplicate_json_keys(pairs: list) -> dict:
@@ -187,7 +263,10 @@ def _validate_json_round_trip(ast: SchemaAST) -> None:
 def _json_restrictions(object_type: str, relation_name: str,
                        entries: list) -> tuple[Restriction, ...]:
     out = []
-    for e in entries:
+    where = f'relation {object_type}#{relation_name}: directly_related_user_types'
+    for i, e in enumerate(entries):
+        e = _validate_json_object(e, f'{where}[{i}]')
+        restricted_type = _validate_json_field(e, 'type', f'{where}[{i}]')
         # REFUSED SHAPE: a conditional type restriction,
         # ``{"type": "user", "condition": ...}``. WHY: conditions are unsupported
         # (`parse_openfga_json`); dropping one would make the restriction unconditional --
@@ -198,9 +277,10 @@ def _json_restrictions(object_type: str, relation_name: str,
             raise ValueError(
                 f'relation {object_type}#{relation_name}: conditional type '
                 f'restrictions are not supported')
-        predicate = e.get('relation') or '...'
+        predicate = (_validate_json_field(e, 'relation', f'{where}[{i}]')
+                     if e.get('relation') is not None else '') or '...'
         wildcard = _validate_json_wildcard(object_type, relation_name, e)
-        out.append(Restriction(type=e['type'], predicate=predicate, wildcard=wildcard))
+        out.append(Restriction(type=restricted_type, predicate=predicate, wildcard=wildcard))
     return tuple(out)
 
 
@@ -213,6 +293,9 @@ def _json_rewrite(node: dict, object_type: str, relation_name: str,
             f'relation {object_type}#{relation_name}: rewrite node must have exactly '
             f'one operator, got {node!r}')
     kind, body = next(iter(node.items()))
+    where = f'relation {object_type}#{relation_name}: {kind}'
+    if kind in ('computedUserset', 'tupleToUserset', 'union', 'intersection', 'difference'):
+        body = _validate_json_object(body, where)
 
     if kind == 'this':
         # REFUSED SHAPE: ``this`` with no ``directly_related_user_types`` metadata.
@@ -226,13 +309,15 @@ def _json_rewrite(node: dict, object_type: str, relation_name: str,
                 f'directly_related_user_types metadata')
         return Direct(restrictions)
     if kind == 'computedUserset':
-        return Computed(body['relation'])
+        return Computed(_validate_json_field(body, 'relation', where))
     if kind == 'tupleToUserset':
-        return TTU(target_rel=body['computedUserset']['relation'],
-                   tupleset_rel=body['tupleset']['relation'])
+        target = _validate_json_object(body.get('computedUserset'), f'{where}.computedUserset')
+        tupleset = _validate_json_object(body.get('tupleset'), f'{where}.tupleset')
+        return TTU(target_rel=_validate_json_field(target, 'relation', f'{where}.computedUserset'),
+                   tupleset_rel=_validate_json_field(tupleset, 'relation', f'{where}.tupleset'))
     if kind in ('union', 'intersection'):
         children = tuple(_json_rewrite(c, object_type, relation_name, restrictions)
-                         for c in body['child'])
+                         for c in _validate_json_array(body.get('child'), f'{where}.child'))
         if not children:
             raise ValueError(
                 f'relation {object_type}#{relation_name}: empty {kind} child list')
@@ -243,8 +328,10 @@ def _json_rewrite(node: dict, object_type: str, relation_name: str,
         return Union(children) if kind == 'union' else Intersection(children)
     if kind == 'difference':
         return Exclusion(
-            _json_rewrite(body['base'], object_type, relation_name, restrictions),
-            _json_rewrite(body['subtract'], object_type, relation_name, restrictions))
+            _json_rewrite(_validate_json_object(body.get('base'), f'{where}.base'),
+                          object_type, relation_name, restrictions),
+            _json_rewrite(_validate_json_object(body.get('subtract'), f'{where}.subtract'),
+                          object_type, relation_name, restrictions))
     # REFUSED SHAPE (connected-store spec §5-S5): an unknown rewrite operator.
     # WHY: only the six operators above are implemented, and skipping an unknown node would
     # silently drop an arm (the front-end's header comment: rejected, never skipped).

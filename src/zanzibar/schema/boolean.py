@@ -695,7 +695,7 @@ def _stratify(plans: dict) -> list[list[tuple[str, str]]]:
         stratum += 1
 
     if placed != len(plans):
-        cyclic = sorted(k for k, d in indeg.items() if d > 0)
+        cyclic = _cycle_members({k for k, d in indeg.items() if d > 0}, fwd)
         # REFUSED SHAPE (boolean spec §1.9): derived relations in a dependency cycle, e.g.
         # ``define member: [user, group#member] but not banned``. The ASK-1 cycle check
         # misses it: a userset restriction or TTU target makes no reference edge.
@@ -711,9 +711,54 @@ def _stratify(plans: dict) -> list[list[tuple[str, str]]]:
         # NOT equivalent: ``banned`` is subtracted once, at the queried group, not at every
         # nesting level. Per-level exclusion has no legal form.
         raise CyclicDerivedDependency(
-            f"derived relations form a dependency cycle (boolean spec §1.9 forbids "
-            f"recursion through boolean relations): {cyclic}")
+            f"derived relations form a dependency cycle: {cyclic}. The graph index (and so "
+            f"ConnectedStore) cannot evaluate recursion through a relation that uses `and` / "
+            f"`but not`; SetEngine on its own accepts it. Instead, recurse on a plain "
+            f"relation and apply the operator on top, e.g. `define viewer_base: [user] or "
+            f"viewer_base from parent` and `define viewer: viewer_base but not blocked`. "
+            f"That is NOT the same schema: the exclusion then applies only at the object "
+            f"queried, not at every level of the recursion")
     return strata
+
+
+def _cycle_members(stuck: set, fwd: dict) -> list[tuple[str, str]]:
+    """The relations ON a dependency cycle, sorted (`TK135`). Kahn leaves every relation
+    downstream of a cycle with a positive in-degree too, and naming those sent a reader
+    looking for recursion in relations that only depend on it. Tarjan's SCCs over the stuck
+    subgraph; a member is in an SCC of two or more, or depends on itself."""
+    index: dict = {}
+    low: dict = {}
+    stack: list = []
+    on_stack: set = set()
+    members: set = set()
+
+    def visit(v):
+        index[v] = low[v] = len(index)
+        stack.append(v)
+        on_stack.add(v)
+        for w in fwd[v]:
+            if w not in stuck:
+                continue
+            if w not in index:
+                visit(w)
+                low[v] = min(low[v], low[w])
+            elif w in on_stack:
+                low[v] = min(low[v], index[w])
+        if low[v] == index[v]:
+            scc = []
+            while True:
+                w = stack.pop()
+                on_stack.discard(w)
+                scc.append(w)
+                if w == v:
+                    break
+            if len(scc) > 1 or v in fwd[v]:
+                members.update(scc)
+
+    for v in sorted(stuck):
+        if v not in index:
+            visit(v)
+    return sorted(members)
 
 
 def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,

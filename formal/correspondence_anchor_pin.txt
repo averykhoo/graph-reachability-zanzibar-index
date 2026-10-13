@@ -396,7 +396,7 @@ src/zanzibar/schema/boolean.py::_is_pure	py:function	9e53a59e23ea58a4
 src/zanzibar/schema/boolean.py::_mentions	py:function	6988b6585110f382
 src/zanzibar/schema/boolean.py::_plan_deps_and_fanout	py:function	6e2d7a41d7c110ff
 src/zanzibar/schema/boolean.py::_plan_leaves	py:function	23d2140675589b71
-src/zanzibar/schema/boolean.py::_stratify	py:function	24d003353bfd4e3e
+src/zanzibar/schema/boolean.py::_stratify	py:function	905eee358585ebdf
 src/zanzibar/schema/boolean.py::compile_boolean_schema	py:function	8dc68286846e622c
 src/zanzibar/schema/boolean.py::compute_taint	py:function	c01980829eb94c8d
 src/zanzibar/schema/compiler.py::_emit_expr	py:function	5ca6cf19f9b81bc1

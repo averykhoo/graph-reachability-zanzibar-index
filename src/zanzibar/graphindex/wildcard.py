@@ -30,6 +30,17 @@ from zanzibar.schema import (AdmissionRejected, SchemaInfo,
 
 @dataclass
 class LookupResult:
+    """What ``lookup`` / ``lookup_reverse`` return (also via ``ConnectedStore``).
+
+    * ``node_ids``: ids of ``zanzibar.graphindex.Node`` rows in this store. Resolve them with
+      ``session.exec(select(Node).where(Node.id.in_(result.node_ids)))``; each node is a
+      ``(type, name, predicate)`` triple, ``predicate`` being the relation or ``"..."`` for a
+      bare subject. Intermediate usersets (``group:eng#member``) are included.
+    * ``markers``: wildcard grants as ``(type, predicate, variant)``; from ``lookup_reverse``,
+      ``("user", "...", "any")`` means every user (a ``[user:*]`` tuple).
+    * ``excluded_node_ids``: node ids a marker would cover but that are refused (``but not``).
+      The caller subtracts them: "every user except these".
+    """
     node_ids: set[int] = field(default_factory=set)               # concrete results
     markers: set[tuple[str, str, str]] = field(default_factory=set)  # (type, predicate, variant) symbolic "all/any"
     # "everyone of a starred shape EXCEPT these" (boolean spec §6): concrete node ids

@@ -11,9 +11,9 @@ labels: [infra]
 source: docs/pypi-trial-0.0.3-2026-10-08.md
 source_hash:
 created: 2026-10-08b
-moved: 2026-10-08b
-updated: 2026-10-08b
-closed:
+moved: 2026-10-13b
+updated: 2026-10-13b
+closed: 2026-10-13b
 ---
 
 PyPI-facing documentation gaps the 0.0.3 install trial hit (AGENT, transcribed in
@@ -37,3 +37,7 @@ PyPI-facing documentation gaps the 0.0.3 install trial hit (AGENT, transcribed i
 Ergonomics items (docstrings, `__all__`, error types) belong to `TK123`, not here.
 
 ## Log
+
+### 2026-10-13b
+
+CLOSED 2026-10-13b. All four gaps re-checked FIRST-HAND before writing (probe of 2026-10-13: group a-in-b-in-a, group-in-itself and the folder parent loop are refused with AdmissionRejected by BOTH ConnectedStore and SetEngine; a check with typo relation / typo type / None / int name returns False while the typo write raises; lookup and lookup_reverse decoded via graphindex.Node). LANDED in `PYPI_README.md`: three new "Things to know" bullets (no recursion through and/but not, acyclic tuple data, lenient reads) and a "Reading lookup results" section. The quickstart now resolves lookup node ids and ASSERTS the result, so `tests/test_tk122_release_metadata.py` executes the claim. `graphindex/wildcard.py::LookupResult` got a docstring. Item 1's message is also fixed in code: `boolean.py::_stratify` now names only the SCC members (`_cycle_members`, Tarjan) instead of every relation Kahn could not place, drops the 'boolean spec 1.9' citation, and gives the INSTEAD rewrite plus how it differs. The difference was measured with SetEngine: user blocked only at mid, leaf view is orig False, rewrite True. PINNED: `tests/test_tk135_cycle_message.py`. SABOTAGE: reverting to the Kahn leftovers -> 2 failed, 3 passed.

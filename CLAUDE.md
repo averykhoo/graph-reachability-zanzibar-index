@@ -54,7 +54,7 @@ pointer. Case histories go to the session log, detail to its home doc (`docs/REA
     The tool is pinned by `tests/test_tasktool.py`, inside the gate.
   * **Close the loop in your session-log entry with two literal lines** (enforced:
     `handoff_lint.py::check_session_receipt` makes `lean` RED without them): the output of
-    `python scripts/task.py lint`, and `read: board only` / `read: board + note` — an honest
+    `python scripts/task.py lint`, and `read: board only` / `read: board + note` / `read: show <id>` — an honest
     self-report of what you actually read to start work. **A third line is conditional**
     (`TK96`): while any open `ASK-*` row sits at `NEXT` (or `NOW`), raise each with the user
     in chat and write `asked: ASK-<n>[, ASK-<m>]` naming all of them — `asked: none` is red

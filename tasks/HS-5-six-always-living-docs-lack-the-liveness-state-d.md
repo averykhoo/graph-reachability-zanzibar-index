@@ -2,7 +2,7 @@
 id: HS-5
 title: always-living docs declare no liveness state; enumeration+method now in docs/README.md sec 2
 brief:
-pri: LATER
+pri: NOW
 size: S
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [docs]
 source: board
 source_hash: 31c0d00522ce
 created: 2026-08-20b
-moved: 2026-10-13
-updated: 2026-10-13
+moved: 2026-10-13b
+updated: 2026-10-13b
 closed:
 ---
 
