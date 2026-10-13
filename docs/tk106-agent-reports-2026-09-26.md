@@ -1,5 +1,18 @@
 # `TK106` subagent reports (2026-09-26)
 
+> **FROZEN 2026-10-13 — provenance, not a living document.** `TK106` closed 2026-09-26b,
+> and this companion promised to freeze with it; the banner was owed from then and was
+> applied late, under `HS-5`. Status lines below are as-of-then and several may now be
+> false; live state: `HANDOFF.md` + the session ledger. Corrections are appended dated at
+> the top, never edited into the body.
+>
+> **2026-10-13 correction (`TK107`, `TK120`):** symbol names below are historical where they
+> belong to the tainted-tupleset path, which `TK107` (closed 2026-10-05) deleted (census:
+> `docs/tk107-tainted-tupleset-removal-2026-10-05.md` § 1). `TK120` (2026-10-06) rewrote
+> this body's file paths to `src/zanzibar/...` mechanically, so a new-style path may name a
+> symbol that no longer exists there; line numbers are as of 2026-09-26, pre-`TK120`. Rename
+> key: `docs/architecture/overview.md` § "Renamed in TK120".
+
 **Companion to [`tk106-boolean-tuplesets-2026-09-26.md`](tk106-boolean-tuplesets-2026-09-26.md);
 FROZEN with it when `TK106` closes.** Each section below was transcribed verbatim from a
 subagent's gitignored `.scratch/tk106/agent-<name>.md` the same hour it returned, per

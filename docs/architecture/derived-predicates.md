@@ -21,10 +21,16 @@ Each tainted relation compiles to a **plan tree** (`RuleSet.compiled.plans`):
   in declared relation names for exactly this). **Storage leaves** (`storage=True`)
   hold Direct restrictions and are fed only by `RewriteFilter`s; **routed leaves**
   are fed only by Rules (`Computed`/`TTU` refs). Never merged — storage-leaf edges ARE
-  the relation's raw stored tuples, which TTU parent enumeration depends on;
-* `PDerivedComputed` / `PDerivedUserset` / `PDerivedTTU` / `PDerivedTuplesetTTU` —
-  references to other derived relations, evaluated at reconcile time through their
-  edge+residue state, never inlined.
+  the relation's raw stored tuples, and a Direct arm's stored tuples must not mix with
+  computed state (before `TK106`/`TK107` a TTU could also enumerate its parents from a
+  derived tupleset's storage leaf; a tupleset is now never derived, so none does);
+* `PDerivedComputed` / `PDerivedUserset` / `PDerivedTTU` — references to other
+  derived relations, evaluated at reconcile time through their edge+residue state,
+  never inlined. A `PDerivedTTU` reads a derived TARGET through an untainted, stored
+  tupleset; the tupleset itself is never derived, because a `from`-tupleset must be
+  direct-only (`TK106`) and `_validate_ttu_tuplesets` (`src/zanzibar/schema/compiler.py`)
+  refuses a tainted one. (A fourth node for a derived tupleset, and its
+  `derived-tupleset-ttu` leaf kind, were deleted by `TK107`, 2026-10-05.)
 
 Executable form: `check_fn(ctx, subject)` / `stars_fn(ctx)` are closure-composed
 callables (short-circuit, no AST walk at runtime). The star fold is lifted

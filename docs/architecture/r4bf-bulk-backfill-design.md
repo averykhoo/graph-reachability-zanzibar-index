@@ -14,6 +14,19 @@
 > correctness bug found long after this design was written, and is FIXED
 > (`docs/history/handoff-status-2026-08.md` §1). Corrections are appended dated at the
 > top, never edited into the body.
+>
+> **2026-10-13 correction (`TK106`, `TK107`, `TK120`): several names below no longer
+> exist.** `TK106` (2026-09-26) made a `from`-tupleset direct-only, so a tupleset is never
+> derived, and `TK107` (2026-10-05) deleted the path that served one: the callback pair
+> `tupleset_ttu_check` / `tupleset_ttu_stars` (§2.2's protocol list, on both
+> `_EvalContext` and `_BulkEvalContext`), the enumeration `derived_stored_parents` (§2.2),
+> and the `derived-tupleset-ttu` leaf kind (§5 (c)). Census:
+> `docs/tk107-tainted-tupleset-removal-2026-10-05.md` § 1. §5's corpus items (c) and (d)
+> left `tests/test_bulk_build.py` with `TK106` (its comment above `_DEMORGAN1` records why).
+> `TK120` (2026-10-06) moved `index_v4/` to `src/zanzibar/graphindex/` and
+> `connectedstore/` to `src/zanzibar/connectedstore/`; key:
+> `docs/architecture/overview.md` § "Renamed in TK120". Every other function the body
+> names was re-checked present under `src/` on 2026-10-13.
 
 Goal: apply the P13 pattern one layer out. P13 (`docs/architecture/p13-bulk-build-design.md`,
 `index_v4/bulk_build.py`) bulk-builds the **pre-backfill** closure state; on boolean
