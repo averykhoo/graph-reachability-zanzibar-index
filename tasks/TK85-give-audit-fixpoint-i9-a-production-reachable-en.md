@@ -2,7 +2,7 @@
 id: TK85
 title: give audit_fixpoint (I9) a production-reachable entry point, framed as repair/diagnosis
 brief: TK74 sec 8.8's rider, demoted by sec 9.9 AMENDMENT 1: every I9 call site is under tests/ (census 2026-09-19b)
-pri: LATER
+pri: SOMEDAY
 size: S
 deps: []
 related: [TK74, TK82, TK73]
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-19b
-moved: 2026-10-04g
-updated: 2026-10-04g
+moved: 2026-10-13
+updated: 2026-10-13
 closed:
 ---
 
@@ -92,3 +92,25 @@ which is accurate and should stay accurate if this ships).
 ### 2026-10-04g
 
 Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): overlaps TK3 almost entirely (see TK3 log 2026-10-04g): merge or narrow one of them.
+
+### 2026-10-13
+
+2026-10-13 (assurance triage, lane L3): TK3's I9 half MOVES HERE. TK3 is narrowed to the cascade-precondition half only (nothing checks that a boolean write ran run_cascade). The I9 picture as of 2026-10-13 (READ): TK82's 'fixpoint' tier (invariants.py::PARANOIA_FIXPOINT -> processor.py::DeltaProcessor._check_cascade_fixpoint) covers execution-side misses for keys a cascade SCHEDULED. A key never scheduled is detectable only by DeltaProcessor.audit_fixpoint, which still has 0 production callers. That never-scheduled class is this row's. formal/README.md and formal/SEMANTICS.md sec 7.7 / 11-A1 now point here for it.
+
+DECISION 2026-10-13 (lane L7; executive call made by a separate judgement subagent under CLAUDE.md 'Who decides', recorded here as the decision of record and implemented by this lane): ACCEPT THE GAP. Build neither shape 1 nor shape 2 (shape 3 was already rejected on this row). Row demoted LATER -> SOMEDAY (promote op of the same date; reopen trigger below).
+
+Why shape 1 (a `scripts/` operator command) is rejected. READ 2026-10-13: `pyproject.toml` has no `[project.scripts]`, and `[tool.setuptools.packages.find] where = ["src"]` (pyproject.toml:62-63). So `scripts/` is not in the wheel, and a scripts/ command can only be run from a checkout. That is not "production-reachable" for anyone who installs zanzibar-index. It would be the first operator-facing script in a directory that holds only repo tooling. It would also need a mandatory sabotage and an M0 mutation sweep, for a sweep that docs/tk74-staleness-net-2026-09-18.md sec 9.9 AMENDMENT 1 already rates at about 0 as a detector (laundered transient staleness: 0 of 34 arms were still divergent after the workload).
+
+Why shape 2 (a `ConnectedStore.verify()`) is rejected. REASONED from the code (READ: `src/zanzibar/graphindex/processor.py::DeltaProcessor.audit_fixpoint`, def at :1663 on 2026-10-13): audit_fixpoint is a REPAIRING MUTATOR. It calls `self.reconcile(...)` per key, writes the FIRST stale key's repair, then raises `InvariantViolation`. Later keys are left untouched, and `_bumped` is cleared only on the clean path. A verify() method that wraps it is the TK73/TK82 "both fixes turn the witness green" shape. Making it honest would take a non-mutating dry-run reconcile. That is an algorithm change the Lean twin would have to follow (CORRESPONDENCE.md sec 8), which is too much for a diagnosis tool nobody has asked for.
+
+What IS true today. Every fact below was READ 2026-10-13.
+(a) `grep -rn audit_fixpoint src/ scripts/` finds only the definition and docstring mentions (invariants.py:69, :239; processor.py:1150, :1572-1579). There is no production call site.
+(b) The detector IS reachable through the public attribute `ConnectedStore.proc` (`src/zanzibar/connectedstore/store.py:209`; it is None when the compiled schema has no plans). Call `store.proc.audit_fixpoint()` in a transaction the caller ROLLS BACK for diagnosis.
+(c) The whole-store repair `DeltaProcessor.backfill()` (processor.py::DeltaProcessor.backfill, :1645) already has a production caller, `src/zanzibar/connectedstore/build.py:265` (`build_index(bulk=False)`). Repair is backfill() plus COMMIT, not audit_fixpoint plus commit, because the latter fixes only the first stale key.
+(d) Execution-side misses are covered per cascade by the TK82 'fixpoint' paranoia tier (`invariants.py` module doc :56-71; `DeltaProcessor._check_cascade_fixpoint`). The never-SCHEDULED class is the only one audit_fixpoint alone detects.
+
+LANDED (lane L7, 2026-10-13): one docstring edit, no behaviour change, in `src/zanzibar/graphindex/processor.py::DeltaProcessor.audit_fixpoint`. It states the contract above: repairs then raises on the first stale key, later keys untouched, `_bumped` cleared only when clean, roll back for diagnosis, backfill()+commit for repair, never swallow the exception, O(live derived keys) and never a write-path default or paranoia tier, the 'fixpoint' tier covers execution-side misses, this audit is the only detector of the never-scheduled class, reachable via `ConnectedStore.proc`, and backfill() is production-called by `build_index(bulk=False)`. The file parses, and 97 tests passed (test_cascade_fixpoint_tier, test_processor, test_reg15_security_hardening, test_stored_cache_scope, test_backfill_enumeration, test_reg_tk91_live_keys_repair, test_refused_shape_comments). A docstring needs no sabotage.
+
+Scope merge: TK85 absorbs TK3's "I9 is test-only" half. TK3 keeps only the cascade-precondition (A1) half. The overstated formal passages (formal/README.md residual paragraph and formal/SEMANTICS.md sec 7.7 / 11-A1) were corrected by lane L3 the same day.
+
+REOPEN TRIGGER: a consumer asks for a store audit, OR a bug of the never-scheduled class appears in the wild (zero across both TK74 rounds). On reopen, start from shape 2 with a non-mutating reconcile, and budget the Lean-correspondence work.

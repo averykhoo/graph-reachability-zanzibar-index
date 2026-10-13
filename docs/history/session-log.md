@@ -21,7 +21,8 @@ from here.
   ids until the 2026-09-06 cutover).
 * **Two literal receipt lines**, enforced by `handoff_lint.py::check_session_receipt` on
   the newest entry only: the output of `python scripts/task.py lint`, and
-  `read: board only` / `read: board + note`. **Plus a third, conditional one (`TK96`,
+  `read: board only` / `read: board + note` / `read: show <id>[, <id>]` (`TK98`,
+  2026-10-13). **Plus a third, conditional one (`TK96`,
   2026-09-27d):** while any `ASK-*` row sits at `NEXT` or `NOW`, an `asked: ASK-<n>[, ...]`
   line naming every one of them (rules: `docs/README.md` §7).
 * **`Still owed:`** closes every entry. If the session ran short of context and skipped
@@ -31,6 +32,73 @@ from here.
   root, so from this file they resolve against `../../`.
 
 ---
+
+## 2026-10-13 — assurance batch: 10 rows closed (`TK99`, `TK97`/`TK98`/`TK86`/`TK100`, `TK110`, `GC-1` ...)
+
+rows: TK99 (closed), AW-1 (closed), TK62 (closed, declined), TK66 (closed), TK3 (narrowed, decided), TK97 (closed), TK98 (closed), TK86 (closed), TK100 (closed), HS-5 (progressed), TK110 (closed), TK85 (LATER -> SOMEDAY), GC-1 (closed)
+
+`task lint: clean (13 checks, 253 task file(s) parsed), 25 warning(s)`
+
+`read: board only`
+
+`asked: none`
+
+**The user asked for the assurance-triage list (items 1-6) to be done by subagents via
+ultracode, and for item 7 (`TK85`, `GC-1`) to be decided by a fable judgement subagent
+and then implemented.** The triage itself (three read-only agents over the open
+assurance rows, 2026-10-13) fed seven implementation lanes; this entry is the records
+stage. Each row's Log carries the full evidence; this is the index.
+- `TK99` (L1) LANDED: `formal/conformance/doc_counts.py::ratchet_floors` runs in
+  `--generate` and raises `MIN_TESTS_ALL` / `MIN_CONF_HEAVY` / `MIN_CONF_REST` to the live
+  count (max, never lower); `MIN_CONF_ALL` is defined as HEAVY + REST. `--check` (step 4e)
+  now refuses any floor below live (`::floor_headroom`). Five sabotages, red, in
+  `tests/test_tk99_floor_ratchet.py`. The records stage ran `--generate` once, which
+  closed the `MIN_TESTS_ALL` headroom the triage measured.
+- `AW-1` (L2) closed: §4(d) of `formal/FINAL_REVIEW.md` did not under-claim; it
+  OVER-claimed (`StoreValidRules` is strictly stronger than `GraphAdmission.storeValid`
+  inside `W4Fragment`). Prose fixed in place; `P9` owns the widening.
+- `TK62` closed as declined (perf deprioritized; reopen only with perf round 6). `TK66`
+  closed: every live-looking `formal/history/` directive is pinned, surfaced live, or
+  discharged. `TK3` narrowed to the cascade-precondition half; decided (`formal/SEMANTICS.md` §11): the Lean
+  boundary is accepted, and an O(1) always-on "cascade owed" mark is WANTED (unbuilt;
+  next action is a census of tests that write without cascading). Its I9 half moved to
+  `TK85`. `formal/README.md` and `formal/SEMANTICS.md` §7.7/§7.8/§11 corrected (L3).
+- `handoff_lint.py` (L4a): `TK97` = `::check_still_owed_fresh` (appended at `CHECKS[12]`,
+  cited by name; age counted in ledger entries; re-stamping does not reset it). `TK98` =
+  the closed third receipt token `read: show <id>[, <id>]` (ids must be known to the
+  tree). `TK86` = hardened, not retired: the badge budget counts the glyph and its `(!)`
+  fold; only code is exempt. `docs/README.md` §4/§7 updated. `TK100` (L4b):
+  `scripts/task.py::extract_banner` refuses an UNCLOSED fence opened inside the banner
+  section (a closed one is content and counts toward the cap). All with sabotage/mutation
+  evidence in the test docstrings.
+- `HS-5` (L5) progressed: the two `TK106` companion docs are FROZEN, and the three docs
+  named by the old Still-owed bullet are handled (`derived-predicates.md` edited,
+  `r4bf-bulk-backfill-design.md` got a dated correction). New finding recorded on the row:
+  about a dozen ACTIVE-PLAN docs whose rows are closed were never frozen. That is the row's
+  next action.
+- `TK110` (L6) closed: 28 refusal-absorbing `except ValueError` sites in 15 test files
+  narrowed to `except AdmissionRejected`; `tests/test_reads.py::_walk_and_compare` now
+  requires both set engines to refuse what the graph refuses, with an anti-vacuity floor.
+  Pre-fix copies stayed green under every sabotage, so the gap was real.
+- Item 7 (L7, fable decision, nothing escalated to the user): `TK85` = accept the gap,
+  demoted to SOMEDAY; the only change is the `DeltaProcessor.audit_fixpoint` docstring
+  (it is a repairing mutator: roll back to diagnose, `backfill()` + commit to repair).
+  `GC-1` closed with no new check (both mechanical shapes are false-red or exemption-list
+  shaped); reopen on a third percentage drift.
+- Records-stage fixes: the `handoff_lint.py` comment's minted-shape placeholder id (it
+  reddened `tests/test_tasktool.py::test_shipped_config_is_measured_not_an_example`)
+  became `<unknown id>`. L6's edit moved the claim-rot body pin of
+  `tests/test_hypothesis.py::test_add_then_remove_restores_row_multiset`. I re-read
+  `formal/CORRESPONDENCE.md` (~l.1264, 2026-10-13) first-hand: it is a historical claim
+  (BL-1 found by fuzzing via that test) and is still true. So `claim_rot.py --generate` was
+  run (1 changed, 0 added, 0 removed). The 2026-10-05 Still-owed bullet was deleted (L5:
+  all three docs handled). The `TK3` brief was shortened to fit the 120-char cap. `promote`
+  takes no message, so `TK85`'s demotion reason is in its comment. The session-log
+  header's receipt rule now lists the third token.
+- NOT RUN by this stage: the gate (`verify.sh` phases). Ask `python scripts/gate_status.py`.
+
+Still owed: `CLAUDE.md` "Start here" still lists only two `read:` tokens (see the
+`HANDOFF.md` Still-owed bullet).
 
 ## 2026-10-12c — `TK79` + `TK102` + `TK44` closed: GC outbox rows pinned; derived-userset enum; no generator gap
 

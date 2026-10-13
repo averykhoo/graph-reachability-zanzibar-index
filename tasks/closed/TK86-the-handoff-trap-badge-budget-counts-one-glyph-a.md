@@ -11,9 +11,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-19d
-moved: 2026-09-19d
-updated: 2026-09-19d
-closed:
+moved: 2026-10-13
+updated: 2026-10-13
+closed: 2026-10-13
 ---
 
 `scripts/handoff_lint.py::check_warn_budget` counts one glyph and one glyph only --
@@ -67,3 +67,7 @@ row, so the two halves feed each other.
 
 Whatever the fix is, it needs a sabotage that a `(!)`-written trap actually goes RED, and
 a control that a QUOTED glyph does not. Both directions, or it will fail by passing again.
+
+### 2026-10-13
+
+DECIDED 2026-10-13 (batch lane L4a): HARDEN, not retire. WHY (REASONED): the budget bounds the SHARE of the note that shouts. The byte/line caps (`handoff_lint.py::MAX_LINES` / `MAX_BYTES`, TK130) bound size, not proportion, so the budget still earns its keep. The row's worry that widening reddens the banner is stale. Live HANDOFF.md re-measured 2026-10-13 (READ, probe `_badge_count`): 0 glyphs and 0 `(!)`. The row's objection that `(!)` is ambiguous is the reason TO count it: `task.py::ASCII_FOLD` maps U+26A0 -> `(!)` (READ), so at the `board` read surface the two ARE one badge. LANDED: `handoff_lint.py::WARN_SPELLINGS = (WARN, '(!)')` and `::_badge_count`. ONE escape, code: backtick spans (`_CODE_SPAN_BADGE`) and fences (`_is_fence`), mirroring check_restated_counts. Double quotes are deliberately NOT an escape. Residual evasion, accepted and documented: wrapping a real badge in backticks renders it as code. TESTS: new `tests/test_handoff_lint_warn_budget.py` (8 tests). These are the first tests the check ever had (grep: none before). They include `test_the_badge_spellings_match_what_board_folds_it_to`, which loads task.py and asserts `ASCII_FOLD[U+26A0]` is in WARN_SPELLINGS, so the two copies cannot drift. SABOTAGE, both directions (first-hand 2026-10-13, temp-dir copy, clean baseline first): W1 glyph-only -> FAILED fold-match + test_ascii_spelled_overflow_is_red + test_mixed_spellings_add_up. W2 no code-span escape -> FAILED test_a_badge_quoted_in_backticks_is_free. W3 no fence escape -> FAILED test_a_fenced_badge_is_free. W4 `>=` -> FAILED test_exactly_the_budget_is_green (+2 control tests). docs/README.md sec 4 badge table now cites `WARN_BUDGET` by symbol (no restated number) and names both spellings and the code escape.

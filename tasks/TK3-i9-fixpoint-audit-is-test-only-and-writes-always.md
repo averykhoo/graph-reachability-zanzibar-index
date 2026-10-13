@@ -1,7 +1,7 @@
 ---
 id: TK3
-title: I9 fixpoint audit is test-only and 'writes always cascade' is convention, not a check
-brief:
+title: nothing checks that a boolean-schema write ran run_cascade (bare WildcardIndex API)
+brief: 2026-10-13: O(1) per-transaction cascade-ran mark wanted (no tier, not head==frontier); unbuilt. I9 half is TK85.
 pri: LATER
 size: M
 deps: []
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-10-04g
-updated: 2026-10-04g
+moved: 2026-10-13
+updated: 2026-10-13
 closed:
 ---
 
@@ -53,3 +53,21 @@ Not closed: the row is still the open question of whether a per-write check is w
 ### 2026-10-04g
 
 Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): PARTLY SUPERSEDED. TK82 shipped the per-cascade fixpoint tier (src/zanzibar/graphindex/invariants.py PARANOIA_FIXPOINT), so 'I9 is test-only' no longer holds for the execution-side class. Remaining: 'writes always cascade' is still a convention (src/zanzibar/connectedstore/apply.py always cascades on the composed path); the never-scheduled class is TK85. Merge with TK85 or narrow this row to the convention half.
+
+### 2026-10-13
+
+NARROWED + A1 DECIDED 2026-10-13 (assurance triage, lane L3). Under CLAUDE.md 'Who decides' (2026-09-12b), the model decides; this is no longer waiting on the user.
+SCOPE NOW: only the cascade-precondition half. On a boolean schema, nothing checks that a graph write ran DeltaProcessor.run_cascade in the same transaction. The I9 'test-only' half is MOVED to TK85. TK82's opt-in 'fixpoint' tier (src/zanzibar/graphindex/invariants.py::PARANOIA_FIXPOINT -> DeltaProcessor._check_cascade_fixpoint, called at the end of run_cascade) covers execution-side misses inside a cascade that RAN. The never-SCHEDULED class (DeltaProcessor.audit_fixpoint, still 0 production callers) is TK85's.
+EVIDENCE (READ 2026-10-13):
+- The composed path always cascades: src/zanzibar/connectedstore/apply.py::advance_index calls run_cascade when a processor exists.
+- The exposure is the bare exported API: src/zanzibar/graphindex/__init__.py exports WildcardIndex, and a caller on a boolean schema must construct and run DeltaProcessor itself.
+- No paranoia tier sees a cascade that was never called. The fixpoint tier runs INSIDE run_cascade, and check_invariants excludes I9 by design (invariants.py::check_invariants docstring, :239 as of 2026-10-13).
+DECISION A1: (1) The proof scope boundary is ACCEPTED: Lean cannot speak to Python call discipline, so baking the cascade into each modelled write op is the faithful model. (2) A cascade-ran CHECK IS WANTED. A skipped cascade makes the graph index silently disagree with the set engine on a public API, and CLAUDE.md prefers a mechanical refusal over a doc convention.
+INTENDED SHAPE (REASONED, unbuilt): O(1), always-on, outside the paranoia ladder (it costs ~nothing, so tiering it would only let it be off). It is a per-session 'cascade owed' mark, set by a WildcardIndex write when the ruleset has compiled plans, cleared by run_cascade and by DeltaProcessor.backfill, and asserted clear in a before_commit hook.
+TRAPS:
+(a) Do NOT use 'outbox head == drained frontier'. The cascade's own reconcile-time GC emits outbox rows late (tests/test_tk79_outbox_replica.py pins three sites), so that comparison is REASONED to misfire.
+(b) The mark catches 'never called', not 'called with a too-high watermark'. State that bound in the docstring.
+(c) Tests that corrupt state on purpose, or write without cascading (the TK74 staleness tests are likely), need an explicit opt-out. Census them FIRST.
+(d) Sabotage per docs/sabotage-procedure.md: drop the clear in run_cascade -> every boolean write must go red; drop the hook -> the no-cascade witness must go red.
+DOCS FIXED this session: formal/README.md residual paragraph (no longer says I9 has no runtime tier; names the WildcardIndex exposure and TK85), formal/SEMANTICS.md sec 7.7 (dated correction naming the TK82 tier), sec 7.8 (re-checked note), sec 11 header + A1 (decision recorded in place). The row's Read-first line numbers are stale: SEMANTICS sec 11-A1 is now ~:933-960 and invariants.py's 'Not here, by design' is now :239 (2026-10-13).
+NEXT ACTION: census the tests/ and formal/conformance/ call sites that write to a WildcardIndex on a boolean schema without run_cascade/backfill in the same transaction. Record the census in a tracked ACTIVE-PLAN doc before wiring the mark. Size stays M.

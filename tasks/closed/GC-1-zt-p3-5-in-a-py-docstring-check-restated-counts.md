@@ -11,9 +11,9 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-09-10b
-moved: 2026-09-10b
-updated: 2026-09-22
-closed:
+moved: 2026-10-13
+updated: 2026-10-13
+closed: 2026-10-13
 ---
 
 ## The rot that was found (TK44, 2026-09-10) and fixed (this row, same day)
@@ -92,3 +92,17 @@ pattern.
 ### 2026-09-22
 
 MECHANICAL: the `HANDOFF.md` `## Still owed` bullet that pointed here ("A percentage still has no mechanical guard -- now FILED as `GC-1`") was DELETED by the 2026-09-22 Still-owed disposition as a SECOND COPY. This row is the single home and its state is unchanged; `moved` deliberately holds. The bullet added nothing this row does not already carry, including why widening the check is not free. Context: `TK97` (lint check 15).
+
+### 2026-10-13
+
+CLOSED 2026-10-13 by executive decision (lane L7; the call was made by a separate judgement subagent under CLAUDE.md 'Who decides' and implemented here). No code, no new test, no lint widening. Facts below were READ first-hand 2026-10-13 unless labelled.
+
+(1) The motivating instance is retired, and the quantity is no longer a free-floating number. The four prose figures stay deleted. The only percentages left in tests/test_generator_coverage.py are: the dated MEASURED 2026-08-10 table (:36-53), the GC-1 (!) paragraph quoting the rotten values AS HISTORY (:86-90), the floor-convention comments '~5% under' / '~10% under' (:598, :617, :633, :645, :968, :976), and the print lines of test_report_cell_coverage (:1802-1815). TK44 (d03156f) turned the residue into a DERIVED classification and pinned its interesting member to zero. `test_every_pair_of_hit_features_is_reached_together` (:722) asserts the gap is empty, with a recorded sabotage dated 2026-10-12c. `test_refused_only_features_are_tupleset_shapes` (:757) pins the refused-only class. No 'blind spot %' is left for anyone to copy. Stray '~30%' strings survive only in DATED snapshot docs: docs/goal-census-2026-09-22.md:123, docs/promote-next-triage-2026-10-03.md:85, and docs/tk44-generator-coverage-census-2026-10-12.md:137 (which quotes the row title). They are as-of-then, not drift.
+
+(2) The general widening (a percentage pattern plus a walk of .py docstrings) fails `scripts/handoff_lint.py::check_restated_counts`'s own contract. In this ONE file a '%' pattern would go red on six legitimate floor-margin comments plus the GC-1 warning paragraph itself. That is more false reds than the whole retrospective control the check was landed on (6 true lines, 0 false). The row's own words: "a pattern that arrives red on dozens of good lines gets deleted."
+
+(3) The narrow self-test ("refuse any %-of-pair-space claim outside test_report_cell_coverage") would need an allow-list: the (!) paragraph, six floor comments, the dated MEASURED table and the print lines. That is an ad-hoc baseline, which the row says the escape vocabulary must never become. A check with that many exemptions gets edited until it passes.
+
+(4) The (!) at the exact site of the rot, naming the single machine-readable home, together with the pinned classification, is the most durable form available. On docs/sabotage-procedure.md's ladder, a mechanical check that cannot be made structural ranks below it, because it either fails by passing or gets deleted.
+
+REOPEN TRIGGER: a THIRD drift of a percentage into live prose anywhere in tests/ or docs/ (dated snapshot docs do not count). Then run a TK58-style census FIRST, and add a fourth `_COUNT_PATTERNS` entry naming GC-1 as its rot, respecting the ten-mutation sweep in tests/test_handoff_lint_count_guard.py. Leave the 2026-08-10 MEASURED table alone: it is dated, so it is honest.

@@ -13,18 +13,20 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-12c -- **`TK79`, `TK102` and `TK44` closed.** `TK79`: a `drain_deltas` replica needs the late GC outbox rows (pinned). `TK102`: the exhaustive enum arm gains `derived_userset_subject`; no divergence. `TK44`: no generator gap left in the pair cells; the rest is reported as a derived refused-only class. Next: `TK134` (NOW, the model's pick; the user may re-rank). No rush to release 0.0.4 (`TK136` + `TK118` sit under `[Unreleased]`; `TK134`/`TK135` are LATER). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-13 -- **Assurance batch: 10 rows closed** (`TK99`, `AW-1`, `TK62`, `TK66`, `TK97`, `TK98`, `TK86`, `TK100`, `TK110`, `GC-1`). Floors now ratchet in `doc_counts --generate`; `handoff_lint` checks Still-owed age and accepts `read: show <id>`. `TK3` narrowed (cascade-ran mark wanted, unbuilt; census next); `TK85` -> SOMEDAY; `HS-5` next: freeze closed-row ACTIVE-PLAN docs. Next: `TK134` (NOW). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed
 
-- (2026-10-05, re-stamped 2026-10-06: `TK120` has landed, so it is now actionable) `docs/architecture/derived-predicates.md` and `docs/architecture/r4bf-bulk-backfill-design.md` still name symbols `TK107` deleted; so does `docs/tk106-triage-2026-09-26.md` (`PDerivedTuplesetTTU`), now cited as `src/zanzibar/schema/::PDerivedTuplesetTTU`.
+- (2026-10-13) `CLAUDE.md` "Start here" lists only `read: board only` / `read: board + note`; add
+  `/ read: show <id>` (`TK98`; mind the `CLAUDE.md` byte cap). Left by the records subagent.
 
 A session that runs short lists its skipped Rhythm steps here verbatim
 (`docs/README.md` § 7), **stamped with its own session key**, and the next session
 executes them before its own work. A bullet that survives two sessions is not a baton,
-it is backlog, and it belongs in the tree — `TK97` is the check that makes that
-mechanical.
+it is backlog, and it belongs in the tree. `handoff_lint.py::check_still_owed_fresh`
+(`TK97`) makes that mechanical: a bullet older than the previous ledger entry is RED, and
+re-stamping does not reset its age.
 
 ## Next session
 

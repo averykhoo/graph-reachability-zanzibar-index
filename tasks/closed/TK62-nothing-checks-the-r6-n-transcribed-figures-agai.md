@@ -11,9 +11,9 @@ labels: [infra]
 source: docs/history/tasktool-scratch-archive-2026-09-07.md
 source_hash:
 created: 2026-09-07
-moved: 2026-10-04g
-updated: 2026-10-04g
-closed:
+moved: 2026-10-13
+updated: 2026-10-13
+closed: 2026-10-13
 ---
 
 Thirteen open `R6-N` bodies carry measurements transcribed BY HAND out of
@@ -81,3 +81,12 @@ benchmarks/profile_r6.py::_ctxmgr_entries, which refuses an odd ncalls).
 ### 2026-10-04g
 
 Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): PARTLY STALE. TK48 banner fix landed and the figure check was declined on the row. Its claim that check 14 resolves the ### R6-N heading is FALSE: scripts/task.py::check_read_first docstring says THE PATH ONLY, NEVER THE LINE. Serves only R6, deprioritized by the 2026-09-22c goal decision: demote candidate.
+
+### 2026-10-13
+
+CLOSED AS DECLINED 2026-10-13 (assurance triage, lane L3). The gap is real, but the work is obsolete. Re-verified first-hand (READ, 2026-10-13):
+(1) The figure-equality check was DECLINED on this row on 2026-09-07b, with the user's agreement: the audit is prose and has no machine-readable truth to diff against.
+(2) The in-scope substitute, check 14 resolving the `### R6-N` heading, was never built and cannot be built as written. scripts/task.py::check_read_first resolves THE PATH ONLY, NEVER THE LINE (docstring, task.py:3213 as of 2026-10-13). No figure or heading checker exists anywhere: the R6 mentions in scripts/task.py (:384, :1570, :3192) are docstring examples, and the ones in scripts/handoff_lint.py are id matching.
+(3) The banner contradiction trap is fixed (TK48 closed). The motivating R6-11 incident is pinned at source by benchmarks/profile_r6.py::_ctxmgr_entries (:114), which refuses an odd ncalls.
+(4) Perf is deprioritized (user goal 2026-09-22c). The 14 R6 rows are all LATER (11) or HOLD (3).
+Building a checker over deprioritized rows would WIDEN the assurance surface for no live catch. Figures in R6-N bodies stay hand-copied and unchecked, and docs/perf-round6-audit-2026-08.md is authoritative over them. REOPEN ONLY IF perf round 6 is reactivated. Then do the shape this row already named: regenerate the audit verdict tables from benchmarks/ output and DELETE the figures from the task bodies, so there is one home and nothing to diff. Do not build a figure differ.

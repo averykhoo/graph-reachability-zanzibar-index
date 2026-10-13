@@ -11,9 +11,9 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-09-07b
-moved: 2026-10-04g
-updated: 2026-10-04g
-closed:
+moved: 2026-10-13
+updated: 2026-10-13
+closed: 2026-10-13
 ---
 
 `TK63` fixed the ONE measured instance (`P4`). This is the class it warned about, now
@@ -119,3 +119,21 @@ by the 2026-09-22d entry (TK94 close + the gate-floor drift repair), which neede
 ### 2026-10-04g
 
 Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): PARTLY MOOT. PROBED by agent: branch p3-flip-red-2026-09-05 is gone, d6d2dfc not in master, P3/P4 landed, so those bindings are dead. The general problem (directives living only in formal/history/) remains open.
+
+### 2026-10-13
+
+CLOSED 2026-10-13 (assurance triage, lane L3). The 17-row table is disposed of. The general mechanism (a resolver for formal/history/ directives) is DECLINED, because its target population is ~0 once leg 7 has landed. A scanner over frozen dirs would mostly fire on discharged text, and a check that is red on arrival gets deleted.
+Disposition. READ = first-hand 2026-10-13; AGENT = assurance-triage agent C, not re-run.
+- DEAD BINDINGS (READ): branch p3-flip-red-2026-09-05 (`git branch -a`: 0 hits). d6d2dfc (`git cat-file -t`: 'Not a valid object name').
+- FIXED/SPLIT (READ): P4 is closed and its pointer was fixed by TK63. FoldAdmits 21/3 is split out as open TK67.
+- MECHANICALLY ENFORCED (READ), four directives:
+  (a) 'leaf preds stay OUT of S.defs'. This is surfaced live at formal/lean/ZanzibarProofs/GraphIndex/Leaf.lean:171, and it is self-enforcing: Core/Schema.lean:64 `relNameOK` forbids '.', WF.relNames lifts it (:71), and leaf preds contain '.' (Leaf.lean::relNameOK_of_mem_keys).
+  (b) 'StoreValidRulesD quantifies over exprDirectsAll'. The def text is pinned in formal/headline_definitions.txt (verify.sh 4c), along with DirectRestrictionsNotLeaf, DirectArmsConcrete and exprDirectsAll. It is also pinned discriminatingly by CascadeStable.lean::directRestrictionsNotLeaf_false_sdrBadDerived vs ::sdrBadDerived_clean_under_exprDirects.
+  (c) 'do NOT extend W4WitnessDirect flat conjunction'. Its statement is pinned at formal/headline_statements.txt:43 (verify.sh 4b). CORRECTION to agent C: this directive is NOT carried by P8 (grep: 0 hits); the statement pin is what protects it.
+  (d) 'no step may rename or delete a pinned name'. The audit name pin (formal/audited_theorems.txt, verify.sh 4a) covers it.
+- DISCHARGED BY LANDED WORK (READ), two directives:
+  'do NOT weaken the audited full-T ones' (optional-widening-2026-07.md:272) binds a FROZEN plan superseded by the echain plan. The _d variants landed ADDITIVELY beside the full-T ones: audited_theorems.txt lists checkFn_eq_sem_bs + _d, graphRec_base_eq_bs + _d, coveredFn_declared + _d, checkFnR_eq_sem_settled + _d. Names are pinned (4a), and headline statements are pinned (4b).
+  'RulesCorrect.lean:135 must NOT move' (PROOF_STATUS.md:1111/:1273) binds the leg-7 4c-ii rewriteClosure->rewriteClosureL re-point, which has landed: the ReachedByW3d2E write case folds rewriteClosureL. Line 135 still reads `foldl_writeDirect_edges_sound (rewriteClosure S t)` (READ 2026-10-13); it is the unlogged W2 path, definitionally tied to writeRules (REASONED: moving it breaks the build).
+- SURFACED LIVE (READ): 'fork the TUPLE, not the write path' is at LeafRules.lean:412 and UsStarWrite.lean:673.
+- DISCHARGED (AGENT, REASONED): the ~8 leaf-family-split-scope 4c/4c-ii in-flight directives (cone budgeting, never commit a partial cone, STATE-GATE control, Class-B spike done, sec 11.13 sizing). P3/P4 are closed, and the residue is carried by open TK67/TK54. W3a inertness/hag binds a chain superseded by ReachedByW3d2E.
+No open row needed a pointer: none of the four UNVERIFIED-at-filing directives binds open work that the pins do not already guard. The one-home rule holds, and nothing was copied out of formal/history/.
