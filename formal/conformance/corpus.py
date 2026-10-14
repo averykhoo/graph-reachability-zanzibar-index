@@ -1329,3 +1329,200 @@ SELF_REFERENTIAL_SCHEMAS: dict[str, tuple[str, list, tuple]] = {
         (),
     ),
 }
+
+# ---------------------------------------------------------------------------
+# `TK119` (2026-10-14): leaf-rule witnesses -- RULE-LAYER inputs only.
+#
+# Read ONLY by `formal/conformance/test_conformance_leaf_rules.py`, which diffs the Lean
+# model's compiled rule set (`zcli mode="leaf-rules"`) against the `Rule`s
+# `src/zanzibar/schema/compiler.py::compile_ruleset` emits. These are NOT curated corpora:
+# they carry no tuples and no expected answers, and they are deliberately kept OUT of
+# `test_conformance_fragment.py::_FAMILIES` and every answer-comparing family (the
+# `REFUSED_TUPLESET_SCHEMAS` precedent), so no other module enrolls them by accident.
+#
+# Why they exist (measured 2026-10-14, `docs/tk119-leaf-rules-differential-2026-10-14.md`
+# sec 5 and challenge C3): across every curated corpus and every `tests/fga_schemas/*.fga`
+# fixture there is NO leaf TTU rule and NO merged closure leaf, on either side. The
+# 2026-08-16 "50/50 schemas" probe therefore only ever compared single-`computed`-arm
+# closure leaves, and a Python twin of `LeafRules.lean`'s own S11 sabotage (a merged leaf
+# half-walked) left every corpus and fixture source GREEN. These witnesses are what makes
+# the leaf half of the comparison bite; the test pins them BY NAME.
+# ---------------------------------------------------------------------------
+
+_LR_HEAD = 'model\n  schema 1.1\n'
+
+LEAF_RULE_WITNESSES: dict[str, str] = {
+    # W1: a leaf TTU rule -- the TTU arm is a closure leaf of its own (`viewer` is
+    # derived nowhere, so both sides call it pure).
+    "W1": _LR_HEAD + """type user
+type folder
+  relations
+    define viewer: [user]
+type doc
+  relations
+    define parent: [folder]
+    define banned: [user]
+    define access: viewer from parent but not banned
+""",
+    # W2: a merged closure leaf -- two computed arms on ONE leaf (`viewer.0`).
+    "W2": _LR_HEAD + """type user
+type doc
+  relations
+    define a: [user]
+    define b: [user]
+    define c: [user]
+    define viewer: (a or b) but not c
+""",
+    # W3: the `TK132` shape, merged-leaf flavour: the TTU target NAME `viewer` is derived
+    # on `doc` but not on `folder`, the only type the tupleset admits. Python
+    # (`boolean.py::_is_pure`, type-aware) keeps the arm; the Lean `Leaf.lean::isPure`
+    # (`derivedAnywhere`, by name) drops it. Positively pinned as a mismatch.
+    "W3": _LR_HEAD + """type user
+type folder
+  relations
+    define viewer: [user]
+type doc
+  relations
+    define parent: [folder]
+    define a: [user]
+    define c: [user]
+    define viewer: (a or viewer from parent) but not c
+""",
+    # W3b: W3 with the name collision removed (`editor from parent`): a merged leaf
+    # holding a computed AND a TTU arm, which both sides agree on.
+    "W3b": _LR_HEAD + """type user
+type folder
+  relations
+    define editor: [user]
+type doc
+  relations
+    define parent: [folder]
+    define a: [user]
+    define c: [user]
+    define viewer: (a or editor from parent) but not c
+""",
+    # W4: a Direct beside a computed arm -- the Direct is storage leaf 0, so `a` lands
+    # on `viewer.1` and `c` on `viewer.2` (allocation index, not arm count).
+    "W4": _LR_HEAD + """type user
+type doc
+  relations
+    define a: [user]
+    define c: [user]
+    define viewer: ([user] or a) but not c
+""",
+    # W5: a TTU closure leaf in the SUBTRACT position.
+    "W5": _LR_HEAD + """type user
+type folder
+  relations
+    define blocked: [user]
+type doc
+  relations
+    define parent: [folder]
+    define a: [user]
+    define viewer: a but not blocked from parent
+""",
+    # W6: an n-ary merge (three computed arms on one leaf, through the left fold).
+    "W6": _LR_HEAD + """type user
+type doc
+  relations
+    define a: [user]
+    define b: [user]
+    define d: [user]
+    define c: [user]
+    define viewer: (a or b or d) but not c
+""",
+    # W7 (challenge X10): a DUPLICATED arm. Both sides keep duplicates (Python by probe:
+    # `(a or a) but not c` gives `a -> viewer.0` twice; Lean by `RulesWrite.lean::exprArms`
+    # using `++`), so this is the input on which a multiset comparison and a set
+    # comparison differ. The test asserts the duplicate is present.
+    "W7": _LR_HEAD + """type user
+type doc
+  relations
+    define a: [user]
+    define c: [user]
+    define viewer: (a or a) but not c
+""",
+}
+
+# `TK126`'s eight SERVED schemas, copied VERBATIM from
+# `tests/test_tk126_ttu_target_name_collision.py::SERVED` (2026-10-14). Copied rather
+# than imported (challenge X7): that module imports `sqlmodel`, the composed store,
+# `tests.parity` and `tests.test_lookup_oracle`, and an import break anywhere in that
+# chain would stop the leaf-rules module from COLLECTING. Drift between the two copies is
+# caught by `test_conformance_leaf_rules.py::test_tk126_copies_match_their_source`, which
+# imports the source lazily inside the test. Three of the eight (`D`, `D_nested`, `SlXt`)
+# have the `TK132` shape; the other five agree.
+_TK126_B = _LR_HEAD + """type user
+type folder
+  relations
+    define viewer: [user]
+type doc
+  relations
+    define parent: [folder]
+    define banned: [user]
+    define reader: [user] or viewer from parent
+    define viewer: reader but not banned
+"""
+_TK126_C = _LR_HEAD + """type user
+type folder
+  relations
+    define viewer: [user]
+type doc
+  relations
+    define parent: [folder]
+    define reader: [user] or viewer from parent
+type report
+  relations
+    define banned: [user]
+    define viewer: [user] but not banned
+"""
+_TK126_D = _LR_HEAD + """type user
+type folder
+  relations
+    define viewer: [user]
+type doc
+  relations
+    define parent: [folder]
+    define banned: [user]
+    define viewer: ([user] or viewer from parent) but not banned
+"""
+_TK126_D_NESTED = _LR_HEAD + """type user
+type folder
+  relations
+    define parent: [folder]
+    define viewer: [user] or viewer from parent
+type doc
+  relations
+    define parent: [folder]
+    define banned: [user]
+    define viewer: ([user] or viewer from parent) but not banned
+"""
+_TK126_SLXT = _LR_HEAD + """type user
+type team
+  relations
+    define z: [user]
+    define y: [user]
+    define viewer: z but not y
+type folder
+  relations
+    define viewer: [user]
+type doc
+  relations
+    define parent: [folder]
+    define banned: [user]
+    define access: viewer from parent but not banned
+"""
+TK126_SERVED_SCHEMAS: dict[str, str] = {
+    "B": _TK126_B,
+    "C": _TK126_C,
+    "D": _TK126_D,
+    "D_nested": _TK126_D_NESTED,
+    "B_star": _TK126_B.replace('define parent: [folder]', 'define parent: [folder, folder:*]'),
+    "C_cross": _TK126_C.replace('define parent: [folder]', 'define parent: [folder, report]'),
+    "C_team": ('type user\ntype folder\n  relations\n'
+               '    define blocked: [user]\n    define viewer: [user] but not blocked\n'
+               'type team\n  relations\n    define viewer: [user]\n'
+               'type doc\n  relations\n'
+               '    define parent: [team]\n    define can_view: viewer from parent\n'),
+    "SlXt": _TK126_SLXT,
+}

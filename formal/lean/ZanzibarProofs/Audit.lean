@@ -1983,9 +1983,14 @@ namespace Zanzibar
 -- minted (dot-carrying) one — so the two halves are a provably disjoint set rather than
 -- "we checked and nothing broke". `writeRulesRaw_untaintedSchema` closes the same claim at
 -- the write level: on a schema with no derived key the forked write IS `writeRules`.
--- Measured before written: the model was transcribed into Python and diffed against the
--- `Rule`s `compile_ruleset` actually emits — 50/50 schemas, 0 mismatches, 32 with a
--- NON-EMPTY leaf rule set (the non-vacuity count).
+-- ★ DIFFERENTIAL-CHECKED, NOT TRANSCRIBED (`TK119`, 2026-10-14): `zcli mode="leaf-rules"`
+-- (`Cli.lean::leafRulesJson`) prints `schemaRewrites` / `leafRewrites` from THIS
+-- definition, and `formal/conformance/test_conformance_leaf_rules.py` diffs each half
+-- against the `Rule`s `compile_ruleset` emits over every corpus, fixture and constructed
+-- witness, with its non-vacuity floor and shape witnesses pinned there. The one known
+-- disagreement, the `TK132` TTU-arm purity shape, is positively pinned there too. (This
+-- comment used to quote a dated count from a one-off 2026-08-16 transcription probe that
+-- no test re-ran.)
 -- ★ THREE SABOTAGES (literal outputs in the module docstring): S9 leaf index dropped → four
 -- rule pins + the payoff pin + the disjointness theorem stops being true; S10 taint filter
 -- inverted → eight errors incl. BOTH untainted subsumption controls; S11 merged closure leaf

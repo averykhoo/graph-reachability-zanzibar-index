@@ -18,6 +18,7 @@
 Cli.lean::canonJsonArr	lean:def	2c89daef263d846c
 Cli.lean::edgeCountsJson	lean:def	1db9ac5b21cacb11
 Cli.lean::fragmentJson	lean:def	9ad53474ef277cde
+Cli.lean::leafRulesJson	lean:def	87043e8b2314863c
 Core/Refs.lean::ObjectRef	lean:structure	fc03bbb135fdcf0b
 Core/Refs.lean::SubjectRef	lean:structure	bcc93891e27f6c9f
 Core/Refs.lean::Tuple	lean:structure	3ac0168c0bb37967
@@ -249,6 +250,8 @@ Spec/Stratify.lean::exprRefs	lean:def	d844965482ee5e5c
 Spec/WellDef.lean::sem_fuel_stable	lean:theorem-statement	d6429c8ef34d016d
 formal/conformance/backends.py::GraphDriver.apply	py:function	9048e3889a945797
 formal/conformance/backends.py::graphindex_drive	py:function	de25cae9ba44503a
+formal/conformance/corpus.py::LEAF_RULE_WITNESSES	py:assign	f72ebb886f88ac57
+formal/conformance/corpus.py::TK126_SERVED_SCHEMAS	py:assign	607d9758b7faaac7
 formal/conformance/encode.py::_fold_binary	py:function	fa485bfc03bf6f90
 formal/conformance/encode.py::schema_to_json	py:function	dde2172841c77127
 formal/conformance/extractor.py::_classify_edges	py:function	e9962f2b370ab52c
@@ -267,6 +270,8 @@ formal/conformance/test_conformance_fragment.py::test_reported_failures_are_refu
 formal/conformance/test_conformance_fragment.py::test_silent_field_mirror_equals_lean	py:function	2303bc7dc271383a
 formal/conformance/test_conformance_generated.py::test_generated_schema_zcli_parity	py:function	05df9c75db2b2f44
 formal/conformance/test_conformance_graph.py::_DIFFERENTIAL_ONLY	py:assign	832b2f3d437b08f0
+formal/conformance/test_conformance_leaf_rules.py::_TK132_EXPECTED	py:assign	3bd437422dfd9cc9
+formal/conformance/test_conformance_leaf_rules.py::test_python_side_sabotages_are_caught	py:function	b9dcde9f139c8438
 formal/conformance/test_conformance_remove.py::_assert_poisoned	py:function	57d7ad721b1683db
 formal/conformance/test_conformance_state.py::test_derived_arm_multiplicity_ledger	py:function	1771bddb3ee46d88
 formal/conformance/test_conformance_state.py::test_no_corpus_nests_a_pure_union_inside_an_impure_one	py:function	ee3551e1ce35bf80

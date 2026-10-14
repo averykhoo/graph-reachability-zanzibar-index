@@ -490,7 +490,7 @@ GATE_LOCK_HELD=1
 #   SUM; see the MIN_TESTS_ALL comment and doc_counts.py::ratchet_floors for why ALL is
 #   derived rather than ratcheted on its own. Measured 2026-10-13: 1093 == live, zero
 #   headroom, so the ratchet changes nothing here on landing.
-MIN_CONF_ALL=1093
+MIN_CONF_ALL=1166
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -698,7 +698,7 @@ MIN_CONF_ALL=1093
 #   1749 vs `pytest tests/ -q --collect-only` -> 2283, i.e. 534 tests of headroom (the
 #   2026-10-12/13 sessions' tests/ additions, not broken down per file). Do not hand-
 #   raise it any more; LOWERING stays a deliberate hand edit, followed by --generate.
-MIN_TESTS_ALL=2518
+MIN_TESTS_ALL=2528
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -783,7 +783,7 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 #   construction. A test moving from REST into HEAVY_CONF leaves REST's floor where it
 #   was, so the gate goes red: lower REST by hand if that move was intended.
 MIN_CONF_HEAVY=135
-MIN_CONF_REST=958
+MIN_CONF_REST=1031
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in

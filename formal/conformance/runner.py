@@ -31,12 +31,15 @@ _ZCLI_TIMEOUT_S = 120
 _SPEC_CACHE: dict[str, list[bool]] = {}
 _STATE_CACHE: dict[str, dict] = {}
 _FRAGMENT_CACHE: dict[str, dict] = {}
+_LEAF_RULES_CACHE: dict[str, dict] = {}
 
 # Windows PROCESS-INITIALIZATION failures that the OS raises BEFORE zcli's own code
 # runs — spawning the ~120 MB static binary in rapid succession under memory/desktop-
-# heap pressure intermittently trips these. zcli's OWN exit codes are exactly 0-4
-# (Cli.lean: 0 answers/state · 1 usage-parse · 2 admission · 3 not-drained · 4 unknown
-# mode), so a code below never comes from zcli's dispatch — but the code ALONE does
+# heap pressure intermittently trips these. zcli's OWN exit codes are exactly 0-5
+# (Cli.lean: 0 answers/state/report · 1 usage-parse · 2 admission · 3 not-drained ·
+# 4 unknown mode · 5 an "ops" stream in a mode that refuses one; corrected from "0-4"
+# by TK119, 2026-10-14 -- rc 5 predates that), so a code below never comes from zcli's
+# dispatch — but the code ALONE does
 # not prove a pre-main failure: 0xC0000017 can also be the exit status of an
 # IN-process allocation failure (an unhandled STATUS_NO_MEMORY after main). The
 # discriminator is output: a pre-main failure dies before any user code could write
@@ -93,7 +96,7 @@ def invoke_zcli(request_json: str,
     with a pre-main init status AND output-free, or a spawn-time resource OSError).
 
     Returns `(completed_process, request_path)` — the CALLER interprets the return
-    code (0-4 are zcli's own outcomes) and cleans up `request_path` (keep it on a
+    code (0-5 are zcli's own outcomes) and cleans up `request_path` (keep it on a
     failure you want to debug). Raises `RuntimeError` on timeout or once the
     transient retries are exhausted; the request file is kept in those cases (the
     message names it). A non-transient spawn OSError propagates as-is, with the
@@ -264,3 +267,62 @@ def run_fragment(request_json: str) -> dict:
     discard_request(req_path)
     _FRAGMENT_CACHE[request_json] = rep
     return rep
+
+
+#: The exact key set `zcli mode="leaf-rules"` emits (`Cli.lean::leafRulesJson`, `TK119`).
+LEAF_RULES_KEYS = frozenset({"untainted", "leaf"})
+
+
+def _check_leaf_rule_shape(rule, half: str, req_path: str) -> tuple:
+    """One emitted rule must be `[ot, matchRel, outRel, "computed"]` or
+    `[ot, matchRel, outRel, "ttu", tr]`, all strings; returned as a tuple."""
+    ok = (isinstance(rule, list) and all(isinstance(x, str) for x in rule)
+          and ((len(rule) == 4 and rule[3] == "computed")
+               or (len(rule) == 5 and rule[3] == "ttu")))
+    if not ok:
+        raise AssertionError(
+            f"leaf-rules output: malformed {half} rule {rule!r} (request kept at {req_path})")
+    return tuple(rule)
+
+
+def run_leaf_rules(request_json: str) -> dict[str, list[tuple]]:
+    """Feed a `mode="leaf-rules"` request to `zcli` and parse the model's compiled rule
+    set (`Cli.lean::leafRulesJson`): `{"untainted": schemaRewrites S, "leaf":
+    leafRewrites S}`, each a RAW list (Lean order, multiplicity kept) of rule tuples
+    `(ot, matchRel, outRel, "computed")` / `(ot, matchRel, outRel, "ttu", tr)`.
+
+    Asserted HERE, at the seam, so a caller's comparison never sees a malformed report:
+    the exact key set, each rule's shape, and the half split -- every `leaf` outRel is a
+    minted leaf name (carries a `.`), no `untainted` outRel does (declared names cannot,
+    `P23`; `LeafRules.lean::schemaRewrites_leafRewrites_disjoint` is the Lean side). On any
+    failure the request file is kept for debugging.
+    """
+    cached = _LEAF_RULES_CACHE.get(request_json)
+    if cached is not None:
+        return cached
+    proc, req_path = invoke_zcli(request_json, "leaf-rules")
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"zcli leaf-rules failed (rc={proc.returncode}): "
+            f"{proc.stderr.strip()} (request kept at {req_path})")
+    rep = json.loads(proc.stdout.strip())
+    if not isinstance(rep, dict) or set(rep) != LEAF_RULES_KEYS:
+        raise AssertionError(
+            f"leaf-rules output shape unexpected: keys="
+            f"{sorted(rep) if isinstance(rep, dict) else type(rep)} "
+            f"(request kept at {req_path})")
+    out: dict[str, list[tuple]] = {}
+    for half in ("untainted", "leaf"):
+        if not isinstance(rep[half], list):
+            raise AssertionError(
+                f"leaf-rules output: {half!r} is not a list (request kept at {req_path})")
+        out[half] = [_check_leaf_rule_shape(r, half, req_path) for r in rep[half]]
+    bad = ([r for r in out["leaf"] if "." not in r[2]]
+           + [r for r in out["untainted"] if "." in r[2]])
+    if bad:
+        raise AssertionError(
+            f"leaf-rules output: rules on the wrong side of the half split: {bad!r} "
+            f"(request kept at {req_path})")
+    discard_request(req_path)
+    _LEAF_RULES_CACHE[request_json] = out
+    return out

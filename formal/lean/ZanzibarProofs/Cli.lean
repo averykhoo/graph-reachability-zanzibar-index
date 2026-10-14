@@ -2,6 +2,7 @@ import ZanzibarProofs.Spec.Semantics
 import ZanzibarProofs.GraphIndex.Exec
 import ZanzibarProofs.GraphIndex.FragmentDecide
 import ZanzibarProofs.GraphIndex.AdmissionDecide
+import ZanzibarProofs.GraphIndex.LeafRules
 import Lean.Data.Json
 
 /-!
@@ -13,7 +14,8 @@ two backends six ways.
 
 Request format (the Python harness folds n-ary `or`/`and` into binary nodes):
 ```json
-{ "mode": "spec" | "graph" | "graph-state"  (optional, default "spec"),
+{ "mode": "spec" | "graph" | "graph-state" | "fragment" | "leaf-rules"
+            (optional, default "spec"),
   "schema": { "defs": [ [[type, rel], <expr>], ... ],
               "objectWildcards": [ [type, rel], ... ] },
   "tuples": [ {"sp":.., "st":.., "sn":.., "rel":.., "ot":.., "on":..}, ... ],
@@ -93,17 +95,32 @@ Modes (Phase 6 — graph-state conformance):
   differential, so the honest move is to REPORT the scope, not to delete the
   category (`docs/dw1-decidable-w4fragment-2026-09-23.md`).
 
+* `"leaf-rules"` (`TK119`, 2026-10-14) — emit the model's compiled rewrite-rule set,
+  `{"untainted": [...], "leaf": [...]}` (`leafRulesJson`): `"untainted"` is
+  `GraphIndex/RulesWrite.lean::schemaRewrites S` and `"leaf"` is
+  `GraphIndex/LeafRules.lean::leafRewrites S`, i.e. the two halves of
+  `schemaRewritesL S`, kept apart so the Python side can check the split (and hence
+  the Lean taint filter) too. Each rule is `[objectType, matchRel, outRel,
+  "computed"]` or `[objectType, matchRel, outRel, "ttu", tuplesetTargetRel]`. The
+  lists are RAW: Lean order, multiplicity kept (NOT `canonJsonArr`, which would
+  deduplicate a doubled arm away). Tuples and queries are ignored; an `"ops"` stream
+  is rc 5. `formal/conformance/test_conformance_leaf_rules.py` diffs this against the
+  `Rule`s `src/zanzibar/schema/compiler.py::compile_ruleset` emits.
+
 An unrecognized mode — a `"mode"` value that is present but not a string, or a
-string other than `"spec"`/`"graph"`/`"graph-state"`/`"fragment"` — is rejected with rc 4
+string other than `"spec"`/`"graph"`/`"graph-state"`/`"fragment"`/`"leaf-rules"` — is
+rejected with rc 4
 (stderr message). A mislabeled mode must never silently fall through to spec
 answers, or the graph-vs-spec conformance pin would void.
 
 Exit codes: 0 = answers/state printed · 1 = usage / JSON parse / decode error ·
 2 = a graph op failed its gate (write admission / remove guard) · 3 = graph state
-not drained · 4 = unrecognized mode · 5 = `"ops"` in spec mode or fragment mode (unsupported).
+not drained · 4 = unrecognized mode · 5 = `"ops"` in spec, fragment or leaf-rules mode
+(unsupported).
 
-Output: a JSON array of booleans, one per query (spec/graph modes), or the
-canonical state object (graph-state mode). Usage: `zcli <request.json>`.
+Output: a JSON array of booleans, one per query (spec/graph modes), the
+canonical state object (graph-state mode), the premise report (fragment mode), or the
+rule-set object (leaf-rules mode). Usage: `zcli <request.json>`.
 -/
 
 open Lean
@@ -340,6 +357,28 @@ def fragmentJson (S : Schema) (T : Store) : Json :=
     ("tainted", Json.arr ((taintedKeys S).map
       (fun k => Json.arr #[Json.str k.1, Json.str k.2])).toArray)]
 
+/-! ## Compiled rule set (mode `"leaf-rules"`) — `TK119` -/
+
+/-- One model rewrite rule (`GraphIndex/RulesWrite.lean::RRule`) as
+    `[objectType, matchRel, outRel, "computed"]` or
+    `[objectType, matchRel, outRel, "ttu", tuplesetTargetRel]`. -/
+def rruleJson (r : RRule) : Json :=
+  match r.kind with
+  | .computed => Json.arr #[Json.str r.objectType, Json.str r.matchRel, Json.str r.outRel,
+                            Json.str "computed"]
+  | .ttu tr => Json.arr #[Json.str r.objectType, Json.str r.matchRel, Json.str r.outRel,
+                          Json.str "ttu", Json.str tr]
+
+/-- The model's compiled rule set, as its two halves: `schemaRewrites S` (the
+    untainted fanout) and `leafRewrites S` (each derived key's closure leaves, targeting
+    the minted `leafPred R i`). Their concatenation is `schemaRewritesL S`. RAW lists, in
+    Lean order with multiplicity kept — `canonJsonArr` would deduplicate a doubled arm,
+    which is a real difference the Python comparison must be able to see. -/
+def leafRulesJson (S : Schema) : Json :=
+  Json.mkObj [
+    ("untainted", Json.arr ((schemaRewrites S).map rruleJson).toArray),
+    ("leaf", Json.arr ((leafRewrites S).map rruleJson).toArray)]
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | [path] =>
@@ -427,6 +466,19 @@ def main (args : List String) : IO UInt32 := do
           | _ => do
             IO.println (fragmentJson S T).compress
             pure 0
+        | .ok "leaf-rules" =>
+          -- `TK119`: emit the model's compiled rule set (schema-only; tuples and
+          -- queries are ignored). An `"ops"` stream is refused (rc 5), as in
+          -- fragment mode: this mode reads no store, so an op stream is a request
+          -- for something it does not do.
+          match decodeOps j with
+          | .ok (some _) =>
+            IO.eprintln "leaf-rules mode does not support an \"ops\" stream \
+              (it emits the schema's compiled rule set)"
+            pure 5
+          | _ => do
+            IO.println (leafRulesJson S).compress
+            pure 0
         | .ok "spec" =>
           -- Spec mode evaluates `sem` over the static store; an `"ops"` stream
           -- (removes especially) has no spec-level meaning and MUST be rejected
@@ -439,7 +491,7 @@ def main (args : List String) : IO UInt32 := do
           | _ => printAnswers (qs.map (fun q => sem S T q))
         | .ok other =>
           IO.eprintln s!"unknown mode: {other} \
-            (expected \"spec\", \"graph\", \"graph-state\", or \"fragment\")"
+            (expected \"spec\", \"graph\", \"graph-state\", \"fragment\", or \"leaf-rules\")"
           pure 4
   | _ => IO.eprintln "usage: zcli <request.json>"; pure 1
 
