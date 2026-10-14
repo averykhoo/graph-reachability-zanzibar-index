@@ -1713,7 +1713,7 @@ theorem reachedByW3d2_wAny_edge_bridged {σ : GraphState} {S : Schema} {T : Stor
     write's bridge edge sources are bridged-in concretes, which `NoBridgedDerived` keeps
     off the derived shapes. -/
 theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
-    {dt R : String} (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S)
+    {dt R : String} (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hLTU : LeafTtuTargetsUnderived S)
     (h : ReachedByW3d2 σ S T) :
     isDerived S (dt, R) = true → NoTtuTarget S R → NoStoreSubjectR T R →
       ∀ a b, (a, b) ∈ σ.edges → a.type = dt → a.pred ≠ R := by
@@ -1730,9 +1730,9 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
     unfold GraphState.writeRulesRaw at hab
     rcases foldl_writeBridgedOne_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
       with hin | ⟨u, hu, h1, _⟩ | ⟨hsw, _⟩
-    · exact ih hNBD hder hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin hty
+    · exact ih hNBD hLTU hder hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin hty
     · rw [h1, subjNode_pred]
-      exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder
+      exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder hLTU
         (hns t List.mem_cons_self) hu
     · -- THE BRIDGE DISJUNCT, W3d-2 twin: identical to the W3d one, and it uses the
       -- in-file `reachedByW3d2_schema` rather than a relocated lemma.
@@ -1776,7 +1776,7 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
     rw [List.mem_flatMap] at hu
     obtain ⟨t', ht', hu'⟩ := hu
     have hsrc : subjNode u.subject = a := congrArg Prod.fst heq
-    exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder (hns t' ht') hu'
+    exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder hLTU (hns t' ht') hu'
       (by rw [← subjNode_pred u.subject, hsrc, haR])
   | @cascade σp S T jobs1 jobs2 hjv1 hjv2 _ _ _ _ hprev ih =>
     intro hder hnt hns a b hab hty
@@ -1787,7 +1787,7 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
       rcases reconcileJobsLR_edge_sound jobs2 _ a b hab' with hmid | ⟨j, hj, c, hc, h1, _⟩
       · rcases reconcileJobsLR_edge_sound jobs1 σp a b hmid
           with hold | ⟨j, hj, c, hc, h1, _⟩
-        · exact ih hNBD hder hnt hns a b hold hty
+        · exact ih hNBD hLTU hder hnt hns a b hold hty
         · rw [h1, subjNode_pred]
           obtain ⟨_, hcb, _⟩ := hjv1 j hj
           rw [hcb c hc]
@@ -1796,18 +1796,18 @@ theorem reachedByW3d2_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store
         obtain ⟨_, hcb, _⟩ := hjv2 j hj
         rw [hcb c hc]
         exact Ne.symm hRne
-    · exact ih hNBD hder hnt hns a b hab hty
+    · exact ih hNBD hLTU hder hnt hns a b hab hty
 
 /-- **The derived R-node is never an edge source on a W3d-2 state.** -/
 theorem reachedByW3d2_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
     {dt on R : String}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hder : isDerived S (dt, R) = true)
+    (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hLTU : LeafTtuTargetsUnderived S) (hder : isDerived S (dt, R) = true)
     (h : ReachedByW3d2 σ S T) :
     ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges := by
   obtain ⟨hnt, hns⟩ := hterm dt R hder
   intro y hy
-  exact reachedByW3d2_edge_source_ne_R hRne hNBD h hder hnt hns _ y hy
+  exact reachedByW3d2_edge_source_ne_R hRne hNBD hLTU h hder hnt hns _ y hy
     (objNode_type ⟨dt, on⟩ R) (objNode_pred ⟨dt, on⟩ R)
 
 /-- R-node terminality survives a routed logged batch, from any terminal base state
@@ -1876,11 +1876,18 @@ theorem hLU2_of_hLU {S : Schema}
     `j`'s operands untainted — contradiction. So NO derived def reads `j.R`: the
     emission maps to no keys, and Python's leftover `raise InvariantViolation`
     (the tail of `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`) is dead code
-    at two strata. -/
+    at two strata.
+
+    ⚠ 2026-10-14 (`TK132`, a DELIBERATE statement change): gains the schema carry
+    `(hLTU : LeafTtuTargetsUnderived S)` after `hNBD`. The two statements gain a schema carry
+    the faithful allocation needs; it is vacuous on `W4Fragment`
+    (`CascadeStable.lean::leafTtuTargetsUnderived_of_computedOrDirect`), and it is FALSE on
+    `D`/`D_nested`/`SlXt`, whose previous coverage was of the wrong model. A typed repair
+    that buys `D` back is design L-B, deferred to `TK133`. -/
 theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
     {jobs1 jobs2 : List W3cJob}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hNBD : NoBridgedDerived S)
+    (hNBD : NoBridgedDerived S) (hLTU : LeafTtuTargetsUnderived S)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
@@ -1928,7 +1935,7 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
   obtain ⟨hRne1, _, _, _, _, _, hder1, _, _⟩ := hjv1 j1 hj1
   -- j1's R-node is terminal at the mid state → the row's only candidate object is
   -- the R-node itself
-  have hbase1 := reachedByW3d2_Rnode_not_source (on := j1.on) hterm hRne1 hNBD hder1 h
+  have hbase1 := reachedByW3d2_Rnode_not_source (on := j1.on) hterm hRne1 hNBD hLTU hder1 h
   have hmidT1 := reconcileJobsLR_Rnode_not_source (T := T) (jobs := jobs1)
     hRne1 hjv1 hbase1
   have hreach1 : ∀ v, (reconcileJobsLR S T σ jobs1).reach d'.node v = false := by
@@ -1977,7 +1984,7 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
   have hjdt : j.dt = j1.dt := by rw [← h1', hc1, htype1]
   -- (B) j's own R-node is terminal at the final state → the emission's only
   -- candidate object is itself, and no derived def may read j.R (hLU2)
-  have hbase2 := reachedByW3d2_Rnode_not_source (on := j.on) hterm hRne2 hNBD hder2 h
+  have hbase2 := reachedByW3d2_Rnode_not_source (on := j.on) hterm hRne2 hNBD hLTU hder2 h
   have hmidT2 := reconcileJobsLR_Rnode_not_source (T := T) (jobs := jobs1)
     hRne2 hjv1 hbase2
   have hfinT2 := reconcileJobsLR_Rnode_not_source (T := T) (jobs := jobs2)
@@ -2045,11 +2052,18 @@ theorem runCascade2_no_abort {σ : GraphState} {S : Schema} {T : Store}
 /-- **`cascade2_drains` (T5 half b, two strata).** After a two-round cascade on the
     fragment the state is `Quiescent`: the watermark advance past BOTH rounds'
     emissions is JUSTIFIED by `runCascade2_no_abort` (the skipped rows provably map
-    to no keys), never asserted. -/
+    to no keys), never asserted.
+
+    ⚠ 2026-10-14 (`TK132`, a DELIBERATE statement change): gains the schema carry
+    `(hLTU : LeafTtuTargetsUnderived S)` after `hNBD`. The two statements gain a schema carry
+    the faithful allocation needs; it is vacuous on `W4Fragment`
+    (`CascadeStable.lean::leafTtuTargetsUnderived_of_computedOrDirect`), and it is FALSE on
+    `D`/`D_nested`/`SlXt`, whose previous coverage was of the wrong model. A typed repair
+    that buys `D` back is design L-B, deferred to `TK133`. -/
 theorem cascade2_drains {σ : GraphState} {S : Schema} {T : Store}
     {jobs1 jobs2 : List W3cJob}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hNBD : NoBridgedDerived S)
+    (hNBD : NoBridgedDerived S) (hLTU : LeafTtuTargetsUnderived S)
     (hLU2 : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
         ∀ e', S.lookup (dt, r') = some e' →
@@ -2060,7 +2074,7 @@ theorem cascade2_drains {σ : GraphState} {S : Schema} {T : Store}
         (σ.frontierMax σ.watermark))
     (h : ReachedByW3d2 σ S T) :
     Quiescent (runCascade2 S T σ jobs1 jobs2) := by
-  rw [runCascade2_no_abort hterm hNBD hLU2 hjv1 hjv2 hscope2 h]
+  rw [runCascade2_no_abort hterm hNBD hLTU hLU2 hjv1 hjv2 hscope2 h]
   intro d hd
   exact mem_outbox_le_maxOutboxId _ d hd
 

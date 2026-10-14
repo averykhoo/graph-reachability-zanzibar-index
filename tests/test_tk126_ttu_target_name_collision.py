@@ -199,10 +199,11 @@ C_TEAM = ('type user\ntype folder\n  relations\n'
           '    define parent: [team]\n    define can_view: viewer from parent\n')
 
 #: SlXt: `formal/lean/ZanzibarProofs/GraphIndex/LeafRules.lean::SlXt`, the Lean model's
-#: "cross-type drop" probe, as DSL. Before TK126 Python refused it (the model docstring
-#: said so); now it is served, and Python allocates the TTU arm as the closure leaf
-#: `access.0` with `banned` at `access.1` (probed 2026-10-08), where the model drops the arm
-#: -- the recorded `formal/CORRESPONDENCE.md` sec 7 gap, dead inside `W4Fragment`.
+#: cross-type witness, as DSL. Before TK126 Python refused it (the model docstring said so);
+#: now it is served, and Python allocates the TTU arm as the closure leaf `access.0` with
+#: `banned` at `access.1` (probed 2026-10-08). Since TK132 (2026-10-14) the model allocates
+#: it the same way (`LeafRules.lean::LeafRuleWitness.lrXt_cross_type_kept`); before it the
+#: model dropped the arm (the closed `formal/CORRESPONDENCE.md` sec 7.1 TK126 entry).
 SLXT = HEAD + """type user
 type team
   relations
@@ -282,11 +283,16 @@ SCRIPTS = {
 }
 
 
-def test_slxt_python_allocation_is_the_recorded_gap():
-    """The Lean model drops ``SlXt``'s TTU arm (``LeafRules.lean::lrXt_cross_type_drop``:
-    ``banned`` inherits index 0). Python keeps it as a pure closure leaf. This pins the
-    PYTHON side of the recorded gap, so a change to either allocation is seen and the
-    CORRESPONDENCE sec 7 entry re-adjudicated."""
+def test_slxt_python_allocation_matches_the_model():
+    """Python keeps ``SlXt``'s TTU arm as a pure closure leaf (``access.0``, ``banned`` on
+    ``access.1``), which is what the Lean model allocates since TK132
+    (``LeafRules.lean::LeafRuleWitness.lrXt_cross_type_kept``, by ``decide``; the full rule
+    list is differential-checked by
+    ``formal/conformance/test_conformance_leaf_rules.py`` over ``TK126:SlXt``). This pins
+    the PYTHON half of that agreement. Renamed from
+    ``test_slxt_python_allocation_is_the_recorded_gap`` by TK132 (2026-10-14), assertion
+    unchanged: before TK132 the model dropped the arm and this was the Python side of a
+    recorded gap."""
     ns = parse_openfga_schema(SLXT).compiled.namespace
     leaves = {k[1]: (f.index, f.positive, f.kind) for k, f in ns.items()
               if k[0] == 'doc' and k[1].startswith('access.')}

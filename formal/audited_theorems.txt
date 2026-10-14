@@ -76,7 +76,11 @@ LeafBridgeWitness.leafBridge_applies4
 LeafBridgeWitness.leafBridge_corpus
 LeafBridgeWitness.leafBridge_corpus_spec
 LeafBridgeWitness.sd_storageLeaves
+LeafRuleWitness.hLTU_load_bearing
+LeafRuleWitness.leafTtuTargetsUnderived_needs_nodup
+LeafRuleWitness.leafTtuTargetsUnderived_snlBoth
 LeafRuleWitness.lrA_rules
+LeafRuleWitness.lrMix_mixed_parent_drop
 LeafRuleWitness.lrN_rules
 LeafRuleWitness.lrStP_rules
 LeafRuleWitness.lrSw_rules
@@ -88,7 +92,11 @@ LeafRuleWitness.lrV_closure_today_misses_leaf
 LeafRuleWitness.lrV_rules
 LeafRuleWitness.lrV_untainted_layer_silent
 LeafRuleWitness.lrV_writeRulesRaw_edges_ne
+LeafRuleWitness.lrW3_merged_computed_ttu
+LeafRuleWitness.lrXt_cross_type_kept
 LeafRuleWitness.slV_derived
+LeafRuleWitness.slXt_not_leafTtuTargetsUnderived
+LeafTtuTargetsUnderived
 LeafWitness.approver_isDerived
 LeafWitness.pol_idx2
 LeafWitness.pol_nv7
@@ -380,6 +388,8 @@ leafPred_ne_relName
 leafPublic_leafPred
 leafRewrites
 leafRewrites_eq_nil
+leafTtuTargetsUnderived_of_computedOnly
+leafTtuTargetsUnderived_of_computedOrDirect
 leaf_probe_bridge
 lookD_rkL
 lookupAll_iff
@@ -563,6 +573,7 @@ restrictUntainted_lookup
 restrictionMatches_type
 rewriteClosureAux_restrict
 rewriteClosureL
+rewriteClosureL_subject_pred_ne_of_noTtuTarget
 rewriteClosureRawL_singleton
 rewriteClosure_derived_eq_seed
 rewriteClosure_object
@@ -659,11 +670,13 @@ taintedKeys_untainted
 throughShapes
 trail_compress
 ttuLeaf_elim
+ttuParentTypes
 ttuStarFreeB_iff
 ttuStarFreeWB
 ttuStarFreeWB_iff
 ttuStarFreeWB_of_ttuStarFreeB
 ttuStarFreeW_of_ttuStarFree
+ttuTargetsSatL_ne_of_noTtuTarget
 unionSpineLeaves
 untaintedSchema_restrict
 untaintedShadow_applyD

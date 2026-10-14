@@ -533,7 +533,7 @@ theorem settledComplete_cascade_targeted {σ : GraphState} {S : Schema} {T : Sto
   have hco := hCO _ _ _ hlk hder
   have hlu := hLU _ _ _ hlk hder
   -- the reject branch is dead on the fragment
-  have hacc := runCascade_no_abort hterm hNBD hLU hjv h
+  have hacc := runCascade_no_abort hterm hNBD (leafTtuTargetsUnderived_of_computedOnly hNK hCO) hLU hjv h
   have hev := reconcileJobsL_evalEq (EvalEq.refl σ) S T jobs
   have hresEq : ({ reconcileJobsL S T σ jobs with
       watermark := (reconcileJobsL S T σ jobs).maxOutboxId }).residue
@@ -569,7 +569,7 @@ theorem settledComplete_cascade_targeted {σ : GraphState} {S : Schema} {T : Sto
     untaintedShadow_reconcileJobsD pre σ σ0 hsh (reachedByRules_of_admitted h0)
       hSV hNK hCO hjvpre
   have hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges :=
-    reachedByW3d_Rnode_not_source hterm hRne hNBD hder h
+    reachedByW3d_Rnode_not_source hterm hRne hNBD (leafTtuTargetsUnderived_of_computedOnly hNK hCO) hder h
   have hRnspre : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σpre.edges :=
     reconcileJobsD_Rnode_not_source hRne hjvpre hRns
   -- the mid-batch read bridge at the last targeting job's pass start

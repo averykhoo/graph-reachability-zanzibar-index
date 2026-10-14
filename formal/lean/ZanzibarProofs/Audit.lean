@@ -2024,6 +2024,27 @@ namespace Zanzibar
 #print axioms LeafRuleWitness.lrV_closure_today_misses_leaf
 #print axioms LeafRuleWitness.lrV_writeRulesRaw_edges_ne
 
+-- `TK132` (2026-10-14): `isPure`'s `.ttu` arm asks over the tupleset's parent types
+-- (`Leaf.lean::ttuParentTypes`), the twin of `boolean.py::_is_pure`. The leaf-layer fact the
+-- cascade termination proofs consumed is now the explicit schema carry
+-- `LeafRules.lean::LeafTtuTargetsUnderived`, discharged on `W4Fragment` (with `NodupKeys`).
+-- Pins: the faithful `SlXt` allocation, the carry's load-bearing refutation, the mixed-parent
+-- `.all` pin, the merged-leaf twin of TK119's `W3`, and the `NodupKeys` necessity witness.
+-- Standard axioms only:
+#print axioms ttuParentTypes
+#print axioms LeafTtuTargetsUnderived
+#print axioms ttuTargetsSatL_ne_of_noTtuTarget
+#print axioms rewriteClosureL_subject_pred_ne_of_noTtuTarget
+#print axioms leafTtuTargetsUnderived_of_computedOrDirect
+#print axioms leafTtuTargetsUnderived_of_computedOnly
+#print axioms LeafRuleWitness.lrXt_cross_type_kept
+#print axioms LeafRuleWitness.hLTU_load_bearing
+#print axioms LeafRuleWitness.slXt_not_leafTtuTargetsUnderived
+#print axioms LeafRuleWitness.lrMix_mixed_parent_drop
+#print axioms LeafRuleWitness.lrW3_merged_computed_ttu
+#print axioms LeafRuleWitness.leafTtuTargetsUnderived_snlBoth
+#print axioms LeafRuleWitness.leafTtuTargetsUnderived_needs_nodup
+
 -- ttuStarFree LIFT, PART (i) (2026-08-14) — the star-tupleset TTU through-shape folded into
 -- `Schema.isSubjectWildcardUserset`, so it is now the disjunction of BOTH loops of
 -- `src/zanzibar/schema/compiler.py::derive_schema_info`, as Python has always been. Before this, Lean's

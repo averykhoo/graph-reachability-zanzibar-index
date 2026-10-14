@@ -359,7 +359,8 @@ theorem reachedByW3d2E_edgeHyg1 {σ : GraphState} {S : Schema} {T : Store}
     have hRD : ResidueDeclared S σp := reachedByW3d2E_residueDeclared hprev
     have hRns : RnodeTerminalAll S σp := by
       intro dt on R hder hRne y hy
-      exact reachedByW3d2_Rnode_not_source hterm hRne hNBD hder hW3d2 y hy
+      exact reachedByW3d2_Rnode_not_source hterm hRne hNBD
+        (leafTtuTargetsUnderived_of_computedOrDirect hNK hCD) hder hW3d2 y hy
     have hsb : RnodeSourceBareAll S σp := by
       intro dt on R hder _hRne x hx
       exact reachedByW3d2_Rnode_source_bare_d hW3d2 hWF hder hDAB hSV x hx

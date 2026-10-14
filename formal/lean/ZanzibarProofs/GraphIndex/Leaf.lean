@@ -350,7 +350,15 @@ Python treats the TTU arm as PURE (a closure leaf, index-consuming) where this m
 inside `W4Fragment`, because `isPure`'s `.ttu` case is evaluated only on a derived def's
 subtree and `W4Fragment.computedOrDirect` bans `.ttu` there. Making this case use the
 tupleset's parent types (as `Spec/Stratify.lean::exprRefs` already does) is the follow-up
-row filed under `TK126`. -/
+row filed under `TK126`.
+
+✓ **2026-10-14 (`TK132`) — FIXED; the two paragraphs above are kept as history.** `isPure`'s
+`.ttu` arm now asks over the tupleset's parent types (`ttuParentTypes` below, the twin of
+`Spec/Stratify.lean::exprRefs`/`directTypes` and of Python's
+`src/zanzibar/schema/boolean.py::_is_pure` over `_member_types`), so the shape above keeps its
+TTU arm as a closure leaf in the model too (`LeafRules.lean::LeafRuleWitness.lrXt_cross_type_kept`).
+`derivedAnywhere` stays: it is the vocabulary of the schema-level carry
+`LeafRules.lean::LeafTtuTargetsUnderived` that the cascade proofs now take explicitly. -/
 
 /-- One persisted (index-consuming) leaf position of a derived def's plan tree.
     Python: the `alloc()` calls in `src/zanzibar/schema/boolean.py::_build_plan_tree` —
@@ -372,9 +380,24 @@ deriving Repr, DecidableEq, Inhabited
     same type-agnostic name test `compile_ruleset`'s exclusivity pass itself uses.
     (2026-10-08, `TK126`: Python's exclusivity pass is now `(type, relation)`-keyed, so
     that last clause is history; the gap is recorded in the section header and in
-    `formal/CORRESPONDENCE.md` §7.) -/
+    `formal/CORRESPONDENCE.md` §7.)
+    (2026-10-14, `TK132`: `isPure` no longer reads this; it asks over `ttuParentTypes`.
+    `derivedAnywhere` survives as the vocabulary of the explicit cascade carry
+    `LeafRules.lean::LeafTtuTargetsUnderived`.) -/
 def derivedAnywhere (S : Schema) (R : String) : Bool :=
   S.keys.any (fun k => k.2 == R && isDerived S k)
+
+/-- **The parent types a TTU's tupleset admits** — the types a stored `ty:_#ts` tuple's
+    subject may have, read off the tupleset def's `Direct` restrictions. The twin of the
+    `.ttu` case of `Spec/Stratify.lean::exprRefs` (which TAINTS through exactly these
+    `(pt, tgt)` keys, via `Spec/Stratify.lean::directTypes`) and of Python's
+    `src/zanzibar/schema/boolean.py::_member_types`, which `_is_pure` and `_mentions` both
+    read. An undeclared tupleset has no parent types (`none => []`), as `_member_types`
+    returns the empty set there. (`TK132`, 2026-10-14.) -/
+def ttuParentTypes (S : Schema) (ty ts : String) : List String :=
+  match S.lookup (ty, ts) with
+  | some e => directTypes e
+  | none => []
 
 /-- Is a restriction a **tainted userset** one, `[T#P]` with `T#P` derived? These are
     the restrictions `_build_plan_tree` peels off into their own storage leaves. -/
@@ -387,11 +410,18 @@ def isTaintedUserset (S : Schema) (r : Restriction) : Bool :=
     ⚠ 2026-10-08 (`TK126`): the `.ttu` case uses the type-agnostic `derivedAnywhere`,
     while Python's `_is_pure` asks over the tupleset's member types and, since `TK126`,
     Python compiles the shapes where the two disagree. Dead inside `W4Fragment`
-    (`computedOrDirect`); recorded in `formal/CORRESPONDENCE.md` §7. -/
+    (`computedOrDirect`); recorded in `formal/CORRESPONDENCE.md` §7.
+    ✓ 2026-10-14 (`TK132`): FIXED, the ⚠ above is history. The `.ttu` case now asks
+    "is the target underived on EVERY parent type the tupleset admits"
+    (`ttuParentTypes`), which is `_is_pure`'s
+    `all((t, target) not in tainted for t in _member_types(...))`. `.all`, not `.any`: a
+    mixed-parent tupleset with one derived parent type is IMPURE
+    (`LeafRules.lean::LeafRuleWitness.lrMix_mixed_parent_drop`). The tupleset conjunct
+    `!isDerived S (ty, ts)` is kept; it is always true on a parsed (direct-only) tupleset. -/
 def isPure (S : Schema) (ty : String) : Expr → Bool
   | .direct rs  => rs.all (fun r => !isTaintedUserset S r)
   | .computed R => !isDerived S (ty, R)
-  | .ttu tgt ts => !isDerived S (ty, ts) && !derivedAnywhere S tgt
+  | .ttu tgt ts => !isDerived S (ty, ts) && (ttuParentTypes S ty ts).all (fun pt => !isDerived S (pt, tgt))
   | .union a b  => isPure S ty a && isPure S ty b
   | .inter _ _  => false
   | .excl _ _   => false

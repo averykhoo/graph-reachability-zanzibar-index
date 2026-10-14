@@ -38,16 +38,19 @@ Directs compile to `Filter`s / `RewriteFilter`s, not `Rule`s, matching `exprArms
   order (`leafRewrites` filters `S.defs`), and nine sources differ that way. Rule order is
   not observable through `rewriteStep` (a `filterMap` over all rules).
 
-THE ONE KNOWN DISAGREEMENT (`TK132`, positively pinned, never xfailed). A TTU arm inside a
-derived def whose target NAME is derived on some type, but not on any type the tupleset
-admits: Python's type-aware `boolean.py::_is_pure` keeps the arm as a closure leaf, the
-model's `Leaf.lean::isPure` (`derivedAnywhere`, by name) drops it and shifts the later
-leaves down. `_TK132_EXPECTED` records each of the four witnesses' diff EXACTLY, and
-`test_mismatching_sources_are_exactly_tk132_and_sweep_is_not_vacuous` asserts no fifth
-source mismatches. When TK132
-fixes the model, these pins go red; its builder deletes the entries in the same commit. The
-Python side is the oracle-checked one (`tests/test_tk126_ttu_target_name_collision.py`), so
-the pin says "the model is out of date here", not "Python is wrong".
+NO KNOWN DISAGREEMENT (since `TK132`, 2026-10-14). Every swept source agrees, and
+`test_mismatching_sources_are_none_and_sweep_is_not_vacuous` asserts the mismatching set is
+EMPTY. HISTORY: until `TK132` there was one class, positively pinned in a
+`_TK132_EXPECTED` dict (`TK126:D`, `TK126:D_nested`, `TK126:SlXt`, `WIT:W3`): a TTU arm inside
+a derived def whose target NAME is derived on some type but on no type the tupleset admits.
+Python's type-aware `boolean.py::_is_pure` kept the arm as a closure leaf; the model's
+`Leaf.lean::isPure` (`derivedAnywhere`, by name) dropped it. `TK132` made the model ask over
+the tupleset's parent types (`Leaf.lean::ttuParentTypes`); on that tree the four pins
+reported `got {}` (every diff vanished), so the dict and its test were deleted and the four
+joined the agreeing set. The Python side was and is the oracle-checked one
+(`tests/test_tk126_ttu_target_name_collision.py`). Both Python halves of that boundary are
+now PERMANENT sabotages in `test_python_side_sabotages_are_caught`: (c) the old NAME test in
+`_is_pure` reddens exactly those four, and (d) `any` for `all` makes `WIT:SMix` raise.
 
 SABOTAGE (2026-10-14, `docs/sabotage-procedure.md`). Permanent: `test_python_side_sabotages_are_caught`
 re-runs the Python half under two in-process mutations of the compiler and asserts exactly
@@ -83,6 +86,17 @@ which sources go red. One-off runs of this whole module, literal pytest summary 
   check disabled in-process, still `51 failed, 22 passed`, now by the comparator: `{'leaf':
   ([('doc', 'b1', 's1.1', 'computed'), ...` vs the stripped names. Restored, rebuilt, `73
   passed`.
+* (g) `TK132`, 2026-10-14, the model side: on the type-aware `isPure` tree, BEFORE this
+  module was edited, `7 failed, 66 passed`: the four `_TK132_EXPECTED` pins each reported
+  `got {}` (e.g. `TK126:SlXt: the TK132 diff changed. Recorded {'leaf': ([('doc', 'banned',
+  'access.1', 'computed'), ('doc', 'parent', 'access.0', 'ttu', 'viewer')], [('doc',
+  'banned', 'access.0', 'computed')])}, got {}`), the sweep reported `assert set() ==
+  {'TK126:D', ...}`, and the emitter and permanent-sabotage tests were red on their stale
+  expectations. That is the acceptance of `TK132`; the edits that followed only removed the
+  pins it obsoleted and ratcheted the floors up. The Lean-side sabotages (revert the arm,
+  same-type test, wrong-def lookup, `.all` -> `.any`) are recorded at
+  `LeafRules.lean::LeafRuleWitness.lrMix_mixed_parent_drop` and in
+  `formal/history/tk132-ispure-parent-types-2026-10-14.md`.
 """
 from __future__ import annotations
 
@@ -106,6 +120,7 @@ from formal.conformance.encode import build_request
 from zanzibar.schema import boolean as boolean_mod
 from zanzibar.schema import parse_openfga_schema
 from zanzibar.schema.rules import Filter, RelationalTriplePattern, Rule
+from zanzibar.schema.syntax import TTU
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -137,35 +152,24 @@ def _collect_sources() -> dict[str, tuple[str, frozenset]]:
 
 _SOURCES = _collect_sources()
 
-#: The `TK132` class: the exact `(python_only, lean_only)` diff per half, sorted. Measured
-#: 2026-10-14 by the scout and challenge probes and re-measured by this module on its first
-#: run; byte-identical to `docs/tk119-leaf-rules-differential-2026-10-14.md` sec 4. A half not
-#: listed must AGREE. TK132's builder deletes these entries when the model is fixed.
-_TK132_EXPECTED: dict[str, dict[str, tuple[list, list]]] = {
-    "TK126:D": {"leaf": (
-        [("doc", "banned", "viewer.2", "computed"), ("doc", "parent", "viewer.1", "ttu", "viewer")],
-        [("doc", "banned", "viewer.1", "computed")])},
-    "TK126:D_nested": {"leaf": (
-        [("doc", "banned", "viewer.2", "computed"), ("doc", "parent", "viewer.1", "ttu", "viewer")],
-        [("doc", "banned", "viewer.1", "computed")])},
-    "TK126:SlXt": {"leaf": (
-        [("doc", "banned", "access.1", "computed"), ("doc", "parent", "access.0", "ttu", "viewer")],
-        [("doc", "banned", "access.0", "computed")])},
-    "WIT:W3": {"leaf": (
-        [("doc", "parent", "viewer.0", "ttu", "viewer")],
-        [])},
-}
+#: The four sources that were the `TK132` class (the deleted `_TK132_EXPECTED` dict). They
+#: AGREE since `TK132`; the permanent sabotage (c) below reddens exactly these when
+#: `_is_pure` is put back on the old NAME test, so they cannot quietly stop testing it.
+_TK132_SHAPE = frozenset({"TK126:D", "TK126:D_nested", "TK126:SlXt", "WIT:W3"})
 
 #: Non-vacuity floor: matched sources whose leaf half is NON-EMPTY. Measured 2026-10-14 by
 #: this module's own sweep (`_sweep`): 32 corpus/fixture sources (the 2026-08-16 figure,
-#: reproduced) + 7 agreeing witnesses + 5 agreeing `TK126` schemas = 44. A `>=`, so adding a
-#: source is free; it catches a family that silently went empty or lost its boolean schemas.
-MIN_MATCHED_NONEMPTY_LEAF = 44
+#: reproduced) + 9 agreeing witnesses (W1-W7, W3 since `TK132`, SMix) + 8 agreeing `TK126`
+#: schemas (D, D_nested and SlXt since `TK132`) = 49. Ratcheted UP from 44 by `TK132`. A
+#: `>=`, so adding a source is free; it catches a family that silently went empty or lost
+#: its boolean schemas.
+MIN_MATCHED_NONEMPTY_LEAF = 49
 
 #: Shape witnesses, pinned BY NAME (challenge X4: a `>= 1` count survives deleting two of
 #: three). Each must be a MATCHED source with the shape on both sides.
-_LEAF_TTU_WITNESSES = frozenset({"WIT:W1", "WIT:W5", "WIT:W3b"})
-_MERGED_LEAF_WITNESSES = frozenset({"WIT:W2", "WIT:W6", "WIT:W3b", "WIT:W7"})
+_LEAF_TTU_WITNESSES = frozenset({"WIT:W1", "WIT:W5", "WIT:W3b", "WIT:W3",
+                                 "TK126:D", "TK126:D_nested", "TK126:SlXt"})
+_MERGED_LEAF_WITNESSES = frozenset({"WIT:W2", "WIT:W6", "WIT:W3b", "WIT:W7", "WIT:W3"})
 _DUPLICATE_RULE_WITNESSES = frozenset({"WIT:W7"})
 
 #: `tests/fga_schemas/*.fga` count on 2026-10-14 (15). A `>=`: a deleted fixture is red.
@@ -272,7 +276,7 @@ def _sweep() -> dict[str, dict]:
 
 # ---- the differential -----------------------------------------------------------------
 
-@pytest.mark.parametrize("label", sorted(set(_SOURCES) - set(_TK132_EXPECTED)))
+@pytest.mark.parametrize("label", sorted(_SOURCES))
 def test_leaf_rules_match_python(label):
     """Lean's `schemaRewrites` / `leafRewrites` equal Python's compiled `Rule`s, per half,
     as multisets, with the untainted order and the within-key leaf order equal too."""
@@ -286,22 +290,13 @@ def test_leaf_rules_match_python(label):
         f"{label}: within-key leaf rule ORDER differs: py={py['leaf']} lean={lean['leaf']}")
 
 
-@pytest.mark.parametrize("label", sorted(_TK132_EXPECTED))
-def test_tk132_gap_is_exactly_the_recorded_diff(label):
-    """POSITIVE pin of the `TK132` disagreement: the diff must EQUAL the recorded one, so
-    a change on either side (including TK132's fix) turns this red."""
-    got = _diff(_python(label), _lean(label))
-    assert got == _TK132_EXPECTED[label], (
-        f"{label}: the TK132 diff changed. Recorded {_TK132_EXPECTED[label]!r}, got {got!r}. "
-        f"If TK132 just fixed `Leaf.lean::isPure`, delete this entry from _TK132_EXPECTED.")
-
-
-def test_mismatching_sources_are_exactly_tk132_and_sweep_is_not_vacuous():
-    """The whole sweep at once: the set of disagreeing sources EQUALS `_TK132_EXPECTED`'s
-    keys (no fifth mismatch can hide), and the agreeing sources exercise the shapes the
-    corpus alone never reaches, pinned by name."""
+def test_mismatching_sources_are_none_and_sweep_is_not_vacuous():
+    """The whole sweep at once: NO source disagrees (since `TK132`; before it the set was
+    exactly `_TK132_SHAPE`), and the agreeing sources exercise the shapes the corpus alone
+    never reaches, pinned by name."""
     diffs = _sweep()
-    assert {k for k, d in diffs.items() if d} == set(_TK132_EXPECTED)
+    assert {k for k, d in diffs.items() if d} == set()
+    assert _TK132_SHAPE <= set(_SOURCES), sorted(_TK132_SHAPE - set(_SOURCES))
     matched = [k for k, d in diffs.items() if not d]
     lean = {k: _lean(k) for k in matched}
     nonempty = [k for k in matched if lean[k]["leaf"]]
@@ -317,7 +312,8 @@ def test_mismatching_sources_are_exactly_tk132_and_sweep_is_not_vacuous():
     assert _DUPLICATE_RULE_WITNESSES <= dup, sorted(_DUPLICATE_RULE_WITNESSES - dup)
     n_fga = sum(1 for k in _SOURCES if k.startswith("fga:"))
     assert n_fga >= MIN_FGA_FIXTURES, f"only {n_fga} .fga fixtures swept"
-    assert set(LEAF_RULE_WITNESSES) == {"W1", "W2", "W3", "W3b", "W4", "W5", "W6", "W7"}
+    assert set(LEAF_RULE_WITNESSES) == {"W1", "W2", "W3", "W3b", "W4", "W5", "W6", "W7",
+                                        "SMix"}
     assert set(TK126_SERVED_SCHEMAS) == {"B", "C", "D", "D_nested", "B_star", "C_cross",
                                          "C_team", "SlXt"}
 
@@ -341,9 +337,16 @@ def test_tk126_copies_match_their_source():
 
 def test_emitter_agrees_with_a_proved_theorem():
     """Instrument cross-check: on `SlXt` the emitted leaf half equals what
-    `LeafRules.lean::LeafRuleWitness.lrXt_cross_type_drop` proves `by decide`, so the
-    channel prints the model's value and not some re-derivation of it."""
+    `LeafRules.lean::LeafRuleWitness.lrXt_cross_type_kept` proves `by decide` (and on
+    `SMix` what `lrMix_mixed_parent_drop` proves), so the channel prints the model's value
+    and not some re-derivation of it. (Before `TK132` the `SlXt` pin was
+    `lrXt_cross_type_drop`, `banned` on `access.0` and no TTU rule.)"""
     assert _lean("TK126:SlXt") == {"untainted": [], "leaf": [
+        ("team", "z", "viewer.0", "computed"),
+        ("team", "y", "viewer.1", "computed"),
+        ("doc", "parent", "access.0", "ttu", "viewer"),
+        ("doc", "banned", "access.1", "computed")]}
+    assert _lean("WIT:SMix") == {"untainted": [], "leaf": [
         ("team", "z", "viewer.0", "computed"),
         ("team", "y", "viewer.1", "computed"),
         ("doc", "banned", "access.0", "computed")]}
@@ -435,23 +438,63 @@ def _rule_offbyone(monkeypatch) -> None:
     monkeypatch.setattr(boolean_mod, "_rewrite_rule", bumped)
 
 
+def _is_pure_name_test(monkeypatch) -> None:
+    """`TK132` S4: `_is_pure`'s TTU arm put back on the model's OLD type-agnostic NAME test
+    ("is the target relation name derived on ANY type"). `_is_pure` recurses through the
+    module global, so nested unions see the patch too."""
+    orig = boolean_mod._is_pure
+
+    def name_test(expr, object_type, tainted, ast):
+        if isinstance(expr, TTU):
+            return not any(rel == expr.target_rel for (_t, rel) in tainted)
+        return orig(expr, object_type, tainted, ast)
+    monkeypatch.setattr(boolean_mod, "_is_pure", name_test)
+
+
+def _is_pure_any(monkeypatch) -> None:
+    """`TK132` S5, Python half: `any` for `all` over the tupleset's parent types."""
+    orig = boolean_mod._is_pure
+
+    def any_test(expr, object_type, tainted, ast):
+        if isinstance(expr, TTU):
+            return any((t, expr.target_rel) not in tainted
+                       for t in boolean_mod._member_types(object_type, expr.tupleset_rel, ast,
+                                                          frozenset()))
+        return orig(expr, object_type, tainted, ast)
+    monkeypatch.setattr(boolean_mod, "_is_pure", any_test)
+
+
 def test_python_side_sabotages_are_caught(monkeypatch):
     """PERMANENT sabotage of the Python side, asserting EXACTLY which sources go red.
 
     (a) S11 twin: only the merged-leaf witnesses go red; every corpus and fixture source
         stays green (the corpus is blind to merged leaves, which is why the witnesses
-        exist), and `W3`'s TK132 diff vanishes because the dropped arm IS the TTU arm.
-    (b) rule-only off-by-one: every source with a non-empty Python leaf half goes red, the
-        TK132 four included, and no source with an empty one does.
+        exist). Since `TK132` that includes `W3`, whose merged leaf holds the TTU arm.
+    (b) rule-only off-by-one: every source with a non-empty Python leaf half goes red, and
+        no source with an empty one does.
+    (c) `TK132` S4: `_is_pure` on the old NAME test reddens EXACTLY the four former `TK132`
+        sources (`_TK132_SHAPE`), so their agreement is a real measurement of the type test.
+    (d) `TK132` S5: `any` for `all` makes `WIT:SMix` RAISE the I5 exclusivity `ValueError`,
+        and the sweep surfaces that refusal as a FAILURE (record (c) in the module
+        docstring), never a skip.
     """
     baseline = {label: _python(label) for label in _SOURCES}
     with monkeypatch.context() as m:
         _s11_twin(m)
         red = {k for k, d in _sweep().items() if d}
-    assert red == {"WIT:W2", "WIT:W6", "WIT:W3b", "WIT:W7",
-                   "TK126:D", "TK126:D_nested", "TK126:SlXt"}, sorted(red)
+    assert red == {"WIT:W2", "WIT:W6", "WIT:W3b", "WIT:W7", "WIT:W3"}, sorted(red)
     with monkeypatch.context() as m:
         _rule_offbyone(m)
         red = {k for k, d in _sweep().items() if d}
     assert red == {k for k, py in baseline.items() if py["leaf"]}, sorted(red)
-    assert {k for k, d in _sweep().items() if d} == set(_TK132_EXPECTED)  # patch undone
+    with monkeypatch.context() as m:
+        _is_pure_name_test(m)
+        red = {k for k, d in _sweep().items() if d}
+    assert red == set(_TK132_SHAPE), sorted(red)
+    with monkeypatch.context() as m:
+        _is_pure_any(m)
+        with pytest.raises(ValueError, match="derived subject predicate"):
+            _python("WIT:SMix")
+        with pytest.raises(ValueError, match="derived subject predicate"):
+            _sweep()
+    assert {k for k, d in _sweep().items() if d} == set()  # patches undone

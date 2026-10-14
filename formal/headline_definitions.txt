@@ -109,6 +109,7 @@ def:Zanzibar.LeafBridgeWitness.alice	[def] def alice : SubjectRef := ⟨"user", 
 def:Zanzibar.LeafBridgeWitness.bob	[def] def bob : SubjectRef := ⟨"user", "bob", BARE⟩
 def:Zanzibar.LeafBridgeWitness.carol	[def] def carol : SubjectRef := ⟨"user", "carol", BARE⟩
 def:Zanzibar.LeafBridgeWitness.d1	[def] def d1 : ObjectRef := ⟨"doc", "d1"⟩
+def:Zanzibar.LeafTtuTargetsUnderived	[def] def LeafTtuTargetsUnderived (S : Schema) : Prop := ∀ r ∈ leafRewrites S, ∀ tr ∈ ttuTargets r, derivedAnywhere S tr = false
 def:Zanzibar.MemberSet	[structure] fields=(pos stars neg) structure MemberSet (Id : Type) where pos : Finset Id stars : Finset Shape neg : Finset Id deriving DecidableEq
 def:Zanzibar.MemberSet.empty	[def] def empty : MemberSet Id := { pos := ∅, stars := ∅, neg := ∅ }
 def:Zanzibar.MemberSet.ext	[def] def ext (pop : Shape → Finset Id) (m : MemberSet Id) : Finset Id := m.pos ∪ (starpop pop m.stars \ m.neg)
@@ -245,7 +246,7 @@ def:Zanzibar.htermB	[def] def htermB (S : Schema) (T : Store) : Bool := (tainted
 def:Zanzibar.instances	[def] def instances (T : Store) (q : Query) (t : String) : List String := universeOf T q t false
 def:Zanzibar.isDerived	[def] def isDerived (S : Schema) (k : Key) : Bool := (taintedKeys S).contains k
 def:Zanzibar.isLeafPred	[def] def isLeafPred (p : String) : Bool := p.toList.contains '.'
-def:Zanzibar.isPure	[def] def isPure (S : Schema) (ty : String) : Expr → Bool | .direct rs => rs.all (fun r => !isTaintedUserset S r) | .computed R => !isDerived S (ty, R) | .ttu tgt ts => !isDerived S (ty, ts) && !derivedAnywhere S tgt | .union a b => isPure S ty a && isPure S ty b | .inter _ _ => false | .excl _ _ => false
+def:Zanzibar.isPure	[def] def isPure (S : Schema) (ty : String) : Expr → Bool | .direct rs => rs.all (fun r => !isTaintedUserset S r) | .computed R => !isDerived S (ty, R) | .ttu tgt ts => !isDerived S (ty, ts) && (ttuParentTypes S ty ts).all (fun pt => !isDerived S (pt, tgt)) | .union a b => isPure S ty a && isPure S ty b | .inter _ _ => false | .excl _ _ => false
 def:Zanzibar.isTaintedUserset	[def] def isTaintedUserset (S : Schema) (r : Restriction) : Bool := (r.2.1 != BARE) && isDerived S (r.1, r.2.1)
 def:Zanzibar.iterate	[def] def iterate {α : Type} (f : α → α) : Nat → α → α | 0, x => x | n + 1, x => iterate f n (f x)
 def:Zanzibar.kahn	[def] def kahn (edges : List (Key × Key)) : Nat → List Key → List (List Key) → Option (List (List Key)) | 0, remaining, acc => if remaining.isEmpty then some acc.reverse else none | fuel + 1, remaining, acc => if remaining.isEmpty then some acc.reverse else let ready := readyNodes remaining edges if ready.isEmpty then none else kahn edges fuel (remaining.filter (fun n => ¬ ready.contains n)) (ready :: acc)
@@ -295,6 +296,7 @@ def:Zanzibar.taintStep	[def] def taintStep (S : Schema) (cur : List Key) : List 
 def:Zanzibar.taintedKeys	[def] def taintedKeys (S : Schema) : List Key := iterate (taintStep S) (S.keys.length) []
 def:Zanzibar.throughShapes	[def] def throughShapes (S : Schema) : List Shape := S.defs.flatMap (fun d => (exprTtus d.2).flatMap (fun tt => match S.lookup (d.1.1, tt.2) with | none => [] | some tse => (exprRestrictions tse).filterMap (fun r => if r.2.2 && r.2.1 == BARE then some ((r.1, tt.1) : Shape) else none)))
 def:Zanzibar.ttuLeaf	[def] def ttuLeaf (rec : Rec) (subject : SubjectRef) (T : Store) (q : Query) (targetRel tuplesetRel : String) (otype oname : String) : Bool := let objs := matchingObjects oname let s := subject T.any (fun tup => if tup.relation == tuplesetRel && tup.object.type == otype && objs.contains tup.object.name then let pt := tup.subject.type let pn := tup.subject.name if pn != STAR then (s.type == pt && s.name == pn && s.predicate == targetRel) || rec pt pn targetRel else (s.type == pt && s.predicate == targetRel) || (instances T q pt).any (fun inst => rec pt inst targetRel) else false)
+def:Zanzibar.ttuParentTypes	[def] def ttuParentTypes (S : Schema) (ty ts : String) : List String := match S.lookup (ty, ts) with | some e => directTypes e | none => []
 def:Zanzibar.ttuStarFreeB	[def] def ttuStarFreeB (S : Schema) (T : Store) : Bool := T.all fun t => !(t.subject.name == STAR) || (schemaRewrites S).all (fun a => match a.kind with | RuleKind.ttu _ => !((t.relation == a.matchRel) && (t.object.type == a.objectType)) | RuleKind.computed => true)
 def:Zanzibar.ttuTargets	[def] def ttuTargets (r : RRule) : List String := match r.kind with | .computed => [] | .ttu tr => [tr]
 def:Zanzibar.unionAll	[def] def unionAll : List Expr → Option Expr | [] => none | e :: es => some (es.foldl Expr.union e)

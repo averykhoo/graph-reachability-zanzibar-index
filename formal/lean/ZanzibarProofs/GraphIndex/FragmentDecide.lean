@@ -394,4 +394,26 @@ theorem outside_S6_by_decide : ¬ W4Fragment S6 Tx := by decide
 
 end FragmentDecideWitness
 
+namespace LeafRuleWitness
+
+/-- **`TK132` X1: `NodupKeys` is LOAD-BEARING on the leaf-carry discharge.** At
+    `LeafRules.lean::LeafRuleWitness.SDup` (`SlXt` with `doc#access` declared twice, the
+    first def `computedOrDirect`, the second a `.ttu` in a derived def):
+    1. the discharge's `hCO` premise HOLDS — every derived key's `lookup` def is
+       `computedOrDirect` (the Bool twin `computedOrDirectB`, `computedOrDirectB_iff`);
+    2. `NodupKeys` FAILS;
+    3. the carry `LeafTtuTargetsUnderived` FAILS — `leafRewrites` filters `S.defs` and sees
+       the second def, which `lookup` hides.
+    So `CascadeStable.lean::leafTtuTargetsUnderived_of_computedOrDirect` without its `hNK`
+    would be FALSE here. This is the semantic record behind sabotage S6 (dropping `hNK` from
+    the discharge breaks its proof at `lookup_of_mem`). -/
+theorem leafTtuTargetsUnderived_needs_nodup :
+    (SDup.keys.all (fun k => !isDerived SDup k ||
+        (match SDup.lookup k with | some e => computedOrDirectB e | none => true))) = true
+      ∧ ¬ NodupKeys SDup ∧ ¬ LeafTtuTargetsUnderived SDup := by
+  refine ⟨by decide, ?_, by decide⟩
+  unfold NodupKeys; decide
+
+end LeafRuleWitness
+
 end Zanzibar

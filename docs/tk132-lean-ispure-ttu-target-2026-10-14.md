@@ -134,6 +134,47 @@ surface (~55 binder threadings, ~21 discharge sites, 2 headline regenerations, 4
 
 ## Corrections
 
+### Corrections 2026-10-14 (build)
+
+Builder: agent `build-TK132`. Design L-A as decided above is BUILT; the whole Lean library,
+`zcli`, the axiom audit and the pins are green on it (the phased gate result is on the row).
+Everything here is first-hand READ/PROBE unless marked; the sabotage outputs are quoted
+literally in `formal/history/tk132-ispure-parent-types-2026-10-14.md` §4, which is tracked.
+
+- **Threading was 13 declarations and 14 discharge sites, not ~52 / ~21** (MEASURED, build-
+  driven). P3's name-closure over-approximated. Rule applied: discharge `hLTU` at the FIRST
+  enclosing declaration that already holds `hNK` plus the `ComputedOnly` / `ComputedOrDirect`
+  premise, rather than widen a further signature. A second discharge lemma was added for the
+  one-stratum chain, which carries `ComputedOnly`:
+  `GraphIndex/CascadeStable.lean::leafTtuTargetsUnderived_of_computedOnly` (via
+  `ReconcileCorrect.lean::computedOnly_computedOrDirect`). The headline statements that moved
+  are exactly the two decided (`runCascade2_no_abort`, `cascade2_drains`).
+  `writeLegSubjectsWide_L` takes `hLTU` after `hterm` (it has no `hNBD`).
+- **`SDup`'s pin lives in `GraphIndex/FragmentDecide.lean`**, namespace `LeafRuleWitness`, not
+  in `LeafRules.lean` (the `SDup` def does). Forced by imports: the pin reads
+  `computedOrDirectB`, which is downstream of `LeafRules.lean`; `FragmentDecide`'s import cone
+  contains `LeafRules` and `CascadeStable`, and `CascadeStable` cannot import `FragmentDecide`
+  (it is in that cone).
+- **`SlW3` was NOT added to `corpus.py::LEAF_RULE_WITNESSES`.** Its Python twin is `TK119`'s
+  existing `W3` (identical DSL); a second copy would be a duplicate source. `SMix` was added.
+- **S3 as built**: "parent types off the CONTAINER def" cannot be written inside `isPure`,
+  which does not know the defined relation. The plausible slip built instead reads the parent
+  types off the wrong def: the lookup keyed `(ty, tgt)` on the container type instead of
+  `(ty, ts)`. Same expected and observed red (`stD_leaves`).
+- **S2 stops the build at `Leaf.lean`** (`stD_leaves` red), so `lrStD_no_ttu_rule` was observed
+  red in a second run (S2b) with `stD_leaves` neutralised.
+- **S4 is PERMANENT**, in both instruments (`test_python_side_sabotages_are_caught` (c) and
+  `test_conformance_tk132_leaf_rows.py::test_python_name_test_sabotage_reddens_exactly_the_tk132_shapes`),
+  and so is S5's Python control ((d): with `any` in `_is_pure`, `WIT:SMix` raises).
+- **T2 measured** (PROBE, fixed tree): the leaf-object-predicate edges are EQUAL (4 each side,
+  multiplicities equal) on `SlXt`, `SlXtR`, `StD`, `D`, `D_nested`. The residual is exactly one
+  Python-only public edge and two Python-only `upos` residue rows on each, so `SlXt`'s residual
+  now equals `SlXtR`'s (§2.2's acceptance criterion).
+- **C4 is filed as `TK149` (LATER)** and named in T2's positive pin docstring.
+- **TK119 acceptance, first-hand**: on the fixed tree, before any test edit, the four
+  `_TK132_EXPECTED` pins each reported `got {}`; after the edits the sweep's mismatching set is
+  EMPTY, and the non-vacuity floor was re-measured at 49 and ratcheted up from 44.
+
 ### Corrections 2026-10-14 (challenge)
 
 Skeptic pass by agent `challenge-TK132`. Its probes are under

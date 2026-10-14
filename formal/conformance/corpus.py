@@ -1374,9 +1374,10 @@ type doc
     define viewer: (a or b) but not c
 """,
     # W3: the `TK132` shape, merged-leaf flavour: the TTU target NAME `viewer` is derived
-    # on `doc` but not on `folder`, the only type the tupleset admits. Python
-    # (`boolean.py::_is_pure`, type-aware) keeps the arm; the Lean `Leaf.lean::isPure`
-    # (`derivedAnywhere`, by name) drops it. Positively pinned as a mismatch.
+    # on `doc` but not on `folder`, the only type the tupleset admits. Both sides keep the
+    # arm in the merged leaf `viewer.0` since `TK132` (2026-10-14) made `Leaf.lean::isPure`
+    # type-aware; before it the model dropped it and this was a pinned mismatch. Lean twin:
+    # `LeafRules.lean::LeafRuleWitness.SlW3` / `lrW3_merged_computed_ttu`.
     "W3": _LR_HEAD + """type user
 type folder
   relations
@@ -1442,6 +1443,28 @@ type doc
     define c: [user]
     define viewer: (a or a) but not c
 """,
+    # SMix (`TK132` X2, 2026-10-14): a MIXED-parent tupleset. `parent: [folder, team]`,
+    # `viewer` derived on `team` only. Purity must hold on EVERY parent type (`_is_pure`'s
+    # `all`, `Leaf.lean::isPure`'s `.all`), so the TTU arm is DROPPED and `banned` lands on
+    # `access.0`. The only swept source on which `.all` and `.any` differ: with `any` in
+    # `_is_pure` Python RAISES the I5 exclusivity ValueError (pinned in
+    # `test_conformance_leaf_rules.py::test_python_side_sabotages_are_caught`), and Lean's
+    # `.any` fails `LeafRules.lean::LeafRuleWitness.lrMix_mixed_parent_drop`.
+    "SMix": _LR_HEAD + """type user
+type team
+  relations
+    define z: [user]
+    define y: [user]
+    define viewer: z but not y
+type folder
+  relations
+    define viewer: [user]
+type doc
+  relations
+    define parent: [folder, team]
+    define banned: [user]
+    define access: viewer from parent but not banned
+""",
 }
 
 # `TK126`'s eight SERVED schemas, copied VERBATIM from
@@ -1451,7 +1474,7 @@ type doc
 # chain would stop the leaf-rules module from COLLECTING. Drift between the two copies is
 # caught by `test_conformance_leaf_rules.py::test_tk126_copies_match_their_source`, which
 # imports the source lazily inside the test. Three of the eight (`D`, `D_nested`, `SlXt`)
-# have the `TK132` shape; the other five agree.
+# have the `TK132` shape; since `TK132` (2026-10-14) all eight agree.
 _TK126_B = _LR_HEAD + """type user
 type folder
   relations

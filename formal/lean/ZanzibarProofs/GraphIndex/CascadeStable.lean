@@ -2176,6 +2176,38 @@ theorem kind_computed_of_mem_leafRewrites_computedOrDirect {S : Schema}
       ((computedOrDirect_closure_persistedLeaves_and_spine d.2 hco).1 sub hmem) hr
   · simp at hr
 
+/-- **★ `TK132`'s DISCHARGE: the leaf carry is VACUOUS on `W4Fragment`.**
+    `LeafRules.lean::LeafTtuTargetsUnderived S` follows from `computedOrDirect` (plus
+    `NodupKeys`): every leaf rule is a `.computed` rule (`kind_computed_of_mem_leafRewrites_computedOrDirect`
+    just above), so `ttuTargets r = []` and the `∀ tr ∈ []` is empty.
+
+    ⚠ `hNK : NodupKeys S` is a NEW premise relative to the fact this replaces. The old
+    leaf-layer THEOREM (`derivedAnywhere_eq_false_of_mem_leafRewrites`, deleted 2026-10-14) read
+    the target conjunct off `isPure` and needed no `NodupKeys` (`LeafRules.lean` prose, "No
+    `WF` and no `NodupKeys` needed"). This route reads `computedOrDirect` through `S.lookup`,
+    which sees only a duplicated key's FIRST def, while `leafRewrites` filters `S.defs` and
+    emits rules for both: `FragmentDecide.lean::LeafRuleWitness.leafTtuTargetsUnderived_needs_nodup`
+    is the decided counterexample (`LeafRuleWitness.SDup`) to the `hNK`-free statement. Every
+    discharge site holds `GraphAdmission.nodup` (`FullScope.lean::GraphAdmission`). -/
+theorem leafTtuTargetsUnderived_of_computedOrDirect {S : Schema}
+    (hNK : NodupKeys S)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
+      ComputedOrDirect e) :
+    LeafTtuTargetsUnderived S := by
+  intro r hr tr htr
+  have hk := kind_computed_of_mem_leafRewrites_computedOrDirect hNK hCO hr
+  simp [ttuTargets, hk] at htr
+
+/-- The same discharge at the STRONGER `ComputedOnly` premise the one-stratum chain
+    (`reachedByW3d_shadow` and its callers) carries — via
+    `ReconcileCorrect.lean::computedOnly_computedOrDirect`. -/
+theorem leafTtuTargetsUnderived_of_computedOnly {S : Schema}
+    (hNK : NodupKeys S)
+    (hCO : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true → ComputedOnly e) :
+    LeafTtuTargetsUnderived S :=
+  leafTtuTargetsUnderived_of_computedOrDirect hNK
+    (fun dt R e hlk hd => computedOnly_computedOrDirect (hCO dt R e hlk hd))
+
 /-- **Every `.closure` leaf of a `ComputedOnly` allocation is `ComputedOnly`.** -/
 theorem computedOnly_of_closure_mem_persistedLeaves {S : Schema} {ty : String} {e sub : Expr}
     (hco : ComputedOnly e) (h : PLeaf.closure sub ∈ persistedLeaves S ty e) :
@@ -3521,13 +3553,14 @@ theorem writeLegSubjectsWide_L {S : Schema} {T : Store} {t : Tuple}
     (hnl : NoLeafSubjects S)
     (hterm : ∀ dt R, isDerived S (dt, R) = true →
       NoTtuTarget S R ∧ NoStoreSubjectR (t :: T) R)
+    (hLTU : LeafTtuTargetsUnderived S)
     (hbase : NotLeafName t.subject.predicate) :
     ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
       ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)) := by
   rintro u hu (⟨dt, on, R, hder, _hRne, _hon, heq⟩ | hleaf)
   · obtain ⟨hnt, hns⟩ := hterm dt R hder
     have hpne : u.subject.predicate ≠ R :=
-      rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder
+      rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder hLTU
         (hns t List.mem_cons_self) hu
     apply hpne
     have hp := congrArg NodeKey.pred heq
@@ -3669,6 +3702,7 @@ theorem reachedByW3d_shadow {σ : GraphState} {S : Schema} {T : Store}
     have hsubjWL0 : ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
         ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)) :=
       writeLegSubjectsWide_L hLS.noLeafSubjects hterm
+        (leafTtuTargetsUnderived_of_computedOnly hNK hCO)
         (noLeafStoreSubjects_of_storeValidRules hDR hSV t List.mem_cons_self)
     -- ★ **`P6` step 3b step 8's `T3`, DISCHARGED HERE** (2026-09-14). The widened extras
     -- predicate adds `BridgeNode`, so obligation (D) gains a third disjunct: no member of
@@ -4757,7 +4791,9 @@ not distinguish them.**
 
 ⚠ **The gap is not closable the way obligation (A)'s was.** (A)'s leaf-layer arm is killed
 by `LeafRules.lean::derivedAnywhere_eq_false_of_mem_leafRewrites`: a leaf rule's TTU target
-is `derivedAnywhere`-false while `R` is `derivedAnywhere`-true, so `tr ≠ R` is free. That
+is `derivedAnywhere`-false while `R` is `derivedAnywhere`-true, so `tr ≠ R` is free. (2026-10-14,
+`TK132`: that lemma is deleted; the same fact is now the explicit carry
+`LeafRules.lean::LeafTtuTargetsUnderived`, discharged by `leafTtuTargetsUnderived_of_computedOrDirect`.) That
 instrument says nothing about a target's NAME SHAPE. Nor does anything else in scope:
 `WF.relNames` (`Core/Schema.lean:71`) constrains DECLARED def keys, while a TTU target is a
 referenced string inside an `Expr`; and `RewriteMatchDeclared` (`RestrictBase.lean:289`)
@@ -4921,6 +4957,7 @@ theorem writeLegSubjectsWide_L_snlBoth :
         ∨ LeafNode LeafRuleWitness.SnlBoth (subjNode ⟨"folder", "f1", "viewer"⟩)) :=
   writeLegSubjectsWide_L (T := ([] : Store)) (t := LeafRuleWitness.tnlParent)
     LeafRuleWitness.noLeafSubjects_snlBoth snlBoth_hterm
+    LeafRuleWitness.leafTtuTargetsUnderived_snlBoth
     (show NotLeafName LeafRuleWitness.tnlParent.subject.predicate from
       Or.inl LeafRuleWitness.tnlParent_subject_bare)
     ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩ (by decide)

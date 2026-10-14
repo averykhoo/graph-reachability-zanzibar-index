@@ -2151,7 +2151,7 @@ theorem reconcileJobsD_edge_sound {S : Schema} {T : Store} :
     NOT answer a later obligation by widening `term` instead; put the carry immediately
     after `hRne` at every threading site so the argument position stays uniform. -/
 theorem reachedByW3d_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
-    {dt R : String} (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S)
+    {dt R : String} (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hLTU : LeafTtuTargetsUnderived S)
     (h : ReachedByW3d σ S T) :
     isDerived S (dt, R) = true → NoTtuTarget S R → NoStoreSubjectR T R →
       ∀ a b, (a, b) ∈ σ.edges → a.type = dt → a.pred ≠ R := by
@@ -2165,9 +2165,9 @@ theorem reachedByW3d_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
     unfold GraphState.writeRulesRaw at hab
     rcases foldl_writeBridgedOne_edges_sound (rewriteClosureL S (rawWriteTuples S t)) hab
       with hin | ⟨u, hu, h1, _⟩ | ⟨hsw, _⟩
-    · exact ih hNBD hder hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin hty
+    · exact ih hNBD hLTU hder hnt (fun t' ht' => hns t' (List.mem_cons_of_mem _ ht')) a b hin hty
     · rw [h1, subjNode_pred]
-      exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder
+      exact rewriteClosureL_subject_pred_ne_of_noTtuTarget hnt hder hLTU
         (hns t List.mem_cons_self) hu
     · -- THE NEW DISJUNCT: `a` is a bridged-in concrete, so its SHAPE is a declared
       -- subject-wildcard userset shape. Under `a.type = dt` and `a.pred = R` that shape is
@@ -2186,12 +2186,12 @@ theorem reachedByW3d_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
     · have hab' : (a, b) ∈ (reconcileJobsL S T σp jobs).edges := hab
       rw [(reconcileJobsL_evalEq (EvalEq.refl σp) S T jobs).edges] at hab'
       rcases reconcileJobsD_edge_sound jobs σp a b hab' with hold | ⟨j, hj, c, hc, h1, _⟩
-      · exact ih hNBD hder hnt hns a b hold hty
+      · exact ih hNBD hLTU hder hnt hns a b hold hty
       · rw [h1, subjNode_pred]
         obtain ⟨_, hcb, _⟩ := hjv j hj
         rw [hcb c hc]
         exact Ne.symm hRne
-    · exact ih hNBD hder hnt hns a b hab hty
+    · exact ih hNBD hLTU hder hnt hns a b hab hty
 
 /-- **The derived R-node is never an edge source on a W3d state.**
 
@@ -2207,12 +2207,12 @@ theorem reachedByW3d_edge_source_ne_R {σ : GraphState} {S : Schema} {T : Store}
 theorem reachedByW3d_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
     {dt on R : String}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hder : isDerived S (dt, R) = true)
+    (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hLTU : LeafTtuTargetsUnderived S) (hder : isDerived S (dt, R) = true)
     (h : ReachedByW3d σ S T) :
     ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges := by
   obtain ⟨hnt, hns⟩ := hterm dt R hder
   intro y hy
-  exact reachedByW3d_edge_source_ne_R hRne hNBD h hder hnt hns _ y hy
+  exact reachedByW3d_edge_source_ne_R hRne hNBD hLTU h hder hnt hns _ y hy
     (objNode_type ⟨dt, on⟩ R) (objNode_pred ⟨dt, on⟩ R)
 
 /-- R-node terminality survives the batch itself (the mid-cascade state the leftover
@@ -2225,13 +2225,13 @@ theorem reachedByW3d_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
 theorem reconcileJobsL_Rnode_not_source {σ : GraphState} {S : Schema} {T : Store}
     {jobs : List W3cJob} {dt on R : String}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hder : isDerived S (dt, R) = true)
+    (hRne : R ≠ BARE) (hNBD : NoBridgedDerived S) (hLTU : LeafTtuTargetsUnderived S) (hder : isDerived S (dt, R) = true)
     (h : ReachedByW3d σ S T) (hjv : ∀ j ∈ jobs, W3cJobValid S j) :
     ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ (reconcileJobsL S T σ jobs).edges := by
   intro y hy
   rw [(reconcileJobsL_evalEq (EvalEq.refl σ) S T jobs).edges] at hy
   rcases reconcileJobsD_edge_sound jobs σ _ y hy with hold | ⟨j, hj, c, hc, h1, _⟩
-  · exact reachedByW3d_Rnode_not_source hterm hRne hNBD hder h y hold
+  · exact reachedByW3d_Rnode_not_source hterm hRne hNBD hLTU hder h y hold
   · obtain ⟨_, hcb, _⟩ := hjv j hj
     have hpred : (objNode ⟨dt, on⟩ R).pred = BARE := by
       rw [h1, subjNode_pred, hcb c hc]
@@ -2250,7 +2250,7 @@ theorem reconcileJobsL_Rnode_not_source {σ : GraphState} {S : Schema} {T : Stor
 theorem runCascade_no_abort {σ : GraphState} {S : Schema} {T : Store}
     {jobs : List W3cJob}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hNBD : NoBridgedDerived S)
+    (hNBD : NoBridgedDerived S) (hLTU : LeafTtuTargetsUnderived S)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
     (hjv : ∀ j ∈ jobs, W3cJobValid S j) (h : ReachedByW3d σ S T) :
@@ -2272,7 +2272,7 @@ theorem runCascade_no_abort {σ : GraphState} {S : Schema} {T : Store}
   · -- a pass-emitted row: maps to no keys
     obtain ⟨hRne, _hcb, _hcS, _hnS, _huP, _huS, hder, _hlke, hon⟩ := hjv j hj
     -- the reach cone of the R-node is empty
-    have hRns := reconcileJobsL_Rnode_not_source (on := j.on) hterm hRne hNBD hder h hjv
+    have hRns := reconcileJobsL_Rnode_not_source (on := j.on) hterm hRne hNBD hLTU hder h hjv
     have hreach : ∀ v, (reconcileJobsL S T σ jobs).reach d.node v = false := by
       intro v
       by_contra hne
@@ -2329,12 +2329,12 @@ theorem runCascade_no_abort {σ : GraphState} {S : Schema} {T : Store}
     vacuous `cascade_converges` shape. -/
 theorem cascade_drains {σ : GraphState} {S : Schema} {T : Store} {jobs : List W3cJob}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hNBD : NoBridgedDerived S)
+    (hNBD : NoBridgedDerived S) (hLTU : LeafTtuTargetsUnderived S)
     (hLU : ∀ dt R e, S.lookup (dt, R) = some e → isDerived S (dt, R) = true →
       ∀ r' ∈ computedRefs e, isDerived S (dt, r') = false)
     (hjv : ∀ j ∈ jobs, W3cJobValid S j) (h : ReachedByW3d σ S T) :
     Quiescent (runCascade S T σ jobs) := by
-  rw [runCascade_no_abort hterm hNBD hLU hjv h]
+  rw [runCascade_no_abort hterm hNBD hLTU hLU hjv h]
   intro d hd
   exact mem_outbox_le_maxOutboxId _ d hd
 

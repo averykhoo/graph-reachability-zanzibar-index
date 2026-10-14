@@ -1440,6 +1440,22 @@ that distinguishes it at the ALLOCATION layer (`Leaf.lean` sabotage S6).
 
 /-! ## Obligation (A)'s PREMISE — DISCHARGED, not assumed
 
+✓ **2026-10-14 (`TK132`) — read this first; the section below is kept as HISTORY.** The
+leaf-layer half of this section rested on `isPure`'s `.ttu` conjunct `!derivedAnywhere S tgt`,
+a type-agnostic NAME test that was not what Python does. `TK132` made `isPure` ask over the
+tupleset's parent types (`Leaf.lean::ttuParentTypes`), and under that faithful allocation the
+leaf fact (item 4 below) is FALSE: `LeafRuleWitness.SlXt` keeps a `.ttu "viewer"` leaf rule
+while `viewer` is derived on `team` (`hLTU_load_bearing`). So items 4/5 changed: the leaf fact
+is now the explicit, decidable schema carry `LeafTtuTargetsUnderived` (`hLTU`), threaded beside
+`NoBridgedDerived` and discharged on `W4Fragment` by
+`CascadeStable.lean::leafTtuTargetsUnderived_of_computedOrDirect` (with `NodupKeys`). The two
+deleted lemmas are `derivedAnywhere_eq_false_of_mem_exprArms_of_isPure` and
+`derivedAnywhere_eq_false_of_mem_leafRewrites`. "Obligation (A) needs no new premise" below is
+therefore history: it needs `hLTU`, which is vacuous inside `W4Fragment`. The cross-type pin is
+now `lrXt_cross_type_kept` (the arm KEPT), not `lrXt_cross_type_drop`. The sabotage record S14
+below names the deleted lemma's line; the `TK132` sabotages are recorded at
+`LeafRuleWitness.lrMix_mixed_parent_drop`.
+
 ★ The `TtuTargetsSatL` note above (`:891`) ends by flagging its own composition as
 **"NOT PROVED HERE — this is a source reading, not a kernel check"**, and names the missing
 step: *"every `.closure` leaf of `persistedLeaves` is `isPure`"*. This section proves that
@@ -1501,9 +1517,11 @@ cross-type case are kept below as permanent `decide` pins (`lrStD_no_ttu_rule`,
    are mutually defined but every recursive call is on an immediate subterm, so plain
    structural induction on the shared argument suffices — no mutual-induction principle).
 4. `derivedAnywhere_eq_false_of_mem_leafRewrites` — every leaf rule's TTU target is derived
-   NOWHERE, by (3) plus a walk of `exprArms` over a pure subtree.
+   NOWHERE, by (3) plus a walk of `exprArms` over a pure subtree. (DELETED 2026-10-14, `TK132`:
+   false under the type-aware `isPure`; replaced by the carry `LeafTtuTargetsUnderived`.)
 5. `ttuTargetsSatL_ne_of_noTtuTarget` and its closure corollary — the two arms of
-   `schemaRewritesL` closed by `NoTtuTarget` (untainted) and by (4) + (2) (leaf).
+   `schemaRewritesL` closed by `NoTtuTarget` (untainted) and by (4) + (2) (leaf). (Since
+   `TK132`: by `hLTU` + (2) on the leaf arm.)
 
 ## ★ CONTROLLED — three sabotages, run 2026-09-05 (`docs/sabotage-procedure.md`)
 
@@ -1773,95 +1791,79 @@ theorem kind_of_mem_ttuTargets {r : RRule} {tr : String} (h : tr ∈ ttuTargets 
     simp only [List.mem_singleton] at h
     subst h; exact hk
 
-/-- **The TTU targets of a PURE subtree are derived nowhere.** `exprArms` mints a `.ttu tgt`
-    rule exactly at a `.ttu tgt ts` node, and `isPure`'s TTU arm is
-    `!isDerived S (ty, ts) && !derivedAnywhere S tgt` — the SECOND conjunct, about the TARGET,
-    is the one this consumes. (The first is about the TUPLESET relation `ts`, which becomes
-    the rule's `matchRel`, not its target; see sabotage (S14).) -/
-theorem derivedAnywhere_eq_false_of_mem_exprArms_of_isPure {ty : String} :
-    ∀ {e : Expr}, isPure S ty e = true → ∀ {ot outRel : String} {r : RRule},
-      r ∈ exprArms ot outRel e → ∀ tr ∈ ttuTargets r, derivedAnywhere S tr = false := by
-  intro e
-  induction e with
-  | direct rs => intro _ _ _ _ hr; simp [exprArms] at hr
-  | computed R =>
-      intro _ _ _ _ hr tr htr
-      simp only [exprArms, List.mem_singleton] at hr
-      subst hr
-      simp [ttuTargets] at htr
-  | ttu tgt ts =>
-      intro hp _ _ _ hr tr htr
-      simp only [exprArms, List.mem_singleton] at hr
-      subst hr
-      simp only [ttuTargets, List.mem_singleton] at htr
-      subst htr
-      rw [isPure, Bool.and_eq_true] at hp
-      simpa using hp.2
-  | union a b iha ihb =>
-      intro hp _ _ _ hr
-      rw [isPure, Bool.and_eq_true] at hp
-      rw [exprArms, List.mem_append] at hr
-      exact hr.elim (iha hp.1) (ihb hp.2)
-  | inter a b _ _ => intro hp; simp [isPure] at hp
-  | excl a b _ _ => intro hp; simp [isPure] at hp
+/-- **★ THE LEAF-LAYER CARRY (`TK132`, 2026-10-14).** Every rule in `leafRewrites S` that has
+    a TTU target has one that is derived NOWHERE.
 
-/-- **★ THE LEAF-LAYER FACT.** Every rule in `leafRewrites S` that has a TTU target has one
-    that is derived NOWHERE. `keyLeafRewrites` mints rules only off `.closure` leaves (its
-    `_ => []` arm), those leaves are pure, and a pure subtree's TTU targets are
-    `derivedAnywhere`-false. The `zipIdx` index is irrelevant to the target, so it is
-    projected away with `List.zipIdx_map_fst`. -/
-theorem derivedAnywhere_eq_false_of_mem_leafRewrites {r : RRule} (h : r ∈ leafRewrites S) :
-    ∀ tr ∈ ttuTargets r, derivedAnywhere S tr = false := by
-  unfold leafRewrites at h
-  obtain ⟨d, _, hd⟩ := List.mem_flatMap.mp h
-  unfold keyLeafRewrites at hd
-  obtain ⟨pi, hpi, hr⟩ := List.mem_flatMap.mp hd
-  split at hr
-  · rename_i sub heq
-    have hmem : PLeaf.closure sub ∈ persistedLeaves S d.1.1 d.2 := by
-      rw [← heq]
-      have := List.mem_map_of_mem (f := Prod.fst) hpi
-      rwa [List.zipIdx_map_fst] at this
-    exact derivedAnywhere_eq_false_of_mem_exprArms_of_isPure
-      (isPure_of_closure_mem_persistedLeaves hmem) hr
-  · simp at hr
+    HISTORY. Until 2026-10-14 this was a THEOREM (`derivedAnywhere_eq_false_of_mem_leafRewrites`,
+    deleted), read off `isPure`'s `.ttu` conjunct `!derivedAnywhere S tgt`. That conjunct was a
+    type-agnostic NAME test and was not what Python does (`formal/CORRESPONDENCE.md` §7.1,
+    `TK126` entry). `TK132` made `isPure` ask over the tupleset's parent types
+    (`Leaf.lean::ttuParentTypes`), the twin of `boolean.py::_is_pure`. Under that faithful
+    allocation the fact is FALSE in general: at `LeafRuleWitness.SlXt` the leaf layer keeps a
+    `.ttu "viewer"` rule while `viewer` is derived on `team` (`hLTU_load_bearing`). So the fact
+    is now a SCHEMA-LEVEL CARRY, decidable, threaded beside `NoBridgedDerived`, and
+    discharged on `W4Fragment` by `CascadeStable.lean::leafTtuTargetsUnderived_of_computedOrDirect`
+    (where it is vacuous: `computedOrDirect` leaves the leaf layer no `.ttu` rule at all).
 
-/-- **★★ OBLIGATION (A)'s PREMISE, DISCHARGED.** `TtuTargetsSatL S (· ≠ R)` from the pair the
-    consumers already carry. The two arms of `schemaRewritesL` are closed differently and
-    that asymmetry is the whole proof:
+    It is an HONEST carry, not an admission narrowing: Python imposes nothing, and `SlXt` /
+    TK126 variant `D` are admitted and served. The cascade termination statements that take it
+    (`CascadeStrata.lean::runCascade2_no_abort`, `::cascade2_drains`) therefore no longer cover
+    `D` / `D_nested` / `SlXt`; their earlier nominal coverage was coverage of a model that was
+    not the code. A typed repair that buys it back is design L-B, deferred to `TK133`
+    (`docs/tk132-lean-ispure-ttu-target-2026-10-14.md`, "Decision 2026-10-14").
+
+    NARROWEST shape on purpose: `NoLeafTtu` (no leaf TTU rule at all) was rejected as strictly
+    stronger; this keeps leaf TTU rules whose target is underived everywhere (`SnlBoth`,
+    `leafTtuTargetsUnderived_snlBoth`). -/
+def LeafTtuTargetsUnderived (S : Schema) : Prop :=
+  ∀ r ∈ leafRewrites S, ∀ tr ∈ ttuTargets r, derivedAnywhere S tr = false
+
+/-- Decidable at a concrete schema, so witnesses and concrete discharge sites are `decide`
+    pins (same reason as `TtuTargetsSatL`'s instance: a plain `def` is not unfolded by
+    instance synthesis). -/
+instance (S : Schema) : Decidable (LeafTtuTargetsUnderived S) :=
+  inferInstanceAs
+    (Decidable (∀ r ∈ leafRewrites S, ∀ tr ∈ ttuTargets r, derivedAnywhere S tr = false))
+
+/-- **★★ OBLIGATION (A)'s PREMISE.** `TtuTargetsSatL S (· ≠ R)` from the pair the consumers
+    already carry plus the leaf carry. The two arms of `schemaRewritesL` are closed
+    differently and that asymmetry is the whole proof:
 
     * **untainted arm** — `NoTtuTarget S R` verbatim (spelled out; see the section header on
       why it is not named), via `kind_of_mem_ttuTargets` to get from the list form to the
       binder form;
-    * **leaf arm** — a leaf rule's TTU target is `derivedAnywhere`-FALSE
-      (`derivedAnywhere_eq_false_of_mem_leafRewrites`) while `R` is `derivedAnywhere`-TRUE
+    * **leaf arm** — a leaf rule's TTU target is `derivedAnywhere`-FALSE (the carry `hLTU`,
+      a theorem before `TK132`) while `R` is `derivedAnywhere`-TRUE
       (`derivedAnywhere_of_isDerived hder`), and a `Bool` is not both.
 
     ⚠ `hder` is LOAD-BEARING, not decoration: `hder_load_bearing` below is the machine-checked
-    refutation of the `hder`-free statement, at `SlStP`. -/
+    refutation of the `hder`-free statement, at `SlStP`. ⚠ So is `hLTU`: `hLTU_load_bearing`
+    refutes the `hLTU`-free statement at `SlXt` (`TK132`, 2026-10-14). -/
 theorem ttuTargetsSatL_ne_of_noTtuTarget {R dt : String}
     (hnt : ∀ r ∈ schemaRewrites S, ∀ tr, r.kind = RuleKind.ttu tr → tr ≠ R)
-    (hder : isDerived S (dt, R) = true) : TtuTargetsSatL S (· ≠ R) := by
+    (hder : isDerived S (dt, R) = true) (hLTU : LeafTtuTargetsUnderived S) :
+    TtuTargetsSatL S (· ≠ R) := by
   intro r hr tr htr
   rw [schemaRewritesL, List.mem_append] at hr
   rcases hr with hr | hr
   · exact hnt r hr tr (kind_of_mem_ttuTargets htr)
   · intro heq
-    have h1 := derivedAnywhere_eq_false_of_mem_leafRewrites hr tr htr
+    have h1 := hLTU r hr tr htr
     rw [heq, derivedAnywhere_of_isDerived hder] at h1
     exact Bool.noConfusion h1
 
 /-- **(A) in the CONSUMER's exact shape.** `Cascade.lean:713`'s
     `exact rewriteClosure_subject_pred_ne …` has `NoTtuTarget S R` and
-    `isDerived S (dt, R) = true` in scope; post-flip it needs the L twin at the same premises,
-    and this is it — `rewriteClosureL_subject_pred_ne` with its `TtuTargetsSatL` premise
-    manufactured rather than assumed. -/
+    `isDerived S (dt, R) = true` in scope; post-flip it needs the L twin at the same premises
+    plus the leaf carry `hLTU` (`TK132`), and this is it — `rewriteClosureL_subject_pred_ne`
+    with its `TtuTargetsSatL` premise manufactured rather than assumed. -/
 theorem rewriteClosureL_subject_pred_ne_of_noTtuTarget {R dt : String}
     (hnt : ∀ r ∈ schemaRewrites S, ∀ tr, r.kind = RuleKind.ttu tr → tr ≠ R)
-    (hder : isDerived S (dt, R) = true) {t : Tuple} (ht : t.subject.predicate ≠ R)
+    (hder : isDerived S (dt, R) = true) (hLTU : LeafTtuTargetsUnderived S) {t : Tuple}
+    (ht : t.subject.predicate ≠ R)
     {u : Tuple} (hu : u ∈ rewriteClosureL S (rawWriteTuples S t)) :
     u.subject.predicate ≠ R :=
-  rewriteClosureL_subject_pred_ne (ttuTargetsSatL_ne_of_noTtuTarget hnt hder) ht hu
+  rewriteClosureL_subject_pred_ne (ttuTargetsSatL_ne_of_noTtuTarget hnt hder hLTU) ht hu
 
 end ObligationAPremise
 
@@ -2628,7 +2630,13 @@ theorem lrStD_no_ttu_rule :
     arm as a pure closure leaf (index 0, `banned` index 1) where this model drops it: the
     pin above now describes the MODEL only, a recorded gap (`formal/CORRESPONDENCE.md` §7,
     `TK126` entry), dead inside `W4Fragment` (`computedOrDirect` bans a `.ttu` in a derived
-    def). -/
+    def).
+
+    ✓ 2026-10-14 (`TK132`): FIXED, the two ⚠ paragraphs above are history. `isPure` now asks
+    over the tupleset's parent types (`Leaf.lean::ttuParentTypes`), so the model KEEPS this
+    arm exactly as Python does (`lrXt_cross_type_kept` below), and `SlXt` is a CORPUS-class
+    shape that Python serves. The pin is no longer an attack pin on the leaf-layer fact; it is
+    the witness that the fact is now a carry (`hLTU_load_bearing`). -/
 def SlXt : Schema :=
   ⟨[(("team", "z"), .direct [("user", BARE, false)]),
     (("team", "y"), .direct [("user", BARE, false)]),
@@ -2645,12 +2653,111 @@ theorem slXt_viewer_derived_anywhere : derivedAnywhere SlXt "viewer" = true := b
 theorem slXt_viewer_untainted_on_folder : isDerived SlXt ("folder", "viewer") = false := by
   decide
 
-/-- …and the TTU arm is dropped regardless: `banned` inherits index 0. -/
-theorem lrXt_cross_type_drop :
+/-- …and the TTU arm is KEPT as closure leaf `access.0`, `banned` on `access.1` — Python's
+    allocation (`tests/test_tk126_ttu_target_name_collision.py::test_slxt_python_allocation_matches_the_model`,
+    and `formal/conformance/test_conformance_leaf_rules.py` over `TK126:SlXt`).
+    (`TK132`, 2026-10-14. Before it, this pin was `lrXt_cross_type_drop`, the arm DROPPED and
+    `banned` on index 0: the model's name test, not the code's type test.)
+
+    ★ SABOTAGES (2026-10-14, `lake build ZanzibarProofs.GraphIndex.LeafRules`, each restored
+    byte-exact): see the `TK132` record at `lrMix_mixed_parent_drop` below. -/
+theorem lrXt_cross_type_kept :
     leafRewrites SlXt =
       [⟨"team", "z", leafPred "viewer" 0, .computed⟩,
        ⟨"team", "y", leafPred "viewer" 1, .computed⟩,
+       ⟨"doc", "parent", leafPred "access" 0, .ttu "viewer"⟩,
+       ⟨"doc", "banned", leafPred "access" 1, .computed⟩] := by decide
+
+/-- **★ THE `TK132` CONTROL — `hLTU` is load-bearing.** P4's counterexample line made
+    permanent: at `SlXt`, `R = viewer`, `dt = team`, the untainted layer has no TTU rule
+    targeting `viewer` (so `hnt` holds), `viewer` IS derived on `team` (so `hder` holds), and
+    yet the FULL rule set targets `viewer` from the kept leaf TTU rule. So
+    `ttuTargetsSatL_ne_of_noTtuTarget` without `hLTU` would be FALSE; the carry is a premise,
+    not decoration. The third conjunct is the one the fix flips (sabotage S1). -/
+theorem hLTU_load_bearing :
+    (∀ r ∈ schemaRewrites SlXt, ∀ tr, r.kind = RuleKind.ttu tr → tr ≠ "viewer")
+      ∧ isDerived SlXt ("team", "viewer") = true
+      ∧ ¬ TtuTargetsSatL SlXt (· ≠ "viewer") := by
+  refine ⟨?_, by decide, by decide⟩
+  have h : schemaRewrites SlXt = [] := by decide
+  rw [h]; intro r hr; simp at hr
+
+/-- …and so the carry FAILS at `SlXt` (the honest scope loss, `TK132` X3). -/
+theorem slXt_not_leafTtuTargetsUnderived : ¬ LeafTtuTargetsUnderived SlXt := by decide
+
+/-- **`SMix` — a MIXED-parent tupleset (`TK132` X2).** `doc#parent: [folder, team]`,
+    `team#viewer` derived, `folder#viewer` plain, `access: viewer from parent but not banned`.
+    `isPure`'s `.ttu` arm must ask "underived on EVERY parent type", as Python's
+    `all(... for t in _member_types(...))` does; on `SlXt` and `StD` (single-parent
+    tuplesets) `.all` and `.any` coincide, so this is the only pinned shape that tells them
+    apart. -/
+def SMix : Schema :=
+  ⟨[(("team", "z"), .direct [("user", BARE, false)]),
+    (("team", "y"), .direct [("user", BARE, false)]),
+    (("team", "viewer"), .excl (.computed "z") (.computed "y")),
+    (("folder", "viewer"), .direct [("user", BARE, false)]),
+    (("doc", "parent"), .direct [("folder", BARE, false), ("team", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "access"), .excl (.ttu "viewer" "parent") (.computed "banned"))], []⟩
+
+/-- **The mixed-parent arm is DROPPED** (`team#viewer` is derived), `banned` on `access.0`.
+    Python agrees (`formal/conformance/corpus.py::LEAF_RULE_WITNESSES["SMix"]`, swept by
+    `test_conformance_leaf_rules.py`); with `any` patched into `_is_pure` Python instead
+    RAISES the I5 exclusivity `ValueError` (pinned by
+    `test_conformance_leaf_rules.py::test_python_side_sabotages_are_caught`).
+
+    ★ `TK132` SABOTAGES, run 2026-10-14 against this file (`lake build
+    ZanzibarProofs.GraphIndex.LeafRules`; each applied to `Leaf.lean::isPure` and restored
+    byte-exact; literal first error lines in `formal/history/tk132-ispure-parent-types-2026-10-14.md`):
+    S1 revert the arm to `!derivedAnywhere S tgt` → `lrXt_cross_type_kept`,
+    `hLTU_load_bearing`, `lrW3_merged_computed_ttu` red; S2 the SAME-type test
+    `!isDerived S (ty, tgt)` → `Leaf.lean::stD_leaves` red (and `lrStD_no_ttu_rule`);
+    S3 parent types off the CONTAINER def → the same pair red; S5 `.all` → `.any` → THIS pin
+    red. -/
+theorem lrMix_mixed_parent_drop :
+    leafRewrites SMix =
+      [⟨"team", "z", leafPred "viewer" 0, .computed⟩,
+       ⟨"team", "y", leafPred "viewer" 1, .computed⟩,
        ⟨"doc", "banned", leafPred "access" 0, .computed⟩] := by decide
+
+/-- **`SlW3` — the Lean twin of `TK119`'s `W3_merged_computed_ttu`** (`TK132` X6;
+    `formal/conformance/corpus.py::LEAF_RULE_WITNESSES["W3"]`): `viewer: (a or viewer from
+    parent) but not c`, `folder#viewer` plain. The TTU target NAME `viewer` is derived on the
+    CONTAINER `doc`, not on `folder`, the only parent type. It exercises the pure-UNION merge
+    path (`persistedLeaves` `.union` → `pureLeaves`), not `atomLeaves`' `.ttu` arm. -/
+def SlW3 : Schema :=
+  ⟨[(("folder", "viewer"), .direct [("user", BARE, false)]),
+    (("doc", "parent"), .direct [("folder", BARE, false)]),
+    (("doc", "a"), .direct [("user", BARE, false)]),
+    (("doc", "c"), .direct [("user", BARE, false)]),
+    (("doc", "viewer"), .excl (.union (.computed "a") (.ttu "viewer" "parent"))
+      (.computed "c"))], []⟩
+
+/-- The merged leaf `viewer.0` holds BOTH the computed arm and the TTU arm, `c` on
+    `viewer.1` (`docs/tk119-leaf-rules-differential-2026-10-14.md` sec 4 literal). -/
+theorem lrW3_merged_computed_ttu :
+    leafRewrites SlW3 =
+      [⟨"doc", "a", leafPred "viewer" 0, .computed⟩,
+       ⟨"doc", "parent", leafPred "viewer" 0, .ttu "viewer"⟩,
+       ⟨"doc", "c", leafPred "viewer" 1, .computed⟩] := by decide
+
+/-- **`SDup` — `SlXt` with `doc#access` declared TWICE** (`TK132` X1): first as `banned but
+    not banned` (`computedOrDirect`), then as `viewer from parent but not banned`. `lookup`
+    sees only the first, `leafRewrites` (a filter over `S.defs`) emits rules for both. It is
+    the witness that the discharge
+    `CascadeStable.lean::leafTtuTargetsUnderived_of_computedOrDirect` NEEDS `NodupKeys`; the
+    pin is `FragmentDecide.lean::LeafRuleWitness.leafTtuTargetsUnderived_needs_nodup` (it
+    reads the Bool twin `computedOrDirectB`, which lives downstream of this file). Lean-only:
+    a duplicate key is not a schema Python serves. -/
+def SDup : Schema :=
+  ⟨[(("team", "z"), .direct [("user", BARE, false)]),
+    (("team", "y"), .direct [("user", BARE, false)]),
+    (("team", "viewer"), .excl (.computed "z") (.computed "y")),
+    (("folder", "viewer"), .direct [("user", BARE, false)]),
+    (("doc", "parent"), .direct [("folder", BARE, false)]),
+    (("doc", "banned"), .direct [("user", BARE, false)]),
+    (("doc", "access"), .excl (.computed "banned") (.computed "banned")),
+    (("doc", "access"), .excl (.ttu "viewer" "parent") (.computed "banned"))], []⟩
 
 /-- **★ THE CONTROL — `hder` is load-bearing, and this is the refutation that proves it.**
     Drop `hder` from `ttuTargetsSatL_ne_of_noTtuTarget` and the statement is FALSE, witnessed
@@ -2680,19 +2787,17 @@ theorem derivedAnywhere_of_isDerived_nonvacuous : derivedAnywhere SnlBoth "acces
   derivedAnywhere_of_isDerived (dt := "doc") snlBoth_access_derived
 
 /-- **The leaf arm is REACHED.** `SnlBoth`'s leaf layer really does contain a rule with a TTU
-    target, so `derivedAnywhere_eq_false_of_mem_leafRewrites` is not quantifying over an empty
-    set of interesting rules — the shape that would make the whole leaf half vacuous. -/
+    target, so `LeafTtuTargetsUnderived` is not quantifying over an empty set of interesting
+    rules — the shape that would make the whole leaf half vacuous. -/
 theorem snlBoth_leaf_layer_has_ttu_target :
     ∃ r ∈ leafRewrites SnlBoth, ttuTargets r ≠ [] := by decide
 
-/-- **`derivedAnywhere_eq_false_of_mem_leafRewrites` applied THROUGH the lemma**, at that
-    rule and its target. A `by decide` of `derivedAnywhere SnlBoth "viewer" = false` would
-    prove the fact without proving the lemma reaches it. -/
-theorem derivedAnywhere_eq_false_of_mem_leafRewrites_nonvacuous :
-    derivedAnywhere SnlBoth "viewer" = false :=
-  derivedAnywhere_eq_false_of_mem_leafRewrites
-    (r := ⟨"doc", "parent", leafPred "access" 0, .ttu "viewer"⟩) (by decide) "viewer"
-    (by decide)
+/-- **The carry HOLDS non-vacuously at `SnlBoth`** (`TK132`, 2026-10-14; replaces the
+    deleted `derivedAnywhere_eq_false_of_mem_leafRewrites_nonvacuous`): its leaf layer keeps a
+    `.ttu "viewer"` rule (`snlBoth_leaf_layer_has_ttu_target`) and `viewer` is derived
+    nowhere. This is the `W1`-class coverage the NARROW carry keeps and `NoLeafTtu` would
+    have lost. -/
+theorem leafTtuTargetsUnderived_snlBoth : LeafTtuTargetsUnderived SnlBoth := by decide
 
 /-- The untainted premise at `SnlBoth`, in the unfolded `NoTtuTarget` shape. NOT vacuous:
     `snlBoth_untainted_layer_ttu` pins that this layer contains a TTU rule, whose target
@@ -2715,7 +2820,7 @@ theorem snlBoth_untainted_layer_no_ttu_target_access :
 theorem ttuTargetsSatL_snlBoth_ne_access_manufactured :
     TtuTargetsSatL SnlBoth (· ≠ "access") :=
   ttuTargetsSatL_ne_of_noTtuTarget snlBoth_untainted_layer_no_ttu_target_access
-    (dt := "doc") snlBoth_access_derived
+    (dt := "doc") snlBoth_access_derived leafTtuTargetsUnderived_snlBoth
 
 /-- **The consumer-shaped corollary applied end to end.** The seed is the untainted write
     `tnlParent` (subject predicate `BARE`), and the tuple examined is the LEAF-layer extra
@@ -2726,7 +2831,7 @@ theorem rewriteClosureL_subject_pred_ne_of_noTtuTarget_nonvacuous :
     (⟨"folder", "f1", "viewer"⟩ : SubjectRef).predicate ≠ "access" :=
   rewriteClosureL_subject_pred_ne_of_noTtuTarget
     snlBoth_untainted_layer_no_ttu_target_access (dt := "doc") snlBoth_access_derived
-    (t := tnlParent) (by decide)
+    leafTtuTargetsUnderived_snlBoth (t := tnlParent) (by decide)
     (u := ⟨⟨"folder", "f1", "viewer"⟩, leafPred "access" 0, ⟨"doc", "d1"⟩⟩) (by decide)
 
 /-- **The purity lemma is non-vacuous at a MERGED leaf** — the arm a lemma written only for

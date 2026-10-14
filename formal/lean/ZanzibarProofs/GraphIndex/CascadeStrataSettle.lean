@@ -916,7 +916,7 @@ theorem reachedByW3d2_shadow {σ : GraphState} {S : Schema} {T : Store}
     -- OBLIGATION (D) — DISCHARGED from `hLS.noLeafSubjects`.
     have hsubjWL0 : ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
         ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)) :=
-      writeLegSubjectsWide_L hLS.noLeafSubjects hterm
+      writeLegSubjectsWide_L hLS.noLeafSubjects hterm (leafTtuTargetsUnderived_of_computedOnly hNK hCO)
         (noLeafStoreSubjects_of_storeValidRules hDR hSV t List.mem_cons_self)
     -- ★ `T3`, W3d-2 twin: no closure member's subject is a bridge node.
     have hsubjWL : ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
@@ -1688,7 +1688,8 @@ theorem reachedByW3d2_shadow_d {σ : GraphState} {S : Schema} {T : Store}
       -- (a BARE subject predicate is `NotLeafName` by its left disjunct).
       have hsubjWD : ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
           ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)) :=
-        writeLegSubjectsWide_L hLS.noLeafSubjects hterm (Or.inl hbare)
+        writeLegSubjectsWide_L hLS.noLeafSubjects hterm
+          (leafTtuTargetsUnderived_of_computedOrDirect hNK hCO) (Or.inl hbare)
       -- OBLIGATION (E), derived form — DISCHARGED. `writeLegExtrasWide_L` splits into
       -- "already in the PLAIN closure" (which `hcl` collapses to the seed `t`, whose target
       -- is the `DerNode` of `hDer`) and "leaf-targeted". So every member of a DERIVED raw
@@ -1745,6 +1746,7 @@ theorem reachedByW3d2_shadow_d {σ : GraphState} {S : Schema} {T : Store}
       have hsubjWL : ∀ u ∈ rewriteClosureL S (rawWriteTuples S t),
           ¬ (DerNode S (subjNode u.subject) ∨ LeafNode S (subjNode u.subject)) :=
         writeLegSubjectsWide_L hLS.noLeafSubjects hterm
+          (leafTtuTargetsUnderived_of_computedOrDirect hNK hCO)
           (noLeafStoreSubjects_of_storeValidRulesD hDR hSV t List.mem_cons_self)
       -- OBLIGATION (E), object half — DISCHARGED.
       have hextraL := writeLegExtrasWide_L (t := t) hLS (hBS t List.mem_cons_self).2
@@ -2540,7 +2542,7 @@ inert at every stratum-1 key settled by round 1. -/
 theorem round2_key_reads_derived {σ : GraphState} {S : Schema} {T : Store}
     {jobs1 : List W3cJob} {dt' R' on' : String} {e' : Expr}
     (hterm : ∀ dt R, isDerived S (dt, R) = true → NoTtuTarget S R ∧ NoStoreSubjectR T R)
-    (hNBD : NoBridgedDerived S)
+    (hNBD : NoBridgedDerived S) (hLTU : LeafTtuTargetsUnderived S)
     (hjv1 : ∀ j ∈ jobs1, W3cJobValid S j)
     (h : ReachedByW3d2 σ S T)
     (hlk' : S.lookup (dt', R') = some e')
@@ -2561,7 +2563,7 @@ theorem round2_key_reads_derived {σ : GraphState} {S : Schema} {T : Store}
     omega
   obtain ⟨hRne1, _, _, _, _, _, hder1, _, _⟩ := hjv1 j1 hj1
   -- terminality collapses the row's candidate objects to its own R-node
-  have hbase1 := reachedByW3d2_Rnode_not_source (on := j1.on) hterm hRne1 hNBD hder1 h
+  have hbase1 := reachedByW3d2_Rnode_not_source (on := j1.on) hterm hRne1 hNBD hLTU hder1 h
   have hmidT1 := reconcileJobsLR_Rnode_not_source (T := T) (jobs := jobs1)
     hRne1 hjv1 hbase1
   have hreach1 : ∀ v, (reconcileJobsLR S T σ jobs1).reach d'.node v = false := by

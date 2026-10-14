@@ -916,6 +916,8 @@ theorem settledComplete_cascade2_targeted {σ : GraphState} {S : Schema} {T : St
     (htgt : ∃ j ∈ jobs1 ++ jobs2, j.keyMatch dt on R) :
     SettledKey S T (runCascade2 S T σ jobs1 jobs2) dt on R ∧
     CompleteKey S T (runCascade2 S T σ jobs1 jobs2) dt on R := by
+  -- `TK132` (2026-10-14): the leaf carry, discharged from the fragment premises.
+  have hLTU : LeafTtuTargetsUnderived S := leafTtuTargetsUnderived_of_computedOnly hNK hCO
   have hLU2e := hLU2 dt R e hlk hder
   have hRne : R ≠ BARE := by
     obtain ⟨j, hj, hkm⟩ := htgt
@@ -929,7 +931,7 @@ theorem settledComplete_cascade2_targeted {σ : GraphState} {S : Schema} {T : St
   have htb : ∀ a b, (a, b) ∈ σ.edges → b.pred ≠ BARE :=
     reachedByW3d2_edge_target_ne_bare h hWF hSV
   have hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges :=
-    reachedByW3d2_Rnode_not_source hterm hRne hNBD hder h
+    reachedByW3d2_Rnode_not_source hterm hRne hNBD hLTU hder h
   have hsbOps : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       ∀ x, (x, objNode ⟨dt, on⟩ r') ∈ σ.edges → x.pred = BARE := by
     intro r' hr' hd' x hx
@@ -937,7 +939,7 @@ theorem settledComplete_cascade2_targeted {σ : GraphState} {S : Schema} {T : St
     have hco' : ComputedOnly e' := hCO dt r' e' hlk' hd'
     exact reachedByW3d2_Rnode_source_bare h hWF hlk' hd' hco' hSV x hx
   -- the accept form (the reject branch is dead at two strata)
-  have hacc := runCascade2_no_abort hterm hNBD hLU2 hjv1 hjv2 hscope2 h
+  have hacc := runCascade2_no_abort hterm hNBD hLTU hLU2 hjv1 hjv2 hscope2 h
   set mid := reconcileJobsLR S T σ jobs1 with hmid_def
   -- the stratum fence: round 2 never targets a derived operand key (its def is
   -- all-untainted, but a round-2 scope key must read a derived operand)
@@ -951,7 +953,7 @@ theorem settledComplete_cascade2_targeted {σ : GraphState} {S : Schema} {T : St
       rw [ha, hb, hc]
     have hjk := hscope2 j2 hj2
     rw [hkey2] at hjk
-    obtain ⟨r'', hr''mem, hd''⟩ := round2_key_reads_derived hterm hNBD hjv1 h hlk' hjk
+    obtain ⟨r'', hr''mem, hd''⟩ := round2_key_reads_derived hterm hNBD hLTU hjv1 h hlk' hjk
     cases (hLU2e r' hr' hd' e' hlk' r'' hr''mem).symm.trans hd''
   by_cases hA : ∃ j ∈ jobs2, j.keyMatch dt on R
   · -- ==== Case A: settle over round 2 from the MID state ====
@@ -982,7 +984,7 @@ theorem settledComplete_cascade2_targeted {σ : GraphState} {S : Schema} {T : St
           rw [← hkm1.2.2]
           exact (hjv1 j1 hj1).1
         have hRns' : ∀ y, (objNode ⟨dt, on⟩ r', y) ∉ σ.edges :=
-          reachedByW3d2_Rnode_not_source hterm hRne' hNBD hd' h
+          reachedByW3d2_Rnode_not_source hterm hRne' hNBD hLTU hd' h
         have hLU2e' : ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = true →
             ∀ e'', S.lookup (dt, r'') = some e'' →
               ∀ r''' ∈ computedRefs e'', isDerived S (dt, r''') = false := by
@@ -1361,7 +1363,8 @@ theorem reachedByW3d2C_settled {σ : GraphState} {S : Schema} {T : Store}
         have h2 : j2.R = R := congrArg Prod.fst h23
         have h3 : j2.on = on := congrArg Prod.snd h23
         exact htgt ⟨j2, List.mem_append_right _ hj2, h1, h3, h2⟩
-      · have hacc := runCascade2_no_abort hterm hNBD hLU2 hjv1 hjv2 hscope2 hW3d2
+      · have hacc := runCascade2_no_abort hterm hNBD
+          (leafTtuTargetsUnderived_of_computedOnly hNK hCO) hLU2 hjv1 hjv2 hscope2 hW3d2
         refine Or.inr (Or.inr ?_)
         rw [hacc]
         exact ⟨settledKey_congr rfl rfl (settledKey_jobsLR_untargeted hjv2 hnot2 hon
@@ -2157,6 +2160,8 @@ theorem settledComplete_cascade2_targeted_d {σ : GraphState} {S : Schema} {T : 
     (htgt : ∃ j ∈ jobs1 ++ jobs2, j.keyMatch dt on R) :
     SettledKey S T (runCascade2 S T σ jobs1 jobs2) dt on R ∧
     CompleteKey S T (runCascade2 S T σ jobs1 jobs2) dt on R := by
+  -- `TK132` (2026-10-14): the leaf carry, discharged from the fragment premises.
+  have hLTU : LeafTtuTargetsUnderived S := leafTtuTargetsUnderived_of_computedOrDirect hNK hCD
   have hcd := hCD dt R e hlk hder
   have hba := hDAB dt R e hlk hder
   have hCOop_e := hCOop dt R e hlk hder
@@ -2180,13 +2185,13 @@ theorem settledComplete_cascade2_targeted_d {σ : GraphState} {S : Schema} {T : 
   have htb : ∀ a b, (a, b) ∈ σ.edges → b.pred ≠ BARE :=
     reachedByW3d2_edge_target_ne_bare_d h hWF hDAB hSV
   have hRns : ∀ y, (objNode ⟨dt, on⟩ R, y) ∉ σ.edges :=
-    reachedByW3d2_Rnode_not_source hterm hRne hNBD hder h
+    reachedByW3d2_Rnode_not_source hterm hRne hNBD hLTU hder h
   have hsbOps : ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
       ∀ x, (x, objNode ⟨dt, on⟩ r') ∈ σ.edges → x.pred = BARE := by
     intro r' hr' hd' x hx
     exact reachedByW3d2_Rnode_source_bare_d h hWF hd' hDAB hSV x hx
   -- the accept form (the reject branch is dead at two strata)
-  have hacc := runCascade2_no_abort hterm hNBD hLU2 hjv1 hjv2 hscope2 h
+  have hacc := runCascade2_no_abort hterm hNBD hLTU hLU2 hjv1 hjv2 hscope2 h
   set mid := reconcileJobsLR S T σ jobs1 with hmid_def
   -- the stratum fence: round 2 never targets a derived operand key
   have hfence : ∀ j2 ∈ jobs2, ∀ r' ∈ computedRefs e, isDerived S (dt, r') = true →
@@ -2199,7 +2204,7 @@ theorem settledComplete_cascade2_targeted_d {σ : GraphState} {S : Schema} {T : 
       rw [ha, hb, hc]
     have hjk := hscope2 j2 hj2
     rw [hkey2] at hjk
-    obtain ⟨r'', hr''mem, hd''⟩ := round2_key_reads_derived hterm hNBD hjv1 h hlk' hjk
+    obtain ⟨r'', hr''mem, hd''⟩ := round2_key_reads_derived hterm hNBD hLTU hjv1 h hlk' hjk
     cases (hLU2e r' hr' hd' e' hlk' r'' hr''mem).symm.trans hd''
   by_cases hA : ∃ j ∈ jobs2, j.keyMatch dt on R
   · -- ==== Case A: settle over round 2 from the MID state ====
@@ -2230,7 +2235,7 @@ theorem settledComplete_cascade2_targeted_d {σ : GraphState} {S : Schema} {T : 
           rw [← hkm1.2.2]
           exact (hjv1 j1 hj1).1
         have hRns' : ∀ y, (objNode ⟨dt, on⟩ r', y) ∉ σ.edges :=
-          reachedByW3d2_Rnode_not_source hterm hRne' hNBD hd' h
+          reachedByW3d2_Rnode_not_source hterm hRne' hNBD hLTU hd' h
         have hLU2e' : ∀ r'' ∈ computedRefs e', isDerived S (dt, r'') = true →
             ∀ e'', S.lookup (dt, r'') = some e'' →
               ∀ r''' ∈ computedRefs e'', isDerived S (dt, r''') = false := by
@@ -2507,7 +2512,8 @@ theorem reachedByW3d2C_settled_d {σ : GraphState} {S : Schema} {T : Store}
         have h2 : j2.R = R := congrArg Prod.fst h23
         have h3 : j2.on = on := congrArg Prod.snd h23
         exact htgt ⟨j2, List.mem_append_right _ hj2, h1, h3, h2⟩
-      · have hacc := runCascade2_no_abort hterm hNBD hLU2 hjv1 hjv2 hscope2 hW3d2
+      · have hacc := runCascade2_no_abort hterm hNBD
+          (leafTtuTargetsUnderived_of_computedOrDirect hNK hCD) hLU2 hjv1 hjv2 hscope2 hW3d2
         refine Or.inr (Or.inr ?_)
         rw [hacc]
         exact ⟨settledKey_congr rfl rfl (settledKey_jobsLR_untargeted hjv2 hnot2 hon
