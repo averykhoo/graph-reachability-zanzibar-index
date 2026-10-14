@@ -153,6 +153,11 @@ above; markers without their exclusions grant too much.
   inside group `b` inside group `a`, a group inside itself, or a folder that is its own
   ancestor, is refused with `AdmissionRejected` by both backends. OpenFGA accepts such
   tuples, so check imported data for cycles first.
+* **A userset is not a member of itself.** OpenFGA counts `doc:1#banned` as a member of
+  `doc:1#banned`, and so of anything built on it; this library does not (except through a
+  `from` parent). With `define vx: [user, doc#banned] but not banned` and the tuple
+  `doc:1#banned vx doc:1`, checking `doc:1#banned` for `vx` on `doc:1` is allowed here and
+  denied by OpenFGA. Only userset subjects are affected; plain users and `user:*` are not.
 * **Reads are lenient; writes are strict.** A write naming an undeclared type or relation,
   or a malformed name, raises `AdmissionRejected`. A `check` with the same mistake returns
   `False` with no error, so a typo in a relation name reads as "denied". A typo in the

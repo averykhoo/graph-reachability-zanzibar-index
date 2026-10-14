@@ -29,6 +29,64 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-10-14 — `TK138`: a userset is not a member of itself here; in OpenFGA it is, at every node
+
+**Open, pinned, not fixed.** The user's word on the row (2026-10-13d) is "verify against a
+real OpenFGA server, then ADOPT". Verification is done (`docs/tk138-userset-self-relation-2026-10-14.md`
+§ 1 and challenge C1, OpenFGA v1.22.0 build `a38d5d0`, live server). Adoption is landing 2
+of that doc's decision, one atomic change set across the oracle, both backends and the
+Lean models, sequenced behind `TK123`, `TK119` and `TK132`. Until it ships, this entry and
+`tests/test_tk138_userset_self_relation.py` (a positive divergence pin with literal OpenFGA
+answers and the exact set of divergent rows; no xfail) are the record.
+
+**The rule OpenFGA applies.** For a concrete userset subject `s = o#r_s` (not a bare
+subject, not a wildcard), at every evaluation node `(o', r)` of a declared relation:
+`member(s, o', r) = (s == o'#r) or eval(rewrite(r), s)`. The self term sits OUTSIDE the
+rewrite, so a `but not` cannot remove it and it satisfies an `and` arm. Because it fires at
+inner nodes, it propagates through computed usersets (`doc:1#viewer` is in
+`doc:1#can_view`), boolean bases (`doc:1#viewer` is in `doc:1#nb`, `nb: viewer but not
+banned`), TTU targets, and across objects (model C: `group:1#admin` is in `group:1#member`
+by the rule, so it is a viewer of every doc that `group:1#member` views). ListObjects and
+ListUsers follow Check; Expand does not show the self member. This repo applies none of it:
+`check(doc:1#viewer, viewer, doc:1)` is False on every corner.
+
+**The security-relevant direction (`vx`).** With `vx: [user, doc#banned] but not banned`
+and a stored `doc:1#banned vx doc:1`, this library ALLOWS `check(doc:1#banned, vx, doc:1)`
+and OpenFGA DENIES it (`doc:1#banned` is in the subtrahend `banned` on `doc:1` by the
+rule). The opposite flip exists too: `vy: [user, doc#editor] and editor` with a stored
+`doc:1#editor vy doc:1` is DENIED here and ALLOWED by OpenFGA. Landing 2 flips both, so it
+needs a CHANGELOG entry and a minor version bump, not a patch.
+
+**Where the two already agree, by accident.** A TTU target reached through a STORED parent:
+after `folder:1 parent doc:1`, `check(folder:1#viewer, fview, doc:1)` (`fview: viewer from
+parent`) is True on both sides, even when the target admits no userset (`fplain`). That is
+the 2026-07-13 X4a from-chain disjunct (`tests/oracle.py::Oracle.check.ttu_leaf`, the set
+engine's twin, the untainted graph's materialized rewrite edge, the processor's reconcile
+step 2a). It applies OpenFGA's rule at that one kind of node only, because the untainted
+graph materializes an EDGE for a TTU but only a write-time rule for a computed userset. No
+spec section chose it as a design.
+
+**An asymmetry landing 2 keeps (challenge C3, sub-decision D4).** A TTU target may be
+undeclared on one of the tupleset's types (ASK-1 requires it on at least one). With
+`parent: [folder, team]`, `x: viewer from parent`, `team` declaring no relations and a
+stored `team:1 parent doc:1`, this repo answers `check(team:1#viewer, x, doc:1)` True
+through the from-chain disjunct; OpenFGA answers `400 validation_error: relation
+'team#viewer' not found`. Reads are lenient here by contract. Landing 2's new disjunct is
+declared-only, so deleting the from-chain disjunct would flip this live answer; it stays,
+and so does this difference.
+
+**Writes.** Both sides refuse the EXACT self tuple `doc:1#viewer viewer doc:1`, for
+different reasons: OpenFGA because it is "implicit" (`400 ... cannot write a tuple that is
+implicit`), this repo because it closes a cycle (`AdmissionRejected: ... would create a
+cycle in the userset membership topology`, first-hand probe 2026-10-14, `SetEngine` and
+`ConnectedStore`). The rules part on other same-object cycles: with `viewer: [user,
+doc#can_view]` and `can_view: viewer`, `doc:1#can_view viewer doc:1` is refused here the
+same way (same probe); whether OpenFGA accepts it is UNVERIFIED.
+
+**Unchanged by the rule, either way:** concrete-user and `user:*` answers (it adds only the
+subject `o#r` itself, never its members), and userset-star subjects such as `doc:*#viewer`
+(sub-decision D1: excluded; OpenFGA has no userset wildcards).
+
 ## 2026-10-14 — `TK137`: the DSL refuses four shapes OpenFGA refuses, and keeps six OpenFGA-DSL extensions on purpose
 
 **What changed.** Both checked parsers (`src/zanzibar/schema/parser.py::parse_schema_ast`, oracle
@@ -2515,6 +2573,13 @@ session's work.
 userset being implicitly related to itself, and OpenFGA's API refuses to store that
 tuple "because they are implicit".] The bug was a canonicalization drift,
 not an evaluation error, so the fix keeps accepting them (does NOT reject).
+
+> **Amended 2026-10-14 (`TK138`, challenge C6).** On that userset self tuple the two sides
+> agree in OUTCOME only: both refuse the exact tuple `document:1#viewer@document:1#viewer`,
+> OpenFGA as "implicit", this repo as a closure cycle (`AdmissionRejected`). This repo also
+> refuses other same-object userset cycles that OpenFGA's rule does not name; and OpenFGA
+> treats the userset as a member of itself at READ time, which this repo does not. See
+> `## 2026-10-14 — TK138` at the top of this file.
 
 **Shape.** A self-referential tupleset tuple `doc:d1 parent doc:d1` (d1 is its own
 `parent`) present in the store, a derived intersection `r0: [user] and [user]`, and
