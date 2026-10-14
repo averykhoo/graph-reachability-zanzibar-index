@@ -372,11 +372,28 @@ def test_generated_refused_schemas_run_the_set_only_lookup_gate():
     seeded generator (``random.Random(seed)``, the same body ``schema_asts`` uses) each run
     a seeded add/remove walk, drained to empty, with the set surfaces checked after every
     accepted op. Non-vacuity: at least ``want`` refused schemas, and the walk must accept
-    at least one remove on each."""
+    at least one remove on each.
+
+    TK142 (2026-10-14): this walk is the broad gate that DOES catch a set-side
+    ``lookup_reverse`` that drops its exclusions (seed 4 reaches a non-empty
+    ``expand.neg``), but it did so by seed luck with nothing asserting it. The summed
+    ``set_reverse_neg`` counter (``tests/test_lookup_oracle.py::_Gate``) is now a tripwire:
+    measured 10 on 2026-10-14.
+
+    Sabotage, observed 2026-10-14 (docs/sabotage-procedure.md):
+    * M1, ``SetEngine.lookup_reverse`` leaves ``excluded_node_ids`` empty: ``lookup/oracle
+      divergence (seed=4): set.lookup_reverse('r1', 'doc', 'd2') [py]: excluded_node_ids
+      set() != expand.neg {5}``. (A graph-side drop cannot reach this walk: it is
+      set-only by construction.)
+    * Tripwire live, the seed range starting past seed 4 (``range(5, 240)``; the four
+      walks it then picks, seeds 5, 12, 17 and the next refused one, reach no neg state): ``TK142 tripwire: none of the 4 set-only walks
+      reached a state with a non-empty expand.neg, so a set lookup_reverse that drops its
+      exclusions would stay green here. ...``.
+    """
     from tests.test_hypothesis import _op_pool, _schema_ast, _RandomChoices
     from tests.test_lookup_oracle import _run_gate
     from zanzibar.schema import unparse_schema_ast
-    want, ran = 4, 0
+    want, ran, set_reverse_neg = 4, 0, 0
     for seed in range(240):
         ast = _schema_ast(_RandomChoices(random.Random(seed)))
         pool = _op_pool(ast)
@@ -389,13 +406,20 @@ def test_generated_refused_schemas_run_the_set_only_lookup_gate():
         except UnsupportedByGraphIndex:
             pass
         removes = []
-        _run_gate(schema, frozenset(), pool, seed, walk_steps=8, allow_graph_absent=True,
-                  on_apply=lambda op, raw, ok: removes.append(ok) if op == 'remove' else None)
+        gate = _run_gate(
+            schema, frozenset(), pool, seed, walk_steps=8, allow_graph_absent=True,
+            on_apply=lambda op, raw, ok: removes.append(ok) if op == 'remove' else None)
         assert any(removes), f'seed {seed}: the walk accepted no remove'
+        set_reverse_neg += gate.set_reverse_neg
         ran += 1
         if ran == want:
             break
     assert ran == want, f'only {ran} refused generated schemas found in 240 seeds'
+    assert set_reverse_neg > 0, (
+        f'TK142 tripwire: none of the {ran} set-only walks reached a state with a non-empty '
+        f'expand.neg, so a set lookup_reverse that drops its exclusions would stay green '
+        f'here. Do NOT delete this; pick seeds or walk length that reach the shape '
+        f'(docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md).')
 
 
 _OWC_ON_DERIVED = next(w for w in WITNESSES if w.family == 'owc-on-derived')

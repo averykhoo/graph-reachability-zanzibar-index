@@ -11,8 +11,8 @@ labels: []
 source: docs/tk139-lookup-reverse-exclusions-2026-10-13.md
 source_hash:
 created: 2026-10-13d
-moved: 2026-10-13d
-updated: 2026-10-13d
+moved: 2026-10-14
+updated: 2026-10-14
 closed:
 ---
 
@@ -45,3 +45,15 @@ Map: `docs/tk139-lookup-reverse-exclusions-2026-10-13.md` sec 5 and its dated co
 ### 2026-10-13d
 
 Why NOW (fix lead decision, 2026-10-13d): closing TK141 left no NOW row, so lint was red. TK142 is a gate that PASSES under a known regression, the house failure mode, and is on the current goal (an honest assurance surface). The only other NEXT row, HS-5, is a doc-liveness tidy. The coordinator or the next session may re-rank with promote --demote.
+
+### 2026-10-14
+
+Scout + challenge + build, 2026-10-14. Map: docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md (ACTIVE-PLAN; challenge corrections at the top).
+
+MEASURED (scout PROBE, re-measured by challenge c1_census): on the fixed gates as of HEAD 0b09687, S3 calls with a non-empty neg and graph lookup_reverse results with a non-empty excluded_node_ids are 0 in every config (wildcards, boolean, demorgans 6 steps, owc_star_ttu). Proposed parameters reach the shape: demorgans_reverse 12 steps s3=8/1120 g34=4/560 (31.7s); boolean seed 4 s3=6/896 g34=3/448 (24.1s).
+Challenge corrections: C1 the set-side mutant M1 WAS already caught by a broad gate, by seed luck, in another module (tests/test_tk116_oracle_only_setengine.py::test_generated_refused_schemas_run_the_set_only_lookup_gate, set-only, s3=10), so the true uncaught regression was G1 (graph side) in every seeded broad gate. C2 TestLookupSurfaceMachine is a coin flip, not blind (G1 caught 4/8). C3 hypothesis Phase.reuse can replay a stored failure under a sabotage. C4 the forward SetEngine.lookup exclusion channel (F1) has the same gap. C5 plan deltas (tripwire on the existing TK116 catch, witness test pointed at graph-joined seeds, count from the set-side instrument, keep walk_steps 6 for drain states, run doc_counts once last).
+
+BUILT (worktree-wf_9a094007-20b-11 @69080d4, tests only, 2 files: tests/test_lookup_oracle.py, tests/test_tk116_oracle_only_setengine.py; reviewer APPROVE): _Gate counters set_reverse_neg / set_reverse_neg_graph_joined / graph_reverse_excl / set_forward_excl (last one counted only); gate_boolean seeds [0,1,4] with tripwire on seed 4; gate_demorgans_reverse walk_steps [6,12] with tripwire on 12; new test_lookup_oracle_gate_generated_schemas_exclusion_witness (>= 2 graph-joined witnesses, seeds 11 and 28, plus refused seed 4); summed set_reverse_neg > 0 tripwire on the TK116 walk. Sabotage observed in the commit message: M1 4 failed/3 passed, M2 same 4 via the oracle half, G1 3 failed/4 passed, the row's original M1 as a src edit 3 failed/9 passed/38 deselected (was 9 passed), each tripwire red on its own message. Done-when met on both sides. Not run there: full phased gate; doc_counts --generate left to the coordinator (run once, last, after TK137/TK138 land: C5(e)).
+
+OPEN, filed as rows (LATER; the requested label tests is not in tasks/config.json vocabulary, so filed unlabelled): TK148 forward lookup exclusion channel caught only by scripted pins (C4, F1); TK145 TestLookupSurfaceMachine catches G1 about half the time (C2); TK146 hypothesis Phase.reuse / example DB can fake a sabotage catch (C3).
+Next action: coordinator merges 69080d4, runs the phased gate, then closes TK142. Not closed here.

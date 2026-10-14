@@ -67,6 +67,18 @@ it drops information:
       subject (...,user,u1): set=True oracle=False (node_ids, or a marker minus
       excluded_node_ids)". The generated-schema gate (6 examples, ci profile) did
       NOT catch it; dense_boolean and test_tamper_set_reverse_is_caught did.
+      CORRECTED 2026-10-14 (TK142): that sabotage ran only this module's gates. The
+      gates HERE missed it because none of their states had an exclusion: zero of
+      4,564 S3 calls across the fixed gates saw a non-empty ``expand.neg``, and the
+      graph's G3/G4 exclusion half went just as unexercised, so a graph
+      ``lookup_reverse`` that dropped its exclusions was missed by EVERY seeded broad
+      gate (the hypothesis LookupSurfaceMachine caught it in about half of ci runs).
+      The set-side drop WAS caught by a broad gate elsewhere, by seed luck:
+      tests/test_tk116_oracle_only_setengine.py::test_generated_refused_schemas_run_the_set_only_lookup_gate.
+      Now caught deterministically on both backends by gate_boolean[4],
+      gate_demorgans_reverse[12] and gate_generated_schemas_exclusion_witness, each with
+      a ``_Gate`` shape-counter tripwire that goes red if its walk stops reaching an
+      exclusion (docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md).
   S4  forward lookup (check-backed): every node id and every marker is O-true
       (markers against the intensional '*'-object query); exact two-sided over
       ALL candidates -- tuple-anchored object keys are write-time interned
@@ -427,6 +439,24 @@ class _Gate:
         self.present: set[tuple] = set()
         self.history: list[tuple] = []
         self.set_checks = 0         # non-vacuity: set-side surface batteries actually run
+        # TK142 shape counters (reach, not correctness): how often the battery actually saw
+        # an EXCLUSION. S3/G3/G4's exclusion halves only bite on a state where some
+        # `expand(obj).neg` is non-empty, and on 2026-10-14 zero of 4,564 S3 calls across
+        # the fixed gates had one, so a dropped `lookup_reverse` exclusion stayed green
+        # (docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md). Gates that exist to cover
+        # exclusions assert these are > 0, so a seed or pool drift that loses the shape is
+        # a red with instructions, never a silent loss.
+        #   set_reverse_neg              set-side expand(obj) with a non-empty neg (S3 runs)
+        #   set_reverse_neg_graph_joined the same, counted only while the graph is joined:
+        #                                the INDEPENDENT instrument for the graph half
+        #   graph_reverse_excl           graph lookup_reverse with non-empty excluded_node_ids
+        #                                (the subject's own output, so a corroborator only)
+        #   set_forward_excl             set-side forward lookup with non-empty
+        #                                excluded_node_ids (counted, not yet asserted anywhere)
+        self.set_reverse_neg = 0
+        self.set_reverse_neg_graph_joined = 0
+        self.graph_reverse_excl = 0
+        self.set_forward_excl = 0
 
     def apply(self, op, raw):
         first = self.graph or self.sets[0]
@@ -456,15 +486,24 @@ class _Gate:
                 _check_graph_forward(self.graph.widx, self.ast, oc, subject, self.objects,
                                      self.graph.widx.lookup(*subject))
             for obj in self.objects if self.graph else ():
-                _check_graph_reverse(self.graph.widx, oc, self.subjects, obj,
-                                     self.graph.widx.lookup_reverse(*obj))
+                res = self.graph.widx.lookup_reverse(*obj)
+                if res.excluded_node_ids:
+                    self.graph_reverse_excl += 1
+                _check_graph_reverse(self.graph.widx, oc, self.subjects, obj, res)
             for side in self.sets:
                 se = side.se
                 self.set_checks += 1
                 for subject in self.subjects:
-                    _check_set_forward(se, oc, subject, self.objects, se.lookup(*subject))
+                    res = se.lookup(*subject)
+                    if res.excluded_node_ids:
+                        self.set_forward_excl += 1
+                    _check_set_forward(se, oc, subject, self.objects, res)
                 for obj in self.objects:
                     m = se.expand(*obj)
+                    if len(set(m.neg)):
+                        self.set_reverse_neg += 1
+                        if self.graph:
+                            self.set_reverse_neg_graph_joined += 1
                     _check_set_expand(se, oc, self.subjects, obj, m)
                     _check_set_reverse(se, oc, self.subjects, obj, m, se.lookup_reverse(*obj))
         except AssertionError as e:
@@ -508,6 +547,22 @@ def _run_gate(schema, object_wc, pool, seed, walk_steps, *, allow_graph_absent=F
         assert_state()
 
     gate.close()
+    return gate          # TK142: the shape counters stay readable after close()
+
+
+def _assert_exclusions_reached(gate, where, recipe):
+    """TK142 tripwire: a gate that exists to cover the exclusion halves of S3 and G3/G4
+    must actually visit a state with an exclusion, on BOTH backends. Counts, not
+    correctness: the oracle battery does the catching, this proves it had something to
+    catch. ``recipe`` says how to re-pick when a pool or walk drift loses the shape."""
+    assert gate.set_reverse_neg > 0 and gate.set_reverse_neg_graph_joined > 0 \
+        and gate.graph_reverse_excl > 0, (
+            f'TK142 tripwire ({where}): the walk never reached an exclusion state '
+            f'(set_reverse_neg={gate.set_reverse_neg}, set_reverse_neg_graph_joined='
+            f'{gate.set_reverse_neg_graph_joined}, graph_reverse_excl='
+            f'{gate.graph_reverse_excl}), so a dropped lookup_reverse exclusion on either '
+            f'backend would stay green here. Do NOT delete this assertion; re-pick: '
+            f'{recipe} (docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md section 4.1).')
 
 
 @pytest.mark.parametrize('seed', [0, 1])
@@ -518,18 +573,85 @@ def test_lookup_oracle_gate_wildcards(load_fga_schema, seed):
               _candidate_raw_tuples(), seed, walk_steps=8)
 
 
-@pytest.mark.parametrize('seed', [0, 1])
+# TK142: the boolean-gate seeds whose 8-step walk reaches an exclusion state (a `user:*
+# public doc:dN` grant plus a `blocked` on the same doc). Seeds 0 and 1 reach none, even
+# at 24 steps (docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md section 4.1); they stay
+# for the states they have always covered.
+_BOOLEAN_EXCLUSION_SEEDS = frozenset({4})
+
+
+@pytest.mark.parametrize('seed', sorted({0, 1} | _BOOLEAN_EXCLUSION_SEEDS))
 def test_lookup_oracle_gate_boolean(load_fga_schema, seed):
     """Boolean fixture: exclusion (viewer), intersection (restricted), TTU over a
-    derived relation (inherited) -- residues, markers and excluded_node_ids live."""
-    _run_gate(load_fga_schema('boolean_wildcards.fga'), frozenset(),
-              _boolean_pool(), seed, walk_steps=8)
+    derived relation (inherited) -- residues, markers and excluded_node_ids live.
+
+    TK142 (2026-10-14): seed 4 added, because seeds 0 and 1 never visit a state with a
+    non-empty ``expand.neg`` (0 of 1,536 S3 calls), so the exclusion halves of S3 and G3/G4
+    never bit here. On a seed in ``_BOOLEAN_EXCLUSION_SEEDS`` the walk must reach one on
+    both backends (``_assert_exclusions_reached``). Measured 2026-10-14 on seed 4:
+    set_reverse_neg=6, graph_reverse_excl=3.
+
+    Sabotage, observed 2026-10-14 on ``[4]`` (docs/sabotage-procedure.md):
+    * M1, ``SetEngine.lookup_reverse`` leaves ``excluded_node_ids`` empty (the pre-TK139
+      body): ``lookup/oracle divergence (seed=4): set.lookup_reverse('viewer', 'doc',
+      'd1') [py]: excluded_node_ids set() != expand.neg {0}``. With S3's structural
+      equality also neutralised, the oracle half alone: ``set.lookup_reverse('viewer',
+      'doc', 'd1') [py] vs oracle on subject (...,user,u1): set=True oracle=False``.
+    * G1, ``WildcardIndex.lookup_reverse`` clears ``excluded_node_ids``: ``lookup/oracle
+      divergence (seed=4): graph.lookup_reverse('viewer', 'doc', 'd1') vs oracle on
+      subject (...,user,u1): graph=True oracle=False``.
+    * Under both, ``[0]`` and ``[1]`` stay GREEN (the gap this closes).
+    * Tripwire live, ``_BOOLEAN_EXCLUSION_SEEDS = frozenset({0})``: ``TK142 tripwire
+      (gate_boolean seed=0): the walk never reached an exclusion state
+      (set_reverse_neg=0, set_reverse_neg_graph_joined=0, graph_reverse_excl=0) ...``.
+    """
+    gate = _run_gate(load_fga_schema('boolean_wildcards.fga'), frozenset(),
+                     _boolean_pool(), seed, walk_steps=8)
+    if seed in _BOOLEAN_EXCLUSION_SEEDS:
+        _assert_exclusions_reached(
+            gate, f'gate_boolean seed={seed}',
+            'replay _run_gate\'s rng over seeds 0..11 on the set engine alone and pick a '
+            'seed whose walk has a non-empty expand(obj).neg (the scout\'s p3 recipe)')
 
 
-def test_lookup_oracle_gate_demorgans_reverse(load_fga_schema):
-    """Nested exclusions + TTU-over-derived chains (demorgans_reverse.fga)."""
+# TK142: the demorgans walk length that must reach an exclusion state (seed 0). The 6-step
+# walk reaches none; it stays for its drain states.
+_DEMORGANS_EXCLUSION_STEPS = 12
+
+
+@pytest.mark.parametrize('walk_steps', sorted({6, _DEMORGANS_EXCLUSION_STEPS}))
+def test_lookup_oracle_gate_demorgans_reverse(load_fga_schema, walk_steps):
+    """Nested exclusions + TTU-over-derived chains (demorgans_reverse.fga).
+
+    TK142 (2026-10-14): the 6-step walk (kept, for its drain states) never visits a state
+    with a non-empty ``expand.neg`` (0 of 700 S3 calls): it adds ``doc:dc1 labels attr:at1``
+    and ``doc:* _all_docs cond:c1`` (the wrong object type), never ``doc:* _all_docs
+    attr:at1``. The 12-step walk keeps the 6-step walk as a prefix and must reach an
+    exclusion on both backends (``_assert_exclusions_reached``). Measured 2026-10-14 at 12
+    steps: set_reverse_neg=8, graph_reverse_excl=4; every seed 0..11 reaches the shape at 12
+    steps, so the choice is robust to small drift.
+
+    Sabotage, observed 2026-10-14 on ``[12]`` (docs/sabotage-procedure.md):
+    * M1 (exclusions dropped by ``SetEngine.lookup_reverse``): ``lookup/oracle divergence
+      (seed=0): set.lookup_reverse('does_not_label', 'attr', 'at1') [py]:
+      excluded_node_ids set() != expand.neg {9}``; oracle half alone (structural equality
+      neutralised): ``... [py] vs oracle on subject (...,doc,dc1): set=True oracle=False``.
+    * G1 (cleared by ``WildcardIndex.lookup_reverse``): ``lookup/oracle divergence
+      (seed=0): graph.lookup_reverse('does_not_label', 'attr', 'at1') vs oracle on subject
+      (...,doc,dc1): graph=True oracle=False``.
+    * Under both, ``[6]`` stays GREEN (the gap this closes).
+    * Tripwire live, ``_DEMORGANS_EXCLUSION_STEPS = 6``: ``TK142 tripwire
+      (gate_demorgans_reverse walk_steps=6): the walk never reached an exclusion state
+      (set_reverse_neg=0, set_reverse_neg_graph_joined=0, graph_reverse_excl=0) ...``.
+    """
     schema = load_fga_schema('demorgans_reverse.fga')
-    _run_gate(schema, frozenset(), _demorgan_pool(schema), seed=0, walk_steps=6)
+    gate = _run_gate(schema, frozenset(), _demorgan_pool(schema), seed=0,
+                     walk_steps=walk_steps)
+    if walk_steps == _DEMORGANS_EXCLUSION_STEPS:
+        _assert_exclusions_reached(
+            gate, f'gate_demorgans_reverse walk_steps={walk_steps}',
+            'raise walk_steps, or replay _run_gate\'s rng on the set engine alone to find '
+            'a seed whose walk has a non-empty expand(obj).neg (the scout\'s p3 recipe)')
 
 
 # ---------------------------------------------------------------------------
@@ -677,6 +799,126 @@ def test_lookup_oracle_gate_generated_schemas_graph_join_rate():
         f'producing out-of-fragment star tuplesets. Did {_TUPLESET_KINDS} shrink?')
 
 
+def _exclusion_witness(schema, pool, objects):
+    """TK142: the first two-op WITNESS of an exclusion state in ``pool``, or None.
+
+    A witness is one star tuple ``s`` and one concrete tuple ``c`` on the same object
+    ``(type, name)`` such that, with both added, some set-side ``expand(obj).neg`` is
+    non-empty. The search runs on a fresh PySets set engine alone and leaves it empty. It
+    reads ``expand``, never ``lookup_reverse``, so it is independent of the surfaces the
+    witness then exercises: a mutant that drops a ``lookup_reverse`` exclusion does not
+    change which witnesses are found, and one that loses ``expand.neg`` finds none, which
+    the caller's count tripwire turns into a loud red."""
+    side = _SetSide(schema, frozenset(), ALL_SETOPS[0])
+    try:
+        for s in (r for r in pool if r[2] == '*'):
+            for c in pool:
+                if c[2] == '*' or (c[4], c[5]) != (s[4], s[5]):
+                    continue
+                ok_s = side.apply(s, 'add')
+                ok_c = side.apply(c, 'add')
+                hit = ok_s and ok_c and any(len(set(side.se.expand(*o).neg))
+                                            for o in objects)
+                if ok_c:
+                    side.apply(c, 'remove')
+                if ok_s:
+                    side.apply(s, 'remove')
+                if hit:
+                    return s, c
+    finally:
+        side.close()
+    return None
+
+
+# TK142: how many GRAPH-JOINED generated schemas with an exclusion witness the test below
+# must exercise. Seeds 11 and 28 today (2026-10-14); a graph-refused witness (seed 4) is
+# also run when the search meets it, but is not required: the set-only side is covered by
+# tests/test_tk116_oracle_only_setengine.py::test_generated_refused_schemas_run_the_set_only_lookup_gate.
+_WITNESS_JOINED_WANT = 2
+
+
+def test_lookup_oracle_gate_generated_schemas_exclusion_witness():
+    """★ TK142: the full lookup battery on GENERATED schemas, at a state that carries an
+    exclusion, deterministically.
+
+    ``test_lookup_oracle_gate_generated_schemas`` (6 hypothesis examples) reaches a
+    non-empty ``expand.neg`` about once in 240 draws, and only 18/240 generated schemas have
+    ANY two-op state with one (docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md section
+    4.2), so the exclusion halves of S3 and G3/G4 were effectively untested on generated
+    schemas. This walks the SAME generator body (``_schema_ast`` through the seeded
+    ``_RandomChoices`` seam, as the join-rate floor above does), searches each schema for an
+    exclusion witness (``_exclusion_witness``), and on every witness runs
+    ``_Gate.assert_surfaces`` (graph when it joins, both SetOps, oracle two-sided) after
+    ``add s``, ``add c``, ``remove c``, ``remove s``. It stops after
+    ``_WITNESS_JOINED_WANT`` graph-joined witnesses.
+
+    Tripwires: that many graph-joined witnesses were found, and summed over them the set
+    side saw a ``neg`` while the graph was joined (the independent instrument) and the graph
+    returned a non-empty ``excluded_node_ids``. Measured 2026-10-14: witnesses at seeds 4
+    (graph refused), 11 and 28 (graph joined).
+
+    Sabotage, observed 2026-10-14 (docs/sabotage-procedure.md):
+    * M1 (exclusions dropped by ``SetEngine.lookup_reverse``), red at the refused witness:
+      ``lookup/oracle divergence (witness seed=4 add ('...', 'user', 'u1', 'r0', 'doc',
+      'd1')): set.lookup_reverse('r1', 'doc', 'd1') [py]: excluded_node_ids set() !=
+      expand.neg {2}``; oracle half alone (structural equality neutralised): ``...
+      set.lookup_reverse('r1', 'doc', 'd1') [py] vs oracle on subject (...,user,u1):
+      set=True oracle=False (node_ids, or a marker minus excluded_node_ids)``.
+    * G1 (cleared by ``WildcardIndex.lookup_reverse``), seed 4 passes (graph refused) and
+      the first joined witness is red: ``lookup/oracle divergence (witness seed=11 add
+      ('...', 'user', 'u1', 'r3', 'doc', 'd1')): graph.lookup_reverse('r3', 'doc', 'd1')
+      vs oracle on subject (...,user,u1): graph=True oracle=False``.
+    * Tripwire live, the search refusing every pair (``c[2] == '*'`` -> ``!=``): ``TK142
+      tripwire: only 0 graph-joined generated schemas with an exclusion witness in 240
+      seeds (want 2; refused witnesses []) ...``.
+    * Tripwire live, the op sequence dropping the concrete tuple (``add s, remove s``):
+      ``TK142 tripwire: the graph-joined witnesses [11, 28] reached no exclusion state
+      (set_reverse_neg_graph_joined=0, graph_reverse_excl=0), so the graph half went
+      unexercised.``
+    """
+    joined, refused = [], []
+    neg_joined = graph_excl = 0
+    for seed in range(240):
+        if len(joined) >= _WITNESS_JOINED_WANT:
+            break
+        ast = _schema_ast(_RandomChoices(random.Random(seed)))
+        pool = _op_pool(ast)
+        if not pool:
+            continue
+        schema = unparse_schema_ast(ast)
+        objects = _object_candidates(parse_schema_ast(schema), _names_by_type(pool))
+        witness = _exclusion_witness(schema, pool, objects)
+        if witness is None:
+            continue
+        try:
+            gate = _Gate(schema, frozenset(), pool)
+        except UnsupportedByGraphIndex as exc:
+            assert match_rejection(exc) is not None, (
+                f'UNRECORDED graph scope rejection: {exc}\nschema:\n{schema}')
+            gate = _Gate(schema, frozenset(), pool, allow_graph_absent=True)
+        s, c = witness
+        try:
+            for op, raw in (('add', s), ('add', c), ('remove', c), ('remove', s)):
+                assert gate.apply(op, raw), f'witness seed={seed}: {op} {raw} rejected'
+                gate.assert_surfaces(context=f'witness seed={seed} {op} {raw}')
+        finally:
+            gate.close()
+        assert not gate.present, f'witness seed={seed}: the store did not drain'
+        (joined if gate.graph else refused).append((seed, s, c))
+        neg_joined += gate.set_reverse_neg_graph_joined
+        graph_excl += gate.graph_reverse_excl
+
+    assert len(joined) >= _WITNESS_JOINED_WANT, (
+        f'TK142 tripwire: only {len(joined)} graph-joined generated schemas with an '
+        f'exclusion witness in 240 seeds (want {_WITNESS_JOINED_WANT}; refused witnesses '
+        f'{[w[0] for w in refused]}). The generator or the set engine\'s neg lost the '
+        f'starred-exclusion shape; find out which before touching this number.')
+    assert neg_joined > 0 and graph_excl > 0, (
+        f'TK142 tripwire: the graph-joined witnesses {[w[0] for w in joined]} reached no '
+        f'exclusion state (set_reverse_neg_graph_joined={neg_joined}, '
+        f'graph_reverse_excl={graph_excl}), so the graph half went unexercised.')
+
+
 # ---------------------------------------------------------------------------
 # N17 corpus: object-wildcard shapes + a STAR-able tupleset ([folder, folder:*]
 # parent) + TTU from-chains + a boolean relation, all live at once. This is the
@@ -738,7 +980,10 @@ def test_lookup_oracle_gate_owc_star_ttu(load_fga_schema, seed):
 # Dense scripted states: the seeded walks may miss specific residue/bridge
 # constellations, so these pin them deterministically (attack-first finding:
 # an injected neg-drop in the graph's forward residue scan survived the walks
-# because no seed had combined a star grant with an exclusion on one object)
+# because no seed had combined a star grant with an exclusion on one object).
+# TK142 (2026-10-14): the same class recurred for lookup_reverse exclusions; the seeded
+# walks that exist to cover it now carry a _Gate shape-counter tripwire
+# (_assert_exclusions_reached), so a walk that stops reaching the shape goes red.
 # ---------------------------------------------------------------------------
 
 def _run_scripted(schema, object_wc, script):
