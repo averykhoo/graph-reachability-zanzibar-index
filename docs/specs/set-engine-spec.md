@@ -58,6 +58,16 @@ leaf    := type-restriction-list | REL | REL 'from' REL
 
 Mixing `or` and `and` in one chain without parentheses is a **schema error** with a message naming the relation. Both sides of `but not` may be chains or parenthesized exprs. Verify the grammar accepts the existing `tests/fga_schemas/demorgans_*.fga` fixtures **before** finalizing — read those files first and adjust if they use a construct this grammar misses; they are the authoritative examples.
 
+> **Correction 2026-10-14 (`TK137`).** The first rule is now `expr := unit 'but not' unit | chain`:
+> both operands of `but not` are UNITS, so a chain operand must be parenthesised, and `but not`
+> beside `or` / `and` / a second `but not` at one level is a schema error in both parsers
+> (`src/zanzibar/schema/parser.py::_reject_unparenthesised_but_not`, oracle twin
+> `tests/oracle.py::_reject_unparenthesised_but_not`). The "loosest binding" reading above is
+> retired: it made `a but not b or c` mean `a but not (b or c)`, which reads as
+> `(a but not b) or c`. OpenFGA's grammar refuses the shape too. The sentence "Both sides of
+> `but not` may be chains" is superseded: write `(a or b) but not (c and d)`. Map:
+> `docs/tk137-dsl-openfga-refusals-2026-10-14.md`.
+
 ### 2.3 Compilation split
 
 `compile_ruleset(ast, schema_info) -> RuleSet` produces exactly today's Filters/Rules for pure-union definitions (all current fixtures except the demorgans ones), and raises `UnsupportedByGraphIndex` naming the relation when the AST contains `Intersection`/`Exclusion`. All existing graph-backend tests must stay green through this refactor — they are the regression net. Add a test asserting the loud failure for boolean schemas (the graph backend must never silently mis-ingest one). The old xfail parser test is superseded: parsing demorgans now succeeds; replace it per §7.4.

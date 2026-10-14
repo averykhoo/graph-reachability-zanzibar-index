@@ -114,13 +114,19 @@ def test_intersection():
     assert _rel(schema, 'doc', 'x') == Intersection((Computed('a'), Computed('b'), Computed('c')))
 
 
-def test_exclusion_binds_loosest():
-    # `a or b but not c` == `(a or b) but not c`
-    schema = '''
+def test_exclusion_beside_a_chain_is_refused_and_parenthesised_parses():
+    """Until TK137 (2026-10-14) this test was `test_exclusion_binds_loosest` and pinned
+    `a or b but not c` == `(a or b) but not c`. TK137 S7 refuses `but not` beside another
+    operator at one level (OpenFGA's grammar does too), so the old text is now a refusal and
+    the reading it used to have is spelled with parentheses."""
+    refused = '''
     type doc
       relations
         define x: a or b but not c
     '''
+    with pytest.raises(ValueError, match='parenthesise the intended reading'):
+        _parse_schema_ast_unchecked(refused)
+    schema = refused.replace('a or b but not c', '(a or b) but not c')
     assert _rel(schema, 'doc', 'x') == Exclusion(
         Union((Computed('a'), Computed('b'))), Computed('c'))
 
@@ -145,12 +151,18 @@ def test_mixing_or_and_without_parens_is_error():
         parse_schema_ast(schema)
 
 
-def test_both_sides_of_but_not_may_be_chains():
-    schema = '''
+def test_both_sides_of_but_not_may_be_parenthesised_chains():
+    """Until TK137 (2026-10-14) this test was `test_both_sides_of_but_not_may_be_chains` and
+    pinned the unparenthesised base `a or b but not (c and d)`. A chain operand of `but not`
+    must be parenthesised now (TK137 S7); the subtrahend already was."""
+    refused = '''
     type doc
       relations
         define x: a or b but not (c and d)
     '''
+    with pytest.raises(ValueError, match='parenthesise the intended reading'):
+        _parse_schema_ast_unchecked(refused)
+    schema = refused.replace('a or b but not', '(a or b) but not')
     assert _rel(schema, 'doc', 'x') == Exclusion(
         Union((Computed('a'), Computed('b'))),
         Intersection((Computed('c'), Computed('d'))),

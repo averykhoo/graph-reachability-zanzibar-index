@@ -2,7 +2,8 @@
 
 Zanzibar-style relationship-based access control (ReBAC) for Python, on top of SQLModel.
 Schemas are written in a subset of the [OpenFGA](https://openfga.dev) modelling DSL
-(schema 1.1, including the `and` / `but not` operators; no conditions or modules). The package is not affiliated with Google or OpenFGA.
+(schema 1.1, including the `and` / `but not` operators; no conditions or modules), plus a
+few extensions listed under "Schema shapes" below. The package is not affiliated with Google or OpenFGA.
 
 Two evaluation backends give the **same answers** with **opposite cost models**:
 
@@ -118,9 +119,20 @@ above; markers without their exclusions grant too much.
   security-sensitive.
 * **Schema shapes.** Conditions (`with`) and modules are not supported. Refused shapes
   come with an explanation of what to write instead; for example, as in OpenFGA, a `from`
-  tupleset must be a direct relation. Wildcard usersets (`[group:*#member]`), wildcard
-  tuplesets (`parent: [folder:*]`) and object wildcards go beyond OpenFGA. They work, but
-  they are outside the proved fragment and emit `UnprovenExtensionWarning`.
+  tupleset must be a direct relation. Only schema 1.1 is implemented: the header is
+  optional, but a `schema` line naming any other version (`schema 1.2` included) is
+  refused. That is stricter than OpenFGA, which also accepts `1.2`. As in OpenFGA, a
+  `model` / `schema 1.1` / `relations` line must stand alone (a comment goes on its own
+  line), every type a restriction names must be declared with a `type` line, and
+  `but not` may not share a level with `or` / `and`: write
+  `(a or b) but not c` or `a but not (b or c)`, never `a or b but not c`. Wildcard usersets
+  (`[group:*#member]`), wildcard tuplesets (`parent: [folder:*]`) and object wildcards go
+  beyond OpenFGA. They work, but they are outside the proved fragment and emit
+  `UnprovenExtensionWarning`. Also beyond OpenFGA's DSL syntax, and accepted here: more than
+  one `[...]` block in a definition (`[user] or [group#member]`), a `[...]` block that is not
+  the first operand (`editor or [user]`, `viewer but not [user:*]`), no `model` /
+  `schema 1.1` header, and a `define` with no `relations` line above it. A schema using them
+  may not load in OpenFGA's own tools.
 * **"All" does not imply "some" when there are none.** A grant on every instance of a
   type reaches a grant on "any" instance only through an instance that exists. With
   `object_wildcard_shapes=frozenset({("folder", "viewer")})` (so `folder:*` can hold a
@@ -143,7 +155,9 @@ above; markers without their exclusions grant too much.
   tuples, so check imported data for cycles first.
 * **Reads are lenient; writes are strict.** A write naming an undeclared type or relation,
   or a malformed name, raises `AdmissionRejected`. A `check` with the same mistake returns
-  `False` with no error, so a typo in a relation name reads as "denied".
+  `False` with no error, so a typo in a relation name reads as "denied". A typo in the
+  SCHEMA, such as `define viewer: [usr]` with no `type usr`, is refused when the schema is
+  parsed (`ValueError`), before any write.
 * **Write cap.** A single write that would add more than `ZANZIBAR_MAX_CLOSURE_FANOUT`
   closure edges (default 100,000; `0` disables) is refused with `ClosureFanoutExceeded`.
   The write then lands in neither backend.

@@ -16,9 +16,10 @@ built in topological order (stratifiable by construction, so inside the spec's
 verified envelope), depth <= 2 expression trees over Direct/Computed/TTU leaves
 and binary Union/Intersection/Exclusion nodes (arity 2 everywhere, satisfying
 encode.py's n-ary-fold arity >= 2 constraint), rendered to DSL text via
-`unparse_schema_ast` + an explicit `type user` header (the generated ASTs
-declare no relations on `user`, so the unparser alone would omit the type
-line). It is deliberately NOT imported from tests/test_hypothesis.py: that
+`unparse_schema_ast`, which since TK137 (2026-10-14) declares every referenced
+type itself, `type user` included (until then this module prepended that line,
+and the TK137 unparser made it a duplicate type declaration). It is
+deliberately NOT imported from tests/test_hypothesis.py: that
 module imports `hypothesis` at module level, and the formal/ suite has no
 hypothesis dependency (the deterministic-seeded convention of
 test_conformance_random.py); duplicating ~30 generator lines is the price of
@@ -140,9 +141,8 @@ def _case(seed: int):
     """Deterministic (schema_text, pool, store_ops) for one seed."""
     rng = random.Random(seed)
     ast = _gen_ast(rng)
-    # `type user` header: the generated AST has no user-typed relations, so the
-    # unparser emits no `type user` line; both parsers accept the prepended one.
-    schema_text = 'type user\n' + unparse_schema_ast(ast)
+    # The unparser declares the relationless `user` type itself (TK137 step 2).
+    schema_text = unparse_schema_ast(ast)
     pool = _op_pool(ast)
     store_ops = [op for op in pool if rng.random() < 0.5]
     if not store_ops:                      # degenerate draw: keep one tuple

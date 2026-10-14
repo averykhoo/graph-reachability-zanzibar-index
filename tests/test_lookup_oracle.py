@@ -144,7 +144,7 @@ _GATE_MAX_EXAMPLES = 30 if os.environ.get('HYPOTHESIS_PROFILE') == 'deep' else 6
 
 from zanzibar.setengine import ALL_SETOPS, SetEngine
 from zanzibar.setengine.memberset import MemberSet
-from zanzibar.schema import (Direct, TTU, Union, Intersection, Exclusion,
+from zanzibar.schema import (Direct, TTU, Union, Intersection, Exclusion, Computed, Restriction,
                                parse_openfga_schema, parse_schema_ast,
                                derive_schema_info, unparse_schema_ast,
                                UnsupportedByGraphIndex, CyclicDerivedDependency,
@@ -1380,13 +1380,31 @@ def test_graph_userset_subject_through_derived_wildcard_gap():
     isolating the userset-subject × wildcard × derived interaction. Fixed by the
     ``_leaf_concretes`` upos lift (the ``derived-userset`` branch now merges
     ``_ttu_target_upos_nodes`` for each stored userset's residue, symmetric to the X4b TTU
-    lift). The write ORDER is preserved from the reduced hunter finding."""
+    lift). The write ORDER is preserved from the reduced hunter finding.
+
+    TK137 (2026-10-14) refuses ``but not`` beside ``or`` at one level, so ``r0`` and ``r3``
+    are written with the parentheses of the reading the old parser gave them (``but not``
+    bound loosest): ``r0: ([user:*] or [user:*]) but not (...)``,
+    ``r3: r1 but not ([doc#r1] or [doc#r1])``. The AST assertion below is the AST HEAD
+    ``0b09687``'s parser built from the old unparenthesised text (first-hand PROBE, TK137
+    builder, ``probe_old_ast.py``: old text under the old parser and new text under the new
+    parser printed byte-identical sorted ASTs, ``EQUAL``), so this pin still tests the same
+    schema."""
     schema = ('type user\n'
               'type doc\n'
               '  relations\n'
-              '    define r0: [user:*] or [user:*] but not ([user:*] but not [user, user:*])\n'
+              '    define r0: ([user:*] or [user:*]) but not ([user:*] but not [user, user:*])\n'
               '    define r1: r0 or ([user] or [doc#r0])\n'
-              '    define r3: r1 but not [doc#r1] or [doc#r1]\n')
+              '    define r3: r1 but not ([doc#r1] or [doc#r1])\n')
+    star, user = Restriction('user', '...', True), Restriction('user', '...', False)
+    doc_r1 = Direct((Restriction('doc', 'r1', False),))
+    assert parse_schema_ast(schema) == {
+        ('doc', 'r0'): Exclusion(Union((Direct((star,)), Direct((star,)))),
+                                 Exclusion(Direct((star,)), Direct((user, star)))),
+        ('doc', 'r1'): Union((Computed('r0'), Union((Direct((user,)),
+                                                     Direct((Restriction('doc', 'r0', False),)))))),
+        ('doc', 'r3'): Exclusion(Computed('r1'), Union((doc_r1, doc_r1))),
+    }
     writes = [('...', 'user', 'u1', 'r0', 'doc', 'd2'),
               ('...', 'user', 'u1', 'r1', 'doc', 'd1'),
               ('r0', 'doc', 'd1', 'r1', 'doc', 'd2')]     # doc:d1#r0 stored on r1

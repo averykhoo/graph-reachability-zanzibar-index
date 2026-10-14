@@ -11,8 +11,8 @@ labels: []
 source: docs/openfga-claims-audit-2026-10-13.md
 source_hash:
 created: 2026-10-13c
-moved: 2026-10-13d
-updated: 2026-10-13d
+moved: 2026-10-14
+updated: 2026-10-14
 closed:
 ---
 
@@ -45,3 +45,17 @@ schemas that parse today, so it wants a CHANGELOG line.
 ### 2026-10-13d
 
 Sprint re-rank 2026-10-13d (user-approved in chat): LATER -> NEXT. User-visible OpenFGA-compat gap from the 2026-10-13 claims audit.
+
+### 2026-10-14
+
+Scout + challenge + build, 2026-10-14. Map: docs/tk137-dsl-openfga-refusals-2026-10-14.md (ACTIVE-PLAN; challenge C1-C12 at the top; section 0 is the shape table).
+
+MEASURED (scout PROBE, re-run byte-identical by challenge): both parsers accept and agree on every shape; H2 relations-line junk silently drops a relation; S7 a but not b or c parses as a but not (b or c); S8 [usr] admits a usr:x write; fuzz floor at 6000 trials projected 455 vs floor 450. tests --collect-only 2401 = MIN_TESTS_ALL.
+DECIDED (refuse/keep split, section 0): REFUSE H1 (schema version other than 1.1), H2 (extra words on model/schema/relations lines), S7 (but not sharing a level with or/and/but not), S8 (restriction to an undeclared type, incl. [usr#...], checked against the FINAL declared set so forward references stay legal; also in parse_openfga_json BEFORE the round trip). S9 keeps refusing but names the feature. KEEP as documented extensions: H3 no header, H4 define without relations, S5 two direct blocks, S6 direct block not first, S10 names, S11 [group#...]. S8 is a FRESH decision extending ASK-1, not a completion of it (C11).
+
+BUILDER DECISIONS (worktree-wf_9a094007-20b-14 @124069c): (1) unparse_schema_ast emits relationless restriction types FIRST, sorted (C12: every OpenFGA example declares type user first), and renders both but-not operands as units, so no new refusal is reachable from the unparser; (2) a relations line before any type (X1) and a model/schema header after types (X2) are KEPT as documented extensions; (3) trailing comments on model / schema / relations lines are REFUSED as H2 (C5; INSTEAD: comment on its own line), consistent with TK123 finding A33; (4) H1 is STRICTER than OpenFGA, which also accepts schema 1.2; the WHY says only 1.1 is implemented and the version was silently ignored. Sabotage SA1-SA15 + SA-F all red in the new tests/test_tk137_openfga_dsl_refusals.py (44 tests); _FUZZ_TRIALS 6000 -> 12000; MIN_TESTS_ALL 2401 -> 2489. Not run there: lean phase, Lean leg of conformance, PostgreSQL leg.
+REVIEW: CHANGES-NEEDED; fixes in progress (2026-10-14). Not merged.
+
+OPEN USER QUESTION R1 (C10, a goal question, so it goes to the user, not decided here): stores persisted under <= 0.0.4 whose schema text has a now-refused shape (H2, S7, S8) cannot reopen (schema_io.py::open_set_engine re-parses with the checked parser) and there is no migration path. Coordinator default pending the user's word: accept the break in the API-break release, with a clear "persisted by <= 0.0.4, refused since TK137: <reason>" message at load/open and a CHANGELOG line.
+Sequencing (C8): TK137 steps 1-2 (the unparser) land before or with TK123's A36.
+Filed: TK147 (LATER) object_wildcard_shapes naming an undeclared type or relation is accepted (C7, out of DSL scope). Next action: land the review fixes, run the phased gate, raise R1 with the user. Not closed here.

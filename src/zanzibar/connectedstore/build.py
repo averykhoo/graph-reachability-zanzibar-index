@@ -30,7 +30,7 @@ from zanzibar.schema import Entity, RelationalTriple, RuleSet
 
 from .apply import ensure_cursor, _norm
 from .models import IndexCursor
-from .schema_io import ensure_schema, load_schema, open_graph_index
+from .schema_io import _persisted_schema_parse, ensure_schema, load_schema, open_graph_index
 from .source import log_watermark
 
 
@@ -103,7 +103,10 @@ def build_index(session: Session, source_store_id: str,
         if index_store_id != source_store_id:
             # Copying the schema to a separate index store compiles it here; reuse
             # that RuleSet in open_graph_index instead of re-parsing the same text.
-            _, boot_ruleset = ensure_schema(session, index_store_id, schema_text, shapes)
+            # The text is the SOURCE store's persisted schema, so a TK137 refusal of it
+            # is that store's version break (C10), not a bad argument.
+            with _persisted_schema_parse(source_store_id):
+                _, boot_ruleset = ensure_schema(session, index_store_id, schema_text, shapes)
 
         existing_cursor = session.exec(
             select(IndexCursor)

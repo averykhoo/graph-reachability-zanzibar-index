@@ -247,3 +247,28 @@ class CyclicDerivedDependency(ValueError):
     the set engine's cycle-parity compile) can degrade on exactly this rejection
     without swallowing every other ``ValueError`` a compile regression might
     raise."""
+
+
+class ShapeRefusedSinceTK137(ValueError):
+    """A schema shape that zanzibar-index 0.0.4 and earlier ACCEPTED and `TK137`
+    (2026-10-14) refuses: a ``schema`` line naming a version but ``1.1`` (H1), extra words on
+    a header line (H2), ``but not`` sharing a level with another operator (S7), or a
+    restriction to an undeclared type (S8). Raised by `parser.py::_validate_header_line`,
+    `parser.py::_reject_unparenthesised_but_not` and
+    `parser.py::_validate_restriction_types_declared`.
+
+    It exists for ONE reader: `zanzibar.connectedstore.schema_io` re-parses a store's
+    PERSISTED schema text on every open, so a store saved under 0.0.4 with one of these
+    shapes stops opening. Telling that version break apart from corruption needs a type,
+    not message matching (review challenge C10 in
+    `docs/tk137-dsl-openfga-refusals-2026-10-14.md`); the store layer turns it into
+    `zanzibar.connectedstore.PersistedSchemaRefused`. ``instead`` is the rewrite that keeps
+    the meaning the 0.0.4 store was serving.
+
+    A ``ValueError`` subclass so every caller that catches the parser's ``ValueError`` is
+    unchanged. Not re-exported from `zanzibar.schema` on purpose: a consumer catches
+    ``ValueError`` (a fresh schema) or ``PersistedSchemaRefused`` (a stored one)."""
+
+    def __init__(self, message: str, instead: str):
+        super().__init__(message)
+        self.instead = instead

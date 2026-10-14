@@ -94,6 +94,28 @@ _REFUSED = {
     # bricked a store the same way; this was an ACCEPT control until then.
     'TK124/type-without-relations': "type user\n",
     'TK124/types-with-empty-relations-blocks': "type user\n  relations\ntype doc\n  relations\n",
+    # TK137 (2026-10-14) -- DSL shapes OpenFGA refuses, refused in BOTH parsers. Map:
+    # `docs/tk137-dsl-openfga-refusals-2026-10-14.md`. These cases pin PARITY; the checks
+    # themselves are pinned (with their sabotage) in `tests/test_tk137_openfga_dsl_refusals.py`.
+    'TK137/H1-schema-1.2': _HEAD.replace("schema 1.1", "schema 1.2"),
+    'TK137/H1-bare-schema': _HEAD.replace("schema 1.1", "schema"),
+    # an ACCEPT control (`header-lines-with-junk`) until TK137: the extra words were dropped
+    'TK137/H2-header-junk': "model x y\nrelations z\n" + _HEAD,
+    'TK137/H2-relations-define-on-one-line': _HEAD + "type folder\n  relations define owner: [user]\n",
+    'TK137/H2-relations-trailing-comment': _HEAD + "type folder\n  relations # c\n    define owner: [user]\n",
+    'TK137/H2-schema-trailing-comment': _HEAD.replace("schema 1.1", "schema 1.1 # c"),
+    'TK137/S7-or-then-but-not': _HEAD + "    define owner: [user] or viewer but not blocked\n",
+    'TK137/S7-but-not-then-or': _HEAD + "    define owner: viewer but not blocked or viewer\n",
+    'TK137/S7-and-then-but-not': _HEAD + "    define owner: viewer and blocked but not viewer\n",
+    'TK137/S7-but-not-then-and': _HEAD + "    define owner: viewer but not blocked and viewer\n",
+    'TK137/S7-but-not-twice': _HEAD + "    define owner: viewer but not blocked but not viewer\n",
+    'TK137/S8-undeclared-type': _HEAD + "    define owner: [usr]\n",
+    'TK137/S8-undeclared-wildcard': _HEAD + "    define owner: [usr:*]\n",
+    'TK137/S8-undeclared-ellipsis': _HEAD + "    define owner: [usr#...]\n",
+    'TK137/S9-condition-restriction': _HEAD + "    define owner: [user with in_office]\n",
+    'TK137/S9-module': "module core\n" + _HEAD,
+    'TK137/S9-extend-type': _HEAD + "extend type doc\n",
+    'TK137/S9-condition-block': _HEAD + "condition in_office(ip: ipaddress) {\n",
 }
 
 #: Accept controls: near-misses of the shapes above that BOTH parsers must accept with
@@ -108,11 +130,24 @@ _ACCEPTED = {
     'tab-heads': _HEAD + "type\tfolder\n  relations\n    define\towner: [user]\n",
     'userset-ellipsis-is-bare': _HEAD + "    define owner: [group#...]\n",
     'space-before-colon': _HEAD + "    define owner : [user]\n",
-    'header-lines-with-junk': "model x y\nrelations z\n" + _HEAD,
+    # (`header-lines-with-junk` moved to `_REFUSED` as `TK137/H2-header-junk`, 2026-10-14.)
     # TK124 controls: a schema without the model / schema header is not refused, and
     # neither is a relationless type beside a type that declares a relation.
     'TK124/no-header': _HEAD.replace("model\n  schema 1.1\n", ""),
     'TK124/relationless-type-beside-a-relation': "type team\n" + _HEAD,
+    # TK137 controls: the OpenFGA-DSL extensions kept on purpose, and the near-misses of
+    # the TK137 refusals. A forward reference must stay legal: the unparser's output puts
+    # `type user` first but a hand-written schema may declare it last.
+    'TK137/two-directs': _HEAD + "    define owner: [user] or [group]\n",
+    'TK137/direct-not-first': _HEAD + "    define owner: viewer but not [user]\n",
+    'TK137/define-without-relations-line': _HEAD + "type folder\n    define owner: [user]\n",
+    'TK137/relations-line-before-any-type': "relations\n" + _HEAD,
+    'TK137/header-after-types': _HEAD + "model\n  schema 1.1\n",
+    'TK137/forward-reference': "type folder\n  relations\n    define owner: [person]\n"
+                               "type person\n" + _HEAD,
+    'TK137/parenthesised-base': _HEAD + "    define owner: (viewer or blocked) but not viewer\n",
+    'TK137/parenthesised-subtrahend': _HEAD + "    define owner: viewer but not (blocked or viewer)\n",
+    'TK137/type-named-with': _HEAD + "type with\ntype folder\n  relations\n    define owner: [with]\n",
 }
 
 
@@ -149,15 +184,23 @@ _ALPHABET = (list('[]#:*,.() \t\n-_/@+=x\u00e9')
              + ['or ', 'and ', 'but not ', ' from ', 'define ', 'type ', 'relations\n',
                 'model\n'])
 _FUZZ_SEEDS = (0, 1, 2)
-_FUZZ_TRIALS = 6000
+_FUZZ_TRIALS = 12000
 
-#: Non-vacuity floors for the 18,000 trials, set 2026-10-03e at about half the count
-#: measured on this tree that day: `refused 17089 accepted 911 splits 0`. Most mutations
-#: break the text, so the accept side is the thin one. Too few refusals means the mutator
-#: stopped reaching the parsers' checks; too few accepts means it only produces garbage
-#: and the key comparison never runs.
-MIN_FUZZ_REFUSED = 8000
-MIN_FUZZ_ACCEPTED = 450
+#: Non-vacuity floors, set 2026-10-03e at about half the count measured on this tree that
+#: day (18,000 trials): `refused 17089 accepted 911 splits 0`. Most mutations break the
+#: text, so the accept side is the thin one. Too few refusals means the mutator stopped
+#: reaching the parsers' checks; too few accepts means it only produces garbage and the key
+#: comparison never runs.
+#: Re-measured 2026-10-14 after TK137, which refuses 456 of those 911 accepted mutants (399
+#: of them restricted to a type nobody declared, a one-character edit of `[user]`): at 18,000
+#: trials `refused 17545 accepted 455 splits 0`, five over the accept floor. So `_FUZZ_TRIALS`
+#: doubled 6000 -> 12000 (36,000 trials, ~10s): `refused 35047 accepted 953 splits 0`
+#: (TK137 builder, `probe_fuzz.py`, same seeds, alphabet and mutator). Both floors rose to
+#: about half of that, 8000 -> 17500 and 450 -> 475, which also makes the doubling
+#: load-bearing. Sabotage 2026-10-14: `_FUZZ_TRIALS` put back to 6000 -> RED,
+#: `AssertionError: 455` at the accept floor (`1 failed`).
+MIN_FUZZ_REFUSED = 17500
+MIN_FUZZ_ACCEPTED = 475
 
 
 def _verdict(parse, text):

@@ -15,7 +15,37 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
   `result_keys`'s docstring had called its output alone "the portable form", which would
   drop a `but not` exclusion at a service boundary (TK139 review).
 
+### Changed
+- **Breaking: four DSL shapes that OpenFGA refuses are refused here too** (`ValueError` at
+  parse, with what to write instead) (TK137):
+  - a `schema` line naming any version but `1.1` (`schema 1.2`, a bare `schema`). The version
+    used to be ignored. Write `schema 1.1`; schema 1.2's modules are not supported.
+  - extra words on a `model`, `schema 1.1` or `relations` line, a trailing comment included
+    (`relations # docs`). Put each `define`, and each comment, on its own line.
+  - `but not` beside `or` / `and` / a second `but not` at one level. It used to bind loosest,
+    so `a but not b or c` meant `a but not (b or c)`. Parenthesise the reading you mean:
+    `(a or b) but not c`, `a but not (b or c)`, `(a but not b) or c`.
+  - a restriction naming a type no `type` line declares (`define viewer: [usr]` with no
+    `type usr`), also in `parse_openfga_json`. Before, the typo let a `usr:x` write in and
+    `check` said True. Declare the type or fix the spelling.
+- `unparse_schema_ast` and `openfga_json_to_dsl` now declare every restriction type that has
+  no relations (`type user`) at the top, and parenthesise both operands of `but not`, so
+  their output parses under the rules above.
+- `module`, `extend type`, `condition` blocks and `[user with cond]` were already refused;
+  the message now names the unsupported OpenFGA feature.
+- **No migration path for persisted stores.** Opening a store re-parses its persisted schema
+  text, so a store saved under 0.0.4 or earlier with one of the refused shapes (including
+  `openfga_json_to_dsl` output that restricts to a relation-less type, or renders
+  `a or b but not c`) now refuses to open, and no public API drops a store id. The only
+  way forward is a new store id with the rewritten schema, with its tuples written again.
+  Such a store's open raises `zanzibar.connectedstore.PersistedSchemaRefused` (a
+  `ValueError`), whose message says the schema was saved by 0.0.4 or earlier using a shape
+  this version refuses, quotes the refusal, and gives the rewrite that keeps the meaning the
+  store was serving (`instead` attribute), so the break does not read as corruption.
+
 ### Fixed
+- A `relations` line with a `define` on it (`relations define viewer: [user]`) parsed and
+  silently dropped the relation. It is now refused (TK137).
 - `SetEngine.lookup_reverse` now fills `excluded_node_ids` with the subjects a `but not`
   refuses under a wildcard grant, as `ConnectedStore.lookup_reverse` already did. Before,
   with `define viewer: [user:*] but not banned`, a `user:*` grant and `mallory` banned, it

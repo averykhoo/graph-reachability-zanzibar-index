@@ -979,22 +979,20 @@ def test_zt_p5_undefined_references_are_refused(name):
         oracle.parse_schema_ast(schema)
 
 
-def test_zt_p5_undefined_restriction_type_still_compiles_and_reads_empty():
-    """The one form ASK-1 does NOT refuse: a bare restriction type that is never declared
-    (`[nosuchtype]`). A relation-less `type` line leaves no trace in a `SchemaAST`, so
-    declared-ness of a bare subject type is not checkable there, and it is not a dangling
-    RELATION (`docs/ask1-schema-self-consistency-2026-09-26.md` sec 2). It still reads
-    EMPTY on every backend, as it did before."""
+def test_zt_p5_undefined_restriction_type_is_refused():
+    """REVERSED 2026-10-14 by TK137 S8 (extending ASK-1). Until then this was
+    `test_zt_p5_undefined_restriction_type_still_compiles_and_reads_empty`: the one form
+    ASK-1 did NOT refuse, a bare restriction type that is never declared (`[nosuchtype]`),
+    because a relation-less `type` line leaves no trace in a `SchemaAST`
+    (`docs/ask1-schema-self-consistency-2026-09-26.md` sec 2). It compiled and read EMPTY on
+    every backend; that test pinned the gap honestly, as a gap. The 0.0.4 install trial
+    showed the cost: a TYPO in a restriction (`[usr]`) then ADMITTED a `usr:x` write and
+    check said True. Both parsers now refuse it from the text-level parse's declared types
+    (`src/zanzibar/schema/parser.py::_validate_restriction_types_declared`, oracle twin
+    `tests/oracle.py::_validate_restriction_types_declared`)."""
+    from tests import oracle
     schema = _UNDEFINED_REFERENCE_SCHEMAS['direct_type']
-    assert parse_openfga_schema(schema) is not None
-    backends = _backends(schema)
-    try:
-        orc = Oracle(schema, [])
-        for q in (('...', 'user', 'u1', 'viewer', 'doc', 'd1'),
-                  ('m', 'group', 'g1', 'viewer', 'doc', 'd1')):
-            assert orc.check(*q) is False, q
-            for b in backends:
-                assert b.check(q) is False, (q, b.name)
-    finally:
-        for b in backends:
-            b.close()
+    with pytest.raises(ValueError, match="names an undeclared type 'nosuchtype'"):
+        parse_openfga_schema(schema)
+    with pytest.raises(ValueError, match="undeclared type 'nosuchtype'"):
+        oracle.parse_schema_ast(schema)

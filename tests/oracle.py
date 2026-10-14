@@ -157,6 +157,7 @@ def _parse_restrictions(bracket: str) -> tuple[tuple[str, str, bool], ...]:
     # Direct nobody can write and `[user,,group#member]` as if the gap were not there, where
     # production refuses both. Now its type is '' and the charset check below refuses it.
     for part in (p.strip() for p in inner.split(',')):
+        _reject_conditional_restriction(part)
         if '#' in part:
             left, pred = part.split('#', 1)
             pred = pred.strip()
@@ -183,8 +184,39 @@ def _parse_restrictions(bracket: str) -> tuple[tuple[str, str, bool], ...]:
     return tuple(out)
 
 
+_CONDITIONAL_RE = re.compile(r'\S+\s+with(\s|\Z)')
+
+
+def _reject_conditional_restriction(part: str) -> None:
+    """Independent twin of `src/zanzibar/schema/parser.py::_reject_conditional_restriction`
+    (TK137 S9, 2026-10-14): name the OpenFGA condition instead of the charset."""
+    # REFUSED SHAPE (TK137 S9): a conditional restriction entry, `user with in_office`.
+    # WHY: no backend evaluates a condition, and dropping it would make the grant
+    # unconditional; production refuses it with this message. INSTEAD: none -- conditions
+    # are unsupported; model a stored fact as a relation, `[user] but not suspended`.
+    if _CONDITIONAL_RE.match(part):
+        raise ValueError(f'conditional type restriction {part!r}: OpenFGA conditions '
+                         f"('with') are not supported")
+
+
+def _reject_unparenthesised_but_not(relation: str) -> None:
+    """Independent twin of `src/zanzibar/schema/parser.py::_reject_unparenthesised_but_not`
+    (TK137 S7, 2026-10-14). `_Parser._expr` would refuse the text anyway (trailing tokens);
+    this supplies the message."""
+    # REFUSED SHAPE (TK137 S7): `but not` at one level with `or`, `and` or a second `but not`
+    # (`[user] or a but not b`, `a but not b or c`). WHY: this parser used to read
+    # `a but not b or c` as `a but not (b or c)`, against how it reads; OpenFGA's grammar
+    # refuses it, and so does production. INSTEAD: parenthesise, `(a or b) but not c` or
+    # `a but not (b or c)`.
+    raise ValueError(f'relation {relation!r}: but not mixed with another operator at one '
+                     f'level without parentheses; parenthesise the intended reading')
+
+
 class _Parser:
-    """expr := chain ('but not' chain)? ; chain := unit (OP unit)* ; unit := '(' expr ')' | leaf."""
+    """expr := unit 'but not' unit | chain ; chain := unit (OP unit)* ; unit := '(' expr ')' | leaf.
+
+    The operands of ``but not`` are units since TK137 (2026-10-14); until then the first rule
+    was ``chain ('but not' chain)?``, and ``a but not b or c`` meant ``a but not (b or c)``."""
 
     def __init__(self, tokens, relation):
         self.tokens = tokens
@@ -202,17 +234,30 @@ class _Parser:
             raise ValueError(f'relation {self.relation!r}: trailing tokens')
         return expr
 
-    def _expr(self):
-        base = self._chain()
-        if (self.pos + 1 < len(self.tokens)
+    def _is_but_not(self) -> bool:
+        return (self.pos + 1 < len(self.tokens)
                 and self.tokens[self.pos] == ('word', 'but')
-                and self.tokens[self.pos + 1] == ('word', 'not')):
-            self.pos += 2
-            return OExclusion(base, self._chain())
-        return base
+                and self.tokens[self.pos + 1] == ('word', 'not'))
 
-    def _chain(self):
-        children = [self._unit()]
+    def _another_operator_follows(self) -> bool:
+        kind, text = self._peek()
+        return (kind == 'word' and text in ('or', 'and')) or self._is_but_not()
+
+    def _expr(self):
+        head = self._unit()
+        if self._is_but_not():
+            self.pos += 2
+            sub = self._unit()
+            if self._another_operator_follows():
+                _reject_unparenthesised_but_not(self.relation)
+            return OExclusion(head, sub)
+        out = self._chain(head)
+        if self._another_operator_follows():
+            _reject_unparenthesised_but_not(self.relation)
+        return out
+
+    def _chain(self, head):
+        children = [head]
         op = None
         while True:
             kind, text = self._peek()
@@ -266,19 +311,27 @@ class _Parser:
 
 def parse_schema_ast(text: str) -> dict[tuple[str, str], object]:
     """Parse the DSL into ``{(type, relation): OExpr}`` (boolean-aware; drives evaluation),
-    refusing a schema that is not self-consistent (``_validate_consistency``)."""
-    ast = parse_schema_ast_unchecked(text)
+    refusing a schema that is not self-consistent (``_validate_consistency``,
+    ``_validate_restriction_types_declared``)."""
+    ast, declared = _parse_schema_ast_declared(text)
     _validate_consistency(ast)
+    _validate_restriction_types_declared(ast, declared)
     _validate_tuplesets_direct(ast)
     _validate_stratified_negation(ast)
     return ast
 
 
 def parse_schema_ast_unchecked(text: str) -> dict[tuple[str, str], object]:
-    """``parse_schema_ast`` without the self-consistency refusal. The conformance encoder
+    """``parse_schema_ast`` without the self-consistency refusals. The conformance encoder
     (``formal/conformance/encode.py::schema_to_json``) uses it: it is a translator, and
     Lean decides admission for itself, so it must be able to send Lean a schema this
     parser would refuse."""
+    return _parse_schema_ast_declared(text)[0]
+
+
+def _parse_schema_ast_declared(text: str):
+    """The parse itself: ``(ast, declared types)``. The declared set is the only record of a
+    relation-less ``type user`` line (TK137 S8)."""
     ast: dict[tuple[str, str], object] = {}
     current_type: str | None = None
     seen_types: set[str] = set()
@@ -291,6 +344,7 @@ def parse_schema_ast_unchecked(text: str) -> dict[tuple[str, str], object]:
         words = line.split()
         head = words[0]
         if head in ('model', 'schema', 'relations'):
+            _validate_header_line(words, line)
             continue
         if head == 'type':
             if len(words) != 2:
@@ -339,11 +393,68 @@ def parse_schema_ast_unchecked(text: str) -> dict[tuple[str, str], object]:
                 raise ValueError(f'duplicate relation definition: {current_type}#{name}')
             ast[(current_type, name)] = _Parser(_tokenize(body.strip()), name).parse()
         else:
+            _reject_unsupported_openfga_line(head, line)
             # silently skipping an unrecognised line lost whole definitions (production's
             # blind-audit S-3; oracle twin added by P23)
             raise ValueError(f'unrecognized schema line: {line!r}')
     _validate_declares_a_type(seen_types, ast)
-    return ast
+    return ast, frozenset(seen_types)
+
+
+#: The only header lines either parser accepts (TK137 H1 / H2), as whitespace-split words.
+_HEADER_FORMS = frozenset({('model',), ('schema', '1.1'), ('relations',)})
+
+
+def _validate_header_line(words: list[str], line: str) -> None:
+    """Independent twin of `src/zanzibar/schema/parser.py::_validate_header_line` (TK137 H1 /
+    H2, 2026-10-14). These lines used to be skipped on their first word."""
+    # REFUSED SHAPE (TK137 H1): `schema` with a version other than `1.1` (`schema 1.2`, bare
+    # `schema`). WHY: only 1.1 is implemented, and the version was silently ignored; the
+    # JSON front end already refused it. INSTEAD: `schema 1.1` (no modules / extend type).
+    if words[0] == 'schema' and words[1:2] != ['1.1']:
+        raise ValueError(f'unsupported schema version: {line!r}')
+    # REFUSED SHAPE (TK137 H2): extra words on a `model` / `schema 1.1` / `relations` line
+    # (`relations define viewer: [user]`, `model # c`). WHY: the rest of the line was
+    # silently dropped, a relation with it. INSTEAD: each keyword, define and comment on its
+    # own line.
+    if tuple(words) not in _HEADER_FORMS:
+        raise ValueError(f'header line with extra words: {line!r}')
+
+
+def _reject_unsupported_openfga_line(head: str, line: str) -> None:
+    """Independent twin of `src/zanzibar/schema/parser.py::_reject_unsupported_openfga_line`
+    (TK137 S9, 2026-10-14): name the OpenFGA feature instead of `unrecognized schema line`."""
+    # REFUSED SHAPE (TK137 S9): `module ...`, `extend type ...`, `condition ...` lines. WHY:
+    # modular models and conditions are not implemented; production refuses them naming the
+    # feature. INSTEAD: none -- one self-contained schema 1.1 file; a stored fact as a
+    # relation, `[user] but not suspended`.
+    if head in ('module', 'extend'):
+        raise ValueError(f'OpenFGA modular models (schema 1.2) are not supported: {line!r}')
+    # REFUSED SHAPE (TK137 S9): a `condition name(param: type) {` block head, and with it the
+    # whole OpenFGA condition block. WHY: a condition gates a tuple on request context that
+    # neither backend evaluates, so skipping the block would grant what the schema says is
+    # conditional; production refuses it naming the feature. INSTEAD: none -- conditions
+    # are not implemented; model a condition that is a stored fact as a relation,
+    # `define viewer: [user] but not suspended`.
+    if head == 'condition':
+        raise ValueError(f'OpenFGA conditions are not supported: {line!r}')
+
+
+def _validate_restriction_types_declared(ast, declared) -> None:
+    """Independent twin of `src/zanzibar/schema/parser.py::_validate_restriction_types_declared`
+    (TK137 S8, 2026-10-14), checked against the final declared set (forward references
+    stay legal)."""
+    for (typ, rel), expr in ast.items():
+        for node in _oracle_nodes(expr):
+            if not isinstance(node, ODirect):
+                continue
+            for (rtype, _pred, _wild) in node.restrictions:
+                # REFUSED SHAPE (TK137 S8): a restriction to a type no `type` line declares
+                # (`[usr]`, `[usr:*]`). WHY: a typo granted access (a `usr:x` write was
+                # admitted); production refuses it, and so does OpenFGA. INSTEAD: declare
+                # `type usr`, or fix the spelling.
+                if rtype not in declared:
+                    raise ValueError(f'{typ}#{rel}: restriction to undeclared type {rtype!r}')
 
 
 def _validate_declares_a_type(seen_types: set[str], ast: dict) -> None:

@@ -104,7 +104,14 @@ HEADER = 'REFUSED SHAPE'
 #: `json_frontend.py::_validate_json_object` / `_array` / `_field` blocks): 44 / 18 / 1.
 #: Re-measured 2026-10-13d after TK140 (+1 engine.py `_reject_unlogged_write`, +1 new
 #: entry store.py `_reject_unlogged_adoption`): 44 / 18 / 2 / 1.
-MIN_HEADERS = {LIB: 44, 'tests/oracle.py': 18, 'src/zanzibar/setengine/engine.py': 2,
+#: Re-measured 2026-10-14 after TK137 (+6 schema package, all in parser.py:
+#: `_reject_unparenthesised_but_not`, `_reject_conditional_restriction`, the two
+#: `_validate_header_line` blocks, `_reject_unsupported_openfga_line`,
+#: `_validate_restriction_types_declared`; +6 oracle: the same six twins): 50 / 24 / 2 / 1.
+#: Re-measured 2026-10-14 after the TK137 review fix (+1 oracle: the ``condition`` raise in
+#: `oracle.py::_reject_unsupported_openfga_line` got its own block instead of
+#: ``WHY/INSTEAD: see above``): 50 / 25 / 2 / 1.
+MIN_HEADERS = {LIB: 50, 'tests/oracle.py': 25, 'src/zanzibar/setengine/engine.py': 2,
                'src/zanzibar/connectedstore/store.py': 1}
 #: In-scope raises the scope rule must keep seeing (anti-vacuity, replacing the per-file
 #: "no in-scope raise found" assert, which cannot hold per SUBMODULE). Measured 2026-10-06
@@ -112,8 +119,8 @@ MIN_HEADERS = {LIB: 44, 'tests/oracle.py': 18, 'src/zanzibar/setengine/engine.py
 #: json_frontend 3, parser 9); the oracle keeps its old per-file >= 1. Re-measured
 #: 2026-10-08 after TK124: 27 (json_frontend 4, parser 10). Re-measured 2026-10-08 after
 #: the TK127 follow-up: 29 (json_frontend 5, parser 11). Re-measured 2026-10-13 after
-#: TK134: 33 (json_frontend 9).
-MIN_IN_SCOPE_RAISES = {LIB: 33, 'tests/oracle.py': 1}
+#: TK134: 33 (json_frontend 9). Re-measured 2026-10-14 after TK137: 39 (parser 17).
+MIN_IN_SCOPE_RAISES = {LIB: 39, 'tests/oracle.py': 1}
 
 
 def _group(rel: str) -> str:

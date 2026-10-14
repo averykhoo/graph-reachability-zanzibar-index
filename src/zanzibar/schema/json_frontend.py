@@ -3,7 +3,7 @@
 Part of `zanzibar.schema`; split out of the single-file module by TK120 (2026-10-06).
 """
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union
-from .parser import _validate_ast_consistency, _validate_ast_references, _validate_declared_name, _validate_stratified_negation, _validate_tuplesets_direct, parse_schema_ast
+from .parser import _validate_ast_consistency, _validate_ast_references, _validate_declared_name, _validate_restriction_types_declared, _validate_stratified_negation, _validate_tuplesets_direct, parse_schema_ast
 from .unparse import unparse_schema_ast
 
 
@@ -102,6 +102,9 @@ def parse_openfga_json(model) -> SchemaAST:
     _validate_json_declares_a_relation(ast)
     _validate_ast_references(ast)
     _validate_ast_consistency(ast)
+    # TK137 S8: a restriction type no type_definitions entry declares. BEFORE the round
+    # trip, so a JSON typo gets the named message, not 'its DSL rendering ...'.
+    _validate_restriction_types_declared(ast, frozenset(seen_types))
     _validate_tuplesets_direct(ast)
     _validate_stratified_negation(ast)
     _validate_json_round_trip(ast)
@@ -237,7 +240,13 @@ def _validate_json_round_trip(ast: SchemaAST) -> None:
     unchanged, so the DSL `openfga_json_to_dsl` persists IS the schema the JSON declared
     (`TK115`). The field-level checks cover declared names; this closes the class for every
     other name, e.g. a restriction type that carries a newline or a comma. Map:
-    `docs/tk115-json-front-end-fidelity-2026-10-04.md`."""
+    `docs/tk115-json-front-end-fidelity-2026-10-04.md`.
+
+    Since `TK137` (2026-10-14) every such restriction type is refused EARLIER, by
+    `parser.py::_validate_restriction_types_declared` (a malformed type string is never a
+    declared type), so no known JSON input reaches either branch below. The guard stays as
+    defence in depth for the class; its branches are pinned by direct calls in
+    `tests/test_tk137_openfga_dsl_refusals.py`."""
     try:
         back = parse_schema_ast(unparse_schema_ast(ast))
     except (ValueError, TypeError) as e:

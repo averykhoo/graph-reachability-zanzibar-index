@@ -2,7 +2,7 @@
 
 Part of `zanzibar.schema`; split out of the single-file module by TK120 (2026-10-06).
 """
-from .errors import IDENTIFIER_CHARSET, is_valid_identifier
+from .errors import IDENTIFIER_CHARSET, ShapeRefusedSinceTK137, is_valid_identifier
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _RESERVED, _directs_only, _iter_directs, _iter_ttus
 from .rules import parse_relation_rule
 
@@ -48,12 +48,19 @@ def _tokenize_relation_body(body: str) -> list[tuple[str, str]]:
 
 
 class _RelationParser:
-    """Recursive-descent parser for one relation body (grammar in spec §2.2):
+    """Recursive-descent parser for one relation body (grammar in spec §2.2, as corrected
+    by `TK137` on 2026-10-14):
 
-        expr    := chain ('but not' chain)?     # at most one exclusion, loosest binding
+        expr    := unit 'but not' unit | chain  # operands of 'but not' are UNITS
         chain   := unit (OP unit)*              # OP homogeneous: all 'or' or all 'and'
         unit    := '(' expr ')' | leaf
         leaf    := type-restriction-list | REL | REL 'from' REL
+
+    Until `TK137` the first rule was ``chain ('but not' chain)?`` ("loosest binding"), so
+    ``a but not b or c`` meant ``a but not (b or c)`` although it reads as
+    ``(a but not b) or c``. OpenFGA's grammar refuses ``but not`` beside another operator
+    at one level (`OpenFGAParser.g4::relationDefPartials`), and so does this parser now
+    (`_reject_unparenthesised_but_not`).
     """
 
     def __init__(self, tokens: list[tuple[str, str]], relation: str):
@@ -74,10 +81,22 @@ class _RelationParser:
         return expr
 
     def _parse_expr(self) -> Expr:
-        base = self._parse_chain()
+        first = self._parse_unit()
         if self._match_but_not():
-            return Exclusion(base, self._parse_chain())
-        return base
+            subtract = self._parse_unit()
+            if self._at_operator():
+                _reject_unparenthesised_but_not(self.relation)
+            return Exclusion(first, subtract)
+        expr = self._parse_chain(first)
+        if self._at_operator():
+            _reject_unparenthesised_but_not(self.relation)
+        return expr
+
+    def _at_operator(self) -> bool:
+        """Whether the next tokens are a binary operator: ``or``, ``and`` or ``but not``."""
+        if self._peek() in (('word', 'or'), ('word', 'and')):
+            return True
+        return self.tokens[self.pos:self.pos + 2] == [('word', 'but'), ('word', 'not')]
 
     def _match_but_not(self) -> bool:
         if (self.pos + 1 < len(self.tokens)
@@ -87,8 +106,8 @@ class _RelationParser:
             return True
         return False
 
-    def _parse_chain(self) -> Expr:
-        children = [self._parse_unit()]
+    def _parse_chain(self, first: Expr) -> Expr:
+        children = [first]
         op: str | None = None
         while True:
             kind, text = self._peek()
@@ -128,6 +147,7 @@ class _RelationParser:
         kind, text = self._peek()
         if kind == 'bracket':
             self.pos += 1
+            _reject_conditional_restriction(self.relation, text)
             direct_assignments, _ = parse_relation_rule(text)
             return Direct(tuple(
                 Restriction(type=t, predicate=('...' if p is None else p), wildcard=(nm == '*'))
@@ -146,6 +166,118 @@ class _RelationParser:
                 return TTU(target_rel=text, tupleset_rel=t3)
             return Computed(text)
         raise ValueError(f"relation {self.relation!r}: unexpected end of expression")
+
+
+def _reject_unparenthesised_but_not(relation: str) -> None:
+    """Called by `_RelationParser._parse_expr` when ``but not`` shares a parenthesis level
+    with another operator (`TK137` S7, 2026-10-14). The restructured grammar would refuse the
+    text anyway (a generic "unexpected token"); this supplies the message. Oracle twin:
+    `tests/oracle.py::_reject_unparenthesised_but_not`."""
+    # REFUSED SHAPE (TK137 S7): ``but not`` beside ``or`` / ``and`` / a second ``but not`` at
+    # one level -- ``[user] or a but not b``, ``a but not b or c``, ``a and b but not c``,
+    # ``a but not b and c``, ``a but not b but not c``.
+    # WHY: until TK137 ``but not`` bound loosest on BOTH sides, so ``a but not b or c`` meant
+    # ``a but not (b or c)`` while it reads as ``(a but not b) or c``; the two readings grant
+    # different subjects (anyone in ``c`` but not in ``a``). OpenFGA's grammar refuses the
+    # shape (`OpenFGAParser.g4::relationDefPartials`: one level holds only ``or``s, only
+    # ``and``s, or exactly one ``but not``).
+    # INSTEAD: parenthesise the intended reading -- ``(a or b) but not c``,
+    # ``a but not (b or c)``, ``(a but not b) or c``.
+    raise ShapeRefusedSinceTK137(
+        f"relation {relation!r}: 'but not' may not share a level with 'or', 'and' or "
+        f"another 'but not'; parenthesise the intended reading, e.g. '(a or b) but not c' "
+        f"or 'a but not (b or c)'",
+        instead=("parenthesise each side of 'but not' as the whole 'or' / 'and' chain "
+                 "beside it, which is how 0.0.4 read it: 'a or b but not c or d' was served "
+                 "as '(a or b) but not (c or d)', so write exactly that"))
+
+
+def _reject_conditional_restriction(relation: str, bracket: str) -> None:
+    """Name OpenFGA's conditional restriction (``[user with cond]``) when a bracket holds
+    one (`TK137` S9, 2026-10-14). It was refused before, as ``invalid subject type in
+    restriction 'user with c'``, which did not say why. Oracle twin:
+    `tests/oracle.py::_reject_conditional_restriction`."""
+    for part in bracket.strip()[1:-1].split(','):
+        words = part.split()
+        # REFUSED SHAPE (TK137 S9): a conditional type restriction, ``[user with in_office]``.
+        # WHY: neither backend evaluates a condition, and dropping one would make the
+        # restriction unconditional -- wider access than the model says (the JSON front end
+        # refuses the same thing, `json_frontend.py::_json_restrictions`).
+        # INSTEAD: none -- conditions are unsupported. Where the condition is a stored fact,
+        # model it as a relation: ``define viewer: [user] but not suspended``.
+        if len(words) >= 2 and words[1] == 'with':
+            raise ValueError(
+                f"relation {relation!r}: conditional type restriction {part.strip()!r}: "
+                f"OpenFGA conditions ('with') are not supported")
+
+
+def _validate_header_line(words: list[str], line: str) -> None:
+    """A ``model``, ``schema`` or ``relations`` line (`TK137` H1 / H2, 2026-10-14). Until
+    then `_parse_schema_ast_unchecked` skipped such a line on its FIRST word, so the rest of
+    it was never read. Oracle twin: `tests/oracle.py::_validate_header_line`.
+
+    Still accepted, deliberately (decided on the `TK137` row): no header at all, a header
+    that is only ``model`` or only ``schema 1.1``, a header after a ``type`` block, a
+    ``relations`` line before any ``type``, and a ``define`` with no ``relations`` line
+    above it. None of these changes what the schema means."""
+    head = words[0]
+    # REFUSED SHAPE (TK137 H1): a ``schema`` line naming any version but ``1.1`` --
+    # ``schema 1.2``, ``schema 9.9``, ``schema 1.0``, ``schema abc``, a bare ``schema``.
+    # WHY: only schema 1.1 is implemented, and the version used to be IGNORED silently, so a
+    # ``schema 1.2`` model (OpenFGA's modular models) parsed with whatever meaning 1.1 gives
+    # it. The JSON front end already refused every ``schema_version`` but ``'1.1'``. This is
+    # stricter than OpenFGA, which also accepts ``1.2``.
+    # INSTEAD: ``schema 1.1``. Schema 1.2's additions (``module``, ``extend type``) are not
+    # supported.
+    if head == 'schema' and (len(words) < 2 or words[1] != '1.1'):
+        raise ShapeRefusedSinceTK137(
+            f"unsupported schema version line {line!r}: only 'schema 1.1' is implemented "
+            f"(schema 1.2 modules and 'extend type' are not supported)",
+            instead=("change the line to 'schema 1.1', or delete it (the header is "
+                     "optional); 0.0.4 ignored the version and read the schema as 1.1"))
+    # REFUSED SHAPE (TK137 H2): a ``model``, ``schema 1.1`` or ``relations`` line with more
+    # words on it -- ``relations define viewer: [user]``, ``model x``, ``relations # c``,
+    # ``schema 1.1 # c``.
+    # WHY: such a line was skipped on its first word, so the rest was silently DROPPED:
+    # ``relations define viewer: [user]`` parsed and ``viewer`` did not exist (the blind-audit
+    # S-3 class). OpenFGA's grammar refuses extra words on these lines too.
+    # INSTEAD: one keyword per line, each ``define`` on its own line under a bare
+    # ``relations``, and a comment on its own line (``# people``, then ``relations``).
+    if len(words) > (2 if head == 'schema' else 1):
+        raise ShapeRefusedSinceTK137(
+            f"{head!r} line with extra words {line!r}: a 'model', 'schema 1.1' or "
+            f"'relations' line must stand alone (put each define, and each comment, on its "
+            f"own line)",
+            instead=("delete the extra words after the keyword: 0.0.4 ignored them, so "
+                     "deleting keeps the meaning the store was serving (a define written on "
+                     "that line never existed; add it on its own line only if you mean to "
+                     "grant it)"))
+
+
+#: Line heads of OpenFGA features this parser does not implement, with the name to give
+#: in the refusal (`TK137` S9).
+_UNSUPPORTED_OPENFGA_HEADS = {
+    'module': "OpenFGA modular models ('module', schema 1.2)",
+    'extend': "OpenFGA modular models ('extend type', schema 1.2)",
+    'condition': "OpenFGA conditions ('condition' blocks)",
+}
+
+
+def _reject_unsupported_openfga_line(head: str, line: str) -> None:
+    """Name the OpenFGA feature a ``module`` / ``extend type`` / ``condition`` line uses
+    (`TK137` S9, 2026-10-14). These lines were refused before, as ``unrecognized schema
+    line``. Oracle twin: `tests/oracle.py::_reject_unsupported_openfga_line`."""
+    # REFUSED SHAPE (TK137 S9): ``module core``, ``extend type doc``,
+    # ``condition in_office(ip: ipaddress) {``.
+    # WHY: neither feature is implemented. Modules would merge type definitions from several
+    # files, and a condition would gate tuples on request context that neither backend
+    # evaluates; skipping either would run a schema other than the one written.
+    # INSTEAD: none -- write one self-contained schema 1.1 file (move the ``extend type``
+    # relations into the ``type`` block). Model a condition that is a stored fact as a
+    # relation: ``define viewer: [user] but not suspended``.
+    if head in _UNSUPPORTED_OPENFGA_HEADS:
+        raise ValueError(
+            f"{_UNSUPPORTED_OPENFGA_HEADS[head]} are not supported: {line!r}")
 
 
 def _validate_declared_name(kind: str, name: str) -> None:
@@ -172,23 +304,38 @@ def parse_schema_ast(schema: str) -> SchemaAST:
     """Parse an OpenFGA-style DSL string into ``{(object_type, relation): Expr}`` (spec §2.2).
 
     The language is a subset of the OpenFGA schema 1.1 DSL (no conditions, modules or
-    ``extend type``) plus this library's wildcard extensions (``UnprovenExtensionWarning``).
+    ``extend type``) plus this library's wildcard extensions (``UnprovenExtensionWarning``)
+    and a few syntax extensions kept on purpose (`TK137`, 2026-10-14): several ``[...]``
+    blocks in one definition, a ``[...]`` block that is not the first operand, no header, and
+    a ``define`` with no ``relations`` line. Since `TK137` the header must be ``schema 1.1``,
+    header lines stand alone, ``but not`` may not share a level with another operator, and
+    every restriction type must be declared (`_validate_restriction_types_declared`).
 
     Succeeds for well-formed, SELF-CONSISTENT syntax (`_validate_ast_consistency`),
     including boolean (``and`` / ``but not``) definitions -- refusing booleans is
     compilation's job, not parsing's.
     """
-    ast = _parse_schema_ast_unchecked(schema)
+    ast, declared_types = _parse_schema_ast_declared(schema)
     _validate_ast_consistency(ast)
+    _validate_restriction_types_declared(ast, declared_types)
     _validate_tuplesets_direct(ast)
     _validate_stratified_negation(ast)
     return ast
 
 
 def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
-    """`parse_schema_ast` WITHOUT the self-consistency refusal (every other refusal
-    stays). Only for the non-raising scope reports, which must describe a dangling or
-    cyclic schema rather than raise on it (`w4_fragment_report`, `graph_admission_report`)."""
+    """`parse_schema_ast` WITHOUT the self-consistency refusals (ASK-1, and `TK137`'s
+    undeclared restriction type; every other refusal stays). Only for the non-raising scope
+    reports, which must describe a dangling or cyclic schema rather than raise on it
+    (`w4_fragment_report`, `graph_admission_report`)."""
+    return _parse_schema_ast_declared(schema)[0]
+
+
+def _parse_schema_ast_declared(schema: str) -> tuple[SchemaAST, frozenset[str]]:
+    """The parse itself: the AST plus every type a ``type`` line declared. The second value
+    exists because a relation-less ``type user`` leaves no trace in a `SchemaAST`, so only
+    the text-level parse can tell `_validate_restriction_types_declared` it was declared
+    (`TK137` S8)."""
     ast: SchemaAST = {}
     current_type: str | None = None
     seen_types: set[str] = set()
@@ -200,6 +347,7 @@ def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
         words = line.split()
         head = words[0]
         if head in ('model', 'schema', 'relations'):
+            _validate_header_line(words, line)
             continue
         if head == 'type':
             if len(words) != 2:
@@ -261,13 +409,49 @@ def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
             tokens = _tokenize_relation_body(body.strip())
             ast[(current_type, relation_name)] = _RelationParser(tokens, relation_name).parse()
         else:
+            _reject_unsupported_openfga_line(head, line)
             # silently dropping unrecognized lines lost or misattributed whole
             # relation definitions (blind-audit S-3)
             raise ValueError(f'unrecognized schema line: {line!r}')
 
     _validate_declares_a_type(seen_types, ast)
     _validate_ast_references(ast)
-    return ast
+    return ast, frozenset(seen_types)
+
+
+def _validate_restriction_types_declared(ast: SchemaAST, declared_types) -> None:
+    """Every type a restriction names must be declared by a ``type`` line (`TK137` S8,
+    2026-10-14), checked against the FINAL declared set, so a ``define`` may name a type
+    declared further down. Shared by the DSL front end (`parse_schema_ast`) and the JSON
+    front end (`json_frontend.py::parse_openfga_json`); its independent twin is
+    `tests/oracle.py::_validate_restriction_types_declared`.
+
+    It extends ASK-1 (`_validate_ast_consistency`), which checks a userset restriction's
+    RELATION but could not check a bare one: a relation-less ``type`` line leaves no trace in
+    a `SchemaAST`, so `unparse_schema_ast` could not round-trip such a schema until it
+    declared every referenced type itself (`TK137` step 2). A userset restriction to an
+    undeclared type never reaches this check: ASK-1 refuses it first."""
+    for (object_type, relation), expr in ast.items():
+        for d in _iter_directs(expr):
+            for r in d.restrictions:
+                # REFUSED SHAPE (TK137 S8): a restriction naming a type no ``type`` line
+                # declares -- ``define viewer: [usr]``, ``[usr:*]``, ``[usr#...]`` with no
+                # ``type usr``.
+                # WHY: a typo here granted access. Both backends then ADMITTED a ``usr:x``
+                # write and ``check`` said True (0.0.4 install trial, p16), because write
+                # admission checks a write against the schema, not the schema against
+                # itself. OpenFGA refuses it (`typesystem.go::validateTypeRestrictions`).
+                # INSTEAD: declare the type (``type usr``, anywhere in the schema), or fix
+                # the spelling in the restriction (``[user]``).
+                if r.type not in declared_types:
+                    star = ':*' if r.wildcard else ''
+                    raise ShapeRefusedSinceTK137(
+                        f'{object_type}#{relation}: restriction [{r.type}{star}] names an '
+                        f'undeclared type {r.type!r}; declare it (type {r.type}) or fix the '
+                        f'spelling',
+                        instead=(f"add a 'type {r.type}' line, which keeps the meaning the "
+                                 f"store was serving (0.0.4 admitted {r.type}: writes there); "
+                                 f"fixing the spelling instead changes who is granted"))
 
 
 def _validate_declares_a_type(seen_types: set[str], ast: SchemaAST) -> None:
@@ -373,8 +557,9 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
     * A TTU target must be declared on at least one type the tupleset admits, or on any
       type when the tupleset admits none.
     * A userset restriction ``[group#member]`` must name a declared relation. Bare subject
-      types (``[user]``) are NOT checked, because a relation-less ``type`` line leaves no
-      trace in a `SchemaAST`.
+      types (``[user]``) are NOT checked here, because a relation-less ``type`` line leaves
+      no trace in a `SchemaAST`; `_validate_restriction_types_declared` checks them against
+      the declared types the text-level parse returns (`TK137` S8).
     * No cycle of computed / TTU-tupleset references, through any operator. Recursion
       through stored tuples (nested groups ``[group#member]``, folders ``x from parent``,
       OpenFGA's self-referential boolean flag) makes no such edge and stays legal. A

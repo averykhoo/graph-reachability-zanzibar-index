@@ -201,6 +201,13 @@ for T0/conformance): `expr := chain ('but not' chain)? ; chain := unit (OP unit)
 schema error (`tests/oracle.py::_Parser._chain`). At most one `but not`, loosest binding
 (`::_Parser._expr`).
 
+> **Correction 2026-10-14 (`TK137`).** The first rule is now `expr := unit 'but not' unit |
+> chain`: both operands of `but not` are units, and `but not` beside `or` / `and` / a second
+> `but not` at one level is a schema error in both parsers (`tests/oracle.py::_reject_unparenthesised_but_not`,
+> product `src/zanzibar/schema/parser.py::_reject_unparenthesised_but_not`). "Loosest binding"
+> is retired; the two parsers still implement one grammar. No Lean change: Lean receives
+> ASTs from the conformance encoder, never DSL text.
+
 ### 4.2 Well-formedness `WF S` (with citations)
 
 Enforced in `src/zanzibar/schema/` and mirrored by the oracle parser:

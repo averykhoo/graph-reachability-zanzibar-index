@@ -10,6 +10,20 @@ session's diff.
 Provenance labels: **READ** (first-hand, this session), **REASONED**, **MEASURED** (a run
 whose output is quoted), **UNVERIFIED**. No subagent was used.
 
+## Corrections (newest first)
+
+- **2026-10-14, extended by `TK137`.** The § 2 bullet "Bare subject types (`[user]` with no
+  `type user`)" under "Not adopted" is no longer true of the code: both checked parsers and
+  the JSON front end now refuse a restriction to an undeclared type
+  (`src/zanzibar/schema/parser.py::_validate_restriction_types_declared`, oracle twin
+  `tests/oracle.py::_validate_restriction_types_declared`). The technical obstacle that bullet
+  names is gone: `unparse_schema_ast` now declares every type it references, and the
+  declared types come from the text-level parse, not the AST. This was a FRESH decision on
+  `TK137`, not a completion of this one: the bullet's other reason ("not a dangling
+  *relation*, and neither proof field depends on it") still describes why ASK-1 left it out.
+  The case for it was the 0.0.4 install trial, where a typo `[usr]` admitted a `usr:x` write.
+  Map: `docs/tk137-dsl-openfga-refusals-2026-10-14.md`.
+
 ## § 0 The decision (the user's, 2026-09-26)
 
 `ASK-1` asked whether the compiler should refuse a dangling reference, as OpenFGA does. The

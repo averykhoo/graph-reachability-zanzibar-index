@@ -187,8 +187,13 @@ def test_rejects_wildcard_that_is_not_an_empty_object(value):
 def test_wildcard_empty_object_and_null_keep_their_canonical_meaning():
     """V10 / V11, the positive half: the refusal above must not eat canonical OpenFGA."""
     star = parse_openfga_json(_with_restriction({'type': 'user', 'wildcard': {}}))
-    assert openfga_json_to_dsl(_with_restriction({'type': 'user', 'wildcard': {}})) \
-        .splitlines()[2].strip() == 'define viewer: [user:*]'
+    # A search, not a line index: since TK137 (2026-10-14) the rendering declares the
+    # relationless `type user` itself, FIRST, so the define line moved.
+    dsl_lines = [line.strip() for line in
+                 openfga_json_to_dsl(_with_restriction({'type': 'user', 'wildcard': {}}))
+                 .splitlines()]
+    assert [line for line in dsl_lines if line.startswith('define viewer:')] \
+        == ['define viewer: [user:*]']
     assert star[('doc', 'viewer')].restrictions[0].wildcard is True
     plain = parse_openfga_json(_with_restriction({'type': 'user', 'wildcard': None}))
     assert plain[('doc', 'viewer')].restrictions[0].wildcard is False
@@ -219,17 +224,24 @@ def test_rejects_duplicate_json_keys_at_any_depth(text):
 
 
 @pytest.mark.parametrize('subject_type, shape', [
-    ('user]' + chr(10) + '    define secret: [user', 'parses to a different schema'),   # V9: adds a key
-    ('user,group', re.escape("parses to a different schema (added [], lost [], changed "
-                             "[('doc', 'viewer')])")),   # SAME keys, another expression
-    ('us er', 'does not parse'),          # V14: the DSL parser refuses the rendering
+    ('user]' + chr(10) + '    define secret: [user', 'user]'),   # V9: its rendering added a key
+    ('user,group', 'user,group'),         # SAME keys, another expression
+    ('us er', 'us er'),                   # V14: a rendering the DSL parser refuses
 ], ids=['V9-injects-relation', 'comma-splits-restriction', 'V14-unparseable'])
 def test_rejects_model_whose_dsl_rendering_is_a_different_schema(subject_type, shape):
-    """A bare restriction type is not a declared name (P23 does not see it) and ASK-1 does
-    not check bare restriction types, so before TK115 V9 rendered a second relation
-    ``secret`` that a ConnectedStore would then admit writes on. The comma case keeps the
-    key set equal, so it pins that the comparison is over EXPRESSIONS, not keys."""
-    with pytest.raises(ValueError, match=f'OpenFGA JSON: its DSL rendering {shape}'):
+    """A bare restriction type is not a declared name (P23 does not see it), so before TK115
+    V9 rendered a second relation ``secret`` that a ConnectedStore would then admit writes on.
+
+    Since TK137 (2026-10-14) all three are refused EARLIER, by the undeclared-restriction-type
+    check (S8, `parser.py::_validate_restriction_types_declared`), which `parse_openfga_json`
+    runs before the round trip: a malformed restriction-type string is never a declared type.
+    Until then they asserted the round-trip messages (``parses to a different schema`` for V9
+    and the comma case, ``does not parse`` for V14). No JSON input reaches the round-trip
+    guard's branches any more, so its live witnesses are direct calls in
+    `tests/test_tk137_openfga_dsl_refusals.py` (`test_round_trip_guard_keeps_a_live_witness`,
+    `test_parse_openfga_json_still_calls_the_round_trip_guard`)."""
+    with pytest.raises(ValueError, match='(?s)doc#viewer: restriction ' + re.escape(f'[{shape}')
+                       + '.*names an undeclared type'):
         parse_openfga_json(_with_restriction({'type': subject_type}))
 
 

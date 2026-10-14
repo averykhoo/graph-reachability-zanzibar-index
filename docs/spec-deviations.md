@@ -29,6 +29,39 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-10-14 — `TK137`: the DSL refuses four shapes OpenFGA refuses, and keeps six OpenFGA-DSL extensions on purpose
+
+**What changed.** Both checked parsers (`src/zanzibar/schema/parser.py::parse_schema_ast`, oracle
+twin `tests/oracle.py::parse_schema_ast`) now refuse, each with a REFUSED SHAPE block: a
+`schema` line naming any version but `1.1` (H1; it was ignored, and this is stricter than
+OpenFGA, which also accepts `1.2`); extra words on a `model` / `schema 1.1` / `relations`
+line, a trailing comment included (H2; `relations define viewer: [user]` silently dropped
+`viewer`); `but not` sharing a level with `or` / `and` / a second `but not` (S7; it bound
+loosest, so `a but not b or c` meant `a but not (b or c)`); and a restriction to a type no
+`type` line declares (S8, also in the JSON front end; it extends ASK-1). `module`,
+`extend type`, `condition` and `[user with c]` were already refused and now say which OpenFGA
+feature they are (S9). `set-engine-spec.md` §2.2 and `formal/SEMANTICS.md` §4.1 carry dated
+grammar corrections.
+
+**Kept as extensions of OpenFGA's DSL SYNTAX (deliberate, documented in `PYPI_README.md`
+"Schema shapes"):** more than one `[...]` block in a definition (`[user] or [doc]`, S5); a
+`[...]` block that is not the leftmost operand (`a or [user]`, `a but not [user]`, S6); no
+`model` / `schema 1.1` header (H3); a `define` with no `relations` line since its `type` (H4);
+a `relations` line before any `type` (X1); a header after a `type` block (X2). S5 and S6 are
+legal OpenFGA MODELS in JSON form (`typesystem.go::isUsersetRewriteValid` puts no positional
+rule on `this`), the unparser emits them for such JSON, and the AST generators produce them
+constantly; refusing them would make the JSON front end refuse valid OpenFGA JSON. H3, H4, X1
+and X2 change no meaning. Names OpenFGA's lexer refuses (`self`, `this`, a leading digit,
+`@+=`) and `[T#...]` stay accepted as before (`P23`). Map and census: the `TK137`
+ACTIVE-PLAN doc (`python scripts/task.py show TK137` names it); sabotage record:
+`tests/test_tk137_openfga_dsl_refusals.py`.
+
+**Breaking, with no migration path:** a store persisted under 0.0.4 or earlier whose schema
+text uses H1 / H2 / S7 / S8 refuses to open, because opening re-parses the persisted text, and
+no public API drops a store id. `openfga_json_to_dsl` output before this change is exposed
+(it declared no relation-less type, and rendered `a or b but not c` for a JSON difference over
+a union).
+
 ## 2026-10-13d — `TK4` adjudicated, outcome (b): the §3.4 "hook" is a design note, and strict ∀⇒∃ is the mode FOR NOW
 
 Settles the open question in the `## 2026-09-10 — TK4` entry below. Decided by the

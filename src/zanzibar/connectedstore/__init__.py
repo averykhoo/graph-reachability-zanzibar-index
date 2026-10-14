@@ -7,7 +7,7 @@ inlined into the write transaction (spec §1/§4).
 """
 
 from .models import IndexCursor, SchemaRecord, TupleLog
-from .schema_io import (SchemaMismatch, ensure_schema, load_schema,
+from .schema_io import (PersistedSchemaRefused, SchemaMismatch, ensure_schema, load_schema,
                         open_graph_index, open_set_engine, save_schema)
 from .source import (StaleRead, TupleSource, UnsafeIsolationLevel, WatermarkGap,
                      assert_read_isolation, log_gap, log_rows, log_watermark)
@@ -35,6 +35,7 @@ __all__ = [
     "TupleLog",
     "IndexCursor",
     "SchemaMismatch",
+    "PersistedSchemaRefused",
     "save_schema",
     "ensure_schema",
     "load_schema",

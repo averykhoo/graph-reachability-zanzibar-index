@@ -11,6 +11,7 @@ the stored one is a loud error, never silent divergence.
 
 from __future__ import annotations
 
+import contextlib
 import json
 
 from sqlmodel import Session, select
@@ -19,12 +20,50 @@ from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
 from zanzibar.setengine import SetEngine
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import RuleSet, parse_openfga_schema, parse_schema_ast, validate_store_id
+from zanzibar.schema.errors import ShapeRefusedSinceTK137
 
 from .models import SchemaRecord
 
 
 class SchemaMismatch(ValueError):
     """An explicit schema disagrees with the store's persisted (immutable) schema."""
+
+
+class PersistedSchemaRefused(ValueError):
+    """A store's PERSISTED schema text uses a shape this version refuses, so the store
+    cannot be opened (`TK137` review challenge C10, 2026-10-14).
+
+    Every open re-parses the stored text (the compiled schema is cache), so a store saved
+    by zanzibar-index 0.0.4 or earlier with a shape `TK137` refuses stops opening. The
+    message says so, quotes the parser's refusal, and gives the rewrite that keeps the
+    meaning the store was serving, so the break reads as a version break, not corruption.
+    There is no lenient mode on purpose: schemas are write-once, and a store opened under
+    a schema the parser refuses would run text no fresh store may hold. ``store_id``,
+    ``refusal`` (the parser's ``ShapeRefusedSinceTK137``, also ``__cause__``) and
+    ``instead`` are attributes. A ``ValueError`` subclass, as the parser's refusal was."""
+
+    def __init__(self, store_id: str, refusal: ShapeRefusedSinceTK137):
+        self.store_id = store_id
+        self.refusal = refusal
+        self.instead = refusal.instead
+        super().__init__(
+            f"store {store_id!r}: its persisted schema was saved by zanzibar-index 0.0.4 "
+            f"or earlier using a shape this version refuses (TK137): {refusal}. To rewrite: "
+            f"{refusal.instead}. Schemas are write-once, so the rewritten schema needs a NEW "
+            f"store id, with this store's tuples written again (see CHANGELOG.md, TK137).")
+
+
+@contextlib.contextmanager
+def _persisted_schema_parse(store_id: str):
+    """Wrap a parse of ``store_id``'s PERSISTED text: a `TK137` refusal becomes
+    ``PersistedSchemaRefused`` (C10). Any other ``ValueError`` passes through unchanged:
+    only a TK137 shape can have been saved by an older version and be refused now, so
+    anything else is not a version break. A text the CALLER passed is never parsed under
+    this wrapper (its refusal is the caller's to fix, not a stored-store break)."""
+    try:
+        yield
+    except ShapeRefusedSinceTK137 as e:
+        raise PersistedSchemaRefused(store_id, e) from e
 
 
 def save_schema(session: Session, store_id: str, schema_text: str,
@@ -85,20 +124,24 @@ def ensure_schema(session: Session, store_id: str, schema_text: str,
     if row is None:
         return save_schema(session, store_id, schema_text, object_wildcard_shapes)
     stored_shapes = frozenset(tuple(s) for s in json.loads(row.object_wildcard_shapes))
-    if stored_shapes != object_wildcard_shapes or not _same_schema(row.schema_text, schema_text):
+    if stored_shapes != object_wildcard_shapes or not _same_schema(
+            store_id, row.schema_text, schema_text):
         raise SchemaMismatch(
             f"explicit schema for store {store_id!r} disagrees with its persisted "
             f"schema; schemas are static (write-once)")
     return row, None
 
 
-def _same_schema(stored_text: str, schema_text: str) -> bool:
+def _same_schema(store_id: str, stored_text: str, schema_text: str) -> bool:
     """True when the passed text parses to the stored text's ``SchemaAST``. Identical text
     short-circuits, so a stored schema is never re-parsed just to be reopened verbatim. A
-    passed text that does not parse raises the parser's own ``ValueError``."""
+    passed text that does not parse raises the parser's own ``ValueError``; a STORED text
+    refused since `TK137` raises ``PersistedSchemaRefused`` (C10)."""
     if stored_text == schema_text:
         return True
-    return parse_schema_ast(stored_text) == parse_schema_ast(schema_text)
+    with _persisted_schema_parse(store_id):
+        stored_ast = parse_schema_ast(stored_text)
+    return stored_ast == parse_schema_ast(schema_text)
 
 
 def open_set_engine(session: Session, store_id: str, *,
@@ -107,8 +150,9 @@ def open_set_engine(session: Session, store_id: str, *,
     """Open the set engine on a self-describing store (schema loaded from the DB).
     ``ruleset`` skips recompiling a schema the caller already compiled."""
     schema_text, shapes = load_schema(session, store_id)
-    return SetEngine(session, store_id, schema_text,
-                     object_wildcard_shapes=shapes, ops=ops, ruleset=ruleset)
+    with _persisted_schema_parse(store_id):
+        return SetEngine(session, store_id, schema_text,
+                         object_wildcard_shapes=shapes, ops=ops, ruleset=ruleset)
 
 
 def open_graph_index(session: Session, store_id: str,
@@ -119,7 +163,8 @@ def open_graph_index(session: Session, store_id: str,
     ``ruleset`` skips re-parsing a schema the caller just compiled (bootstrap reuse)."""
     if ruleset is None:
         schema_text, shapes = load_schema(session, store_id)
-        ruleset = parse_openfga_schema(schema_text, object_wildcard_shapes=shapes)
+        with _persisted_schema_parse(store_id):
+            ruleset = parse_openfga_schema(schema_text, object_wildcard_shapes=shapes)
     if create_store_row and session.get(Store, store_id) is None:
         session.add(Store(id=store_id))
         session.flush()

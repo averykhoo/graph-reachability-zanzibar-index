@@ -190,8 +190,10 @@ def test_all_folders_grant_ghost_folder_probe3():
 
 def test_parse_schema_classification():
     # `group#member` and `parent` are declared since ASK-1 (2026-09-26): the parser
-    # refuses a dangling reference.
+    # refuses a dangling reference. `type user` is declared since TK137 S8 (2026-10-14):
+    # a restriction to an undeclared type is refused too.
     rels = parse_schema('''
+    type user
     type group
       relations
         define member: [user]
