@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: ea8db643136e
 created: 2026-08-31b
-moved: 2026-10-04g
-updated: 2026-10-04g
+moved: 2026-10-13d
+updated: 2026-10-13d
 closed:
 ---
 
@@ -65,3 +65,7 @@ Half-absorbed by DW-1 (2026-09-23d). A fourth zcli mode now EXISTS: mode=fragmen
 ### 2026-10-04g
 
 Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): NEARLY CLOSABLE, size now S. The channel exists: Cli.lean::fragmentJson emits an admission object incl. noLeafSubjects (AdmissionDecide.lean admNoLeafSubjectsB, from TK104), and formal/conformance/test_conformance_fragment.py::test_lean_admission_verdict_matches_the_prediction compares it to Python. Residual: tests/test_leaf_namespace_correspondence.py still says zcli exposes exactly three modes and is still a hand mirror. Re-point that test at the Lean verdict, then close.
+
+### 2026-10-13d
+
+Sprint re-rank 2026-10-13d (user-approved in chat): stays LATER, first in line after HS-5 when a NEXT slot frees. TK3 gave its slot to TK123 (user put the rename in NEXT); P21 gave its slot to TK138.

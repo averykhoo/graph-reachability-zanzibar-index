@@ -345,8 +345,9 @@ Module map and pointers: `docs/architecture/overview.md`.
     refuse with `IndexStalled` (lookups) — an availability loss, not a stale ALLOW.
   * `zanzibar.graphindex.outbox.prune_outbox` — manual retention, never auto-called; it keeps
     the head row so SQLite cannot recycle outbox ids under a held cursor.
-  * `SetEngine.log_governed` — set by `TupleSource`; a direct `add_tuple` on a logged store
-    raises `UnloggedWriteRefused` instead of silently diverging the source from the index.
+  * `SetEngine.log_governed` — set by `TupleSource`, or latched when the id has a
+    `SchemaRecord` (`TK140`); a direct write on a logged store raises
+    `UnloggedWriteRefused` instead of silently diverging the source from the index.
 - **Supported backends: SQLite (dev/test) and PostgreSQL (the server). MySQL is NOT
   supported** — don't reason about it, and don't leave InnoDB facts in comments (one was half
   the justification for a live fail-open, `docs/spec-deviations.md` 2026-07-27). **`READ

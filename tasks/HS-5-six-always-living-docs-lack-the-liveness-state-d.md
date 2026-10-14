@@ -2,7 +2,7 @@
 id: HS-5
 title: always-living docs declare no liveness state; enumeration+method now in docs/README.md sec 2
 brief:
-pri: NEXT
+pri: LATER
 size: S
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [docs]
 source: board
 source_hash: 31c0d00522ce
 created: 2026-08-20b
-moved: 2026-10-13c
-updated: 2026-10-13c
+moved: 2026-10-13d
+updated: 2026-10-13d
 closed:
 ---
 
@@ -62,3 +62,7 @@ SIZE: M, not S. SINGLE NEXT ACTION: freeze the ACTIVE-PLAN docs in (c) whose row
 ### 2026-10-13c
 
 Bumped NOW -> NEXT by the user (2026-10-13c): TK141 (verify.sh start banner) goes first next session, then this.
+
+### 2026-10-13d
+
+Sprint re-rank 2026-10-13d (user decision in chat): NEXT -> LATER, top of LATER. TK142 (an assurance hole: the broad lookup gates stay green under the TK139 regression) took NOW, and NEXT is full (TK138, TK123, TK137, TK132, TK119). Pick this up first when a NEXT slot frees.

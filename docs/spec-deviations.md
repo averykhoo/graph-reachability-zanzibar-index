@@ -29,6 +29,32 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-10-13d — `TK4` adjudicated, outcome (b): the §3.4 "hook" is a design note, and strict ∀⇒∃ is the mode FOR NOW
+
+Settles the open question in the `## 2026-09-10 — TK4` entry below. Decided by the
+session under `CLAUDE.md` "Who decides" and agreed by the user in chat, with a caveat
+quoted verbatim: *"I just don't want a ruling that we'll be strict only forever, but I
+think it's the reasonable choice for now."*
+
+**Outcome (b): reword, do not build.** `docs/specs/wildcard-materialization-spec.md` §3.4
+and §10 now carry dated corrections (the original sentences are kept): strict ∀⇒∃ is the
+current mode, not a permanent ruling, and the "hook" is the documented recipe — a single
+`w_all(S) → w_any(S)` edge per shape for the lenient/vacuous reading — not a code flag.
+**Why not (a), the flag.** A flag that only the graph index honours would be unexercised,
+unproven config surface, against the current goal (make the assurance surface honest, not
+wider). It would also be a divergence switch: the set engine (`src/zanzibar/setengine/`),
+the oracle (`tests/oracle.py::Oracle.check._member_of_granted`) and the Lean model
+(`Spec/Semantics.lean::memberOfGranted`, `formal/CORRESPONDENCE.md`) all pin strict ∀⇒∃,
+so turning it on would make the backends disagree. A real lenient mode is one change to
+all of them together, which is the condition the corrections now state. §10 already listed
+the mode as a non-goal, "hook only".
+**Still true, unchanged:** no lenient code exists. The user-facing behaviour is now stated
+in `README.md` and `PYPI_README.md` with a zero-folders example (`alice viewer folder:*`,
+`folder:* parent doc:1`, `viewer from parent`: no folder stored means alice cannot view
+`doc:1`), probed 2026-10-13d on the oracle, a standalone `SetEngine` and a `ConnectedStore`
+(its graph index and its set engine): all False with zero folders, all True once
+`folder:f1` exists.
+
 ## 2026-10-08 — `TK126`: the graph's I5 exclusivity checks are keyed on `(type, relation)`, not on the relation NAME
 
 **What the spec says.** Boolean spec §3.3 (exclusivity, compile-time third): no plain

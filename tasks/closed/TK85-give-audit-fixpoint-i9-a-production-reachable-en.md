@@ -11,9 +11,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-09-19b
-moved: 2026-10-13
-updated: 2026-10-13
-closed:
+moved: 2026-10-13d
+updated: 2026-10-13d
+closed: 2026-10-13d
 ---
 
 FILED 2026-09-19b as the unfiled "Still owed" rider carried on the banner since the `TK74`
@@ -114,3 +114,7 @@ LANDED (lane L7, 2026-10-13): one docstring edit, no behaviour change, in `src/z
 Scope merge: TK85 absorbs TK3's "I9 is test-only" half. TK3 keeps only the cascade-precondition (A1) half. The overstated formal passages (formal/README.md residual paragraph and formal/SEMANTICS.md sec 7.7 / 11-A1) were corrected by lane L3 the same day.
 
 REOPEN TRIGGER: a consumer asks for a store audit, OR a bug of the never-scheduled class appears in the wild (zero across both TK74 rounds). On reopen, start from shape 2 with a non-mutating reconcile, and budget the Lean-correspondence work.
+
+### 2026-10-13d
+
+Closed at the user word (2026-10-13d, in chat: "you can close 85"). Its own log already records the outcome: DECISION 2026-10-13, ACCEPT THE GAP; LANDED in lane L7 as one docstring edit (processor.py::audit_fixpoint states the repairing-mutator contract). The reopen trigger in its body still stands.

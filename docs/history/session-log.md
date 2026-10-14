@@ -35,9 +35,11 @@ from here.
 
 ## 2026-10-13d — `TK141` start banner landed; `TK139` + `TK140` (the 0.0.4 trial's 3 BROKEN) fixed, unreleased
 
-rows: TK141 (closed), TK139 (closed), TK140 (closed), TK142 (new, NOW)
+rows: TK141 (closed), TK139 (closed), TK140 (closed), TK142 (new, NOW); addendum: TK85 (closed),
+TK4 (closed), TK143 (new, LATER), TK119, TK123, TK132, TK137, TK138, HS-5, TK3, P21, P7, P15, P16
+(re-ranked)
 
-`task lint: clean (13 checks, 259 task file(s) parsed), 25 warning(s)`
+`task lint: clean (13 checks, 260 task file(s) parsed), 25 warning(s)`
 
 `read: show TK141, TK139, TK140`
 
@@ -84,6 +86,32 @@ and a fix lead for its findings. The coordinator read `task.py show` for the thr
   scouting, fixes and sabotage instead of delegating further.
 - The full gate is run AFTER these records (a dedicated gate agent); nothing is committed
   by this entry's writer. Ask `python scripts/gate_status.py` for the verdict.
+
+**Addendum, same session, after commit `0a193e9` (appended, not a retro-edit; dated
+2026-10-14 wall clock).** `0a193e9` landed `TK141`, `TK139` and `TK140`. The user then
+decided in chat, and the rows were moved with `--session 2026-10-13d`:
+- Ranking: `TK142` stays NOW; NEXT is `TK119`, `TK123`, `TK132`, `TK137`, `TK138`; `HS-5`,
+  `TK3` and `P21` go to LATER; `P7`, `P15` and `P16` go to SOMEDAY (they widen the proved
+  surface, against the "honest, not wider" goal).
+- `TK85` closed (the user: "you can close 85"; its own log had ACCEPT THE GAP as landed).
+- `TK4` closed, outcome (b): strict ∀⇒∃ is the mode FOR NOW, with the user's caveat
+  verbatim, *"I just don't want a ruling that we'll be strict only forever, but I think
+  it's the reasonable choice for now."* Dated corrections in
+  `docs/specs/wildcard-materialization-spec.md` §3.4 and §10, the adjudication at the top of
+  `docs/spec-deviations.md` (§ 2026-10-13d), and a zero-folders example in `README.md`,
+  `PYPI_README.md` and CHANGELOG `[Unreleased]`. The example was probed first-hand on the
+  oracle, a standalone `SetEngine` and a `ConnectedStore` (graph index and set engine): all
+  False with no folder, all True once one exists. The first encoding tried,
+  `define viewer: [folder:*#viewer]` with `(folder, viewer)` also an object-wildcard shape,
+  is refused (`DoublyBridgedShapeError`), so the docs use the star-tupleset form
+  (`viewer from parent`, `parent: [folder, folder:*]`).
+- `TK138`: verify against a real OpenFGA server first, then adopt the reflexive reading
+  across all backends, the oracle and Lean. `TK123`: the user accepted the naming table
+  recorded on the row. `TK143` filed at LATER: a user docs site on GitHub Pages (needs the
+  user's approval for the Pages workflow and publishing).
+- `CLAUDE.md`'s `log_governed` knob now says a `SchemaRecord` also latches it (`TK140`).
+- Not as asked: the workflow agents had no Agent tool, so the task leads could not delegate
+  as the user asked.
 
 Still owed: Nothing.
 

@@ -363,11 +363,18 @@ kept anyway is in
 [`docs/architecture/decision-log.md`](./docs/architecture/decision-log.md) § "Wildcards
 beyond OpenFGA".
 
-**Strict ∀⇒∃ (the only mode).** "Granted on **all** S" implies "reaches **some** S" only if
+**Strict ∀⇒∃ (the current mode).** "Granted on **all** S" implies "reaches **some** S" only if
 at least one concrete instance of S exists — realized structurally by
 `alice → w_all(S) → concrete → w_any(S)`, which requires a real concrete in the middle.
-With zero instances the implication does not hold. A per-shape lenient/vacuous mode (a
-single `w_all(S) → w_any(S)` edge) is a documented future hook, not implemented.
+With zero instances the implication does not hold. Example, with `(folder, viewer)` an
+object-wildcard shape, `doc` declaring `define parent: [folder, folder:*]` and
+`define viewer: viewer from parent`, and two tuples — alice is a viewer of `folder:*`
+(every folder), and `doc:1`'s parent is `folder:*` (so viewers of any folder view
+`doc:1`): with **no folder stored**, `check(alice, viewer, doc:1)` is `False` on both
+backends and the oracle; it turns `True` as soon as any folder, say `folder:f1`, exists.
+A lenient/vacuous mode (a single `w_all(S) → w_any(S)` edge per shape) is not implemented
+and may come later; it would have to land in the set engine, the oracle and the Lean model
+together so the backends never disagree (`docs/spec-deviations.md` § 2026-10-13d).
 
 **Cost model** (don't "fix" these — they are the accepted trade for O(1) reads):
 

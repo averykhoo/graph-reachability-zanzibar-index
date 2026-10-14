@@ -2,7 +2,7 @@
 id: TK132
 title: Lean isPure: test a TTU target over the tupleset's parent types, not derivedAnywhere (TK126 a+)
 brief: model/code leaf-allocation gap since TK126: Lean isPure .ttu asks by NAME, Python by (type, relation)
-pri: LATER
+pri: NEXT
 size: M
 deps: []
 related: [TK126]
@@ -11,8 +11,8 @@ labels: [formal]
 source: hand
 source_hash:
 created: 2026-10-08
-moved: 2026-10-08
-updated: 2026-10-08
+moved: 2026-10-13d
+updated: 2026-10-13d
 closed:
 ---
 
@@ -55,3 +55,7 @@ inside `W4Fragment`, so headline proofs need re-plumbing, not new math), UNVERIF
 - [`tests/test_tk126_ttu_target_name_collision.py`](../tests/test_tk126_ttu_target_name_collision.py) (the differential evidence for the served shapes).
 
 ## Log
+
+### 2026-10-13d
+
+Sprint re-rank 2026-10-13d (user-approved in chat): LATER -> NEXT. The Lean model allocates TTU leaves by name while the Python keys on (type, relation): a proof describing other code is the goal (formal/CORRESPONDENCE.md sec 8).

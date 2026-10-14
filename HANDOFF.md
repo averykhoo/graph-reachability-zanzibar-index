@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-13d -- **`TK141` landed** (each `verify.sh` phase prints its start time + ETA) and **the 0.0.4 trial's three broken repros are fixed**: `TK139` (`SetEngine.lookup_reverse` keeps `but not` exclusions; new `excluded_keys`) and `TK140` (one write path per store id; new `UnloggedTuplesPresent`). Both are in CHANGELOG `[Unreleased]`, version NOT bumped: 0.0.5 needs the user's word. Next: `TK142` (NOW: the lookup-oracle gates stay green with the `TK139` fix reverted), then `HS-5` (NEXT). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-13d -- **`TK141`, `TK139`, `TK140` landed** (the 0.0.4 trial's broken repros fixed); `TK4` (strict forall=>exists, for now) and `TK85` closed; the user re-ranked. **First next session: the 0.0.5 release, on the user's word** (CHANGELOG `[Unreleased]`, version NOT bumped). Then `TK142` (NOW: lookup-oracle gates stay green with the `TK139` fix reverted), then NEXT `TK119`, `TK123`, `TK132`, `TK137`, `TK138`. ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

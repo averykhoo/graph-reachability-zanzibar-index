@@ -35,6 +35,12 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
   refused open writes nothing. To adopt such a store: `save_schema(session, id, schema)`,
   commit, `build_index(session, id)`, then `ConnectedStore(session, id)` (TK140).
 
+### Documentation
+- The READMEs now state that a grant on every instance (`folder:*`) does not reach a grant
+  on "any" instance while no instance exists, with a zero-folders example. This strict
+  reading is the current mode; a lenient mode may come later, in all backends together
+  (TK4).
+
 ## [0.0.4]
 
 ### Fixed

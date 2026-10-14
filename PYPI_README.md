@@ -121,6 +121,14 @@ above; markers without their exclusions grant too much.
   tupleset must be a direct relation. Wildcard usersets (`[group:*#member]`), wildcard
   tuplesets (`parent: [folder:*]`) and object wildcards go beyond OpenFGA. They work, but
   they are outside the proved fragment and emit `UnprovenExtensionWarning`.
+* **"All" does not imply "some" when there are none.** A grant on every instance of a
+  type reaches a grant on "any" instance only through an instance that exists. With
+  `object_wildcard_shapes=frozenset({("folder", "viewer")})` (so `folder:*` can hold a
+  viewer grant), `doc`
+  declaring `define parent: [folder, folder:*]` and `define viewer: viewer from parent`,
+  and the tuples `alice viewer folder:*` and `folder:* parent doc:1`: while no folder is
+  stored, alice cannot view `doc:1`. Once any folder exists, she can. This strict reading
+  is the current mode on both backends; a lenient mode may come later.
 * **No recursion through `and` / `but not`.** A relation that reaches itself through an
   operator, such as `define viewer: ([user] or viewer from parent) but not blocked`, is
   refused by the graph index and so by `ConnectedStore` (`CyclicDerivedDependency`), while a

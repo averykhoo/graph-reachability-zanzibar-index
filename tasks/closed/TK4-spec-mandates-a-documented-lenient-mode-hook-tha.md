@@ -11,9 +11,9 @@ labels: [docs, infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-10-04g
-updated: 2026-10-04g
-closed:
+moved: 2026-10-13d
+updated: 2026-10-13d
+closed: 2026-10-13d
 ---
 
 `docs/specs/wildcard-materialization-spec.md:141` (§3.4, *Strict ∀⇒∃, pinned*) ends: *"Leave a documented hook (a per-shape config flag that would add a single `w_all(S) → w_any(S)` edge for the lenient/vacuous reading) but do not implement it."* No such flag or hook exists in `src/zanzibar/graphindex/wildcard.py` or `src/zanzibar/schema/`.
@@ -49,3 +49,13 @@ Verified first-hand: sec 3.4 at `wildcard-materialization-spec.md:141` names "a 
 ### 2026-10-04g
 
 Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): DECIDABLE NOW. Its trap reserves the call for a human, but CLAUDE.md 'Who decides' (2026-09-12b) delegates such calls to the model: decide it and record the reasoning here.
+
+### 2026-10-13d
+
+CLOSED 2026-10-13d, outcome (b): reword, do not build. Decided under CLAUDE.md 'Who decides', agreed by the user in chat with a CAVEAT, verbatim: "I just don't want a ruling that we'll be strict only forever, but I think it's the reasonable choice for now." So strict forall=>exists is the CURRENT mode, not a permanent ruling.
+
+LANDED: docs/specs/wildcard-materialization-spec.md sec 3.4 and sec 10 carry dated 'Correction 2026-10-13d' blockquotes (original sentences kept): the hook is the design note (one w_all(S) -> w_any(S) edge per shape), not a code flag; a lenient mode, if ever built, lands in the set engine, tests/oracle.py and the Lean model (Spec/Semantics.lean::memberOfGranted) together. docs/spec-deviations.md has the adjudication at the top (## 2026-10-13d). User-facing: README.md 'Strict forall=>exists (the current mode)' paragraph and a PYPI_README.md 'Things to know' bullet with a zero-folders example; CHANGELOG.md [Unreleased] ### Documentation line.
+
+PROBE (first-hand, .scratch/s1013d/tk4_probe_v2.py, gitignored; result recorded in the ledger entry): object_wildcard_shapes {(folder, viewer)}; doc: parent: [folder, folder:*], viewer: viewer from parent; tuples alice viewer folder:* and folder:* parent doc:1. Zero folders: oracle, standalone SetEngine, ConnectedStore.check, its graph index and its set engine all False; after bob viewer folder:f1 all True. NOTE: the literal encoding doc viewer: [folder:*#viewer] with the same object-wildcard shape is REFUSED at construction (DoublyBridgedShapeError, the 2026-07-17 F1/F2 scope), so the docs use the star-tupleset form (the spec sec 3.2 canonical shape), which emits UnprovenExtensionWarning.
+
+No code changed; no lenient code exists.

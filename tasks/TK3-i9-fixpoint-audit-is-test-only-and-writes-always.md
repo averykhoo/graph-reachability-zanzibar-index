@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-10-13
-updated: 2026-10-13
+moved: 2026-10-13d
+updated: 2026-10-13d
 closed:
 ---
 
@@ -71,3 +71,7 @@ TRAPS:
 (d) Sabotage per docs/sabotage-procedure.md: drop the clear in run_cascade -> every boolean write must go red; drop the hook -> the no-cascade witness must go red.
 DOCS FIXED this session: formal/README.md residual paragraph (no longer says I9 has no runtime tier; names the WildcardIndex exposure and TK85), formal/SEMANTICS.md sec 7.7 (dated correction naming the TK82 tier), sec 7.8 (re-checked note), sec 11 header + A1 (decision recorded in place). The row's Read-first line numbers are stale: SEMANTICS sec 11-A1 is now ~:933-960 and invariants.py's 'Not here, by design' is now :239 (2026-10-13).
 NEXT ACTION: census the tests/ and formal/conformance/ call sites that write to a WildcardIndex on a boolean schema without run_cascade/backfill in the same transaction. Record the census in a tracked ACTIVE-PLAN doc before wiring the mark. Size stays M.
+
+### 2026-10-13d
+
+Sprint re-rank 2026-10-13d (user-approved in chat): stays LATER, first in line after HS-5 when a NEXT slot frees. TK3 gave its slot to TK123 (user put the rename in NEXT); P21 gave its slot to TK138.

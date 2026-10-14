@@ -2,7 +2,7 @@
 id: TK123
 title: review the public API naming and ergonomics (connectedstore name, lookup results, docstrings)
 brief: user ask 2026-10-07: package/module names (connectedstore), top-level imports, lookup ids, docstrings, __all__, docs
-pri: LATER
+pri: NEXT
 size: M
 deps: []
 related: [TK122]
@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-07b
-moved: 2026-10-13c
-updated: 2026-10-13c
+moved: 2026-10-13d
+updated: 2026-10-13d
 closed:
 ---
 
@@ -65,3 +65,15 @@ Input from the 0.0.3 install trial (AGENT, docs/pypi-trial-0.0.3-2026-10-08.md),
 Partial progress on the "unsupported-OpenFGA-features list" doc gap (2026-10-13c, OpenFGA claims audit, docs/openfga-claims-audit-2026-10-13.md): PYPI_README.md now says the schema language is a subset of the OpenFGA DSL (schema 1.1, no conditions or modules) and lists all three wildcard extensions. A full feature list is still owed; the parser leniencies that list would need are TK137.
 
 The 0.0.4 install trial (docs/pypi-trial-0.0.4-2026-10-13.md, CONFUSING / DOC GAP section, AGENT) adds ergonomics items for this row: missing docstrings on ConnectedStore.add_tuple/check/remove_tuple/watermark and SetEngine.check; internal ids (TK112, ZT-P1-8a, ASK-2, spec sec N) in public messages; UnprovenExtensionWarning stacklevel points into site-packages and fires 2-3 times per ConnectedStore; no ConnectedStore.expand and raw interner ids from SetEngine.expand; marker tuple shape differs per backend (3-tuple vs 2-tuple); ClosureFanoutExceeded suggests a knob a ConnectedStore user cannot pass; paranoia full/fixpoint undocumented; openfga_json_to_dsl drops the model header; reopen with a reordered restriction list raises SchemaMismatch without naming the relation; a failed ConnectedStore(s, unknown) raises bare KeyError and holds the SQLite write lock; standalone SetEngine neither commits nor persists its schema (undocumented); a duplicate ConnectedStore.add_tuple returns the head id with no no-op signal.
+
+### 2026-10-13d
+
+USER DECISION 2026-10-13d (in chat): promoted LATER -> NEXT, and the user ACCEPTED this naming table, so use it as the decided list without asking again:
+- zanzibar.connectedstore -> zanzibar.store (the user-facing package)
+- ConnectedStore -> Store (an instance is bound to one store_id, so it IS one store)
+- zanzibar.graphindex.Store (internal model) -> IndexStore (frees the name; users never touch it)
+- table zanzibar_store -> UNCHANGED (existing 0.0.x databases must still open)
+- top-level zanzibar re-exports Store, LookupResult, parse_openfga_schema and the public exceptions, with an __all__
+- the subpackage __all__ is trimmed of internals (log_gap, ensure_cursor, log_rows, ...)
+- TupleSource, advance_index, build_index, setengine, graphindex keep their names.
+One release, a CHANGELOG entry, no shims (TK120 precedent). First step: re-measure the file census (2026-10-07: about 145 files for the subpackage alone; IndexStore adds more and moves CORRESPONDENCE anchors and the claim-rot pin). Add a "Renamed in TK123" key to docs/architecture/overview.md. TK140 added UnloggedTuplesPresent to connectedstore.__all__ (public, keep it).

@@ -140,6 +140,8 @@ An entity never mentioned in any tuple must still be covered by wildcards. Probe
 
 "Alice is granted on **all** S" implies "alice reaches **some** S" only if at least one concrete instance of S exists — realized structurally by `alice → w_all(S) → concrete → w_any(S)`, which requires a real concrete in the middle. With zero instances the implication does not hold. This is the **default and only** mode for this feature. Leave a documented hook (a per-shape config flag that would add a single `w_all(S) → w_any(S)` edge for the lenient/vacuous reading) but do not implement it.
 
+> **Correction 2026-10-13d (`TK4`, outcome (b)).** Strict ∀⇒∃ is the **current** mode, chosen for now; it is not a permanent ruling against the lenient reading. The "hook" is this design note, not a code flag, and no flag exists: the lenient/vacuous reading would add a single `w_all(S) → w_any(S)` edge per shape. Adding it later is one change across the set engine, the oracle (`tests/oracle.py`) and the Lean model together, so the backends never diverge; a graph-only flag would be unexercised config surface that breaks equivalence the day it is turned on. Adjudication: `docs/spec-deviations.md` § 2026-10-13d.
+
 ### 3.5 Validity rules (writes)
 
 1. Tuple with subject name `'*'`: shape must be in `subject_wildcard_shapes`, else `ValueError` naming the missing declaration. (Strict filters enforce this for raw tuples; the façade enforces it again for defense in depth and better messages.)
@@ -322,3 +324,5 @@ Execute in order; each phase must leave the full suite green (plus the pre-exist
 ## 10. Non-goals (do not build)
 
 Boolean operators (`and` / `but not` — a separate check-time expression layer whose leaves will call `WildcardIndex.check`; nothing here may preclude that, and nothing here implements it). Lenient/vacuous ∀⇒∃ mode (hook only). Delta post-processing/expansion of symbolic wildcard deltas. Sink/source bridge elision beyond the structural bare-shape rule. Schema re-declaration migrations beyond idempotent `backfill()`. Any v3 support. Any read-path caching beyond wildcard-node-id memoization.
+
+> **Correction 2026-10-13d (`TK4`).** "Hook only" means the §3.4 design note, not a code affordance. Lenient mode is a non-goal **for now**, not forever; if it is ever built, the set engine, the oracle and the Lean model gain it in the same change (§3.4 correction).
