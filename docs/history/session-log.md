@@ -37,7 +37,7 @@ from here.
 
 rows: TK123 (comment: items 1-2 landed)
 
-`task lint: clean (13 checks, 269 task file(s) parsed), 25 warning(s)`
+`task lint: clean (13 checks, 271 task file(s) parsed), 28 warning(s)`
 
 `read: board + note`
 
@@ -59,6 +59,17 @@ down mid-gate.
 - This session read the uncommitted `src/` diff (coherent, complete; pinned by
   `tests/test_tk123_equivalence_refusals.py`), wrote these records first, then ran the full
   gate on the tree before committing.
+- **Released.** Gate 2026-10-15 all ten phases PASSED, `b17759e` committed; on the user's word
+  ("Yes push and tag and push the tag") `master` pushed, then annotated tag `v0.0.5`. CI by
+  SHA: `gate` success, `Publish to PyPI` success; `pypi.org/pypi/zanzibar-index/0.0.5/json`
+  200 (first-hand).
+- **Install trial: 0 BROKEN**, 3 DOC GAP, ~10 CONFUSING; smoke script 67/68 passed, control
+  red. Transcribed to [`docs/pypi-trial-0.0.5-2026-10-15.md`](../pypi-trial-0.0.5-2026-10-15.md).
+  F16 re-run first-hand and is worse than reported: a recycled id makes a stale
+  `excluded_keys` return ANOTHER node's key silently -> `TK154` (NEXT). Findings not on
+  `TK123`'s accept list -> `TK153` (LATER); the rest are mapped onto `TK123` items.
+
+rows (addendum): TK153 (new, LATER), TK154 (new, NEXT), TK123 (comment: trial mapping)
 
 Still owed: nothing.
 
