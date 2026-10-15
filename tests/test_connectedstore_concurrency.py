@@ -3,7 +3,7 @@ S7 (connected-store spec §5-S7): concurrency + stale-read hardening on file-bac
 SQLite (mirrors tests/test_concurrency.py's idioms: busy_timeout + retry on
 SQLITE_BUSY / IntegrityError; one Session per thread, never shared).
 
-  * concurrent ConnectedStore writers on the SAME store converge to a consistent
+  * concurrent Store writers on the SAME store converge to a consistent
     state equal to a single-writer twin over the union of their accepted writes;
   * a separate reader session ("the replica"): sees only consistent committed
     snapshots mid-stream (index answers ≡ its own set-engine evaluator after
@@ -34,7 +34,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import Session, SQLModel, create_engine
 
 from zanzibar.schema import AdmissionRejected
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.graphindex.invariants import snapshot_rows
 from tests.dbengine import rdbms_dsn, shared_engine
 from tests.oracle import Oracle, OracleTuple
@@ -85,7 +85,7 @@ def _write_retry(cs, op, raw, attempts=300):
         except AdmissionRejected:
             return False
         except (OperationalError, IntegrityError):
-            # ConnectedStore already rolled back + rebuilt its evaluator
+            # Store already rolled back + rebuilt its evaluator
             time.sleep(0.005)
     raise RuntimeError(f'gave up committing {op} {raw}')
 
@@ -93,7 +93,7 @@ def _write_retry(cs, op, raw, attempts=300):
 def test_concurrent_writers_converge(tmp_path):
     engine = _file_engine(tmp_path, 'cs.db')
     with Session(engine) as boot:
-        ConnectedStore(boot, 's', schema=_SCHEMA)      # bootstrap schema + store rows
+        Store(boot, 's', schema=_SCHEMA)      # bootstrap schema + store rows
         boot.commit()
 
     ops_a = [('add', ('...', 'user', '*', 'public', 'doc', 'd1')),
@@ -115,7 +115,7 @@ def test_concurrent_writers_converge(tmp_path):
     # No behaviour change on SQLite, where the constructor's two reads share one
     # pinned snapshot and the race cannot occur.
     sessions = [Session(engine) for _ in range(2)]
-    stores = [ConnectedStore(s, 's') for s in sessions]
+    stores = [Store(s, 's') for s in sessions]
 
     def worker(cs, ops, errors):
         try:
@@ -137,11 +137,11 @@ def test_concurrent_writers_converge(tmp_path):
 
     # a single-writer twin over the same accepted writes reaches the same state
     with Session(engine) as session:
-        twin = ConnectedStore(session, 'twin', schema=_SCHEMA)
+        twin = Store(session, 'twin', schema=_SCHEMA)
         for op, raw in ops_a + ops_b:
             _write_retry(twin, op, raw)
 
-        cs = ConnectedStore(session, 's')
+        cs = Store(session, 's')
         assert_wildcard_invariants(cs.widx)
         if cs.proc is not None:
             cs.proc.audit_fixpoint()
@@ -180,7 +180,7 @@ def test_reader_session_sees_consistent_snapshots(tmp_path):
     on its target dialect."""
     engine = _file_engine(tmp_path, 'replica.db')
     with Session(engine) as boot:
-        ConnectedStore(boot, 's', schema=_SCHEMA)
+        Store(boot, 's', schema=_SCHEMA)
         boot.commit()
 
     stop = threading.Event()
@@ -188,7 +188,7 @@ def test_reader_session_sees_consistent_snapshots(tmp_path):
 
     def reader():
         with Session(engine) as session:
-            cs = ConnectedStore(session, 's')
+            cs = Store(session, 's')
             while not stop.is_set():
                 cs.refresh()                           # fresh snapshot + caches per poll
                 for q in _GRID[:12]:
@@ -201,7 +201,7 @@ def test_reader_session_sees_consistent_snapshots(tmp_path):
     t.start()
     try:
         with Session(engine) as session:
-            cs = ConnectedStore(session, 's')
+            cs = Store(session, 's')
             rng = random.Random(0)
             pool = [('...', 'user', f'u{i}', rel, 'doc', d)
                     for i in (1, 2, 3) for rel in ('blocked', 'editor') for d in ('d1', 'd2')]
@@ -228,15 +228,15 @@ def test_replica_reads_under_async_lag(tmp_path):
     index; token-carrying reads fall back fresh; after catch-up everything agrees."""
     engine = _file_engine(tmp_path, 'lag.db')
     with Session(engine) as boot:
-        ConnectedStore(boot, 's', schema=_SCHEMA, sync=False)
+        Store(boot, 's', schema=_SCHEMA, sync=False)
         boot.commit()
 
     with Session(engine) as w_session, Session(engine) as r_session:
-        writer = ConnectedStore(w_session, 's')
+        writer = Store(w_session, 's')
         writer.sync = False
         token = writer.add_tuple('...', 'user', '*', 'public', 'doc', 'd1')
 
-        reader = ConnectedStore(r_session, 's')
+        reader = Store(r_session, 's')
         q = ('...', 'user', 'ghost', 'viewer', 'doc', 'd1')
         assert reader.check(*q) is False                       # stale index, consistent
         assert reader.check(*q, at_least=token) is True        # fresh fallback
@@ -251,17 +251,17 @@ def test_token_fallback_rebuilds_stale_evaluator(tmp_path):
     """The cross-session token contract: a write committed AFTER the reader opened
     must still be honored by a token-carrying read -- the reader's in-memory
     evaluator rebuilds on demand instead of serving its stale cache."""
-    from zanzibar.connectedstore import StaleRead
+    from zanzibar.store import StaleRead
 
     engine = _file_engine(tmp_path, 'token.db')
     with Session(engine) as boot:
-        ConnectedStore(boot, 's', schema=_SCHEMA, sync=False)
+        Store(boot, 's', schema=_SCHEMA, sync=False)
         boot.commit()
 
     with Session(engine) as w_session, Session(engine) as r_session:
-        writer = ConnectedStore(w_session, 's')
+        writer = Store(w_session, 's')
         writer.sync = False
-        reader = ConnectedStore(r_session, 's')        # opens BEFORE the write
+        reader = Store(r_session, 's')        # opens BEFORE the write
 
         token = writer.add_tuple('...', 'user', '*', 'public', 'doc', 'd1')
 
@@ -282,17 +282,17 @@ def test_token_not_visible_in_pinned_snapshot_raises(tmp_path):
     """If the reader is pinned in a snapshot that predates the write, a tokened read
     must refuse loudly (StaleRead), never silently serve stale under an explicit
     freshness demand; refresh() + retry succeeds."""
-    from zanzibar.connectedstore import StaleRead
+    from zanzibar.store import StaleRead
 
     engine = _file_engine(tmp_path, 'pinned.db')
     with Session(engine) as boot:
-        ConnectedStore(boot, 's', schema=_SCHEMA, sync=False)
+        Store(boot, 's', schema=_SCHEMA, sync=False)
         boot.commit()
 
     with Session(engine) as w_session, Session(engine) as r_session:
-        writer = ConnectedStore(w_session, 's')
+        writer = Store(w_session, 's')
         writer.sync = False
-        reader = ConnectedStore(r_session, 's')
+        reader = Store(r_session, 's')
         q = ('...', 'user', 'ghost', 'viewer', 'doc', 'd1')
         reader.check(*q)                    # pin a WAL read snapshot NOW
 

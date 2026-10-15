@@ -4,7 +4,7 @@ S5 (connected-store spec §5-S5): the OpenFGA authorization-model JSON front-end
 JSON twins of the DSL fixtures must parse to IDENTICAL SchemaASTs -- one AST, two
 front-ends; everything downstream untouched. Unsupported OpenFGA features are
 rejected loudly. openfga_json_to_dsl gives the persistable schema source, so a
-ConnectedStore is constructible straight from an OpenFGA model.
+Store is constructible straight from an OpenFGA model.
 
 TK115 (2026-10-04) added the fidelity pins at the bottom: the JSON front end must render the
 schema it was given, or refuse. MUTATION SWEEP (2026-10-04, `.scratch/tk115/sweep.py`, each
@@ -32,7 +32,7 @@ import re
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.schema import (openfga_json_to_dsl, parse_openfga_json,
                                parse_schema_ast)
 
@@ -60,7 +60,7 @@ def test_connected_store_from_openfga_json(load_fga_schema):
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         dsl = openfga_json_to_dsl(load_fga_schema('boolean_wildcards.json'))
-        cs = ConnectedStore(session, 'json-store', schema=dsl)
+        cs = Store(session, 'json-store', schema=dsl)
         cs.add_tuple('...', 'user', '*', 'public', 'doc', 'd1')
         cs.add_tuple('...', 'user', 'u1', 'blocked', 'doc', 'd1')
         assert cs.check('...', 'user', 'ghost', 'viewer', 'doc', 'd1') is True
@@ -230,7 +230,7 @@ def test_rejects_duplicate_json_keys_at_any_depth(text):
 ], ids=['V9-injects-relation', 'comma-splits-restriction', 'V14-unparseable'])
 def test_rejects_model_whose_dsl_rendering_is_a_different_schema(subject_type, shape):
     """A bare restriction type is not a declared name (P23 does not see it), so before TK115
-    V9 rendered a second relation ``secret`` that a ConnectedStore would then admit writes on.
+    V9 rendered a second relation ``secret`` that a Store would then admit writes on.
 
     Since TK137 (2026-10-14) all three are refused EARLIER, by the undeclared-restriction-type
     check (S8, `parser.py::_validate_restriction_types_declared`), which `parse_openfga_json`

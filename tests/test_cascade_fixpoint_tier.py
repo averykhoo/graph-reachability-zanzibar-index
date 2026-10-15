@@ -63,7 +63,7 @@ CONTROLS, and why each is here rather than assumed:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.graphindex.invariants import (InvariantViolation, PARANOIA_ENV_VAR,
                                  PARANOIA_FIXPOINT, PARANOIA_FULL,
                                  install_paranoia, paranoia_at_least)
@@ -350,7 +350,7 @@ def test_the_tier_runs_outside_the_cache_scopes(arm):
     is a doc warning and the next refactor may quietly reverse it.
 
     ⚠ It pins that this method opens no scope the tier runs under -- NOT that no scope
-    is ever installed. Under ``connectedstore.advance_index`` an OUTER node-cache scope
+    is ever installed. Under ``store.advance_index`` an OUTER node-cache scope
     spans the whole apply loop, and ``run_cascade`` cannot close a caller's scope."""
     a = arm(PARANOIA_FIXPOINT)
     assert a.run() is None
@@ -491,7 +491,7 @@ def test_the_env_var_arms_the_tier_end_to_end(monkeypatch):
 
     The tier is read out of the guard registry on the processor's own session
     (``src/zanzibar/graphindex/invariants.py::paranoia_level``), and nothing else in this module proves
-    that registry is the same one ``ConnectedStore`` writes to -- every other arm installs
+    that registry is the same one ``Store`` writes to -- every other arm installs
     the guard by hand. §9.7 of TK74 is the reason this is a test and not an assumption: a
     tier knob that silently resolves to the wrong level is a failure mode this repo has
     already shipped once.
@@ -501,7 +501,7 @@ def test_the_env_var_arms_the_tier_end_to_end(monkeypatch):
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
     try:
-        cs = ConnectedStore(session, 'cs', schema=SCHEMA)
+        cs = Store(session, 'cs', schema=SCHEMA)
         assert cs.paranoia == PARANOIA_FIXPOINT
         assert cs.paranoia_guard is not None
         assert cs.paranoia_guard.level == PARANOIA_FIXPOINT
@@ -513,7 +513,7 @@ def test_the_env_var_arms_the_tier_end_to_end(monkeypatch):
         tier = cs.proc._tier
         assert tier is not None, (
             'the env var set the guard but the cascade tier never ran -- the processor '
-            'is reading a different registry than ConnectedStore writes')
+            'is reading a different registry than Store writes')
         assert tier.changed == (), f'false positive on clean traffic: {list(tier.changed)}'
         assert tier.keys, 'the tier ran but examined nothing'
     finally:

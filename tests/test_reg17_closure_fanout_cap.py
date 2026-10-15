@@ -28,12 +28,12 @@ write stalls every other writer on the store for its whole duration.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, func, select
 
-from zanzibar.graphindex import ReachabilityIndex, Store
+from zanzibar.graphindex import ReachabilityIndex, IndexStore
 from zanzibar.graphindex.core import (DEFAULT_MAX_CLOSURE_FANOUT, MAX_CLOSURE_FANOUT_ENV,
                            resolve_max_closure_fanout)
 from zanzibar.graphindex.invariants import check_invariants, snapshot_rows
 from zanzibar.graphindex.models import DeltaOutbox, Edge, Node
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.graphindex.invariants import InvariantViolation
 from zanzibar.schema import AdmissionRejected, ClosureFanoutExceeded
 
@@ -51,7 +51,7 @@ def _store(cap=None):
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    session.add(Store(id='s'))
+    session.add(IndexStore(id='s'))
     session.commit()
     return session, ReachabilityIndex(session, store_id='s', max_closure_fanout=cap)
 
@@ -239,7 +239,7 @@ def test_default_admits_a_region_far_larger_than_any_test_writes():
 
 
 # --------------------------------------------------------------------------- #
-# 2026-07-29 — the cap through the COMPOSED system (ConnectedStore).
+# 2026-07-29 — the cap through the COMPOSED system (Store).
 # Everything above drives the raw `ReachabilityIndex`, which is why this went
 # unnoticed: the composed path had no coverage at all.
 # --------------------------------------------------------------------------- #
@@ -247,7 +247,7 @@ def test_default_admits_a_region_far_larger_than_any_test_writes():
 def test_cap_through_connectedstore_is_a_refusal_not_a_corruption_report():
     """A cap refusal on the REPLAY path must not be reported as corruption.
 
-    `AdmissionRejected` subclasses `ValueError`, and `zanzibar.connectedstore.apply._apply_row`
+    `AdmissionRejected` subclasses `ValueError`, and `zanzibar.store.apply._apply_row`
     promotes every `ValueError` to `InvariantViolation('... the log is
     admission-validated, so this is corruption or a validity-parity bug ...')`. That
     promotion is right for every other refusal family — those are properties of the
@@ -259,7 +259,7 @@ def test_cap_through_connectedstore_is_a_refusal_not_a_corruption_report():
     same tuple is admissible or not depending on how big the closure has since grown.
     So a cap refusal during replay is neither corruption nor a parity bug.
 
-    Observed BEFORE the fix (cap tuned to 119 on the 240-tuple hub, via ConnectedStore):
+    Observed BEFORE the fix (cap tuned to 119 on the 240-tuple hub, via Store):
         zanzibar.graphindex.invariants.InvariantViolation: log row 121 (ADD) was rejected by the
         index -- the log is admission-validated, so this is corruption or a
         validity-parity bug: closure fan-out cap exceeded: this edge would materialise
@@ -274,7 +274,7 @@ def test_cap_through_connectedstore_is_a_refusal_not_a_corruption_report():
     session = Session(engine)
     schema = ('model\n  schema 1.1\ntype user\ntype group\n'
               '  relations\n    define member: [user, group#member]\n')
-    cs = ConnectedStore(session, 'cs', schema=schema)
+    cs = Store(session, 'cs', schema=schema)
 
     # Build a region, then tighten the cap under the live index so the NEXT write
     # exceeds it. This mirrors an operator lowering the cap on a running store.

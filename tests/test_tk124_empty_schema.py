@@ -8,7 +8,7 @@ A schema text with no ``type`` line -- ``""``, whitespace, comments only, or onl
 ``tests/oracle.py::_validate_declares_a_type``), checked and unchecked, and an OpenFGA JSON
 model with no ``type_definitions`` is refused by
 ``src/zanzibar/schema/json_frontend.py::_validate_json_declares_a_type``. Because
-``connectedstore/schema_io.py::save_schema`` parses before it adds the ``SchemaRecord``, the
+``store/schema_io.py::save_schema`` parses before it adds the ``SchemaRecord``, the
 refusal persists nothing, and the same store id can then be bootstrapped with a real schema.
 
 A schema that declares types but no relation anywhere (``type user``) is refused too, by the
@@ -27,7 +27,7 @@ probe_tk124.py``, re-run first-hand on the first TK124 fix (gitignored; this is 
     two_types_no_rel   BOOTSTRAPPED -> BRICKED: SchemaMismatch: ...
 
 The new cases written first, on that tree: ``27 failed, 118 passed, 1 deselected in 1.23s``
-(19 x ``DID NOT RAISE ValueError`` across both parsers and ConnectedStore, 6 x the same in P23,
+(19 x ``DID NOT RAISE ValueError`` across both parsers and Store, 6 x the same in P23,
 2 x the JSON message "Regex pattern did not match" -- it said "DSL rendering does not
 parse (schema declares no type ...)"). Sabotage (``.scratch/.../fix-tk127-sab124.py``, each new
 ``if not ast:`` -> ``if False:``, anchor asserted, sha256-restored; this module + P23 +
@@ -44,7 +44,7 @@ probe1.py``, gitignored -- this docstring is the tracked record)::
     empty        prod=ACCEPT keys=0 | prod_unchecked=ACCEPT keys=0 | oracle=ACCEPT keys=0 | ...
     header-only  prod=ACCEPT keys=0 | ...
     json-empty-type_definitions  json=ACCEPT keys=0
-    ConnectedStore(schema="") constructed OK
+    Store(schema="") constructed OK
     SchemaRecord row for x: created_at=... store_id='x' schema_text='' object_wildcard_shapes='[]'
 
 SABOTAGE (2026-10-08, ``.scratch/tk127-2026-10-08/impl-tk124-probes/sabotage.py``: each guard's
@@ -53,7 +53,7 @@ sha256-checked; targets this module + ``test_p23_parser_refusal_parity.py`` +
 ``test_refused_shape_comments.py``), literal summary lines::
 
     S1 product guard off   32 failed, 117 passed in 2.32s
-       (21 product-parse cases, 3 P23 product cases, the 7 ConnectedStore cases, the JSON
+       (21 product-parse cases, 3 P23 product cases, the 7 Store cases, the JSON
         round-trip case)
     S2 oracle guard off    17 failed, 132 passed in 2.57s   (14 oracle cases, 3 P23 oracle)
     S3 JSON guard off       4 failed, 145 passed in 2.93s
@@ -74,8 +74,8 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from tests import oracle as oracle_mod
-from zanzibar.connectedstore import ConnectedStore
-from zanzibar.connectedstore.models import SchemaRecord, TupleLog
+from zanzibar.store import Store
+from zanzibar.store.models import SchemaRecord, TupleLog
 from zanzibar.schema import (
     _parse_schema_ast_unchecked, openfga_json_to_dsl, parse_openfga_json,
     parse_openfga_schema, parse_schema_ast,
@@ -219,7 +219,7 @@ def test_connected_store_refuses_before_persisting_and_the_id_stays_usable(
     engine = _engine(tmp_path)
     with Session(engine) as s:
         with pytest.raises(ValueError, match=msg):
-            ConnectedStore(s, 'x', schema=text, sync=sync)
+            Store(s, 'x', schema=text, sync=sync)
         # never even flushed into this session's transaction
         assert s.get(SchemaRecord, 'x') is None
         s.rollback()
@@ -229,7 +229,7 @@ def test_connected_store_refuses_before_persisting_and_the_id_stays_usable(
         assert s.exec(select(TupleLog)).all() == []
     # the same store id bootstraps with the intended schema and serves writes
     with Session(engine) as s:
-        cs = ConnectedStore(s, 'x', schema=REAL, sync=sync)
+        cs = Store(s, 'x', schema=REAL, sync=sync)
         cs.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
         if not sync:
             cs.catch_up()
@@ -237,7 +237,7 @@ def test_connected_store_refuses_before_persisting_and_the_id_stays_usable(
         assert cs.check('...', 'user', 'bob', 'viewer', 'doc', 'd1') is False
     # and it reopens (persisted schema re-parsed) without a schema argument
     with Session(engine) as s:
-        cs = ConnectedStore(s, 'x', sync=sync)
+        cs = Store(s, 'x', sync=sync)
         assert cs.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True
 
 
@@ -246,8 +246,8 @@ def test_same_session_can_bootstrap_after_the_refusal(tmp_path):
     engine = _engine(tmp_path)
     with Session(engine) as s:
         with pytest.raises(ValueError, match=_MSG):
-            ConnectedStore(s, 'x', schema='')
+            Store(s, 'x', schema='')
         s.rollback()
-        cs = ConnectedStore(s, 'x', schema=REAL)
+        cs = Store(s, 'x', schema=REAL)
         cs.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
         assert cs.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True

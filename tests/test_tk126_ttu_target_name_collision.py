@@ -26,7 +26,7 @@ tupleset's declared restriction types. This module pins the outcome:
    ``tests/parity.py::ParityEngine`` with the graph REQUIRED present (oracle + both
    ``SetOps`` set engines + graph, paranoia ON, full-grid parity after every op);
 3. the composed system agrees with ``tests/oracle.py`` on the full grid along six
-   construction paths: ``ConnectedStore`` sync and async (+ ``catch_up``), each read
+   construction paths: ``Store`` sync and async (+ ``catch_up``), each read
    through the store AND straight off its graph index, ``build_index(bulk=True)``,
    ``build_index(bulk=False)`` and ``rebuild_index``;
 4. ``lookup`` / ``lookup_reverse`` / ``expand`` match the oracle-composed references
@@ -100,7 +100,7 @@ restored byte-for-byte and sha256-checked), literal summaries:
 - S6, INSTRUMENT control: the graph's compiled ``Rule``s with if-pattern ``doc#parent``
   dropped after ``compile_boolean_schema`` (the set engines evaluate without a ruleset, so
   only the graph goes wrong), whole module: ``24 failed, 18 passed`` -- every
-  ParityEngine, ConnectedStore/build and lookup case red except ``C_cross``, whose TTU is
+  ParityEngine, Store/build and lookup case red except ``C_cross``, whose TTU is
   inside a tainted relation and so compiles to a plan node, not a ``Rule``.
 """
 from __future__ import annotations
@@ -112,7 +112,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from zanzibar.schema import AdmissionRejected
-from zanzibar.connectedstore import (ConnectedStore, TupleSource, build_index,
+from zanzibar.store import (Store, TupleSource, build_index,
                                      rebuild_index, save_schema)
 from zanzibar.schema import (CyclicDerivedDependency, UnsupportedByGraphIndex,
                              parse_openfga_schema, parse_schema_ast)
@@ -400,8 +400,8 @@ def test_connected_store_and_build_paths_match_the_oracle(name):
     schema = SERVED[name]
     s_live, s_async, s_src = _session(), _session(), _session()
     try:
-        live = ConnectedStore(s_live, 'live', schema=schema, paranoia='full')
-        asy = ConnectedStore(s_async, 'asy', schema=schema, sync=False, paranoia='full')
+        live = Store(s_live, 'live', schema=schema, paranoia='full')
+        asy = Store(s_async, 'asy', schema=schema, sync=False, paranoia='full')
         save_schema(s_src, 'b1', schema)
         save_schema(s_src, 'b2', schema)
         save_schema(s_src, 'b3', schema)

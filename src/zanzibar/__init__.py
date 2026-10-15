@@ -6,7 +6,7 @@ Two backends with identical semantics and opposite cost models:
 * `zanzibar.graphindex` -- materializes the transitive closure, O(1) `check`;
 
 sharing the schema layer `zanzibar.schema`, and composed with a tuple log in
-`zanzibar.connectedstore`. Deliberately imports nothing: import the subpackage
+`zanzibar.store`. Deliberately imports nothing: import the subpackage
 you need.
 """
 

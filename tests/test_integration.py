@@ -35,14 +35,14 @@ class Backend:
 
 class GraphIndexBackend(Backend):
     def __init__(self):
-        from zanzibar.graphindex import ReachabilityIndex, Store
+        from zanzibar.graphindex import ReachabilityIndex, IndexStore
         from sqlmodel import Session, create_engine
 
         self._engine = create_engine('sqlite:///:memory:')
         SQLModel.metadata.create_all(self._engine)
         self._session = Session(self._engine)
 
-        store = Store(id="integration_test")
+        store = IndexStore(id="integration_test")
         self._session.add(store)
         self._session.commit()
 
@@ -74,13 +74,13 @@ class WildcardIndexBackend(Backend):
     add_tuple/remove_tuple; check_reachable runs the O(1) probe set."""
 
     def __init__(self, schema_info):
-        from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
+        from zanzibar.graphindex import ReachabilityIndex, IndexStore, WildcardIndex
         from sqlmodel import Session, create_engine
 
         self._engine = create_engine('sqlite:///:memory:')
         SQLModel.metadata.create_all(self._engine)
         self._session = Session(self._engine)
-        store = Store(id="wildcard_test")
+        store = IndexStore(id="wildcard_test")
         self._session.add(store)
         self._session.commit()
 

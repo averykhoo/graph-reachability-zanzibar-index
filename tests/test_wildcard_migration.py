@@ -10,7 +10,7 @@ restoring the structural invariants -- without failing.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
+from zanzibar.graphindex import ReachabilityIndex, IndexStore, WildcardIndex
 from zanzibar.schema import SchemaInfo
 from tests.wildcard_helpers import assert_wildcard_invariants
 
@@ -20,7 +20,7 @@ def test_backfill_migrates_existing_concretes(n):
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    session.add(Store(id='m'))
+    session.add(IndexStore(id='m'))
     session.commit()
     idx = ReachabilityIndex(session, 'm')
 

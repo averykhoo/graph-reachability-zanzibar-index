@@ -15,7 +15,7 @@ from zanzibar.schema import (AdmissionRejected, ClosureFanoutExceeded,
                                validate_write_identifiers,
                                validate_node_identifiers)
 from .invariants import InvariantViolation
-from .models import DeltaOutbox, Edge, Node, Store
+from .models import DeltaOutbox, Edge, Node, IndexStore
 
 _log = logging.getLogger(__name__)
 
@@ -220,11 +220,11 @@ def take_row_write_lock(session: Session, lock_select, lock_update) -> None:
 def store_lock_statements(store_id: str):
     """The (SELECT ... FOR UPDATE, no-op UPDATE) pair that locks one store's row."""
     return (
-        select(Store).where(Store.id == store_id).with_for_update(),
+        select(IndexStore).where(IndexStore.id == store_id).with_for_update(),
         # no-op UPDATE (SQLite arm): same row, unchanged value -- it exists to take the
         # write lock, not to change data.
-        update(Store).where(Store.id == store_id)
-        .values(description=Store.description),
+        update(IndexStore).where(IndexStore.id == store_id)
+        .values(description=IndexStore.description),
     )
 
 
@@ -363,7 +363,7 @@ class ReachabilityIndex:
         """Do not REFUSE over-cap additions in this thread for the duration; log them.
 
         For callers that replay rows already committed to the tuple log
-        (``ConnectedStore.catch_up``, ``zanzibar.connectedstore.build.build_index``). There the
+        (``Store.catch_up``, ``zanzibar.store.build.build_index``). There the
         cap cannot refuse the write, only stall the index behind it until an operator
         raises the cap, and the data never shrinks to let it through. On those paths it
         also bounds nothing it was built for: the stall it guards against is one write
@@ -497,7 +497,7 @@ class ReachabilityIndex:
 
         On PostgreSQL this blocks other writers to the store until this transaction
         commits/rolls back; that the block is real and row-granular is now observed, not
-        assumed (``tests/test_postgres_ha.py`` holds this very ``Store`` row and watches
+        assumed (``tests/test_postgres_ha.py`` holds this very ``IndexStore`` row and watches
         a writer queue on it). A missing store row simply yields no lock (harmless).
 
         SQLITE (ZT-P1-4, 2026-07-26): ``with_for_update()`` compiles to a plain SELECT
@@ -882,7 +882,7 @@ class ReachabilityIndex:
             # ClosureFanoutExceeded (an AdmissionRejected subclass), like the cycle
             # refusals: a correct refusal of THIS write, classifiable by every harness
             # that already handles rejection -- not an InvariantViolation, because
-            # nothing is corrupt. The SUBCLASS matters: `zanzibar.connectedstore.apply` promotes
+            # nothing is corrupt. The SUBCLASS matters: `zanzibar.store.apply` promotes
             # every other ValueError to InvariantViolation("corruption") on the replay
             # path, and must not do that here -- admission cannot predict this cap, so
             # a refusal during replay is a resource limit, not a parity bug.

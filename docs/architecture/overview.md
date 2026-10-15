@@ -72,11 +72,11 @@ src/zanzibar/setengine/
   memberset.py           star-closed MemberSet (pos/stars/neg) algebra -- the pinned
                          star×boolean table lives here
   setops.py              pluggable SetOps seam: RoaringSets (default) / PySets
-src/zanzibar/connectedstore/          the composed system (imports both backends, never imported
+src/zanzibar/store/          the composed system (imports both backends, never imported
                          by them): SchemaRecord (write-once schema source), TupleLog
                          (permanent tuple log = tokens), IndexCursor, TupleSource
                          (validated source-of-truth writes), advance_index (THE
-                         apply step), ConnectedStore (sync/async schedules,
+                         apply step), Store (sync/async schedules,
                          freshness-gated reads, refresh(), catch_up()),
                          build_index (offline bootstrap)
 tests/
@@ -119,6 +119,27 @@ explicit constraint names (`zanzibar_node_unique_constraint`) and index names
 `extend_existing`, so a clash with a consumer's own table is a loud `InvalidRequestError`,
 never a silent merge (`tests/test_tk122_table_namespace.py`). Why:
 `docs/pypi-readiness-2026-10-07.md` sec 2 B2.
+
+## Renamed in TK123 (2026-10-15)
+
+The same kind of key, for the public API break (`TK123` item 3; plan
+`docs/tk123-api-review-2026-10-14.md` § S1). No compatibility shims: the old names do not
+import (`tests/test_tk123_rename.py`, which also fails if a shipped string names them).
+
+| before | after |
+|---|---|
+| package `src/zanzibar/connectedstore/` / `zanzibar.connectedstore` | `src/zanzibar/store/` / `zanzibar.store` |
+| class `ConnectedStore` | `Store` (import it from `zanzibar.store`) |
+| module `connectedstore/store.py` / `zanzibar.connectedstore.store` | `store/_store.py` / `zanzibar.store._store` |
+| graph-index model `zanzibar.graphindex.Store` (`graphindex/models.py::Store`) | `IndexStore` |
+
+Unchanged on purpose: the table `zanzibar_store` (0.0.x databases must open), and the test
+file names `tests/test_connectedstore*.py` (FROZEN docs and `formal/verify.sh` cite them by
+path). So a pre-2026-10-15 cite `connectedstore/store.py::ConnectedStore.X` maps to
+`store/_store.py::Store.X`, and any other `connectedstore/<m>.py` to `store/<m>.py`. The
+`zanzibar.graphindex.Store` row of the TK120 key above is today's `IndexStore`. Lean
+docstrings under `formal/lean/` still cite the old paths (left untouched to avoid a Lean
+rebuild for comments; this key maps them).
 
 ## Key semantics (pinned -- see decision-log.md for why)
 
@@ -180,7 +201,7 @@ as harmless colour (a wrong InnoDB claim was half the justification for acceptin
 `../spec-deviations.md` 2026-07-27).
 
 * **`READ COMMITTED` is the only accepted isolation level.** `TupleSource` and
-  `ConnectedStore` raise `UnsafeIsolationLevel` at construction for anything else,
+  `Store` raise `UnsafeIsolationLevel` at construction for anything else,
   SERIALIZABLE included; the check is a no-op on SQLite, which has no server-side
   level to pin.
 * **The PostgreSQL leg of the gate** is `tests/test_postgres_ha.py`, opt-in:
@@ -194,13 +215,13 @@ as harmless colour (a wrong InnoDB claim was half the justification for acceptin
 * **The dialect-specific surface is deliberately tiny** — everything else is
   flavour-agnostic SQLModel/SQLAlchemy. It is exactly `src/zanzibar/graphindex/core.py::is_sqlite`,
   `src/zanzibar/graphindex/core.py::take_row_write_lock`, and
-  `src/zanzibar/connectedstore/source.py::assert_read_isolation`. Put new dialect branching in those
+  `src/zanzibar/store/source.py::assert_read_isolation`. Put new dialect branching in those
   three places; do not spread it through call sites or documentation.
 
 Deps: `sqlmodel`, `pytest`, `pyroaring`, `hypothesis` (+ `psycopg2-binary` for the
 PostgreSQL leg only). Paranoia mode (invariants inside
 every commit) is ON by default **in tests only** (`tests/wildcard_helpers.make_wildcard_index`).
-`ConnectedStore` does now wire it — `ZANZIBAR_PARANOIA` or a constructor argument, tiered —
+`Store` does now wire it — `ZANZIBAR_PARANOIA` or a constructor argument, tiered —
 but `DEFAULT_PARANOIA` is OFF, so a stock production deployment still runs with the I1–I13
 layer dark. That default is a measured decision (the cheap `residue` tier costs ~4–6% of the
 write path and grows with the store), not an oversight, and `ZANZIBAR_PARANOIA=residue` is

@@ -1,11 +1,11 @@
-from .models import PermissionDelta, Store, Node, Edge
+from .models import PermissionDelta, IndexStore, Node, Edge
 from .core import ReachabilityIndex, AdmissionRejected
 from .invariants import InvariantViolation
 from .wildcard import WildcardIndex, LookupResult
 
 __all__ = [
     "PermissionDelta",
-    "Store",
+    "IndexStore",
     "Node",
     "Edge",
     "ReachabilityIndex",

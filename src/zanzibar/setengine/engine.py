@@ -75,32 +75,32 @@ def _reject_unlogged_write(engine: 'SetEngine', op: str) -> None:
 
     Two ways in, one refusal: the engine a ``TupleSource`` owns (ZT-P1-8a), and since
     TK140 ANY ``SetEngine`` on a store id that has a ``SchemaRecord`` -- a second,
-    standalone engine opened on a store a ``ConnectedStore`` owns
+    standalone engine opened on a store a ``Store`` owns
     (``docs/tk140-one-write-path-per-store-2026-10-13.md``)."""
     # REFUSED SHAPE (ZT-P1-8a, TK140): a direct SetEngine write on a log-governed store id
     # (one a TupleSource owns, or that has a SchemaRecord).
     # WHY: it changes RelationTuple with no TupleLog row, so the graph index, replica
     # evaluators and at_least tokens never see it while lag() reports 0. An unlogged
-    # REMOVE leaves the grant ALLOWed by ConnectedStore.check, and ConnectedStore can then
+    # REMOVE leaves the grant ALLOWed by Store.check, and Store can then
     # no longer revoke it (0.0.4 trial BROKEN-2, p12).
-    # INSTEAD: write through ConnectedStore.add_tuple/remove_tuple (or TupleSource.add/
-    # remove); for a standalone engine, use a store id no ConnectedStore owns.
+    # INSTEAD: write through Store.add_tuple/remove_tuple (or TupleSource.add/
+    # remove); for a standalone engine, use a store id no Store owns.
     raise UnloggedWriteRefused(
         f'SetEngine.{op} is refused on store {engine.store_id!r}: the store is tuple-LOGGED '
-        f'(a ConnectedStore/TupleSource owns it -- it has a SchemaRecord), and a direct '
+        f'(a Store/TupleSource owns it -- it has a SchemaRecord), and a direct '
         f'write mutates RelationTuple without appending to TupleLog -- so the graph index, '
         f'replica evaluators and every at_least freshness token would silently miss it, '
         f'permanently, while lag() reports 0 (zero-trust review ZT-P1-8a, TK140). Write '
         f'through TupleSource.{"add" if op == "add_tuple" else "remove"}() '
-        f'(or ConnectedStore.{op}()), which locks, catches up, validates and appends '
+        f'(or Store.{op}()), which locks, catches up, validates and appends '
         f'the log row in the same transaction. A standalone SetEngine needs a store id '
-        f'that no ConnectedStore owns.')
+        f'that no Store owns.')
 
 
 #: TK140: the connected store's ``SchemaRecord`` table, named by STRING so this package
-#: keeps importing nothing from ``zanzibar.connectedstore`` (the composition layer imports
+#: keeps importing nothing from ``zanzibar.store`` (the composition layer imports
 #: the backends, never the reverse). A ``SchemaRecord`` row is the governance marker: the
-#: first ``ConnectedStore`` / ``save_schema`` writes it, it is write-once, and it exists
+#: first ``Store`` / ``save_schema`` writes it, it is write-once, and it exists
 #: from the moment a store is claimed -- while its log is still EMPTY, which is why the
 #: marker is this row and not "has a TupleLog row". Pinned equal to
 #: ``SchemaRecord.__tablename__`` by ``tests/test_tk140_one_write_path.py``, so a rename
@@ -111,7 +111,7 @@ _SCHEMA_RECORD = _sa_table(SCHEMA_RECORD_TABLE, _sa_column('store_id'),
 
 
 def store_has_schema_record(session: Session, store_id: str) -> bool:
-    """True when ``store_id`` has a ``SchemaRecord`` row, i.e. a ``ConnectedStore`` /
+    """True when ``store_id`` has a ``SchemaRecord`` row, i.e. a ``Store`` /
     ``TupleSource`` owns it and its writes must go through the log (TK140).
 
     ``has_table`` first: a process that only ever imported ``zanzibar.setengine`` never
@@ -148,7 +148,7 @@ def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
     """Raise ``SchemaMismatch`` unless ``(schema, object_wildcard_shapes)`` is the
     store's persisted schema (TK123 A53).
 
-    The comparison is ``connectedstore.schema_io.ensure_schema``'s (`TK136`): equal
+    The comparison is ``store.schema_io.ensure_schema``'s (`TK136`): equal
     declared object-wildcard shapes, and the texts parse to an equal ``SchemaAST`` (so
     whitespace, comments and the order of type blocks or ``define`` lines do not matter).
     Identical text short-circuits, so the store's own opens (``open_set_engine`` passes
@@ -158,10 +158,10 @@ def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
     if stored_shapes != frozenset(object_wildcard_shapes):
         raise SchemaMismatch(
             f'SetEngine on store {store_id!r}: its object_wildcard_shapes disagree with the '
-            f'persisted schema of this store (a ConnectedStore owns this store id, and schemas are '
+            f'persisted schema of this store (a Store owns this store id, and schemas are '
             f'write-once). Open it with the persisted schema -- '
-            f'zanzibar.connectedstore.open_set_engine(session, {store_id!r}) loads it -- or '
-            f'use a store id no ConnectedStore owns.')
+            f'zanzibar.store.open_set_engine(session, {store_id!r}) loads it -- or '
+            f'use a store id no Store owns.')
     if stored_text == schema:
         return
     try:
@@ -174,11 +174,11 @@ def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
     if stored_ast != ast:
         raise SchemaMismatch(
             f'SetEngine on store {store_id!r}: the schema passed here disagrees with the '
-            f'persisted schema of this store (a ConnectedStore owns this store id, and schemas '
+            f'persisted schema of this store (a Store owns this store id, and schemas '
             f'are write-once). Answering under a different schema would give different '
             f'answers from the same tuples, e.g. a dropped "but not" reads as ALLOW. Open '
-            f'it with the persisted schema -- zanzibar.connectedstore.open_set_engine('
-            f'session, {store_id!r}) loads it -- or use a store id no ConnectedStore owns.')
+            f'it with the persisted schema -- zanzibar.store.open_set_engine('
+            f'session, {store_id!r}) loads it -- or use a store id no Store owns.')
 
 
 def _drive(gen):
@@ -441,7 +441,7 @@ class SetEngine:
         # direct write here would be an unlogged mutation of the source of truth. The
         # flag is set by ``TupleSource.__init__`` and, since TK140, by
         # ``_probe_log_governance`` when the store id has a ``SchemaRecord`` (a SECOND
-        # engine on a store a ``ConnectedStore`` owns: 0.0.4 trial BROKEN-2). It only
+        # engine on a store a ``Store`` owns: 0.0.4 trial BROKEN-2). It only
         # ever goes False -> True. The two public write methods refuse while it is on;
         # the ``_*_direct`` bodies stay reachable for ``TupleSource``, which appends the
         # log row itself.
@@ -472,7 +472,7 @@ class SetEngine:
         # leaf families). Schemas the graph still refuses (decision-15 scope, cyclic
         # derived dependencies) have no graph partner: data-cycle rejection is off and
         # the oracle remains the only cross-check. A caller that already compiled the
-        # same schema (ConnectedStore opens both backends) passes its RuleSet in.
+        # same schema (Store opens both backends) passes its RuleSet in.
         if ruleset is not None:
             self._ruleset = ruleset
         else:
@@ -650,7 +650,7 @@ class SetEngine:
                   relation: str, o_type: str, o_name: str) -> bool:
         """Add one raw tuple; True if added, False for the idempotent duplicate
         no-op. Raises ``ValueError`` only from validation, BEFORE any in-memory
-        mutation (ConnectedStore's rejection path relies on this to skip the
+        mutation (Store's rejection path relies on this to skip the
         evaluator rebuild). This backend computes no deltas (§6.1).
 
         Refused with ``UnloggedWriteRefused`` on a log-governed store (ZT-P1-8a) --
@@ -744,7 +744,7 @@ class SetEngine:
         Presence mismatches are HARD failures, never op rejections: the log is
         admission-validated and applied exactly-once, so an ADD of a present tuple or
         a REMOVE of an absent one means the caller's watermark is corrupt (mirrors
-        the apply step's corruption guard in ``zanzibar.connectedstore.apply``)."""
+        the apply step's corruption guard in ``zanzibar.store.apply``)."""
         s_pred = _norm_pred(subject_predicate)
         if op == 'ADD':
             if self._tuple_present(s_pred, s_type, s_name, relation, o_type, o_name):

@@ -1,6 +1,6 @@
 """TK111 / TK112: a STALLED async apply step must not keep serving untokened reads.
 
-An untokened ``ConnectedStore`` read is documented as bounded-stale: the index trails
+An untokened ``Store`` read is documented as bounded-stale: the index trails
 the log by whatever the async worker has not applied yet. A log row the index can NEVER
 apply breaks the bound. Two such rows are admitted today: a path-count overflow
 (``TK111``) and a fan-out-capped row (``TK112``). ``catch_up`` then retries the row
@@ -11,7 +11,7 @@ Observed BEFORE the fix (P10 verify probe, first-hand, 2026-09-27d; the witness 
 first test below, SQLite, K=63, batch=1):
     catch_up attempt 0/1/2: OverflowError: Python int too large to convert to SQLite
     INTEGER | lag=2
-    check(mallory viewer doc:secret): ConnectedStore.check(untokened)=True
+    check(mallory viewer doc:secret): Store.check(untokened)=True
     set_engine=False oracle=False
 
 The fix (``docs/tk111-stall-aware-freshness-2026-10-02.md`` sec 2, D1-D5):
@@ -24,8 +24,8 @@ cross-instance case, and the transient case (a stall clears on the next good bat
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-import zanzibar.connectedstore.store as store_mod
-from zanzibar.connectedstore import ConnectedStore, IndexStalled
+import zanzibar.store._store as store_mod
+from zanzibar.store import Store, IndexStalled
 from tests import oracle as O
 from zanzibar.schema import PathCountExceeded
 
@@ -79,7 +79,7 @@ def test_overflow_poison_row_stalls_and_untokened_check_stops_serving_revoked_al
     now refused cleanly at K=31, and on the async schedule that is STILL a stall (the
     row is already logged), which is what this test pins."""
     writes = _diamond_writes(31) + [('-', MALLORY)]
-    cs = ConnectedStore(session, 'st', schema=DIAMOND, sync=False)
+    cs = Store(session, 'st', schema=DIAMOND, sync=False)
     last = _write_all(cs, writes)
 
     with pytest.raises(PathCountExceeded):
@@ -122,7 +122,7 @@ def test_fanout_over_cap_row_no_longer_stalls_the_async_apply(session, caplog):
     index, and the index itself answers correctly. Decision:
     ``docs/tk111-stall-aware-freshness-2026-10-02.md`` sec 7."""
     schema = DIAMOND
-    cs = ConnectedStore(session, 'cs', schema=schema, sync=False)
+    cs = Store(session, 'cs', schema=schema, sync=False)
     for i in range(30):
         cs.add_tuple('...', 'user', f'u{i}', 'member', 'group', 'big')
     old = ('...', 'user', 'u0', 'viewer', 'doc', 'old')
@@ -154,7 +154,7 @@ def test_fanout_over_cap_row_no_longer_stalls_the_async_apply(session, caplog):
 def test_transient_failure_stalls_until_the_next_good_batch(session, monkeypatch):
     """D2: ANY catch_up failure records a stall, transient ones included. The cost of
     a false stall is a set-engine fallback until the next successful batch."""
-    cs = ConnectedStore(session, 'st', schema=DIAMOND, sync=False)
+    cs = Store(session, 'st', schema=DIAMOND, sync=False)
     cs.add_tuple(*MALLORY)
     cs.catch_up()
     revoke = cs.remove_tuple(*MALLORY)
@@ -193,10 +193,10 @@ def test_replica_reader_sees_a_stall_recorded_by_another_instance(tmp_path):
     engine = create_engine(f'sqlite:///{tmp_path / "st.db"}')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as ws, Session(engine) as rs:
-        worker = ConnectedStore(ws, 'st', schema=DIAMOND, sync=False)
+        worker = Store(ws, 'st', schema=DIAMOND, sync=False)
         _write_all(worker, _diamond_writes(31)[:2])
         worker.catch_up()
-        reader = ConnectedStore(rs, 'st', schema=DIAMOND, sync=False)
+        reader = Store(rs, 'st', schema=DIAMOND, sync=False)
         assert reader.check(*MALLORY) is True
 
         _write_all(worker, _diamond_writes(31)[2:] + [('-', MALLORY)])
@@ -223,10 +223,10 @@ def test_replica_polling_by_rollback_gets_a_caught_up_set_engine_answer(tmp_path
     engine = create_engine(f'sqlite:///{tmp_path / "st.db"}')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as ws, Session(engine) as rs:
-        worker = ConnectedStore(ws, 'st', schema=DIAMOND, sync=False)
+        worker = Store(ws, 'st', schema=DIAMOND, sync=False)
         _write_all(worker, _diamond_writes(31)[:2])
         worker.catch_up()
-        reader = ConnectedStore(rs, 'st', schema=DIAMOND, sync=False)
+        reader = Store(rs, 'st', schema=DIAMOND, sync=False)
         assert reader.check(*MALLORY) is True
 
         _write_all(worker, _diamond_writes(31)[2:] + [('-', MALLORY)])

@@ -3,7 +3,7 @@
 WHY THIS EXISTS. ``src/zanzibar/schema/rules.py::RuleSet.apply`` yields a raw tuple's rewrite
 fan-out out of a ``set``, so its order moves with ``PYTHONHASHSEED``. Both write paths
 consume it inside one transaction, leaf by leaf -- ``tests/parity.py::_GraphSide.apply``
-(every differential harness) and ``src/zanzibar/connectedstore/apply.py::_apply_row`` under
+(every differential harness) and ``src/zanzibar/store/apply.py::_apply_row`` under
 ``advance_index`` (production). When a LATER leaf is refused, the leaves before it are
 already written, and correctness rests entirely on the caller's rollback undoing exactly
 that prefix -- a prefix whose CONTENTS are a hash-seed accident. `TK93` measured it
@@ -89,8 +89,8 @@ from sqlalchemy import inspect, select, text
 from sqlmodel import SQLModel
 
 import zanzibar.schema as Z
-from zanzibar.connectedstore.apply import advance_index, ensure_cursor
-from zanzibar.connectedstore.models import TupleLog
+from zanzibar.store.apply import advance_index, ensure_cursor
+from zanzibar.store.models import TupleLog
 from zanzibar.graphindex.invariants import InvariantViolation
 from tests.genswarm import Diff
 from tests.wildcard_helpers import make_wildcard_index

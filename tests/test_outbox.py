@@ -12,7 +12,7 @@ P3 tests (boolean spec §4, §8.3): the delta outbox replaces in-memory delta li
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.graphindex import Edge, ReachabilityIndex, Store
+from zanzibar.graphindex import Edge, ReachabilityIndex, IndexStore
 from zanzibar.graphindex.invariants import InvariantViolation, verify_outbox_deltas
 from zanzibar.graphindex.models import DeltaOutbox
 from zanzibar.graphindex.outbox import drain_deltas, outbox_rows, outbox_watermark
@@ -25,7 +25,7 @@ def env():
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    session.add(Store(id='s'))
+    session.add(IndexStore(id='s'))
     session.commit()
     yield session, ReachabilityIndex(session, store_id='s')
     session.close()

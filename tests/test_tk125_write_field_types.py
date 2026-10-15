@@ -63,8 +63,8 @@ from __future__ import annotations
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.connectedstore import ConnectedStore, TupleLog
-from zanzibar.graphindex import ReachabilityIndex, Store
+from zanzibar.store import Store, TupleLog
+from zanzibar.graphindex import ReachabilityIndex, IndexStore
 from zanzibar.graphindex.invariants import snapshot_rows
 from zanzibar.schema import AdmissionRejected, parse_openfga_schema
 from zanzibar.setengine import RelationTuple, SetEngine
@@ -122,7 +122,7 @@ def _sqlite_session() -> Session:
 
 def _cs(sync: bool):
     session = _sqlite_session()
-    cs = ConnectedStore(session, 'tk125', schema=SCHEMA, sync=sync)
+    cs = Store(session, 'tk125', schema=SCHEMA, sync=sync)
 
     def state():
         log = tuple(sorted((r.op, r.subject_predicate, r.subject_type, r.subject_name,
@@ -167,7 +167,7 @@ def _graph():
 
 def _core():
     session = _sqlite_session()
-    session.add(Store(id='tk125'))
+    session.add(IndexStore(id='tk125'))
     session.commit()
     idx = ReachabilityIndex(session, store_id='tk125')
 

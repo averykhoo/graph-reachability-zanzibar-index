@@ -102,10 +102,10 @@ def _set_engine(schema):
 
 
 def _connected_store(schema):
-    from zanzibar.connectedstore import ConnectedStore
+    from zanzibar.store import Store
     session = _session()
     try:
-        ConnectedStore(session, 'cs', schema=schema)
+        Store(session, 'cs', schema=schema)
     finally:
         session.close()
 
@@ -121,7 +121,7 @@ PATHS = {
     'SetEngine': _set_engine,
     'Oracle': lambda s: Oracle(s, []),
     'ParityEngine': _parity,
-    'ConnectedStore': _connected_store,
+    'Store': _connected_store,
 }
 
 

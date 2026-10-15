@@ -40,7 +40,7 @@ exactly the tests that name the mutated check:
 - SA4  parser.py reject call after the CHAIN -> ``pass``: ``2 failed, 42 passed``
   (``[or-then]``, ``[and-then]``).
 - SA5  parser.py `parse_schema_ast`'s S8 call deleted: ``5 failed, 39 passed`` (four
-  ``test_undeclared_restriction_type_is_refused`` ids + the ConnectedStore test).
+  ``test_undeclared_restriction_type_is_refused`` ids + the Store test).
 - SA6  json_frontend.py S8 call deleted: ``1 failed, 43 passed``
   (`test_json_undeclared_restriction_type_is_refused`).
 - SA7  unparse.py relationless ``type`` emission skipped: ``8 failed, 36 passed`` (the
@@ -68,7 +68,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from tests import oracle as oracle_mod
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.schema import (Computed, Direct, Exclusion, Intersection, Restriction, TTU, Union,
                              _parse_schema_ast_unchecked, parse_openfga_json,
                              parse_openfga_schema, parse_schema_ast, unparse_schema_ast)
@@ -255,7 +255,7 @@ def test_undeclared_restriction_type_is_refused(restriction):
     dangling references.
 
     Sabotage SA5 (product: the `_validate_restriction_types_declared` call in
-    `parse_schema_ast` deleted): RED, the product halves here and the ConnectedStore test.
+    `parse_schema_ast` deleted): RED, the product halves here and the Store test.
     SA12a (oracle: its call deleted): RED, the oracle halves (module docstring)."""
     text = _SCHEMA + f"    define x: {restriction}\n"
     _refused_by_both(text, "names an undeclared type 'usr'", "undeclared type 'usr'")
@@ -264,7 +264,7 @@ def test_undeclared_restriction_type_is_refused(restriction):
 
 
 def test_connected_store_refuses_a_typo_schema_up_front():
-    """The shipped consequence. Before TK137, ``ConnectedStore(schema=<[usr] typo>)`` was
+    """The shipped consequence. Before TK137, ``Store(schema=<[usr] typo>)`` was
     built, a ``usr:x`` write was admitted and check said True (TK137 row log 2026-10-13c,
     p16). Now construction refuses the schema, naming the type, and compilation does too."""
     typo = _SCHEMA + "    define viewer: [usr]\n"
@@ -274,7 +274,7 @@ def test_connected_store_refuses_a_typo_schema_up_front():
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         with pytest.raises(ValueError, match="undeclared type 'usr'"):
-            ConnectedStore(session, 'tk137-typo', schema=typo)
+            Store(session, 'tk137-typo', schema=typo)
 
 
 def _json_model(restricted_type: str, declare_user: bool = True) -> dict:

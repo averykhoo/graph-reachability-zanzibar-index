@@ -33,7 +33,7 @@ Phases (design "Bulk algorithm"):
      processor-written pairs), residues, and one outbox ADDED row per final pair.
 
 On a non-boolean schema Phase D is skipped and this is exactly the P13 pre-backfill build;
-``connectedstore.build_index``'s bulk branch no longer runs ``DeltaProcessor.backfill()``.
+``store.build_index``'s bulk branch no longer runs ``DeltaProcessor.backfill()``.
 """
 
 from __future__ import annotations
@@ -289,7 +289,7 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
     session.flush()
     node_id = {key: n.id for key, n in node_objs.items()}
     # N18: the INSERT is flushed and every id is captured in ``node_id``; nothing
-    # downstream (Phase W below, or the caller in ``src/zanzibar/connectedstore/build.py`` -- which
+    # downstream (Phase W below, or the caller in ``src/zanzibar/store/build.py`` -- which
     # re-reads all graph state via fresh queries) touches the live instances again.
     # Expunge them so ~165k Node objects do not sit in the identity map for the rest
     # of the build; drop the dict too.

@@ -30,7 +30,7 @@ import textwrap
 import pytest
 from sqlmodel import SQLModel, UniqueConstraint
 
-import zanzibar.connectedstore.models as cs_models
+import zanzibar.store.models as cs_models
 import zanzibar.graphindex.models as gi_models
 import zanzibar.setengine.models as se_models
 
@@ -88,7 +88,7 @@ def test_a_consumer_table_declared_first_makes_our_import_fail_loudly(table):
             id: int | None = Field(default=None, primary_key=True)
             label: str
         try:
-            import zanzibar.graphindex, zanzibar.connectedstore
+            import zanzibar.graphindex, zanzibar.store
         except Exception as e:
             print("RAISED", type(e).__name__)
         else:

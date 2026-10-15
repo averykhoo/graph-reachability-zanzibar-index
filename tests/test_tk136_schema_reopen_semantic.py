@@ -2,8 +2,8 @@
 
 Property guarded
 ----------------
-``src/zanzibar/connectedstore/schema_io.py::ensure_schema`` (reached by
-``ConnectedStore(session, store_id, schema=...)`` and ``build_index``) accepts a passed
+``src/zanzibar/store/schema_io.py::ensure_schema`` (reached by
+``Store(session, store_id, schema=...)`` and ``build_index``) accepts a passed
 schema whose ``parse_schema_ast`` equals the persisted text's, and still raises
 ``SchemaMismatch`` for a different schema. The persisted text is never rewritten.
 
@@ -33,7 +33,7 @@ restored and sha256-checked; this module only. Literal summary lines::
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.connectedstore import (ConnectedStore, SchemaMismatch, SchemaRecord,
+from zanzibar.store import (Store, SchemaMismatch, SchemaRecord,
                                      ensure_schema, load_schema)
 
 BASE = '''type user
@@ -93,7 +93,7 @@ def engine(tmp_path):
 
 def _bootstrap(engine):
     with Session(engine) as s:
-        cs = ConnectedStore(s, 'x', schema=BASE)
+        cs = Store(s, 'x', schema=BASE)
         cs.add_tuple('...', 'user', 'alice', 'owner', 'doc', 'd1')
         s.commit()
 
@@ -102,7 +102,7 @@ def _bootstrap(engine):
 def test_reopen_with_an_equal_schema_is_accepted(engine, name):
     _bootstrap(engine)
     with Session(engine) as s:
-        cs = ConnectedStore(s, 'x', schema=ACCEPTED[name])
+        cs = Store(s, 'x', schema=ACCEPTED[name])
         assert cs.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True
     with Session(engine) as s:
         # the persisted text is the source of truth and is never rewritten
@@ -115,7 +115,7 @@ def test_reopen_with_a_different_schema_is_refused(engine, name):
     _bootstrap(engine)
     with Session(engine) as s:
         with pytest.raises(SchemaMismatch, match='disagrees with its persisted schema'):
-            ConnectedStore(s, 'x', schema=REFUSED[name])
+            Store(s, 'x', schema=REFUSED[name])
     with Session(engine) as s:
         assert load_schema(s, 'x') == (BASE, frozenset())
 

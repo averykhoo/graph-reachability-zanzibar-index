@@ -16,7 +16,7 @@ step the sync schedule inlines. Asserted here:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.graphindex.invariants import snapshot_rows
 from tests.test_connectedstore_build import _SCHEMA, _OPS, _GRID, _residues_by_name
 from tests.wildcard_helpers import assert_wildcard_invariants
@@ -31,8 +31,8 @@ def session():
 
 
 def test_async_equals_sync_after_catch_up(session):
-    sync_store = ConnectedStore(session, 'sync', schema=_SCHEMA)
-    async_store = ConnectedStore(session, 'async', schema=_SCHEMA, sync=False)
+    sync_store = Store(session, 'sync', schema=_SCHEMA)
+    async_store = Store(session, 'async', schema=_SCHEMA, sync=False)
 
     for op, raw in _OPS:
         (sync_store.add_tuple if op == 'add' else sync_store.remove_tuple)(*raw)
@@ -55,7 +55,7 @@ def test_async_equals_sync_after_catch_up(session):
 
 
 def test_freshness_gating_while_lagging(session):
-    cs = ConnectedStore(session, 's', schema=_SCHEMA, sync=False)
+    cs = Store(session, 's', schema=_SCHEMA, sync=False)
     token = cs.add_tuple('...', 'user', '*', 'public', 'doc', 'd1')
     assert cs.lag() > 0
 
@@ -72,7 +72,7 @@ def test_freshness_gating_while_lagging(session):
 
 
 def test_catch_up_is_exactly_once_across_crashes(session):
-    cs = ConnectedStore(session, 's', schema=_SCHEMA, sync=False)
+    cs = Store(session, 's', schema=_SCHEMA, sync=False)
     for op, raw in _OPS:
         (cs.add_tuple if op == 'add' else cs.remove_tuple)(*raw)
     head = cs.watermark()
@@ -99,7 +99,7 @@ def test_catch_up_is_exactly_once_across_crashes(session):
     cs.catch_up(batch=3)
     assert cs.cursor.applied_log_id == head
 
-    twin = ConnectedStore(session, 'twin', schema=_SCHEMA)
+    twin = Store(session, 'twin', schema=_SCHEMA)
     for op, raw in _OPS:
         (twin.add_tuple if op == 'add' else twin.remove_tuple)(*raw)
     assert snapshot_rows(session, 's') == snapshot_rows(session, 'twin')
@@ -110,7 +110,7 @@ def test_catch_up_is_exactly_once_across_crashes(session):
 def test_sync_store_is_the_inlined_special_case(session):
     """A sync store's catch_up is always a no-op: the inlined apply step already
     rode every write (same machinery, different schedule)."""
-    cs = ConnectedStore(session, 's', schema=_SCHEMA)      # sync=True
+    cs = Store(session, 's', schema=_SCHEMA)      # sync=True
     for op, raw in _OPS[:4]:
         (cs.add_tuple if op == 'add' else cs.remove_tuple)(*raw)
     assert cs.lag() == 0

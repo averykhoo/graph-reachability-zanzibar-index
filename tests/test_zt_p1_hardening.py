@@ -13,7 +13,7 @@ actually detected:
 * **ZT-P1-4 (no-op locks)** -- ``with_for_update()`` compiles to a plain SELECT on
   SQLite, so both documented per-store write locks were silent no-ops. They now take a
   real write lock, and a session configured so that no lock can hold is refused at
-  ``ConnectedStore`` construction.
+  ``Store`` construction.
 * **ZT-P1-5 (unguarded watermarks)** -- the evaluator watermark and the index cursor
   jumped to the newest id they had seen, assuming the preceding catch-up was complete.
   Under a pinned read snapshot it is not, and the skipped rows are lost FOREVER while
@@ -31,10 +31,10 @@ from sqlalchemy import event
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, SQLModel, create_engine, select
 
-import zanzibar.connectedstore.apply as apply_mod
-import zanzibar.connectedstore.source as source_mod
+import zanzibar.store.apply as apply_mod
+import zanzibar.store.source as source_mod
 import zanzibar.graphindex.core as core_mod
-from zanzibar.connectedstore import (ConnectedStore, SchemaRecord, TupleSource,
+from zanzibar.store import (Store, SchemaRecord, TupleSource,
                             UnsafeIsolationLevel, WatermarkGap, log_watermark)
 from zanzibar.graphindex.core import WriteLockUnsafe, is_sqlite
 from zanzibar.setengine import SetEngine
@@ -340,7 +340,7 @@ def test_source_lock_is_a_real_write_lock_on_sqlite(tmp_path, monkeypatch):
     monkeypatch.setattr(core_mod, 'SQLITE_BUSY_RETRIES', 1)
     engine = _file_engine(tmp_path / 'lock.db')
     with Session(engine) as boot:
-        ConnectedStore(boot, 's', schema=BOOL_SCHEMA)
+        Store(boot, 's', schema=BOOL_SCHEMA)
         boot.commit()
 
     with Session(engine) as sa, Session(engine) as sb:
@@ -367,7 +367,7 @@ def test_write_lock_leaves_the_connection_in_a_transaction(tmp_path):
     autocommit."""
     engine = _file_engine(tmp_path / 'txn.db', recipe=False)
     with Session(engine) as s:
-        cs = ConnectedStore(s, 's', schema=BOOL_SCHEMA)
+        cs = Store(s, 's', schema=BOOL_SCHEMA)
         assert is_sqlite(s)
         raw = s.connection().connection.dbapi_connection
         assert raw.isolation_level == ''                    # pysqlite default
@@ -387,12 +387,12 @@ def test_construction_refuses_autocommit_sqlite(tmp_path, kwargs):
     The error names the fix."""
     path = tmp_path / 'auto.db'
     with Session(_file_engine(path)) as boot:                # bootstrap normally
-        ConnectedStore(boot, 's', schema=BOOL_SCHEMA)
+        Store(boot, 's', schema=BOOL_SCHEMA)
         boot.commit()
     engine = create_engine(f'sqlite:///{path}', **kwargs)
     with Session(engine) as s:
         with pytest.raises(WriteLockUnsafe) as exc:
-            ConnectedStore(s, 's')
+            Store(s, 's')
     assert 'autocommit' in str(exc.value)
     assert 'isolation_level' in str(exc.value)
 
@@ -405,7 +405,7 @@ def test_construction_refuses_driver_autocommit_without_begin(tmp_path, mode):
     ``sqlite3`` ``autocommit=True``."""
     path = tmp_path / f'nobegin_{mode}.db'
     with Session(_file_engine(path)) as boot:
-        ConnectedStore(boot, 's', schema=BOOL_SCHEMA)
+        Store(boot, 's', schema=BOOL_SCHEMA)
         boot.commit()
 
     engine = create_engine(f'sqlite:///{path}')
@@ -419,7 +419,7 @@ def test_construction_refuses_driver_autocommit_without_begin(tmp_path, mode):
 
     with Session(engine) as s:
         with pytest.raises(WriteLockUnsafe):
-            ConnectedStore(s, 's')
+            Store(s, 's')
 
 
 @pytest.mark.parametrize('recipe', [True, False])
@@ -429,7 +429,7 @@ def test_construction_accepts_both_safe_configurations(tmp_path, recipe):
     read normally."""
     engine = _file_engine(tmp_path / f'ok{int(recipe)}.db', recipe=recipe)
     with Session(engine) as s:
-        cs = ConnectedStore(s, 's', schema=BOOL_SCHEMA)
+        cs = Store(s, 's', schema=BOOL_SCHEMA)
         token = cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
         assert cs.check('...', 'user', 'u1', 'viewer', 'doc', 'd1', at_least=token)
 
@@ -437,7 +437,7 @@ def test_construction_accepts_both_safe_configurations(tmp_path, recipe):
 def test_in_memory_default_session_still_opens():
     """The whole existing suite's shape: a default in-memory SQLite session."""
     with Session(_mem_engine()) as s:
-        cs = ConnectedStore(s, 's', schema=BOOL_SCHEMA)
+        cs = Store(s, 's', schema=BOOL_SCHEMA)
         cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
         assert cs.check('...', 'user', 'u1', 'viewer', 'doc', 'd1')
 
@@ -455,7 +455,7 @@ def test_evaluator_watermark_gap_raises(tmp_path, monkeypatch):
     ``tests/test_postgres_ha.py::test_advance_index_raises_watermark_gap_on_a_real_out_of_order_commit``."""
     engine = _file_engine(tmp_path / 'gap.db')
     with Session(engine) as boot:
-        ConnectedStore(boot, 's', schema=BOOL_SCHEMA)
+        Store(boot, 's', schema=BOOL_SCHEMA)
         boot.commit()
 
     with Session(engine) as sa, Session(engine) as sb:
@@ -489,16 +489,16 @@ def test_index_cursor_gap_raises(tmp_path, monkeypatch):
     still certify the resulting stale answer)."""
     engine = _file_engine(tmp_path / 'cgap.db')
     with Session(engine) as boot:
-        ConnectedStore(boot, 's', schema=BOOL_SCHEMA)
+        Store(boot, 's', schema=BOOL_SCHEMA)
         boot.commit()
 
     with Session(engine) as sw:                        # the writer fills the log
-        w = ConnectedStore(sw, 's')
+        w = Store(sw, 's')
         ids = [w.add_tuple('...', 'user', f'u{i}', 'editor', 'doc', 'd1')
                for i in range(1, 4)]
 
     with Session(engine) as sr:                        # a lagging async index
-        r = ConnectedStore(sr, 's', sync=False)
+        r = Store(sr, 's', sync=False)
         r.cursor.applied_log_id = 0
         sr.commit()
         real = apply_mod.log_rows
@@ -518,7 +518,7 @@ def test_contiguous_path_unaffected_and_read_your_writes_holds(tmp_path):
     contract still holds on the sync AND async schedules."""
     engine = _file_engine(tmp_path / 'ok.db')
     with Session(engine) as s:
-        cs = ConnectedStore(s, 's', schema=BOOL_SCHEMA)
+        cs = Store(s, 's', schema=BOOL_SCHEMA)
         tokens = []
         for i in range(6):
             tokens.append(cs.add_tuple('...', 'user', f'u{i}', 'editor', 'doc', 'd1'))
@@ -536,7 +536,7 @@ def test_contiguous_path_unaffected_and_read_your_writes_holds(tmp_path):
         assert cs.source.evaluator_watermark == tok
 
     with Session(engine) as s2:                        # async schedule
-        cs2 = ConnectedStore(s2, 's', sync=False)
+        cs2 = Store(s2, 's', sync=False)
         t = cs2.add_tuple('...', 'user', 'zz', 'editor', 'doc', 'd1')
         assert cs2.lag() == 1
         # tokened read while the index lags: served by the fresh set engine
@@ -553,8 +553,8 @@ def test_no_false_gap_when_log_ids_interleave_across_stores(tmp_path):
     exercises the real gap query)."""
     engine = _file_engine(tmp_path / 'two.db')
     with Session(engine) as sa, Session(engine) as sb:
-        a = ConnectedStore(sa, 'A', schema=BOOL_SCHEMA)
-        b = ConnectedStore(sb, 'B', schema=BOOL_SCHEMA)
+        a = Store(sa, 'A', schema=BOOL_SCHEMA)
+        b = Store(sb, 'B', schema=BOOL_SCHEMA)
         for i in range(5):
             ta = a.add_tuple('...', 'user', f'u{i}', 'editor', 'doc', 'd1')
             tb = b.add_tuple('...', 'user', f'u{i}', 'editor', 'doc', 'd1')
@@ -576,7 +576,7 @@ def test_rolled_back_own_write_still_needs_refresh_not_a_gap(tmp_path):
     ``refresh_evaluator``) is unchanged by the assignment/contiguity rewrite."""
     engine = _file_engine(tmp_path / 'rb.db')
     with Session(engine) as s:
-        ConnectedStore(s, 's', schema=BOOL_SCHEMA)
+        Store(s, 's', schema=BOOL_SCHEMA)
         src = TupleSource(s, 's')
         tok = src.add('...', 'user', 'u1', 'editor', 'doc', 'd1')
         assert src.evaluator_watermark == tok

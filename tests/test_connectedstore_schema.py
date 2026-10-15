@@ -8,7 +8,7 @@ persisted one (loud SchemaMismatch, never silent divergence).
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.connectedstore import (SchemaMismatch, SchemaRecord, ensure_schema, load_schema,
+from zanzibar.store import (SchemaMismatch, SchemaRecord, ensure_schema, load_schema,
                             open_graph_index, open_set_engine, save_schema, TupleSource)
 from zanzibar.schema import parse_openfga_schema
 from zanzibar.setengine import UnloggedWriteRefused

@@ -11,7 +11,7 @@ NOT "the cache is fast" — it is the four properties that carry correctness:
      visible_to_the_next_cascade``, BOTH signs).
   2. **Placement.** A raw (non-processor) write must never execute while a scope is
      open — which is exactly why the scope is installed inside ``run_cascade`` and NOT
-     in ``src/zanzibar/connectedstore/apply.py::advance_index``, where the N15 node cache lives and
+     in ``src/zanzibar/store/apply.py::advance_index``, where the N15 node cache lives and
      spans the apply loop (``test_raw_writes_never_run_inside_a_stored_cache_scope``,
      plus the deliberately-degraded ``test_a_scope_spanning_a_raw_write_serves_a_stale_
      answer`` which shows what that placement would buy).
@@ -227,7 +227,7 @@ thinly exercised; keep that in mind before widening it.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.graphindex.models import Node
 from zanzibar.graphindex.outbox import outbox_watermark
 from zanzibar.graphindex.processor import DeltaProcessor
@@ -368,7 +368,7 @@ def test_raw_writes_never_run_inside_a_stored_cache_scope(sync):
     that stored tuples on storage-leaf families are constant for the life of a scope;
     a raw write inside a scope violates that directly. It is the reason the scope is
     installed in ``DeltaProcessor.run_cascade`` and NOT in
-    ``src/zanzibar/connectedstore/apply.py::advance_index`` — ``advance_index`` installs the N15
+    ``src/zanzibar/store/apply.py::advance_index`` — ``advance_index`` installs the N15
     node cache around the WHOLE ``_apply_row`` loop, so a stored-tuple memo copied to
     that site would span the raw writes.
 
@@ -383,7 +383,7 @@ def test_raw_writes_never_run_inside_a_stored_cache_scope(sync):
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
-        cs = ConnectedStore(session, 's', schema=_CS_SCHEMA, sync=sync)
+        cs = Store(session, 's', schema=_CS_SCHEMA, sync=sync)
         proc, widx = cs.proc, cs.widx
         assert proc is not None, 'schema must compile derived plans or this pins nothing'
 
@@ -432,7 +432,7 @@ def test_a_scope_spanning_a_raw_write_serves_a_stale_answer():
     constructed here in the test rather than by editing the source.
 
     Opening the scope around a raw write — which is what installing it at
-    ``src/zanzibar/connectedstore/apply.py::advance_index`` would do — makes
+    ``src/zanzibar/store/apply.py::advance_index`` would do — makes
     ``_stored_tupleset_subjects`` serve the pre-write answer. Asserting the stale
     answer appears is the point: it proves the placement rule is load-bearing and not
     a stylistic preference, and it survives whoever next reads the comment.

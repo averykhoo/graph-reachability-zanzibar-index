@@ -172,7 +172,7 @@ Listed so this file is a complete index of what is open, and pointed rather than
   of `anchor_check.py`'s `MIN_*` floors, may be worth more than a model and is a legitimate
   outcome.
 * **`advance_index`'s docstring asserts the exact claim the model leaves unproved** —
-  `src/zanzibar/connectedstore/apply.py:104-105` argues that batch size *"affects only latency/
+  `src/zanzibar/store/apply.py:104-105` argues that batch size *"affects only latency/
   granularity, not the final materialized state or any semantic guarantee"*. Home:
   `formal/CORRESPONDENCE.md` §6 (`:393-424`), which owns the batched-schedule gap and
   already marks it open (*"nothing in the Lean tree quantifies over 'apply N ops, then one
@@ -233,7 +233,7 @@ rail; delete a bullet only when its ledger text can no longer be misread.
 * **`Residuals` item 1 — "the cap does not stop the DoS that motivated it."** Adjudicated
   by [`spec-deviations.md`](spec-deviations.md) `## 2026-07-29c`: a store-level write quota
   was **DECLINED by the user**, "bulk rebuild instead" was measured and rejected on four
-  independent blockers, and `ConnectedStore(sync=False)` is the accepted answer. Closed as
+  independent blockers, and `Store(sync=False)` is the accepted answer. Closed as
   a decision, not as a fix — do not re-open it as an unbuilt feature.
 * **`Residuals` item 3** (zero coverage for wildcard usersets and the
   `derived-tupleset-ttu` leaf) — closed 2026-07-28; both are corpus'd or recorded as scope

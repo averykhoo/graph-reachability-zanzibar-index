@@ -12,7 +12,7 @@ WHAT THIS MODULE SETTLES
 On the PROCESSOR side that term is a repair affordance and deleting it is a live
 authorization fail-open (``TK91``, ``tests/test_reg_tk91_live_keys_repair.py``). On the
 BULK side ``TK91`` left a hypothesis behind, explicitly labelled UNVERIFIED: that
-``src/zanzibar/connectedstore/build.py::build_index`` "refuses to run on an index that already has
+``src/zanzibar/store/build.py::build_index`` "refuses to run on an index that already has
 state", so the bulk backfill only ever sees a store it built itself and its ``[rel]`` term
 might be **unreachable by construction**.
 
@@ -126,7 +126,7 @@ import json
 
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.connectedstore import TupleSource, build_index, save_schema
+from zanzibar.store import TupleSource, build_index, save_schema
 from zanzibar.graphindex import bulk_backfill
 from zanzibar.graphindex.invariants import snapshot_rows
 from zanzibar.graphindex.models import Residue

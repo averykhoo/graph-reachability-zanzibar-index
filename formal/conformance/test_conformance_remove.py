@@ -608,7 +608,7 @@ def test_graph_full_churn_restores(name):
 # ADD-ONLY write-by-write build of the survivors. That fresh build is the same
 # constructor, run again: `graphindex_drive_ops`, routing + same-transaction
 # cascade. The PRODUCTION bootstrap is a different constructor —
-# `connectedstore.build_index(bulk=True)` -> `src/zanzibar/graphindex/bulk_build.py` (one
+# `store.build_index(bulk=True)` -> `src/zanzibar/graphindex/bulk_build.py` (one
 # in-memory pass, closed-form path counts, `bulk_backfill.py`'s in-memory
 # boolean Phase-D backfill, bulk INSERTs) — and until this arm nothing anywhere
 # bulk-built from a POST-REMOVAL survivor set. `test_conformance_bulk_state.py`
@@ -690,7 +690,7 @@ def _incremental_constructor_label(schema_text, tuples, object_wildcards):
     per seed. It asserts nothing about STATE — `tests/test_bulk_build.py` owns
     the bulk/incremental identity differential.
     """
-    from zanzibar.connectedstore import TupleSource, build_index, save_schema
+    from zanzibar.store import TupleSource, build_index, save_schema
 
     session = _fresh_session()
     try:
@@ -714,7 +714,7 @@ def test_graph_remove_bulk_build_survivors(name):
     generators, so all three graph arms traverse identical op streams). Per
     corpus x seed: drive adds/removes through the synchronous v1 path
     (`graphindex_drive_ops`), snapshot the accepted survivors, then build a
-    SECOND index from that snapshot through `connectedstore.build_index(
+    SECOND index from that snapshot through `store.build_index(
     bulk=True)` (`backends.bulk_build_drive`) and assert
 
       (a) the bulk-built index satisfies I1-I8 on its own, and on a boolean
@@ -727,14 +727,14 @@ def test_graph_remove_bulk_build_survivors(name):
       (d) driven grid `check` == bulk grid `check` over the full universe;
       (e) the BULK constructor is the one that actually RAN. `bulk_build_drive`
           refuses unless `build_index` reports `constructor == 'bulk'`
-          (`src/zanzibar/connectedstore/build.py::BuildReport`), and this arm carries the
+          (`src/zanzibar/store/build.py::BuildReport`), and this arm carries the
           CONTROL that keeps that refusal from being an assertion that cannot
           fail: once per corpus `_incremental_constructor_label` rebuilds the
           last seed's survivors with `bulk=False` and requires the OTHER label.
           Legs (a)-(d) are blind here BY DESIGN — P13's correctness bar is that
           the two constructors produce identical state — so nothing about the
           RESULT can distinguish them. Measured 2026-09-20, before leg (e)
-          existed: a byte edit of `src/zanzibar/connectedstore/build.py` turning `if bulk:`
+          existed: a byte edit of `src/zanzibar/store/build.py` turning `if bulk:`
           into `if False:` left this arm at `26 passed, 104 deselected` rc=0
           while `zanzibar.graphindex.bulk_build.bulk_build` was called 0 times instead of
           130 — the arm's whole stated subject silently replaced by the
@@ -902,7 +902,7 @@ def test_graph_remove_bulk_build_survivors(name):
         (0:02:11)``.
 
       * ★ **Leg (e), the constructor pin -- PROVEN BOTH WAYS, 2026-09-20.**
-        Both runs are BYTE EDITS of `src/zanzibar/connectedstore/build.py` (pristine bytes
+        Both runs are BYTE EDITS of `src/zanzibar/store/build.py` (pristine bytes
         restored and `cmp`-verified afterwards), on the 3-param subset
         ``-k "test_graph_remove_bulk_build_survivors and (object_wildcard or
         residue_rich or wildcard_public)"`` -- chosen for the bridge corpus,

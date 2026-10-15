@@ -43,8 +43,8 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from zanzibar.setengine import PySets, RoaringSets
 from zanzibar.setengine.models import RelationTuple
-from zanzibar.connectedstore import build_index, save_schema
-from zanzibar.connectedstore.schema_io import open_set_engine
+from zanzibar.store import build_index, save_schema
+from zanzibar.store.schema_io import open_set_engine
 
 from benchmarks._harness import rss_mb, timed
 from benchmarks.scale_bench import WORKLOADS, _rsz

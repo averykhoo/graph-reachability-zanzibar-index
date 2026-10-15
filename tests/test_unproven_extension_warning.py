@@ -8,7 +8,7 @@ theorems' premise (`FullScope.lean::W4Fragment` fields `wsBare` / `bareStar` /
 
 The warning is raised in `src/zanzibar/schema/compiler.py::derive_schema_info`, the one step every
 construction path shares (`parse_openfga_schema`, `SetEngine.__init__`,
-`zanzibar.connectedstore.schema_io`). `pytest.ini` IGNORES it suite-wide so the hundreds of
+`zanzibar.store.schema_io`). `pytest.ini` IGNORES it suite-wide so the hundreds of
 wildcard fixtures do not flood the warnings summary; `pytest.warns` / `catch_warnings`
 below install their own filter, so these pins are not blinded by that ignore.
 

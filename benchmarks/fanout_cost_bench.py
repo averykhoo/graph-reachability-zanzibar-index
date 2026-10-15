@@ -22,8 +22,8 @@ The precondition is NOT measured and NOT built through per-write admission: the 
 tuples are bulk-inserted as ``RelationTuple`` rows PLUS matching ``TupleLog`` ADD rows
 (so the TK140 adoption check sees a fully-logged store), then the index is built with
 ``build_index(..., bulk=True)`` (the P13 offline constructor, never capped), and only
-then is the store opened through the user-facing ``ConnectedStore`` (sync schedule).
-The one measured write goes through ``ConnectedStore.add_tuple`` exactly as a user's
+then is the store opened through the user-facing ``Store`` (sync schedule).
+The one measured write goes through ``Store.add_tuple`` exactly as a user's
 would, and the removal through ``remove_tuple``.
 
 Usage (from the repo root, with the repo's conda env)::
@@ -61,22 +61,18 @@ sys.path.insert(0, str(_ROOT / 'src'))   # this checkout's code, never an instal
 from sqlalchemy import event, func, insert, text  # noqa: E402
 from sqlmodel import Session, SQLModel, create_engine, select  # noqa: E402
 
-from zanzibar.connectedstore import build_index, save_schema  # noqa: E402
-from zanzibar.connectedstore.models import TupleLog  # noqa: E402
+from zanzibar.store import build_index, save_schema  # noqa: E402
+from zanzibar.store.models import TupleLog  # noqa: E402
 from zanzibar.graphindex.core import ReachabilityIndex  # noqa: E402
 from zanzibar.graphindex.models import DeltaOutbox, Edge, Node  # noqa: E402
 from zanzibar.setengine.models import RelationTuple  # noqa: E402
 
-# The user-facing store class may be renamed (TK123); import defensively.
-try:
-    from zanzibar.connectedstore import ConnectedStore as _StoreClass  # noqa: E402
-except ImportError:  # pragma: no cover - post-rename
-    from zanzibar.connectedstore import Store as _StoreClass  # type: ignore  # noqa: E402
+from zanzibar.store import Store as _StoreClass  # noqa: E402
 try:
     from zanzibar.schema import ClosureFanoutExceeded  # noqa: E402
 except ImportError:  # pragma: no cover
     from zanzibar import ClosureFanoutExceeded  # type: ignore  # noqa: E402
-import zanzibar.connectedstore.store as _store_mod  # noqa: E402
+import zanzibar.store._store as _store_mod  # noqa: E402
 
 from benchmarks._harness import rss_mb  # noqa: E402
 

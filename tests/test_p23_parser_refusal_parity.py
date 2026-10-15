@@ -23,7 +23,7 @@ gitignored, this docstring is the tracked record)::
     'a#b'         prod=accept oracle=accept
     'can view'    prod=accept oracle=accept
     'a.b'         prod=REFUSE oracle=accept
-    ConnectedStore(schema=<define *: viewer but not blocked>): constructed OK
+    Store(schema=<define *: viewer but not blocked>): constructed OK
     add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1') ->
         AdmissionRejected invalid relation '*': must match [A-Za-z0-9_./@+=-] (1-256 chars)
 
@@ -48,7 +48,7 @@ import random
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from tests import oracle as oracle_mod
 from zanzibar.schema import parse_openfga_json, parse_schema_ast
 
@@ -267,7 +267,7 @@ def test_connected_store_refuses_the_schema_instead_of_the_write():
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         with pytest.raises(ValueError, match=r"declared relation name '\*'"):
-            ConnectedStore(session, 'cs', schema=_REFUSED['P23/rel-star'])
+            Store(session, 'cs', schema=_REFUSED['P23/rel-star'])
 
 
 def _json_model(type_name='doc', rel_name='viewer'):

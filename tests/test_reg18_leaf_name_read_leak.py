@@ -47,7 +47,7 @@ deterministic minimal repro.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.setengine import ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
 from tests.parity import GHOST_NAME, _GraphSide, _SetSide
@@ -221,7 +221,7 @@ def test_junk_and_ghost_dotted_names_are_false_everywhere_and_raise_nothing():
                           route into the derived machinery.
 
     Both must answer False on the graph, both set engines, the oracle AND the
-    composed ConnectedStore, with nothing raised (a raise fails the test naturally).
+    composed Store, with nothing raised (a raise fails the test naturally).
     NOTE these controls pass on the UNFIXED tree too -- they are the boundary of the
     fix, pinned so the deny cannot overshoot into an exception or a KeyError."""
     leaves = _leaf_families()
@@ -237,7 +237,7 @@ def test_junk_and_ghost_dotted_names_are_false_everywhere_and_raise_nothing():
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     cs_session = Session(engine)
-    cs = ConnectedStore(cs_session, 'cs', schema=SCHEMA)
+    cs = Store(cs_session, 'cs', schema=SCHEMA)
     sets = [_SetSide(SCHEMA, frozenset(), ops) for ops in ALL_SETOPS]
     try:
         write('add', ('...', 'user', 'alice', 'editor', 'doc', 'd1'))
@@ -266,17 +266,17 @@ def test_junk_and_ghost_dotted_names_are_false_everywhere_and_raise_nothing():
 
 
 # --------------------------------------------------------------------------- #
-# 4. THE COMPOSED SURFACE: ConnectedStore.check
+# 4. THE COMPOSED SURFACE: Store.check
 # --------------------------------------------------------------------------- #
 
 def test_connectedstore_check_at_a_leaf_name_is_false():
     """The composed system serves reads from the same facade, so the leak reached
-    ConnectedStore.check verbatim. Same anti-vacuity discipline: the routed write's
+    Store.check verbatim. Same anti-vacuity discipline: the routed write's
     leaf node must exist in the composed store before the denial means anything."""
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    cs = ConnectedStore(session, 'cs', schema=SCHEMA)
+    cs = Store(session, 'cs', schema=SCHEMA)
     try:
         cs.add_tuple('...', 'user', 'alice', 'editor', 'doc', 'd1')
 
@@ -288,7 +288,7 @@ def test_connectedstore_check_at_a_leaf_name_is_false():
         assert cs.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True
         for (o_type, leaf) in leaves:
             assert cs.check('...', 'user', 'alice', leaf, o_type, 'd1') is False, (
-                f'BL-2 through the composed surface: ConnectedStore.check grants '
+                f'BL-2 through the composed surface: Store.check grants '
                 f'the leaf name {leaf!r}')
     finally:
         session.close()

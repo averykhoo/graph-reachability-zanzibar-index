@@ -6,11 +6,11 @@ Every open re-parses a store's persisted ``SchemaRecord.schema_text``, so a stor
 zanzibar-index 0.0.4 or earlier saved with a shape TK137 now refuses (H1 ``schema 1.2``, H2
 extra words on a header line, S7 unparenthesised ``but not``, S8 a restriction to an
 undeclared type) stops opening. The error must read as a VERSION BREAK, not corruption: it is
-``zanzibar.connectedstore.PersistedSchemaRefused``, it says the schema was saved by
+``zanzibar.store.PersistedSchemaRefused``, it says the schema was saved by
 zanzibar-index 0.0.4 or earlier using a shape this version refuses, quotes the parser's
 refusal, and says how to rewrite it. Every parse site of persisted text is covered:
 
-- ``ConnectedStore(session, id)`` and ``ConnectedStore(session, id, schema=<same text>)``
+- ``Store(session, id)`` and ``Store(session, id, schema=<same text>)``
   (``schema_io.py::open_graph_index``),
 - ``schema_io.py::open_set_engine`` (``TupleSource``'s open path),
 - ``schema_io.py::ensure_schema`` with a different passed text (``_same_schema``),
@@ -49,7 +49,7 @@ Literal tails, every one RED:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.connectedstore import (ConnectedStore, PersistedSchemaRefused, SchemaRecord,
+from zanzibar.store import (Store, PersistedSchemaRefused, SchemaRecord,
                                      build_index, ensure_schema, open_set_engine)
 from zanzibar.schema import parse_schema_ast
 from zanzibar.schema.errors import ShapeRefusedSinceTK137
@@ -133,11 +133,11 @@ def test_reopening_a_0_0_4_store_says_it_is_a_version_break(engine, name):
     _persist_as_0_0_4(engine, 'old', text)
     with Session(engine) as s:
         with pytest.raises(PersistedSchemaRefused) as info:
-            ConnectedStore(s, 'old')
+            Store(s, 'old')
     _assert_version_break(info.value, 'old', name)
     with Session(engine) as s:  # reopening with the identical text takes the same path
         with pytest.raises(PersistedSchemaRefused) as info:
-            ConnectedStore(s, 'old', schema=text)
+            Store(s, 'old', schema=text)
     _assert_version_break(info.value, 'old', name)
 
 
@@ -174,10 +174,10 @@ def test_build_index_into_another_store_blames_the_source(engine, name):
 def test_the_rewrite_opens_in_a_new_store(engine, name):
     """The message's advice works: the rewritten schema under a new store id opens."""
     with Session(engine) as s:
-        ConnectedStore(s, 'new', schema=CASES[name][3])
+        Store(s, 'new', schema=CASES[name][3])
         s.commit()
     with Session(engine) as s:
-        ConnectedStore(s, 'new')
+        Store(s, 'new')
 
 
 @pytest.mark.parametrize('name', sorted(CASES))
@@ -186,7 +186,7 @@ def test_a_fresh_schema_keeps_the_parser_refusal(engine, name):
     refusal and nothing is saved."""
     with Session(engine) as s:
         with pytest.raises(ShapeRefusedSinceTK137) as info:
-            ConnectedStore(s, 'fresh', schema=CASES[name][0])
+            Store(s, 'fresh', schema=CASES[name][0])
     assert not isinstance(info.value, PersistedSchemaRefused)
     assert VERSION_BREAK not in str(info.value)
     with Session(engine) as s:
@@ -199,7 +199,7 @@ def test_an_older_refusal_of_a_persisted_text_is_not_called_a_version_break(engi
     _persist_as_0_0_4(engine, 'corrupt', BASE.replace('define x: a or b', 'define x: a or zz'))
     with Session(engine) as s:
         with pytest.raises(ValueError) as info:
-            ConnectedStore(s, 'corrupt')
+            Store(s, 'corrupt')
     assert not isinstance(info.value, PersistedSchemaRefused)
     assert not isinstance(info.value, ShapeRefusedSinceTK137)
     assert VERSION_BREAK not in str(info.value)

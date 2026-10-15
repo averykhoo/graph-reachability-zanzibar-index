@@ -148,9 +148,9 @@ class ConnectedBackend:
     name = 'connected'
 
     def __init__(self, schema, object_wc=frozenset()):
-        from zanzibar.connectedstore import ConnectedStore
+        from zanzibar.store import Store
         self.session = _fresh_session()
-        self.cs = ConnectedStore(self.session, 'cx', schema=schema,
+        self.cs = Store(self.session, 'cx', schema=schema,
                                  object_wildcard_shapes=object_wc)
         self.session.commit()
 
@@ -159,7 +159,7 @@ class ConnectedBackend:
             (self.cs.add_tuple if op == 'add' else self.cs.remove_tuple)(*raw)
             return True
         except AdmissionRejected:
-            return False        # ConnectedStore rolled back + self-healed already
+            return False        # Store rolled back + self-healed already
 
     def check(self, q):
         return self.cs.check(*q)

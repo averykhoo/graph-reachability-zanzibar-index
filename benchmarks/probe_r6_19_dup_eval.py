@@ -28,8 +28,8 @@ sys.path.insert(0, '.')
 from sqlmodel import Session, SQLModel, create_engine  # noqa: E402
 
 from benchmarks.scale_bench import WORKLOADS  # noqa: E402
-from zanzibar.connectedstore import build_index  # noqa: E402
-from zanzibar.connectedstore import save_schema  # noqa: E402
+from zanzibar.store import build_index  # noqa: E402
+from zanzibar.store import save_schema  # noqa: E402
 from zanzibar.setengine.models import RelationTuple  # noqa: E402
 
 CALLS = Counter()            # (plan_id, key) -> times evaluated

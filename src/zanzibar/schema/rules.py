@@ -354,7 +354,7 @@ class RuleSet:
                 # as one. Whether reaching it means "the user wrote nonsense" or "the
                 # log is corrupt" is a property of the CALLER's provenance guarantee,
                 # not of this check -- and the caller that has such a guarantee already
-                # says so: `zanzibar.connectedstore.apply._apply_row` promotes any ValueError
+                # says so: `zanzibar.store.apply._apply_row` promotes any ValueError
                 # from this path to `InvariantViolation`. `AdmissionRejected` subclasses
                 # ValueError, so that promotion is untouched.
                 raise AdmissionRejected(

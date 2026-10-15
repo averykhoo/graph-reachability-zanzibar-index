@@ -26,9 +26,9 @@ from sqlalchemy import func
 from sqlmodel import Session, SQLModel, create_engine, select
 
 import zanzibar.graphindex.core as core
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.graphindex import Edge, InvariantViolation, ReachabilityIndex
-from zanzibar.graphindex.models import DeltaOutbox, Node, Store
+from zanzibar.graphindex.models import DeltaOutbox, Node, IndexStore
 from tests import oracle as O
 from tests.test_tk111_stall_aware_freshness import DIAMOND, _diamond_writes
 from zanzibar.schema import (AdmissionRejected, IndexResourceLimit,
@@ -75,7 +75,7 @@ def test_sync_overflow_is_a_clean_refusal_at_the_int4_ceiling(session):
     """K=31 is the first width that overflows int4; it must refuse exactly ONE write,
     with a classifiable type, and leave a consistent, writable store."""
     writes = _diamond_writes(31)
-    cs = ConnectedStore(session, 'st', schema=DIAMOND, sync=True)
+    cs = Store(session, 'st', schema=DIAMOND, sync=True)
     refused = _apply(cs, writes)
 
     assert [t for t, _ in refused] == [('member', 'group', 'B30', 'member', 'group', 'L31')]
@@ -96,7 +96,7 @@ def test_ceiling_control_k30_admits_everything(session):
     """The CEILING control: one layer less (2**30) is under the bound, so nothing is
     refused. Without it the K=31 test cannot tell a bound at 2**31 from one far lower."""
     writes = _diamond_writes(30)
-    cs = ConnectedStore(session, 'st', schema=DIAMOND, sync=True)
+    cs = Store(session, 'st', schema=DIAMOND, sync=True)
     assert _apply(cs, writes) == []
     _assert_three_way(cs, writes, [], 30)
 
@@ -107,7 +107,7 @@ def test_bound_is_inclusive_and_exact(session, monkeypatch, bound, refused_last)
     refuses the last diamond row. Pins ``new > MAX_PATH_COUNT``, not ``>=``."""
     monkeypatch.setattr(core, 'MAX_PATH_COUNT', bound)
     writes = _diamond_writes(3)
-    cs = ConnectedStore(session, 'st', schema=DIAMOND, sync=True)
+    cs = Store(session, 'st', schema=DIAMOND, sync=True)
     refused = _apply(cs, writes)
     if refused_last:
         assert [t for t, _ in refused] == [writes[-1][1]]
@@ -122,7 +122,7 @@ def _raw_store():
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    session.add(Store(id='s'))
+    session.add(IndexStore(id='s'))
     session.commit()
     return session, ReachabilityIndex(session, store_id='s')
 
@@ -187,7 +187,7 @@ def test_both_build_index_constructors_apply_the_same_bound(monkeypatch, bulk, b
     (``bulk=False``) refuses through the edge-add path; the bulk one
     (``src/zanzibar/graphindex/bulk_build.py``) builds the closure in memory and must refuse the same
     snapshot with the same type, not fail in the driver at INSERT. K=3 is exactly 8."""
-    from zanzibar.connectedstore import TupleSource, build_index, save_schema
+    from zanzibar.store import TupleSource, build_index, save_schema
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:

@@ -1,5 +1,5 @@
 """
-S3 (connected-store spec §5-S3): the ConnectedStore, sync schedule.
+S3 (connected-store spec §5-S3): the Store, sync schedule.
 
   * randomized walks on the boolean fixture: after every accepted write, the store's
     index-served checks ≡ the oracle ≡ its own set engine over the full grid, with
@@ -16,7 +16,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from zanzibar.schema import AdmissionRejected
-from zanzibar.connectedstore import ConnectedStore, TupleLog, log_rows
+from zanzibar.store import Store, TupleLog, log_rows
 from zanzibar.graphindex.invariants import install_paranoia, snapshot_rows
 from zanzibar.setengine import RelationTuple
 from tests.oracle import Oracle, OracleTuple
@@ -33,7 +33,7 @@ def session():
 
 
 def _open(session, load_fga_schema, fixture='boolean_wildcards.fga', store='cs'):
-    cs = ConnectedStore(session, store, schema=load_fga_schema(fixture))
+    cs = Store(session, store, schema=load_fga_schema(fixture))
     install_paranoia(session, store, cs.widx.schema_info)
     return cs
 
@@ -178,11 +178,11 @@ def test_fresh_token_reads_served_by_index(session, load_fga_schema):
 
 
 def test_reopen_is_self_describing(session, load_fga_schema):
-    """A second ConnectedStore on the same (session, store_id) needs no schema and
+    """A second Store on the same (session, store_id) needs no schema and
     sees the same state."""
     cs = _open(session, load_fga_schema)
     cs.add_tuple('...', 'user', 'u2', 'editor', 'doc', 'd1')
 
-    reopened = ConnectedStore(session, 'cs')
+    reopened = Store(session, 'cs')
     assert reopened.check('...', 'user', 'u2', 'viewer', 'doc', 'd1') is True
     assert reopened.cursor.applied_log_id == cs.cursor.applied_log_id

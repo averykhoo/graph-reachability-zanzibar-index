@@ -94,7 +94,7 @@ def graphindex_drive(schema_text: str, tuples, object_wildcards=()):
 
 def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
     """Build the real graph index OFFLINE from a tuple snapshot, via
-    `connectedstore.build_index(bulk=True)` — the production bootstrap path
+    `store.build_index(bulk=True)` — the production bootstrap path
     (`src/zanzibar/graphindex/bulk_build.py`: one in-memory pass, closed-form path counts,
     in-memory boolean backfill, bulk INSERTs) — instead of growing it one logged
     write + cascade at a time as `graphindex_drive` does.
@@ -119,7 +119,7 @@ def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
     differential), not tolerated.
 
     REFUSES, too, if `build_index` did not actually take its BULK branch
-    (`BuildReport.constructor`, `src/zanzibar/connectedstore/build.py`). The two
+    (`BuildReport.constructor`, `src/zanzibar/store/build.py`). The two
     constructors are byte-identical in effect by design (P13), so no state
     assertion in any caller of this drive can tell them apart: a flipped
     default or a silent fallback would downgrade every one of them to a second
@@ -135,7 +135,7 @@ def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
     """
     from sqlmodel import select
 
-    from zanzibar.connectedstore import TupleSource, build_index, save_schema
+    from zanzibar.store import TupleSource, build_index, save_schema
     from zanzibar.setengine.models import RelationTuple
 
     store_id = "conf"
@@ -165,7 +165,7 @@ def bulk_build_drive(schema_text: str, tuples, object_wildcards=()):
             f"executed. Every caller of this drive exists to pin the OFFLINE "
             f"BULK bootstrap; because the two constructors are byte-identical "
             f"in effect by design (P13), a flipped `bulk` default or a silent "
-            f"fallback in src/zanzibar/connectedstore/build.py would downgrade this "
+            f"fallback in src/zanzibar/store/build.py would downgrade this "
             f"differential to a second run of the incremental path and NOTHING "
             f"else here would notice. Measured 2026-09-20: `if bulk:` -> "
             f"`if False:` left test_conformance_remove.py::"

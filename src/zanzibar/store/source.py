@@ -81,7 +81,7 @@ class WatermarkGap(RuntimeError):
 
     RETRYABLE, and distinct from ``StaleRead`` on purpose -- nothing is corrupt; the
     reader/writer merely acted on a stale snapshot. Roll back to start a fresh one
-    (``ConnectedStore.refresh()`` / ``TupleSource.refresh_evaluator()``) and retry the
+    (``Store.refresh()`` / ``TupleSource.refresh_evaluator()``) and retry the
     operation; a fresh snapshot sees the missing rows and applies them normally."""
 
 
@@ -230,15 +230,15 @@ class TupleSource:
 
     def __init__(self, session: Session, store_id: str, *, ops: SetOps = DEFAULT_SETOPS,
                  ruleset=None):
-        # The isolation gate belongs HERE, not only in ConnectedStore (added
-        # 2026-07-27). ``TupleSource`` is exported from ``src/zanzibar/connectedstore/__init__``
+        # The isolation gate belongs HERE, not only in Store (added
+        # 2026-07-27). ``TupleSource`` is exported from ``src/zanzibar/store/__init__``
         # and is a complete write path -- lock, catch up, validate, append -- so a
         # caller using it directly used to get no isolation check at all, and every
         # mechanism ZT-P1-5 added (contiguous watermark advance, ``log_gap``, the
         # freshness tokens) silently ran on a pinned snapshot. The reproduced
         # SERIALIZABLE escalation ran entirely through this constructor, never
-        # touching ``ConnectedStore``. Cheap and idempotent: a no-op on SQLite, and
-        # ``ConnectedStore`` calling it too costs one extra dialect check.
+        # touching ``Store``. Cheap and idempotent: a no-op on SQLite, and
+        # ``Store`` calling it too costs one extra dialect check.
         validate_store_id(store_id)  # TK127 follow-up: before any statement
         assert_read_isolation(session)
         self.session = session
@@ -387,7 +387,7 @@ class TupleSource:
         alternative is another window to reason about.
 
         Both openers use this: ``__init__`` and ``refresh_evaluator`` had the identical
-        shape, and ``refresh_evaluator`` sits on ``ConnectedStore._write``'s error
+        shape, and ``refresh_evaluator`` sits on ``Store._write``'s error
         path -- so the constructor race could also be entered by any failed write."""
         for attempt in range(1, SNAPSHOT_ATTEMPTS + 1):
             wm = log_watermark(self.session, self.store_id)
@@ -418,7 +418,7 @@ class TupleSource:
         serialization is at store granularity and deadlock-free.
 
         LOCK ORDERING invariant: writers take this source lock (the ``SchemaRecord``
-        row) BEFORE the graph store lock (the ``Store`` row, taken later inside
+        row) BEFORE the graph store lock (the ``IndexStore`` row, taken later inside
         ``advance_index`` via ``ReachabilityIndex._lock_store``). One global order
         across both locks -- deadlock-free.
 
@@ -636,7 +636,7 @@ class TupleSource:
         but not in the watermark leaves the evaluator AHEAD of its watermark, and the
         next catch-up replays it into ``apply_logged``'s strict guard and bricks the
         instance. Live on PostgreSQL READ COMMITTED, and this method sits on
-        ``ConnectedStore._write``'s error path, so any failed write could enter it."""
+        ``Store._write``'s error path, so any failed write could enter it."""
         self.evaluator_watermark = self._consistent_rebuild(self.engine.rebuild)
 
     def watermark(self) -> int:

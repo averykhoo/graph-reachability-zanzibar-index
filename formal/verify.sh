@@ -698,7 +698,7 @@ MIN_CONF_ALL=1178
 #   1749 vs `pytest tests/ -q --collect-only` -> 2283, i.e. 534 tests of headroom (the
 #   2026-10-12/13 sessions' tests/ additions, not broken down per file). Do not hand-
 #   raise it any more; LOWERING stays a deliberate hand edit, followed by --generate.
-MIN_TESTS_ALL=2538
+MIN_TESTS_ALL=2543
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #

@@ -36,7 +36,7 @@ from sqlmodel import SQLModel, create_engine
 
 # Import for the side effect of registering every table on SQLModel.metadata --
 # ``create_all`` below must create all nine, whoever imports this helper first.
-import zanzibar.connectedstore.models  # noqa: F401
+import zanzibar.store.models  # noqa: F401
 import zanzibar.graphindex.models        # noqa: F401
 import zanzibar.setengine.models       # noqa: F401
 
@@ -48,7 +48,7 @@ DSN_ENV_VAR = 'ZANZIBAR_TEST_DSN'
 #: SQLite fallback or a skip.
 REQUIRED_ENV_VAR = 'ZANZIBAR_PG_REQUIRED'
 
-#: Mandatory for a server bind: ``connectedstore.assert_read_isolation`` REFUSES to
+#: Mandatory for a server bind: ``store.assert_read_isolation`` REFUSES to
 #: open a store whose snapshot can hide a committed log row, and psycopg2's default
 #: is whatever the server default is. READ COMMITTED is also the level the whole
 #: log-tailing design is written against (per-statement snapshots, so a catch-up

@@ -28,8 +28,8 @@ number INTO it over restating it.
 | quantity | value |
 |---|---|
 | `formal/conformance/` collected | **1178** |
-| `tests/` collected | **2538** |
-| whole-repo suite | **3716** |
+| `tests/` collected | **2543** |
+| whole-repo suite | **3721** |
 | differential conformance tests | **1095** across **19** files |
 | gate-tooling conformance tests | **83** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **728** |
@@ -39,7 +39,7 @@ number INTO it over restating it.
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 27 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1178 (=135+1043), `MIN_TESTS_ALL`=2538, `EXPECTED_MIN_AUDITS`=460 |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1178 (=135+1043), `MIN_TESTS_ALL`=2543, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
 Driven fresh over all **25** `GRAPH_FRAGMENT` corpora through the real graph
@@ -629,7 +629,7 @@ Everything §7 lists, plus the fragment carries:
    bulk INSERTs, T4's closed form computed in closed form rather than
    incrementally — instead of replaying routed triples through the incremental
    `WildcardIndex.add_tuple` / `DeltaProcessor` path that the Lean `ReachedBy`
-   chain models. `connectedstore.build_index` takes `bulk: bool = True`, so this
+   chain models. `store.build_index` takes `bulk: bool = True`, so this
    is the path a real bootstrap takes. Its `bulk=False` side is NOT the modeled
    path either (this item said it was until 2026-09-06): it loads every tuple
    through `add_tuple` and then runs `DeltaProcessor.backfill()`, which
@@ -655,7 +655,7 @@ Everything §7 lists, plus the fragment carries:
    `rc2_star_tupleset` corpora; the I14 loop (`src/zanzibar/graphindex/bulk_build.py:206-221`)
    is pinned by NOTHING (disabling it was green in every `build_index` caller
    in `tests/` and in the conformance module — the complete reach of
-   `bulk_build`, which only `src/zanzibar/connectedstore/build.py` imports, 2026-09-06).
+   `bulk_build`, which only `src/zanzibar/store/build.py` imports, 2026-09-06).
    The Python-vs-Python identity gate remains as a second net
    (`tests/test_bulk_build.py`, 7 corpora: same snapshot built both ways must
    produce byte-identical state, plus the I1–I13 checker and an oracle

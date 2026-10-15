@@ -1,5 +1,5 @@
 """
-Multi-instance set-engine support: several TupleSource / ConnectedStore instances
+Multi-instance set-engine support: several TupleSource / Store instances
 (one Session each) share ONE store in ONE database; each instance's set engine is
 in-memory-local, kept coherent via the TupleLog log.
 
@@ -21,7 +21,7 @@ Covers the just-landed APIs:
   * TupleSource.catch_up_evaluator / evaluator_lag / check(at_least=)
   * the add/remove critical section (_lock_source -> catch_up_evaluator -> _append)
   * StaleRead re-export + the pinned-snapshot / bogus-token refusal
-  * ConnectedStore.check tail fallback under concurrent multi-instance writers
+  * Store.check tail fallback under concurrent multi-instance writers
 
 The oracle (tests/oracle.py) is the independent ground truth -- it imports nothing
 from either backend and parses the DSL itself.
@@ -35,7 +35,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from zanzibar.schema import AdmissionRejected
-from zanzibar.connectedstore import (ConnectedStore, StaleRead, TupleSource,
+from zanzibar.store import (Store, StaleRead, TupleSource,
                             log_rows, log_watermark)
 from zanzibar.setengine import SetEngine, RelationTuple
 from tests.dbengine import rdbms_dsn, shared_engine
@@ -83,11 +83,11 @@ sqlite_only_pinned_snapshot = pytest.mark.skipif(
 
 
 def _bootstrap(tmp_path, name):
-    """Bootstrap the store (schema + store + cursor rows) once via ConnectedStore,
+    """Bootstrap the store (schema + store + cursor rows) once via Store,
     then return the shared engine for per-instance sessions to open against."""
     engine = shared_engine(tmp_path, name)
     with Session(engine) as boot:
-        ConnectedStore(boot, 's', schema=SCHEMA)   # commits its own bootstrap rows
+        Store(boot, 's', schema=SCHEMA)   # commits its own bootstrap rows
         boot.commit()
     return engine
 
@@ -279,7 +279,7 @@ def test_cross_instance_remove_unseen(tmp_path):
 # --------------------------------------------------------------------------- #
 # 7. Rejection leaves the caught-up evaluator truthful: the catch-up rows applied
 #    under the (rejected) write were committed by A, so a plain rollback (the
-#    ConnectedStore rejection path -- no refresh_evaluator) discards nothing they
+#    Store rejection path -- no refresh_evaluator) discards nothing they
 #    depend on.
 # --------------------------------------------------------------------------- #
 
@@ -301,7 +301,7 @@ def test_rejection_leaves_evaluator_truthful(tmp_path):
         # AFTER the internal catch-up has already applied A's committed rows in memory.
         with pytest.raises(ValueError):
             b.add('...', 'martian', 'zork', 'viewer', 'doc', 'd1')
-        sb.rollback()                        # ConnectedStore's rejection path
+        sb.rollback()                        # Store's rejection path
 
         _assert_grid(b, _oracle(present))
 
@@ -428,15 +428,15 @@ def test_write_path_ordering(tmp_path, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# 12. Concurrent multi-instance writers converge (threads). ConnectedStore
+# 12. Concurrent multi-instance writers converge (threads). Store
 #     handles the SQLITE_BUSY / shared-node retry internally; afterwards every
 #     fresh instance catches up and agrees with the single-writer twin + oracle.
 # --------------------------------------------------------------------------- #
 
 def _write_retry(cs, op, raw, attempts=300):
     """SQLITE_BUSY and shared-node IntegrityErrors are safe to retry; an AdmissionRejected
-    is a genuine rejection (any other ValueError propagates; TK110, 2026-10-13). ConnectedStore already rolls back + rebuilds its
-    evaluator on the retryable errors (see ConnectedStore._write)."""
+    is a genuine rejection (any other ValueError propagates; TK110, 2026-10-13). Store already rolls back + rebuilds its
+    evaluator on the retryable errors (see Store._write)."""
     fn = cs.add_tuple if op == 'add' else cs.remove_tuple
     for _ in range(attempts):
         try:
@@ -466,7 +466,7 @@ def test_concurrent_multi_instance_writers_converge(tmp_path):
     # would make this test intermittently red for an unrelated reason. Identical
     # behaviour on SQLite.
     sessions = [Session(engine) for _ in range(2)]
-    stores = [ConnectedStore(s, 's') for s in sessions]
+    stores = [Store(s, 's') for s in sessions]
 
     def worker(cs, ops, errors):
         try:
@@ -491,10 +491,10 @@ def test_concurrent_multi_instance_writers_converge(tmp_path):
 
     with Session(engine) as session:
         # a single-writer twin over the same accepted writes reaches the same answers
-        twin = ConnectedStore(session, 'twin', schema=SCHEMA)
+        twin = Store(session, 'twin', schema=SCHEMA)
         for op, raw in ops_a + ops_b:
             _write_retry(twin, op, raw)
-        cs = ConnectedStore(session, 's')
+        cs = Store(session, 's')
         for q in GRID:
             exp = oracle.check(*q)
             assert cs.check(*q) == exp, q

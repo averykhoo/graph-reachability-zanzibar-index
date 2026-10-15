@@ -712,7 +712,7 @@ def _stratify(plans: dict) -> list[list[tuple[str, str]]]:
         # nesting level. Per-level exclusion has no legal form.
         raise CyclicDerivedDependency(
             f"derived relations form a dependency cycle: {cyclic}. The graph index (and so "
-            f"ConnectedStore) cannot evaluate recursion through a relation that uses `and` / "
+            f"Store) cannot evaluate recursion through a relation that uses `and` / "
             f"`but not`; SetEngine on its own accepts it. Instead, recurse on a plain "
             f"relation and apply the operator on top, e.g. `define viewer_base: [user] or "
             f"viewer_base from parent` and `define viewer: viewer_base but not blocked`. "

@@ -84,7 +84,7 @@ calls ``_live_keys_of`` (measured over the same 26-corpus sweep: every one of th
 calls came from ``audit_fixpoint``, zero from cascade maintenance), so the reference
 cannot be corrupted by the mutation it is being used to catch.
 ``test_repaired_state_equals_a_fresh_bulk_build`` adds the production bootstrap path
-(``connectedstore.build_index(bulk=True)``) as a second, independent reference.
+(``store.build_index(bulk=True)``) as a second, independent reference.
 
 SABOTAGE (``docs/sabotage-procedure.md``), 2026-09-20, byte-level edit of
 ``src/zanzibar/graphindex/processor.py``, original bytes saved and restored, ``git status --porcelain``
@@ -123,7 +123,7 @@ leaves this module plus ``tests/test_backfill_enumeration.py``,
 ``tests/test_bulk_build.py`` and ``tests/test_invariants_derived.py`` at ``29 passed``.
 
 This file used to explain that green with a REASONED, explicitly UNVERIFIED guess: that
-because ``src/zanzibar/connectedstore/build.py::build_index`` "refuses to run on an index that already
+because ``src/zanzibar/store/build.py::build_index`` "refuses to run on an index that already
 has state", the bulk path's ``[rel]`` term had no inconsistent store to repair and might be
 **unreachable by construction**. **``TK92`` REFUTED IT on 2026-09-21.** The defence is
 about inconsistent stores and says nothing about the other way the public family gets a
@@ -145,7 +145,7 @@ import json
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.connectedstore import TupleSource, build_index, save_schema
+from zanzibar.store import TupleSource, build_index, save_schema
 from zanzibar.graphindex.invariants import InvariantViolation, snapshot_rows
 from zanzibar.graphindex.models import Node, Residue
 from zanzibar.graphindex.outbox import outbox_watermark
@@ -278,7 +278,7 @@ def _preds_without_rel(proc, object_type, rel) -> set:
 
 def _bulk_reference(tuples):
     """Fresh index built OFFLINE from a tuple snapshot through the production
-    bootstrap (`connectedstore.build_index(bulk=True)`)."""
+    bootstrap (`store.build_index(bulk=True)`)."""
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
@@ -390,7 +390,7 @@ def test_backfill_repairs_the_stale_grant():
 
 def test_repaired_state_equals_a_fresh_bulk_build():
     """Second, independent reference: the production OFFLINE bootstrap
-    (``connectedstore.build_index(bulk=True)``) over the surviving tuples.
+    (``store.build_index(bulk=True)``) over the surviving tuples.
 
     ``src/zanzibar/graphindex/bulk_backfill.py`` carries its own mirror of ``_live_keys_of``, so this
     arm crosses the two copies; on a consistent store both agree, which is what makes

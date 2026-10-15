@@ -12,7 +12,7 @@ import json
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.connectedstore import ConnectedStore, TupleSource, build_index, save_schema
+from zanzibar.store import Store, TupleSource, build_index, save_schema
 from zanzibar.graphindex.invariants import snapshot_rows
 from zanzibar.graphindex.models import Residue
 
@@ -69,7 +69,7 @@ def _residues_by_name(session, widx, store_id):
 
 def test_built_index_equals_live_maintained(session, load_fga_schema):
     # live twin: every write maintains the index synchronously
-    live = ConnectedStore(session, 'live', schema=_SCHEMA)
+    live = Store(session, 'live', schema=_SCHEMA)
     # index-less twin: source-of-truth writes only
     save_schema(session, 'bulk', _SCHEMA)
     src = TupleSource(session, 'bulk')
@@ -95,8 +95,8 @@ def test_built_index_continues_under_sync_schedule(session):
     session.commit()
     build_index(session, 's')
 
-    # reopening as a ConnectedStore picks up the cursor and keeps maintaining
-    cs = ConnectedStore(session, 's')
+    # reopening as a Store picks up the cursor and keeps maintaining
+    cs = Store(session, 's')
     assert cs.cursor.applied_log_id == cs.watermark()
     cs.add_tuple('...', 'user', 'u1', 'blocked', 'doc', 'd1')
     assert cs.check('...', 'user', 'u1', 'viewer', 'doc', 'd1') is False
@@ -130,7 +130,7 @@ def test_double_build_refused(session):
 
 
 def test_build_on_store_with_graph_state_refused(session):
-    cs = ConnectedStore(session, 's', schema=_SCHEMA)
+    cs = Store(session, 's', schema=_SCHEMA)
     cs.add_tuple('...', 'user', 'u2', 'editor', 'doc', 'd1')
     # simulate a state-but-no-cursor situation
     session.exec(select(type(cs.cursor))).first()

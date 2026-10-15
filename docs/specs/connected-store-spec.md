@@ -12,7 +12,7 @@ conclusions frozen here; implementation record continues in `../spec-deviations.
   maximal materialization (full closure + boolean derived state) maintained *from*
   the tuple store. Tuples never live "in" the index; nothing is ever reconstructed
   from it.
-* **`ConnectedStore`** composes the two. The synchronous coupling built this round is
+* **`Store`** composes the two. The synchronous coupling built this round is
   a **temporary schedule, not temporary machinery**: sync mode is the async apply
   step inlined into the write transaction (cursor pinned at the log head). The
   cutover to async changes *when* the apply step runs, never *what* it does.
@@ -82,7 +82,7 @@ current-state reads, complete replayability.
 
 ## §4 Mechanisms
 
-* **Write path** (`ConnectedStore.write`): validate (charset, restrictions,
+* **Write path** (`Store.write`): validate (charset, restrictions,
   wildcard shapes, cycle parity) → mutate `TupleV1` + append `TupleLogV1` → [sync
   schedule only: apply to index + advance cursor] → commit. One transaction;
   rejection rolls back everything (I12 across both halves). Returns the log id.
@@ -105,7 +105,7 @@ current-state reads, complete replayability.
   *Accept: self-describing stores; immutability & mismatch tests.*
 * **S2** `TupleLogV1` + the source-of-truth write path (full admission validity,
   tokens returned). *Accept: log ≡ applied writes; rejected writes leave no row.*
-* **S3** `ConnectedStore`, sync schedule (documented temporary-schedule note).
+* **S3** `Store`, sync schedule (documented temporary-schedule note).
   *Accept: parity vs oracle + set engine over fixture grids; atomic rollback across
   both halves.*
 * **S4** `build_index` bootstrap. *Accept: built ≡ live-maintained (row multisets +
@@ -117,7 +117,7 @@ current-state reads, complete replayability.
   *Accept: async-built state ≡ sync-built state after catch-up; stale reads gated.*
 * **S7** Concurrency & stale-read hardening (file-backed SQLite, concurrent writers,
   reader-session-as-replica). *Accept: concurrency suite green.*
-* **S8** Docs + matrix: `ConnectedStore` joins the validation matrix;
+* **S8** Docs + matrix: `Store` joins the validation matrix;
   `docs/architecture/system.md`. *Accept: suite green; docs cross-linked.*
 
 ## §6 Non-goals (hooks only)

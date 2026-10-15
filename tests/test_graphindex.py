@@ -23,7 +23,7 @@ def v4_env():
     SQLModel.metadata.create_all(engine)
 
     session = Session(engine)
-    store = v4.Store(id="test_store", description="unit test store")
+    store = v4.IndexStore(id="test_store", description="unit test store")
     session.add(store)
     session.commit()
 
@@ -117,8 +117,8 @@ class TestMultiStoreIsolation:
         SQLModel.metadata.create_all(engine)
 
         session = Session(engine)
-        session.add(v4.Store(id="store_a", description="Store A"))
-        session.add(v4.Store(id="store_b", description="Store B"))
+        session.add(v4.IndexStore(id="store_a", description="Store A"))
+        session.add(v4.IndexStore(id="store_b", description="Store B"))
         session.commit()
 
         idx_a = v4.ReachabilityIndex(session, store_id="store_a")
@@ -335,7 +335,7 @@ class TestStoreMetadata:
         SQLModel.metadata.create_all(engine)
         session = Session(engine)
 
-        store = v4.Store(id="my_store", description="A test store")
+        store = v4.IndexStore(id="my_store", description="A test store")
         session.add(store)
         session.commit()
         session.refresh(store)
@@ -351,7 +351,7 @@ class TestStoreMetadata:
         SQLModel.metadata.create_all(engine)
         session = Session(engine)
 
-        store = v4.Store(id="bare_store")
+        store = v4.IndexStore(id="bare_store")
         session.add(store)
         session.commit()
         session.refresh(store)

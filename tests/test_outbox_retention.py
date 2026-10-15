@@ -20,7 +20,7 @@ knowledge, not the library's.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.graphindex import ReachabilityIndex, Store
+from zanzibar.graphindex import ReachabilityIndex, IndexStore
 from zanzibar.graphindex.invariants import snapshot_rows
 from zanzibar.graphindex.models import DeltaOutbox
 from zanzibar.graphindex.outbox import outbox_rows, outbox_watermark, prune_outbox
@@ -34,8 +34,8 @@ def env():
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    session.add(Store(id='s'))
-    session.add(Store(id='other'))
+    session.add(IndexStore(id='s'))
+    session.add(IndexStore(id='other'))
     session.commit()
     yield session, ReachabilityIndex(session, store_id='s')
     session.close()

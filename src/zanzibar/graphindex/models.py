@@ -15,10 +15,14 @@ class PermissionDelta(NamedTuple):
     action: str  # "ADDED" or "REMOVED"
 
 
-class Store(SQLModel, table=True):
-    """
-    Represents a discrete graph index environment (e.g., a specific Tenant or App).
-    Allows attaching arbitrary metadata to the graph boundary.
+class IndexStore(SQLModel, table=True):
+    """One row per graph index store id, in table ``zanzibar_store``.
+
+    Represents a discrete graph index environment (e.g., a specific Tenant or App)
+    and allows attaching arbitrary metadata to the graph boundary. Its ``id`` is the
+    same store id that ``zanzibar.store.Store`` and ``SchemaRecord`` use. This is the
+    index's bookkeeping row, not the user-facing ``zanzibar.store.Store`` class; the
+    table name is kept from 0.0.x so existing databases still open.
     """
     __tablename__ = "zanzibar_store"
 
@@ -49,7 +53,7 @@ class Node(SQLModel, table=True):
     implicit: bool = Field(default=True)
     reference_count: int = Field(default=0)
 
-    store: Store = Relationship()
+    store: IndexStore = Relationship()
 
     @property
     def predicate_or_ellipsis(self) -> str | EllipsisType:
@@ -82,7 +86,7 @@ class Edge(SQLModel, table=True):
     # a derived-public family"; the flag makes the invariant checkable per row.
     derived: bool = Field(default=False)
 
-    store: Store = Relationship()
+    store: IndexStore = Relationship()
     subject: Node = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[Edge.subject_id]'))
     object: Node = Relationship(sa_relationship=RelationshipProperty(foreign_keys='[Edge.object_id]'))
 

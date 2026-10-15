@@ -19,7 +19,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from zanzibar.graphindex import ReachabilityIndex, Node
-from zanzibar.graphindex.models import Store
+from zanzibar.graphindex.models import IndexStore
 from zanzibar.graphindex.invariants import check_invariants
 from zanzibar.setengine import SetEngine, ALL_SETOPS
 from zanzibar.schema import (Entity, RelationalTriple, UnsupportedByGraphIndex,
@@ -248,7 +248,7 @@ def test_userset_edge_does_not_poison_member_exclusions():
 
 def _core_index():
     session = _fresh_session()
-    session.add(Store(id='t'))
+    session.add(IndexStore(id='t'))
     session.commit()
     return session, ReachabilityIndex(session, 't')
 
@@ -406,14 +406,14 @@ def test_connected_store_ctor_commits_bootstrap():
     """X3: the constructor persists schema source + store rows and COMMITS them;
     before the fix a reader opening a second session saw nothing until the first
     data write happened to commit."""
-    from zanzibar.connectedstore import ConnectedStore
+    from zanzibar.store import Store
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s1:
-        ConnectedStore(s1, 'cs', schema=_CS_SCHEMA)
+        Store(s1, 'cs', schema=_CS_SCHEMA)
         # a SECOND session sees the bootstrap without any tuple write
         with Session(engine) as s2:
-            reopened = ConnectedStore(s2, 'cs')      # self-describing reopen
+            reopened = Store(s2, 'cs')      # self-describing reopen
             assert reopened.check('...', 'user', 'u', 'viewer', 'doc', 'd') is False
 
 
@@ -421,9 +421,9 @@ def test_catch_up_idle_leaves_no_open_transaction():
     """X2: the zero-row catch_up path still opened a transaction (store lock +
     cursor refresh + log read) and left it open -- pinning the worker's read
     snapshot forever and, on PostgreSQL, holding the FOR UPDATE store lock."""
-    from zanzibar.connectedstore import ConnectedStore
+    from zanzibar.store import Store
     session = _fresh_session()
-    cs = ConnectedStore(session, 'cs', schema=_CS_SCHEMA)
+    cs = Store(session, 'cs', schema=_CS_SCHEMA)
     cs.add_tuple('...', 'user', 'u', 'viewer', 'doc', 'd')
     assert cs.catch_up() == 0                        # sync mode: already at head
     assert not session.in_transaction(), \

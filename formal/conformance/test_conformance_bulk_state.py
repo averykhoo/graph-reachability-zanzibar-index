@@ -9,8 +9,8 @@ the `ReachedBy` chain's sole base constructor is `empty`
 `ReachedByW3d2E`), so every headline theorem quantifies over indexes reached
 from `emptyState` by logged writes and cascades.
 
-`connectedstore.build_index` — the production bootstrap — does NOT build an
-index that way. Its default `bulk=True` (`src/zanzibar/connectedstore/build.py`) hands the
+`store.build_index` — the production bootstrap — does NOT build an
+index that way. Its default `bulk=True` (`src/zanzibar/store/build.py`) hands the
 tuple snapshot to `src/zanzibar/graphindex/bulk_build.py`, which routes every tuple once,
 computes closed-form path counts, runs the in-memory boolean backfill
 (`bulk_backfill.py`) and bulk-INSERTs the final rows. Nothing in the proof

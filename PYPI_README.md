@@ -12,7 +12,7 @@ Two evaluation backends give the **same answers** with **opposite cost models**:
 * `zanzibar.graphindex` materializes the transitive closure as reference-counted edges,
   so `check` is a single indexed lookup. Writes do the work, reads are cheap.
 
-`zanzibar.connectedstore` composes them: an append-only tuple log is the source of truth,
+`zanzibar.store` composes them: an append-only tuple log is the source of truth,
 the graph index is a materialized view over it, and reads fall back to the set engine
 when the index is behind.
 
@@ -37,7 +37,7 @@ Python 3.13 or later. The import name is `zanzibar`.
 
 ```python
 from sqlmodel import SQLModel, Session, create_engine, select
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.graphindex import Node
 
 SCHEMA = """
@@ -57,7 +57,7 @@ engine = create_engine("sqlite:///perms.db")
 SQLModel.metadata.create_all(engine)   # creates the zanzibar_* tables (see below)
 
 with Session(engine) as session:
-    store = ConnectedStore(session, "my-app", schema=SCHEMA)
+    store = Store(session, "my-app", schema=SCHEMA)
     # add_tuple(subject_predicate, subject_type, subject_name, relation, object_type, object_name)
     store.add_tuple("...", "user", "alice", "member", "group", "eng")      # "..." = the bare user
     store.add_tuple("member", "group", "eng", "viewer", "doc", "d1")       # group#member is a viewer
@@ -75,7 +75,7 @@ with Session(engine) as session:
 
 Each write commits and returns a log id. Pass it back as `check(..., at_least=token)` to
 read your own writes when the index is maintained asynchronously (`sync=False`).
-Reopening a store with `ConnectedStore(session, "my-app")` reads its persisted schema;
+Reopening a store with `Store(session, "my-app")` reads its persisted schema;
 a store's schema is write-once.
 
 ### Reading lookup results
@@ -105,17 +105,17 @@ above; markers without their exclusions grant too much.
   `zanzibar_*`, so `SQLModel.metadata.create_all(engine)` creates them next to your own.
   A table of yours that reuses one of those names is a loud `InvalidRequestError`,
   whichever is declared first; the two are never silently merged.
-* **One write path per store id.** Write a `ConnectedStore`'s store through the
-  `ConnectedStore` only. A standalone `SetEngine` opened on the same id can read it, but its
+* **One write path per store id.** Write a store that a `Store` owns through the
+  `Store` only. A standalone `SetEngine` opened on the same id can read it, but its
   `add_tuple` / `remove_tuple` raise `UnloggedWriteRefused`, and it must be given the
-  store's own schema (`zanzibar.connectedstore.open_set_engine(session, id)` loads it); a
-  different one raises `SchemaMismatch`. A `ConnectedStore` will not
+  store's own schema (`zanzibar.store.open_set_engine(session, id)` loads it); a
+  different one raises `SchemaMismatch`. A `Store` will not
   take over an id that a standalone `SetEngine` already wrote to (`UnloggedTuplesPresent`).
   To adopt such a store, call `save_schema(session, id, schema)`, commit, then
-  `build_index(session, id)`, then open `ConnectedStore(session, id)`.
+  `build_index(session, id)`, then open `Store(session, id)`.
 * **Databases.** SQLite and PostgreSQL only. On PostgreSQL the session must use
   `READ COMMITTED`; any other isolation level is refused at construction.
-* **Runtime checks.** `ConnectedStore(..., paranoia="residue")` or the
+* **Runtime checks.** `Store(..., paranoia="residue")` or the
   `ZANZIBAR_PARANOIA=residue` environment variable turns on a cheap runtime corruption
   detector for the index. It is off by default and recommended for anything
   security-sensitive.
@@ -145,7 +145,7 @@ above; markers without their exclusions grant too much.
   is the current mode on both backends; a lenient mode may come later.
 * **No recursion through `and` / `but not`.** A relation that reaches itself through an
   operator, such as `define viewer: ([user] or viewer from parent) but not blocked`, is
-  refused by the graph index and so by `ConnectedStore` (`CyclicDerivedDependency`), while a
+  refused by the graph index and so by `Store` (`CyclicDerivedDependency`), while a
   standalone `zanzibar.setengine.SetEngine` accepts it. The usual rewrite recurses on a plain
   relation and applies the operator on top:
   `define viewer_base: [user] or viewer_base from parent` then

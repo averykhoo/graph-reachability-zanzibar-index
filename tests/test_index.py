@@ -15,13 +15,13 @@ class IndexPolyfill:
 
 class GraphIndexPolyfill(IndexPolyfill):
     def __init__(self):
-        from zanzibar.graphindex import ReachabilityIndex, Store
+        from zanzibar.graphindex import ReachabilityIndex, IndexStore
         from sqlmodel import Session, create_engine
         
         self.engine = create_engine('sqlite:///:memory:')
         SQLModel.metadata.create_all(self.engine)
         self.session = Session(self.engine)
-        store = Store(id="test_store")
+        store = IndexStore(id="test_store")
         self.session.add(store)
         self.session.commit()
         

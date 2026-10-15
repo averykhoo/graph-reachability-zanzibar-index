@@ -365,7 +365,7 @@ Python runs. The omissions are now listed in §7 rather than left implicit.
 | `GraphIndex/RulesWrite.lean::rewriteClosureRaw` | the write fan-out worklist, before dedup | `src/zanzibar/schema/rules.py::RuleSet.apply`'s expansion (dispatch built by `::RuleSet._build_dispatch`, candidates by `::RuleSet._candidates`) |
 | `GraphIndex/RulesWrite.lean::rewriteClosure` | the write fan-out worklist **incl. the dedup** (2026-08-08, §7.2 item 6) | `src/zanzibar/schema/rules.py::RuleSet.apply` in full — its `processed` set is the dedup AND the termination mechanism, so this is not an optional mirror |
 | `GraphIndex/RulesWrite.lean::mem_rewriteClosure_iff` | dedup is membership-transparent | — (model-internal bridge; no Python counterpart) |
-| `GraphIndex/Cascade.lean::GraphState.writeLoggedOne` / `::GraphState.removeLoggedOne` / `::GraphState.writeLoggedRules` (`:190-191`) / `::GraphState.removeLoggedRules` (`:340-341`) | routed write + delta row per accepted flip. ★ **BOTH logged legs fold the SAME leaf-routed list since 2026-09-05** (4c-ii step (α) for the write leg, step R5 for the remove leg): `(rewriteClosureL S (rawWriteTuples S t)).foldl …` — stage 1 is `GraphIndex/Leaf.lean::rawWriteTuples` (the raw write re-addressed onto its storage-bearing leaves), stage 2 is `GraphIndex/LeafRules.lean::rewriteClosureL` (closure under `schemaRewritesL = schemaRewrites ++ leafRewrites`). The write leg's unlogged evalEq twin is therefore `GraphIndex/LeafRules.lean::GraphState.writeRulesRaw`, NOT `GraphIndex/RulesWrite.lean::GraphState.writeRules`. Folding the PLAIN `GraphIndex/RulesWrite.lean::rewriteClosure` on the remove leg while the write leg folded the L closure was a MODEL BUG (the minted leaf edge survived a write-then-remove — "the edge leak"); the legs are symmetric in Python, so they are symmetric here | `src/zanzibar/schema/rules.py::RuleSet.apply` + per-triple `src/zanzibar/graphindex/wildcard.py::WildcardIndex.add_tuple` / `::WildcardIndex.remove_tuple`; delta rows emitted by `src/zanzibar/graphindex/core.py::ReachabilityIndex._emit` (buffered) and `::ReachabilityIndex._flush_outbox`. **The leg symmetry is a fact about Python, not a modelling choice:** `src/zanzibar/connectedstore/apply.py::_apply_row` (`:62-66`) picks `fn = widx._add_tuple_trusted if row.op == 'ADD' else widx._remove_tuple_trusted` and THEN runs one `for d in ruleset.apply(triple): fn(...)` — the fan-out is computed once, OUTSIDE the ADD/REMOVE choice, so the retraction retracts byte-for-byte what the write materialised |
+| `GraphIndex/Cascade.lean::GraphState.writeLoggedOne` / `::GraphState.removeLoggedOne` / `::GraphState.writeLoggedRules` (`:190-191`) / `::GraphState.removeLoggedRules` (`:340-341`) | routed write + delta row per accepted flip. ★ **BOTH logged legs fold the SAME leaf-routed list since 2026-09-05** (4c-ii step (α) for the write leg, step R5 for the remove leg): `(rewriteClosureL S (rawWriteTuples S t)).foldl …` — stage 1 is `GraphIndex/Leaf.lean::rawWriteTuples` (the raw write re-addressed onto its storage-bearing leaves), stage 2 is `GraphIndex/LeafRules.lean::rewriteClosureL` (closure under `schemaRewritesL = schemaRewrites ++ leafRewrites`). The write leg's unlogged evalEq twin is therefore `GraphIndex/LeafRules.lean::GraphState.writeRulesRaw`, NOT `GraphIndex/RulesWrite.lean::GraphState.writeRules`. Folding the PLAIN `GraphIndex/RulesWrite.lean::rewriteClosure` on the remove leg while the write leg folded the L closure was a MODEL BUG (the minted leaf edge survived a write-then-remove — "the edge leak"); the legs are symmetric in Python, so they are symmetric here | `src/zanzibar/schema/rules.py::RuleSet.apply` + per-triple `src/zanzibar/graphindex/wildcard.py::WildcardIndex.add_tuple` / `::WildcardIndex.remove_tuple`; delta rows emitted by `src/zanzibar/graphindex/core.py::ReachabilityIndex._emit` (buffered) and `::ReachabilityIndex._flush_outbox`. **The leg symmetry is a fact about Python, not a modelling choice:** `src/zanzibar/store/apply.py::_apply_row` (`:62-66`) picks `fn = widx._add_tuple_trusted if row.op == 'ADD' else widx._remove_tuple_trusted` and THEN runs one `for d in ruleset.apply(triple): fn(...)` — the fan-out is computed once, OUTSIDE the ADD/REMOVE choice, so the retraction retracts byte-for-byte what the write materialised |
 | **`GraphIndex/Leaf.lean::leafPred` / `::isLeafPred` / `::leafNode`** (leg 7 step 3, 2026-08-09; MAPPED 2026-08-14 — previously unrecorded) | leaf-family addressing: `R.i` naming, the dot-carrying test, and the leaf object node | leaf names minted `f'{relation}.{counter[0]}'` pre-order over persisted leaves by `src/zanzibar/schema/boolean.py::_build_plan_tree`; the dot-carrying scan is I4 in `src/zanzibar/graphindex/invariants.py::_check_derived_invariants`. `'.'` is reserved in declared relation names by `src/zanzibar/schema/parser.py::_validate_ast_references`, which is what makes leaf nodes provably distinct from bare ones (no new axiom — `Core/Schema.lean::relNameOK`) |
 | **`GraphIndex/Leaf.lean::PLeaf` / `::persistedLeaves` / `::unionSpineLeaves` / `::atomLeaves` / `::derivedAnywhere`** (leg 7 step 4c-pre, 2026-08-15; **ALLOCATION ORDER CORRECTED TWICE — 2026-08-16 and 2026-08-16b**) | the leaf-family ALLOCATION. ⚠ **The 2026-08-15 "pre-order over persisted-leaf positions" reading was measured WRONG.** Python stops at each maximal PURE subtree and MERGES it: all `Direct` restrictions into ONE storage leaf allocated FIRST, then all other members into ONE closure leaf. ⚠⚠ **And a binary recursion over the encoded AST is ALSO wrong**: an impure union's left spine must be FLATTENED, never merged (`GraphIndex/Leaf.lean::unionSpineLeaves`) — see §7.2's n-ary-allocation entry for why. A leaf's index is its position in that order | `src/zanzibar/schema/boolean.py::_build_plan_tree`'s `build` (`alloc` the only minting site) via `::_is_pure` and its nested `_split_pure`. Measured 2026-08-16: `(a or b) but not banned` → `r.0 = {a,b}` / `r.1 = banned` (not three leaves); `(a or [user]) but not banned` puts the storage leaf at index 0 ahead of `a`; and (2026-08-16b) `a or b or c or safe` with `safe` derived → THREE leaves, where a binary recursion merged them into one. ⚠ **The "82/82 derived keys agree" validation this row used to carry is RETRACTED (2026-08-16b)** — that diff consumed Python's n-ary AST, not the left-folded tree Lean receives, so it was blind to the spine defect on the in-fragment corpus `nary_union_derived4`. Re-run over the BINARIZED AST the corrected model is 0-disagreement; the retracted instrument is written up in `docs/sabotage-procedure.md` |
 | **`GraphIndex/Leaf.lean::isPure` / `::splitPure` / `::unionAll` / `::pureLeaves` / `::isTaintedUserset`** (the corrected allocation's parts, 2026-08-16) | purity (boolean-free AND derived-free), the pure-subtree flattening, the at-most-two-leaves emission, and the tainted-userset test that peels `[T#P]` restrictions into their own storage leaves | `src/zanzibar/schema/boolean.py::_is_pure` and `::_build_plan_tree`'s nested `_split_pure` / `build` non-pure-`Direct` arm (`PDerivedUserset`, Python `LeafFamily.kind = 'userset-storage'`). ⚠ The userset split is REACHABLE FROM A LIVE FIXTURE — `tests/fga_schemas/userset_over_derived.fga::doc#editor` — where the pre-2026-08-16 model routed the userset subject to the wrong leaf. ★ **Since 2026-10-14 (`TK132`) the `.ttu` case tests the tupleset's PARENT TYPES** (`GraphIndex/Leaf.lean::ttuParentTypes`, the twin of `Spec/Stratify.lean::exprRefs`' taint walk): the target must be underived on EVERY type the tupleset admits, which is `src/zanzibar/schema/boolean.py::_is_pure` over `src/zanzibar/schema/boolean.py::_member_types` (`all`, not `any`: `GraphIndex/LeafRules.lean::LeafRuleWitness.lrMix_mixed_parent_drop`, with the Python `any` control in `formal/conformance/test_conformance_leaf_rules.py::test_python_side_sabotages_are_caught`). The cross-type shape now allocates as in Python (`GraphIndex/LeafRules.lean::LeafRuleWitness.lrXt_cross_type_kept`). HISTORY, kept per §8: until 2026-10-08 the case used the type-agnostic `derivedAnywhere` and was backed by a Python refusal (the exclusivity pass's own name test; measured 2026-08-16, `ValueError: Rule then-pattern carries a derived subject predicate`); `TK126` keyed both I5 checks (`src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets`, the exclusivity loop in `src/zanzibar/schema/boolean.py::compile_boolean_schema`) on `(type, relation)`, the backing went, and the model dropped an arm Python kept (§7.1 `TK126` entry, CLOSED by `TK132`). The cascade proofs that used to read a leaf fact off the old test now take it as the explicit carry in the next row |
@@ -438,7 +438,7 @@ anchors instead. Fixing them is a separate, Lean-owning task.
 
 | Lean | models | Python |
 |---|---|---|
-| `GraphIndex/CascadeStrataAssemble.lean::ReachedByW3d2E` = **`ReachedBy`** | the write path as *admitted write + same-transaction cascade* | `src/zanzibar/connectedstore/apply.py::advance_index` → `src/zanzibar/graphindex/processor.py::DeltaProcessor.run_cascade`; `tests/test_matrix.py` `GraphBackend.apply`. **"interleaved" is true of ONE of Python's two schedules — see the row note below** |
+| `GraphIndex/CascadeStrataAssemble.lean::ReachedByW3d2E` = **`ReachedBy`** | the write path as *admitted write + same-transaction cascade* | `src/zanzibar/store/apply.py::advance_index` → `src/zanzibar/graphindex/processor.py::DeltaProcessor.run_cascade`; `tests/test_matrix.py` `GraphBackend.apply`. **"interleaved" is true of ONE of Python's two schedules — see the row note below** |
 | `FullScope.lean::Drained` (`:96`, `cascadeKeys S σ = []`) | outbox fully drained at commit boundary. **The text is unchanged by the flip but the CLAIM is strictly stronger since 2026-09-05**: `GraphIndex/Cascade.lean::cascadeKeys` (`:561`) is `frontierRows.flatMap (affectedKeys S σ)`, and the write legs now materialise minted-leaf edges, so the frontier carries leaf-tagged deltas whose own-key branch resolves through `GraphIndex/Leaf.lean::publicOfLeaf`. Pre-flip there were no such rows to be dirty — "drained" ranged over a strictly smaller frontier | boolean spec §7.8 / I9 `src/zanzibar/graphindex/processor.py::DeltaProcessor.audit_fixpoint` |
 | `FullScope.lean::GraphAdmission` (`wf`/`nodup`/`strat`/`ttuDirect`/`matchDecl`/`ranked`/`objWild`/`usWild`/`storeValid`/`ttuNotLeaf`/`directRestrNotLeaf`/`computedRefsNotLeaf`/`noLeafSubjects`/`keysNonempty` — `storeValid` WIDENED to `StoreValidRulesD` by E-chain leg 5, 2026-08-05, mirroring `RuleSet.apply` routing a public-name write onto a derived def's Direct leaf family; `ttuNotLeaf`/`directRestrNotLeaf`/`computedRefsNotLeaf` are the three syntactic readings of Python's ONE dot-lock, added by 4c-ii steps 9 and 10. ★ **TWO fields added 2026-09-05 by 4c-ii (THE FLIP), obligations (D) and (E)** — `noLeafSubjects` (`GraphIndex/LeafRules.lean::NoLeafSubjects`: no rule of the FULL leaf-routed set `schemaRewritesL` mints a leaf-named SUBJECT predicate; NOT derivable from the three dot-lock fields, refuted in-kernel by `GraphIndex/CascadeStable.lean::admissionNameShape_does_not_give_noLeafSubjects`) and `keysNonempty` (a declared relation name is non-empty — the object half, `LeafNode`'s E3 residual guard pushed back to its source; `Core/Schema.lean::relNameOK` forbids only `'.'`, so `WF` cannot supply it). Both are consumed only through `FullScope.lean::GraphAdmission.leafScope`, which assembles `GraphIndex/LeafRules.lean::LeafScope` — so no headline assumes anything new) | what compile+write admission guarantees | see field docs; e.g. `ttuDirect` ↔ `src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets`, `matchDecl` ↔ `src/zanzibar/schema/rules.py::RuleSet.apply`'s raise on a raw write matching no declared restriction, `objWild` ↔ `src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope`; ★ **`usWild` added 2026-09-13e (`TK68`) — the SUBJECT-wildcard twin of `objWild`, and a fidelity gap closed rather than a new assumption:** `UnsupportedByGraphIndex` survives for exactly TWO scope rejections, `objWild` mirrored the first and NOTHING mirrored the second, so the Lean admission predicate was strictly WEAKER than the shipped compiler and admitted schemas `compile_ruleset` refuses. `usWild` forbids a derived key from being a subject-wildcard *userset* shape (i.e. from carrying an in-bridge), mirroring BOTH disjuncts of `GraphIndex/UsStarWrite.lean::Schema.isSubjectWildcardUserset`: a literal `[T:*#p]` restriction over a derived `(T,p)` ↔ `src/zanzibar/schema/boolean.py::_build_plan_tree` (`:1881-1886`), and a star-tupleset TTU through-shape landing on a derived target ↔ `src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope` (`:1484-1492`). Neither rejection can be dodged by an untainted container: `src/zanzibar/schema/boolean.py::_mentions` (`:1677-1678`) counts a userset restriction as a reference so `::compute_taint` taints the container, and an untainted TTU onto a derived predicate name is refused one check earlier by `src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets` (`:1132-1145`). ★ **2026-10-08 (`TK126`): that check is now keyed on `(type, relation)`, not the predicate NAME** -- a TTU is refused only if a type its tupleset admits carries the target as a derived relation, which a checked parse cannot produce (`src/zanzibar/schema/boolean.py::compute_taint` taints such a container through the same member types). A target merely derived on some OTHER type is served. The argument above is unaffected: a container that can reach a derived target is tainted. Stated as `∀ k ∈ taintedKeys S` — a quantifier over a computed LIST, exactly `objWild`'s shape — so all SEVEN `GraphAdmission` construction sites discharge it `by decide`; `FullScope.lean::GraphAdmission.noBridgedDerived` turns it into the ∀-over-strings carry `GraphIndex/UsStarWrite.lean::NoBridgedDerived` that consumers want. **It is a NARROWING, machine-checked twice and not asserted:** `FullScope.lean::W4Witness.sxUsWild_other_admission_fields_hold` shows every other decidable field still holds where `usWild` fails, and — the sharp half, because `W4Fragment.wsBare` makes the literal disjunct identically false on the whole W4 fragment — `FullScope.lean::W4Witness.sxThruDerived_wsBare_holds_but_usWild_fails` shows `wsBare` HOLDING and `usWild` failing anyway through the purely schematic through-shape disjunct, which neither `wsBare` nor the store-indexed `ttuStarFree` constrains; `ttuNotLeaf`/`directRestrNotLeaf`/`computedRefsNotLeaf` ↔ `src/zanzibar/schema/parser.py::_validate_ast_references`'s `'.' in name and name != '...'` dot-lock, read at a TTU arm's target, a `Direct` restriction's predicate, and a `computed` operand respectively. **The two new fields are Python-enforced too, and that is what makes them scope claims rather than assumptions:** `noLeafSubjects` ↔ the same `::_validate_ast_references` walk — `src/zanzibar/schema/parser.py::_validate_ast_references.check_name` applied by the same function's `isinstance(e, TTU)` branch to BOTH `target_rel` and `tupleset_rel`, so no arm, untainted layer or leaf layer, can compile a dotted TTU target; `keysNonempty` ↔ **the parse-time empty-name lock in `src/zanzibar/schema/parser.py::parse_schema_ast` (the `if not relation_name` raise beside the `'.'` lock) and, independently, in `tests/oracle.py::parse_schema_ast` — both added 2026-09-06 (`TK55`), pinned by `tests/test_reg_empty_relation_name.py`. ⚠ This cell used to say the identifier charset (`_IDENTIFIER_RE`) rejected `""` "at parse time"; that was FALSE — `validate_write_identifiers` fires on the WRITE path only, both parsers accepted `define : [user]`, and a computed reference to the empty name (`define : viewer`) was reachable through a valid write on `viewer`, where the set engine answered `check=True` and the graph answered `False` (untainted) or refused the write in `DeltaProcessor._write_derived` (boolean). The write-path charset is still the ONLY guard for every OTHER out-of-charset declared name (`*`, inner whitespace, `#`, non-ASCII, >256 chars): those still parse and compile, and the graph refuses the write on the referencing relation while the set engine accepts it (probe 2026-09-06, `ParityEngine` raises `accept/reject disagreement`). ★ **CORRECTED 2026-10-03e (`P23`): that last sentence is no longer true.** Both parsers now refuse every declared type or relation name outside the write charset at parse time (`src/zanzibar/schema/parser.py::_validate_declared_name`, independent twin `tests/oracle.py::_validate_declared_name`; the JSON front end too), pinned by `tests/test_p23_parser_refusal_parity.py`. No Lean field was added: `Core/Schema.lean::relNameOK` still forbids only `'.'`, so the charset is a Python-side narrowing of the admitted inputs, not a model assumption** |
 | `FullScope.lean::W4Fragment` (`computedOrDirect`/`directArmsBare`/`directArmsConcrete`/`computedOnlyOperands`/`noUnionDirects`/`twoStrata`/`wsBare`/`bareStar`/`ttuStarFree`/`term` — **TEN** fields since E-chain leg 5, 2026-08-05, split `computedOnly` into the first five; `rootB` was deleted 2026-07-17). (Until `P5`, 2026-09-23, T2a `graph_reached_inv` alone also took a `W4NarrowT2a` bundle — schema-wide `ComputedOnly` + narrow `StoreValidRules`; DELETED, so all headline theorems now take exactly this bundle + `GraphAdmission`: `docs/p5-negedgefree-under-leaf-routing-2026-09-23.md`) | — the HONEST carries: restrictions Python does NOT impose | `history/ROADMAP.md` "W4 — honest gaps" |
@@ -451,11 +451,11 @@ The previous revision described this as "the synchronous v1 write path: admitted
 write + same-txn cascade, **interleaved**". Python has **two schedules**, and the
 proof covers only the first:
 
-* **Interleaved (sync, `ConnectedStore(sync=True)` — the default).**
-  `src/zanzibar/connectedstore/store.py` inlines the apply step into every write, so
-  `src/zanzibar/connectedstore/apply.py::advance_index` receives a one-row `rows_hint`: one
+* **Interleaved (sync, `Store(sync=True)` — the default).**
+  `src/zanzibar/store/_store.py` inlines the apply step into every write, so
+  `src/zanzibar/store/apply.py::advance_index` receives a one-row `rows_hint`: one
   op, then one cascade. **This is the modeled schedule.**
-* **Batched (async, `ConnectedStore(sync=False)` → `src/zanzibar/connectedstore/store.py::ConnectedStore.catch_up`,
+* **Batched (async, `Store(sync=False)` → `src/zanzibar/store/_store.py::Store.catch_up`,
   and `build_index`).** `advance_index` runs `for row in rows: _apply_row(...)`
   over the **whole batch** and only THEN calls `proc.run_cascade(wm)` — one
   cascade for N log rows. A `remove` at batch position 2 therefore executes
@@ -640,7 +640,7 @@ The bullet is corrected in place below.
   where an argument recovers the dropped information from what remains, there is
   simply nothing on the Lean side to compare against. Consequence, stated
   plainly: **I7 is pinned only by `tests/` paranoia runs**, `Inv` has no clause
-  for it, and `install_paranoia` is not wired into `ConnectedStore`
+  for it, and `install_paranoia` is not wired into `Store`
   (`ZT-P1-3`). Modelling it (a monotone counter on `Residue` plus an `Inv`
   clause) remains open and is a real, if small, widening.
 * **State-gate thinness (`ZT-P4-5(a)`, RE-MEASURED 2026-07-27; the numbers below
@@ -1037,7 +1037,7 @@ The bullet is corrected in place below.
   def, so no headline theorem's premise reaches the branch; B, C and D are served but
   outside the fragment (B/C fail `term`, whose `NoTtuTarget` is still NAME-keyed; D fails
   `computedOrDirect`), and their equivalence evidence is differential only (ParityEngine,
-  `ConnectedStore` sync/async, `build_index` bulk/incremental, `rebuild_index`, lookups --
+  `Store` sync/async, `build_index` bulk/incremental, `rebuild_index`, lookups --
   the same test module). **The fix is a follow-up row** (filed 2026-10-08 under `TK126`):
   make the `.ttu` case use the tupleset's parent types, as `Spec/Stratify.lean::exprRefs`
   already does for taint, and re-plumb the `derivedAnywhere` use sites (the `SlXt` attack
@@ -1063,13 +1063,13 @@ These were neither mapped nor declared. None is a bug; each is a place where an
 auditor must know the pin is a Python↔Python differential, not a Lean twin.
 
 * **The async apply step's STALL marker and the read-path freshness fallback (added
-  2026-10-02b, `TK111`).** `src/zanzibar/connectedstore/store.py::ConnectedStore.catch_up` now
-  records any failure on the cursor row via `::ConnectedStore._record_stall`, and
-  `src/zanzibar/connectedstore/apply.py::advance_index` clears that marker when it advances the
+  2026-10-02b, `TK111`).** `src/zanzibar/store/_store.py::Store.catch_up` now
+  records any failure on the cursor row via `::Store._record_stall`, and
+  `src/zanzibar/store/apply.py::advance_index` clears that marker when it advances the
   cursor. Neither change touches the apply SCHEDULE that the rows above and the
   sec 7.4 entries describe (the row loop, the cascade, the `rows_hint` fast path). All
   of those were re-read on 2026-10-02b when the anchor CONTENT pin flagged both bodies,
-  and all still hold. The cursor, the stall and `ConnectedStore._fresh_enough` (which
+  and all still hold. The cursor, the stall and `Store._fresh_enough` (which
   untokened read is served by which backend) have NO Lean model. They are pinned
   Python-to-Python by `tests/test_tk111_stall_aware_freshness.py`, whose mutation sweep
   is in `docs/tk111-stall-aware-freshness-2026-10-02.md` sec 5.
@@ -1086,10 +1086,10 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   - `src/zanzibar/graphindex/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl` raises
     `ClosureFanoutExceeded` (`ZT-P1-6a`, never mapped until now). Since 2026-10-03b it
     does so only outside `ReachabilityIndex.fanout_cap_suspended`; inside, it logs and
-    proceeds. `src/zanzibar/connectedstore/store.py::ConnectedStore.catch_up` and the non-bulk
-  branch of `src/zanzibar/connectedstore/build.py::_materialise` enter that window. That function is
+    proceeds. `src/zanzibar/store/_store.py::Store.catch_up` and the non-bulk
+  branch of `src/zanzibar/store/build.py::_materialise` enter that window. That function is
   the build body shared, since 2026-10-04f (`TK121`), by `build_index` and
-  `src/zanzibar/connectedstore/build.py::rebuild_index`.
+  `src/zanzibar/store/build.py::rebuild_index`.
   The arithmetic of every ADMITTED write is unchanged: the bound is a read-only pre-check
   over the region `_add_indirect_edges_batch_unsafe` already loads. The rows cited at sec
   3 (T4), sec 4 (`_apply_row`, `_add_indirect_edges_batch_unsafe`, `__init__`), sec 5's
@@ -1596,7 +1596,7 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   tuple)"*. That argument covers the `t ∈ T` conjunct **only**. The
   drained-prior-state conjunct is a genuinely stronger requirement that
   `TupleSource.remove` does not impose, and the **batched** apply schedule
-  (`src/zanzibar/connectedstore/apply.py::advance_index` under `ConnectedStore.catch_up` /
+  (`src/zanzibar/store/apply.py::advance_index` under `Store.catch_up` /
   `build_index`) routinely violates it. Presence ≠ drained-ness. See the §6 row
   note.
 * **Fixed two rounds.** `runCascade2` always runs 2 rounds; Python runs
@@ -1676,7 +1676,7 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   §3 row change.)
 * **Multi-instance scheduling is OUT-OF-MODEL (2026-07-23).** HA support added
   instance-local set engines synced by tailing the log — locks
-  (`src/zanzibar/connectedstore/source.py::TupleSource._lock_source`), per-`Session` state, and
+  (`src/zanzibar/store/source.py::TupleSource._lock_source`), per-`Session` state, and
   catch-up cadence (`::TupleSource.catch_up_evaluator` /
   `src/zanzibar/setengine/engine.py::SetEngine.apply_logged`). **No Lean change needed**, for
   three reasons. (a) The set-engine Lean layer (§2) models the evaluator as a
@@ -1848,7 +1848,7 @@ still describes the algorithm the Python actually runs. So, when optimizing:
     type `T` closes `w_all → middle → w_any` — and nothing in it ever depended on the
     length. The hole was real and measured: three separately-innocuous edges assembled the
     same configuration, and the next ordinary grant naming any `folder` was then
-    permanently refused (the detonation), wedging `ConnectedStore.catch_up` forever.
+    permanently refused (the detonation), wedging `Store.catch_up` forever.
     `src/zanzibar/setengine/engine.py::SetEngine._flow_reaches`'s I14 crossing hop became **schematic
     and ungated** to match — its entity-existence gate helper was added 2026-09-16 and
     deleted here with its last caller — so the two backends again state ONE rule in two
@@ -1943,21 +1943,21 @@ no-Lean-impact change, not perf only.)*
   from-chain star identity. Both are candidate-generation completeness fixes on
   an unmodeled surface.
 * **P12a/P12b — composition write-path round-trip elision
-  (`src/zanzibar/graphindex/core.py::ReachabilityIndex._lock_store`, `src/zanzibar/connectedstore/`,
+  (`src/zanzibar/graphindex/core.py::ReachabilityIndex._lock_store`, `src/zanzibar/store/`,
   2026-07-14).** Both below the model's abstraction; no Lean def describes them.
   `ReachedByW3d2E` (§6) models the sync write path as *admitted write +
   same-transaction cascade* — WHAT is applied and THAT it is one transaction.
   P12a memoizes the `SELECT…FOR UPDATE` store-lock re-take per transaction
   (locking/concurrency is unmodeled; the lock is still taken, once, before the
   cursor read — and see the `ZT-P1-7` entry above, which fixed that memo's key).
-  P12b hands `src/zanzibar/connectedstore/apply.py::advance_index` the just-flushed
+  P12b hands `src/zanzibar/store/apply.py::advance_index` the just-flushed
   `TupleLog` row instead of
   re-SELECTing it, guarded by `cursor.applied_log_id == rows_hint[0].id - 1` plus
   strict contiguity, with an exact `log_rows` fallback — the same rows in the
   same order reach the same apply loop. Netted by the full differential suite +
   `tests/test_connectedstore_*` + graph conformance (verdict + state).
 * **P13 — bulk closure builder for `build_index`
-  (`src/zanzibar/graphindex/bulk_build.py`, `src/zanzibar/connectedstore/build.py`, 2026-07-15).** The
+  (`src/zanzibar/graphindex/bulk_build.py`, `src/zanzibar/store/build.py`, 2026-07-15).** The
   offline bootstrap can construct the pre-backfill graph state directly: route
   the tuple snapshot to a natural-key direct multigraph, topo-sort, compute
   per-pair path counts by sparse integer DP (`P(a,b) = m(a,b) + Σ_v
@@ -1986,7 +1986,7 @@ no-Lean-impact change, not perf only.)*
   (sabotage 2026-09-06). No modeled definition describes dead code.
 * **R4-BF — bulk boolean backfill for `build_index`
   (`src/zanzibar/graphindex/bulk_backfill.py`, `src/zanzibar/graphindex/bulk_build.py`,
-  `src/zanzibar/connectedstore/build.py`, 2026-07-15).** Same disposition as P13, one layer
+  `src/zanzibar/store/build.py`, 2026-07-15).** Same disposition as P13, one layer
   out. The **incremental backfill/cascade is the modeled algorithm** — the
   per-flip reconcile + per-stratum cascade (§4/§5) still runs for every online
   write, and `::DeltaProcessor.backfill()` itself is unchanged (it survives as

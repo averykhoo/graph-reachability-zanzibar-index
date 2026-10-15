@@ -69,6 +69,6 @@ class IndexCursor(SQLModel, table=True):
     # successful advance invalidates it even if nothing clears it. Persisted (not held
     # in memory) because the reader that must stop trusting the index is usually a
     # different instance from the worker that hit the failure. See
-    # ``ConnectedStore.index_stalled``.
+    # ``Store.index_stalled``.
     stalled_after: int | None = Field(default=None)
     stall_error: str | None = Field(default=None)

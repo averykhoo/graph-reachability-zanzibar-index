@@ -614,11 +614,11 @@ The tier table is the module docstring of `invariants.py`.)*
 - **Cascade-in-same-transaction is an assumed precondition, not a checked
   invariant.** Nothing structural forces `run_cascade` to run on a write; the
   commit hooks don't call it (`invariants.py::install_paranoia`). Every production write path
-  *does* call it (`src/zanzibar/connectedstore/apply.py::advance_index`; `GraphBackend.apply` in the test
+  *does* call it (`src/zanzibar/store/apply.py::advance_index`; `GraphBackend.apply` in the test
   matrix), and `build_index` uses `backfill`. The graph model in Lean will bake the
   cascade into each write op (so the model is always consistent); the honesty note
   (§11-A1) records that the *Python* relies on convention here. *(Re-checked
-  2026-10-13: still true. The composed `ConnectedStore` path always cascades; the
+  2026-10-13: still true. The composed `Store` path always cascades; the
   exposure is a caller of the exported `zanzibar.graphindex.WildcardIndex` on a boolean
   schema. The decision is in §11-A1.)*
 
@@ -626,10 +626,10 @@ The tier table is the module docstring of `invariants.py`.)*
 
 `add_tuple` at the wildcard layer is **multigraph** — the same triple twice counts
 to 2 and needs two removes (`wildcard.py::WildcardIndex._reject_star_self_edge`, extraction surprise #7). Zanzibar
-set-idempotence lives one layer up in `connectedstore.TupleSource`
-(`src/zanzibar/connectedstore/source.py::TupleSource.add` + the `RelationTuple` unique constraint). The graph model's edges are
+set-idempotence lives one layer up in `store.TupleSource`
+(`src/zanzibar/store/source.py::TupleSource.add` + the `RelationTuple` unique constraint). The graph model's edges are
 **multisets (ℤ counters)**; `Store` at the spec level is a set, so the graph model's
-op sequence must apply the connectedstore dedup or model raw multiplicity explicitly.
+op sequence must apply the store dedup or model raw multiplicity explicitly.
 Resolve per §11-A4.
 
 ---
@@ -976,11 +976,11 @@ Each must be resolved or escalated before Phase 1 Lean. Proposed resolutions giv
   empty); fold "compiler rejects" into `WF S` so graph theorems never see such a
   schema. Verify the compiler's actual behavior in Phase 0.5 and adjust `WF`.
 - **A4 — Store as set vs graph multigraph.** The spec `Store` is a set; the graph
-  layer counts multiplicity, with idempotence added by `zanzibar.connectedstore`
+  layer counts multiplicity, with idempotence added by `zanzibar.store`
   (§7.9). *Proposed:* the graph model op sequence applies connectedstore-style dedup
   (add is a no-op if the tuple is present; remove deletes) so its edge multiplicities
   stay in `{0,1}` per tuple and match the set semantics. **Escalate: confirm we model
-  at the connectedstore (deduped) boundary, not the raw multigraph `WildcardIndex`
+  at the store (deduped) boundary, not the raw multigraph `WildcardIndex`
   boundary** — this changes which Python `add_tuple` the correspondence table points
   at (source.py vs wildcard.py).
 - **A5 — `-O` assert-stripping.** Several core invariants are `assert`s

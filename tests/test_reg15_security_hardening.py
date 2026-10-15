@@ -40,7 +40,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from zanzibar.graphindex.core import ReachabilityIndex
 from zanzibar.graphindex.invariants import InvariantViolation
-from zanzibar.graphindex.models import Store
+from zanzibar.graphindex.models import IndexStore
 from zanzibar.schema import is_valid_identifier, validate_write_identifiers
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -51,7 +51,7 @@ def _fresh_index(store_id: str = 't'):
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    session.add(Store(id=store_id))
+    session.add(IndexStore(id=store_id))
     session.commit()
     return session, ReachabilityIndex(session, store_id)
 
@@ -155,12 +155,12 @@ def test_reg15_direct_edge_delta_guard_survives_O():
         from sqlmodel import Session, SQLModel, create_engine
         from zanzibar.graphindex.core import ReachabilityIndex
         from zanzibar.graphindex.invariants import InvariantViolation
-        from zanzibar.graphindex.models import Store
+        from zanzibar.graphindex.models import IndexStore
 
         engine = create_engine('sqlite:///:memory:')
         SQLModel.metadata.create_all(engine)
         s = Session(engine)
-        s.add(Store(id='t')); s.commit()
+        s.add(IndexStore(id='t')); s.commit()
         idx = ReachabilityIndex(s, 't')
         try:
             idx._add_direct_edge_unsafe_impl(1, 2, 7)   # 7 is neither -1 nor +1
@@ -180,12 +180,12 @@ def test_reg15_self_edge_cycle_guard_survives_O():
     proc = _run_under_O("""
         from sqlmodel import Session, SQLModel, create_engine
         from zanzibar.graphindex.core import ReachabilityIndex
-        from zanzibar.graphindex.models import Store
+        from zanzibar.graphindex.models import IndexStore
 
         engine = create_engine('sqlite:///:memory:')
         SQLModel.metadata.create_all(engine)
         s = Session(engine)
-        s.add(Store(id='t')); s.commit()
+        s.add(IndexStore(id='t')); s.commit()
         idx = ReachabilityIndex(s, 't')
         try:
             idx._add_edge_locked(5, 5)
@@ -261,7 +261,7 @@ def test_reg15_source_lock_memo_keys_on_nested_transaction_too():
     validation against current committed state."""
     import inspect
 
-    from zanzibar.connectedstore import source as source_mod
+    from zanzibar.store import source as source_mod
 
     src = inspect.getsource(source_mod.TupleSource._lock_source)
     assert 'get_nested_transaction' in src, (

@@ -464,7 +464,7 @@ def _validate_declares_a_type(seen_types: set[str], ast: SchemaAST) -> None:
     schema without the ``model`` / ``schema 1.1`` header."""
     # REFUSED SHAPE (TK124): a schema that declares no type -- ``""``, whitespace, comments
     # only, or only the ``model`` / ``schema 1.1`` header lines.
-    # WHY: it parsed to an empty schema, and `ConnectedStore(session, "x", schema="")`
+    # WHY: it parsed to an empty schema, and `Store(session, "x", schema="")`
     # persisted it write-once (`save_schema`). Every later write was then refused (no type
     # restriction matches), re-opening the store with the intended schema raised
     # `SchemaMismatch`, and there is no public way to drop a store, so the store id was lost.
@@ -480,7 +480,7 @@ def _validate_declares_a_type(seen_types: set[str], ast: SchemaAST) -> None:
     # WHY: the AST is keyed by ``(type, relation)``, so this parses to the SAME empty schema
     # as ``""`` and bricks a store id the same way (persisted write-once, every write refused,
     # re-opening with the intended schema raises `SchemaMismatch`). Reviewer probe
-    # 2026-10-08: ``ConnectedStore(s, "x", schema="type user")`` bootstrapped, then the id was
+    # 2026-10-08: ``Store(s, "x", schema="type user")`` bootstrapped, then the id was
     # lost.
     # INSTEAD: declare the relations, e.g. ``type user\ntype doc\n  relations\n
     # define viewer: [user]``.

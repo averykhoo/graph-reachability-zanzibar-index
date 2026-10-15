@@ -32,7 +32,7 @@ The two families this module was built from
   F2  order B,C,D,A -- the DETONATION. No ``folder`` entity exists yet, so the graph
       accepted D with the cycle merely LATENT, and then permanently refused A =
       ``user:u1 editor folder:f1``: a write naming no wildcard, no userset and not the
-      crossable relation. Through ``ConnectedStore`` that write is admission-validated by
+      crossable relation. Through ``Store`` that write is admission-validated by
       the set engine, lands in the permanent log, and wedges ``catch_up`` forever.
       CLOSED 2026-09-17 (`TK70`) graph-side, by refusing the latent write itself.
 

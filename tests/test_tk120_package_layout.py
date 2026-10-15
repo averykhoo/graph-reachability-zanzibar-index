@@ -52,7 +52,7 @@ def test_children_import_this_checkouts_src():
 def test_every_library_dir_is_a_package():
     lib = SRC / 'zanzibar'
     dirs = {p.parent for p in lib.rglob('*.py') if '__pycache__' not in p.parts}
-    assert len(dirs) >= 4, dirs  # zanzibar, graphindex, setengine, connectedstore (+ schema once split)
+    assert len(dirs) >= 4, dirs  # zanzibar, graphindex, setengine, store (+ schema once split)
     missing = sorted(str(d.relative_to(REPO)) for d in dirs if not (d / '__init__.py').is_file())
     assert not missing, f'directories that a wheel would silently drop: {missing}'
 

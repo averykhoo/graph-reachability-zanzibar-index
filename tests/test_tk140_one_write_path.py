@@ -2,16 +2,16 @@
 
 Plan, census, decision and residuals: ``docs/tk140-one-write-path-per-store-2026-10-13.md``.
 
-* BROKEN-2 (p12): a SECOND ``SetEngine`` opened on a store id that a ``ConnectedStore``
+* BROKEN-2 (p12): a SECOND ``SetEngine`` opened on a store id that a ``Store``
   owns accepted an unlogged ``remove_tuple``. The grant then stayed ALLOWed by
-  ``ConnectedStore.check`` with ``lag 0`` and ``ConnectedStore.remove_tuple`` refused it
+  ``Store.check`` with ``lag 0`` and ``Store.remove_tuple`` refused it
   as non-existent (fail-OPEN, unrecoverable through the API). Fix: a ``SetEngine`` on a
   store id with a ``SchemaRecord`` is LOG-GOVERNED (``SetEngine._probe_log_governance``),
   so its direct writes raise ``UnloggedWriteRefused``; reads keep working.
-* BROKEN-3 (p09): ``ConnectedStore`` silently adopted a store id a standalone
+* BROKEN-3 (p09): ``Store`` silently adopted a store id a standalone
   ``SetEngine`` had already written: the index was born empty (``check`` False, the set
   engine True) and removing the tuple raised ``InvariantViolation``. Fix:
-  ``connectedstore/store.py::_reject_unlogged_adoption`` refuses the first open with
+  ``store/_store.py::_reject_unlogged_adoption`` refuses the first open with
   ``UnloggedTuplesPresent``, naming ``save_schema`` + ``build_index``.
 
 SABOTAGE (2026-10-13d, literal observed output). Runner:
@@ -48,7 +48,7 @@ is the record.
       1 failed, 11 passed
 
 - S4, the ``_reject_unlogged_adoption(session, store_id)`` call in
-  ``ConnectedStore.__init__`` replaced by ``pass``::
+  ``Store.__init__`` replaced by ``pass``::
 
       FAILED tests/test_tk140_one_write_path.py::test_p09_adoption_of_unlogged_tuples_is_refused
       1 failed, 11 passed
@@ -98,8 +98,8 @@ from sqlalchemy import event
 from sqlmodel import Session, select
 
 import zanzibar.setengine.engine as engine_mod
-import zanzibar.connectedstore.store as store_mod
-from zanzibar.connectedstore import (ConnectedStore, SchemaRecord, TupleLog, TupleSource,
+import zanzibar.store._store as store_mod
+from zanzibar.store import (Store, SchemaRecord, TupleLog, TupleSource,
                                      UnloggedTuplesPresent, build_index, save_schema)
 from zanzibar.setengine import RelationTuple, SetEngine, UnloggedWriteRefused
 
@@ -130,11 +130,11 @@ def test_the_probe_names_the_real_schema_table():
 
 def test_p12_second_engine_on_an_owned_store_is_log_governed(tmp_path):
     """BROKEN-2 positive pin (p12). Before TK140 the literal output was
-    ``SetEngine.log_governed: False`` / ``ConnectedStore check alice: True lag 0`` /
+    ``SetEngine.log_governed: False`` / ``Store check alice: True lag 0`` /
     ``cs.remove_tuple: AdmissionRejected non-existent tuple cannot be removed``."""
     eng = _file_engine(tmp_path)
     with Session(eng) as s:
-        ConnectedStore(s, 'app', schema=SCHEMA).add_tuple(*ALICE)
+        Store(s, 'app', schema=SCHEMA).add_tuple(*ALICE)
     with Session(eng) as s:
         se = SetEngine(s, 'app', SCHEMA)
         assert se.log_governed is True                    # latched at construction
@@ -142,13 +142,13 @@ def test_p12_second_engine_on_an_owned_store_is_log_governed(tmp_path):
         with pytest.raises(UnloggedWriteRefused) as exc:
             se.remove_tuple(*ALICE)
         msg = str(exc.value)
-        assert 'TK140' in msg and 'ConnectedStore.remove_tuple' in msg
+        assert 'TK140' in msg and 'Store.remove_tuple' in msg
         with pytest.raises(UnloggedWriteRefused):
             se.add_tuple(*BOB)
         s.commit()
         assert _count(s, RelationTuple, 'app') == 1       # nothing written, on disk
     with Session(eng) as s:
-        cs = ConnectedStore(s, 'app')
+        cs = Store(s, 'app')
         assert cs.check(*ALICE) is True and cs.lag() == 0
         cs.remove_tuple(*ALICE)                           # the store can still revoke
         assert cs.check(*ALICE) is False
@@ -157,7 +157,7 @@ def test_p12_second_engine_on_an_owned_store_is_log_governed(tmp_path):
 
 def test_claim_after_open_refuses_the_next_transactions_write(tmp_path):
     """The reverse order: a standalone engine opened on a FRESH id, the id then claimed by
-    a ConnectedStore. The construction probe saw nothing; the write probe (once per
+    a Store. The construction probe saw nothing; the write probe (once per
     transaction) must refuse."""
     eng = _file_engine(tmp_path)
     sa = Session(eng)
@@ -166,7 +166,7 @@ def test_claim_after_open_refuses_the_next_transactions_write(tmp_path):
         assert se.log_governed is False
         sa.commit()                                       # end the probing transaction
         with Session(eng) as sb:
-            ConnectedStore(sb, 'app', schema=SCHEMA).add_tuple(*ALICE)
+            Store(sb, 'app', schema=SCHEMA).add_tuple(*ALICE)
         with pytest.raises(UnloggedWriteRefused):
             se.remove_tuple(*ALICE)
         with pytest.raises(UnloggedWriteRefused):
@@ -177,7 +177,7 @@ def test_claim_after_open_refuses_the_next_transactions_write(tmp_path):
         sa.close()
     with Session(eng) as s:
         assert _count(s, RelationTuple, 'app') == 1
-        assert ConnectedStore(s, 'app').check(*ALICE) is True
+        assert Store(s, 'app').check(*ALICE) is True
 
 
 def test_p09_adoption_of_unlogged_tuples_is_refused(tmp_path):
@@ -190,7 +190,7 @@ def test_p09_adoption_of_unlogged_tuples_is_refused(tmp_path):
         s.commit()
     with Session(eng) as s:
         with pytest.raises(UnloggedTuplesPresent) as exc:
-            ConnectedStore(s, 'app', schema=SCHEMA)
+            Store(s, 'app', schema=SCHEMA)
         msg = str(exc.value)
         assert 'build_index' in msg and 'save_schema' in msg and 'TK140' in msg
         assert not s.in_transaction()                     # no SQLite write lock held
@@ -200,7 +200,7 @@ def test_p09_adoption_of_unlogged_tuples_is_refused(tmp_path):
         other.commit()
     with Session(eng) as s:
         with pytest.raises(UnloggedTuplesPresent):
-            ConnectedStore(s, 'app', schema=SCHEMA, paranoia='full')
+            Store(s, 'app', schema=SCHEMA, paranoia='full')
 
 
 def test_p09_the_instead_recipe_adopts_the_store(tmp_path):
@@ -213,7 +213,7 @@ def test_p09_the_instead_recipe_adopts_the_store(tmp_path):
         save_schema(s, 'app', SCHEMA)
         s.commit()
         build_index(s, 'app')
-        cs = ConnectedStore(s, 'app')
+        cs = Store(s, 'app')
         assert cs.check(*ALICE) is True
         assert cs.source.check(*ALICE) is True
         cs.remove_tuple(*ALICE)
@@ -224,7 +224,7 @@ def test_p09_the_instead_recipe_adopts_the_store(tmp_path):
 
 def test_a_fully_logged_store_is_adopted_on_first_open(tmp_path):
     """A store written only through TupleSource (log accounts for every row) and opened by
-    a ConnectedStore for the first time later is NOT refused: the log replays it."""
+    a Store for the first time later is NOT refused: the log replays it."""
     eng = _file_engine(tmp_path)
     with Session(eng) as s:
         save_schema(s, 'app', SCHEMA)
@@ -235,7 +235,7 @@ def test_a_fully_logged_store_is_adopted_on_first_open(tmp_path):
         src.remove(*BOB)
         s.commit()
     with Session(eng) as s:
-        cs = ConnectedStore(s, 'app')
+        cs = Store(s, 'app')
         assert cs.lag() == 3                              # born at 0; the log is the path
         assert cs.catch_up() == 3
         assert cs.check(*ALICE) is True and cs.check(*BOB) is False
@@ -280,7 +280,7 @@ def test_a_standalone_engine_probes_once_per_transaction(monkeypatch, tmp_path):
         assert calls == ['solo', 'solo']                  # new transaction: one probe
         s.commit()
 
-        cs = ConnectedStore(s, 'owned', schema=SCHEMA)
+        cs = Store(s, 'owned', schema=SCHEMA)
         n = len(calls)
         for name in ('a', 'b', 'c'):
             cs.add_tuple('...', 'user', name, 'viewer', 'doc', 'd')
@@ -288,10 +288,10 @@ def test_a_standalone_engine_probes_once_per_transaction(monkeypatch, tmp_path):
 
 
 def test_the_store_owners_own_engine_is_still_governed(tmp_path):
-    """ZT-P1-8a unchanged: the engine a ConnectedStore owns refuses direct writes."""
+    """ZT-P1-8a unchanged: the engine a Store owns refuses direct writes."""
     eng = _file_engine(tmp_path)
     with Session(eng) as s:
-        cs = ConnectedStore(s, 'app', schema=SCHEMA)
+        cs = Store(s, 'app', schema=SCHEMA)
         assert cs.source.engine.log_governed is True
         with pytest.raises(UnloggedWriteRefused):
             cs.source.engine.add_tuple(*ALICE)
@@ -322,11 +322,11 @@ def test_a_reopened_store_is_never_reaudited(monkeypatch, tmp_path):
                         lambda s, sid: calls.append(sid) or real(s, sid))
     eng = _file_engine(tmp_path)
     with Session(eng) as s:
-        ConnectedStore(s, 'app', schema=SCHEMA).add_tuple(*ALICE)
+        Store(s, 'app', schema=SCHEMA).add_tuple(*ALICE)
     assert calls == ['app']                               # the cursor-creating open counts
     with Session(eng) as s:
-        assert ConnectedStore(s, 'app', schema=SCHEMA).check(*ALICE) is True
-        assert ConnectedStore(s, 'app').check(*ALICE) is True
+        assert Store(s, 'app', schema=SCHEMA).check(*ALICE) is True
+        assert Store(s, 'app').check(*ALICE) is True
     assert calls == ['app']                               # reopens never re-count
 
 
@@ -372,7 +372,7 @@ def test_the_adoption_counts_are_one_statement(monkeypatch, tmp_path):
 
     monkeypatch.setattr(store_mod, '_adoption_counts', spy)
     with Session(eng) as s:
-        cs = ConnectedStore(s, 'app')                     # fully logged: adopted
+        cs = Store(s, 'app')                     # fully logged: adopted
         assert cs.catch_up() == 1 and cs.check(*ALICE) is True
     counting = [q for q in seen if 'count(' in q.lower()]
     assert counting, f'anti-vacuity: no COUNT statement observed in {seen}'
@@ -383,7 +383,7 @@ def test_the_adoption_counts_are_one_statement(monkeypatch, tmp_path):
 def test_an_empty_store_id_bootstraps_as_before(tmp_path):
     eng = _file_engine(tmp_path)
     with Session(eng) as s:
-        cs = ConnectedStore(s, 'fresh', schema=SCHEMA)
+        cs = Store(s, 'fresh', schema=SCHEMA)
         cs.add_tuple(*ALICE)
         assert cs.check(*ALICE) is True
 
@@ -393,11 +393,11 @@ def test_a_separate_id_built_index_does_not_govern_the_source_engine_twice(tmp_p
     log-governed engine and its writes are unaffected."""
     eng = _file_engine(tmp_path)
     with Session(eng) as s:
-        cs = ConnectedStore(s, 'src', schema=SCHEMA)
+        cs = Store(s, 'src', schema=SCHEMA)
         cs.add_tuple(*ALICE)
     with Session(eng) as s:
         build_index(s, 'src', 'src-idx')
     with Session(eng) as s:
-        cs = ConnectedStore(s, 'src')
+        cs = Store(s, 'src')
         cs.add_tuple(*BOB)
         assert cs.check(*BOB) is True

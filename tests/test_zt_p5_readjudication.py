@@ -161,7 +161,7 @@ def test_zt_p5_reg11_multihop_out_bridge_IS_reachable():
 # engine already had (`SetEngine._would_cycle`'s raw-level `any(u == v ...)`), so the
 # backends now implement ONE rule.
 #
-# ConnectedStore was never affected: TupleSource delegates admission to the SetEngine,
+# Store was never affected: TupleSource delegates admission to the SetEngine,
 # which rejects. The exposure was the graph index used directly (WildcardIndex --
 # a public API and the matrix's GraphBackend).
 
@@ -348,11 +348,11 @@ def test_zt_p5_starstar_generator_blind_spot_is_closed():
 def test_zt_p5_connectedstore_is_not_exposed_to_the_starstar_divergence():
     """The composed system rejects the write (TupleSource delegates admission to
     the SetEngine), so the exposure is the graph index used DIRECTLY."""
-    from zanzibar.connectedstore import ConnectedStore
+    from zanzibar.store import Store
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s:
-        cs = ConnectedStore(s, 'cx', schema=ZT_P5_STARSTAR_SCHEMA,
+        cs = Store(s, 'cx', schema=ZT_P5_STARSTAR_SCHEMA,
                             object_wildcard_shapes=ZT_P5_STARSTAR_OWC)
         s.commit()
         with pytest.raises(ValueError, match='cycle'):
@@ -639,13 +639,13 @@ def _live_state(schema, owc, seq):
     as an OPTIONAL argument and silently drops half its body without it — the rest of
     I3 (bridge completeness/exclusivity), I14, I4 namespace and every derived
     invariant. This helper returns the handle so its callers cannot accidentally run
-    the reduced checker; `src/zanzibar/connectedstore/store.py` exposes it as `cs.widx.schema_info`.
+    the reduced checker; `src/zanzibar/store/_store.py` exposes it as `cs.widx.schema_info`.
     """
-    from zanzibar.connectedstore import ConnectedStore
+    from zanzibar.store import Store
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    cs = ConnectedStore(session, 'live', schema=schema, object_wildcard_shapes=owc)
+    cs = Store(session, 'live', schema=schema, object_wildcard_shapes=owc)
     session.commit()
     landed = []
     for w in seq:
@@ -699,7 +699,7 @@ def test_zt_p5_object_wildcard_state_level_live_equals_rebuild(corpus, k):
             implicit=True predicate='viewer' type='folder' wildcard=''
             reference_count=3 of bridged-out shape missing its w_all->concrete bridge
     """
-    from zanzibar.connectedstore import build_index
+    from zanzibar.store import build_index
     from zanzibar.graphindex.invariants import check_invariants
 
     schema, owc, space = corpus

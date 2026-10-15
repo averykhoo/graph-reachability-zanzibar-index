@@ -146,7 +146,7 @@ composition-write round-trips that would change the modeled algorithm; leave the
   rollback correct — the in-memory engine holds phantom state that can't be
   incrementally undone without an undo journal, and *that* is a new algorithm
   on the evaluator-freshness watermark contract. Cold path anyway (ordinary
-  rejections take the cheap branch, `store.py::ConnectedStore.__init__`). Cost documented;
+  rejections take the cheap branch, `store/_store.py::Store.__init__`). Cost documented;
   not changing. (N10 deferred *write-only auxiliary* state off the rebuild —
   a different, narrower thing.)
 

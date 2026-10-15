@@ -640,7 +640,7 @@ class DeltaProcessor:
         families, i.e. raw admitted user writes. Those cannot change inside one
         cascade:
 
-          * raw writes PRECEDE the cascade. ``src/zanzibar/connectedstore/apply.py::advance_index``
+          * raw writes PRECEDE the cascade. ``src/zanzibar/store/apply.py::advance_index``
             runs its whole ``_apply_row`` loop before ``proc.run_cascade(wm)``, and
             ``tests/test_matrix.py::GraphBackend.apply`` does the same (synchronous v1).
           * the cascade's own writes go somewhere else. ``_write_derived`` writes only
@@ -689,7 +689,7 @@ class DeltaProcessor:
         starts serving a stale empty answer. The pin is
         ``tests/test_stored_cache_scope.py``.
 
-        ⚠ DO NOT install this in ``src/zanzibar/connectedstore/apply.py::advance_index``. That is
+        ⚠ DO NOT install this in ``src/zanzibar/store/apply.py::advance_index``. That is
         where the N15 node cache lives and its scope SPANS the raw-write apply loop --
         a stored-tuple memo there would outlive writes that change the very edges it
         caches, which is a silent wrong-answer authorization bug, not a crash.
@@ -1685,7 +1685,7 @@ class DeltaProcessor:
         the ``'fixpoint'`` tier (``_check_cascade_fixpoint``); a key that was never
         SCHEDULED is outside that tier by construction, and this audit is the only
         detector for that class. Production callers: none -- it is reached from
-        ``tests/`` and, on the composed system, via the public ``ConnectedStore.proc``
+        ``tests/`` and, on the composed system, via the public ``Store.proc``
         attribute (``None`` when the schema has no boolean relation). The whole-store
         repair ``backfill()`` does have a production caller, ``build_index(bulk=False)``.
         """

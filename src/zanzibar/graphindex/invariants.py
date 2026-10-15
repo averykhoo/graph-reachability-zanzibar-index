@@ -72,10 +72,10 @@ production at all -- leaving every runtime corruption detector dark:
 
 ``resolve_paranoia_level`` is the shared precedence rule for wiring sites: an
 explicit argument beats the ``ZANZIBAR_PARANOIA`` environment variable, which beats
-the caller's default. ``ConnectedStore`` defaults to ``'off'`` because ``'residue'``
+the caller's default. ``Store`` defaults to ``'off'`` because ``'residue'``
 measured at +4.3%/+5.7% of the sync write path (162/478 per-write commits,
 interleaved A/B, min-of-3) -- cheap next to ``'full'``'s +124%/+303%, but too much
-to impose silently; see ``ConnectedStore.DEFAULT_PARANOIA``. ``'residue'`` is
+to impose silently; see ``Store.DEFAULT_PARANOIA``. ``'residue'`` is
 nonetheless the RECOMMENDED production setting: it is the only runtime detector for
 the ZT-P0-1 escalation class.
 """
@@ -848,7 +848,7 @@ class ParanoiaGuard:
     """The installed paranoia state for one (session, store) pair.
 
     The commit listeners read their level off this object, so a *re-install* (say a
-    test that wants ``'full'`` on a store its ``ConnectedStore`` already opened at
+    test that wants ``'full'`` on a store its ``Store`` already opened at
     ``'residue'``) UPGRADES in place instead of stacking a second pair of listeners
     and double-checking every commit.
     """

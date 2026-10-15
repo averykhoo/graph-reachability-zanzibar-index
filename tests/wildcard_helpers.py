@@ -12,7 +12,7 @@ from contextlib import contextmanager
 
 from sqlmodel import Session, create_engine, SQLModel
 
-from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
+from zanzibar.graphindex import ReachabilityIndex, IndexStore, WildcardIndex
 from zanzibar.graphindex.invariants import check_invariants, install_paranoia, snapshot_rows
 from zanzibar.schema import SchemaInfo
 
@@ -37,7 +37,7 @@ def make_wildcard_index(schema_info: SchemaInfo, store_id: str = 'test', *,
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    session.add(Store(id=store_id))
+    session.add(IndexStore(id=store_id))
     session.commit()
     idx = ReachabilityIndex(session, store_id=store_id)
     install_paranoia(session, store_id, schema_info, level=paranoia)

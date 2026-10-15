@@ -239,11 +239,11 @@ Module map and pointers: `docs/architecture/overview.md`.
 - **`tests/oracle.py`** — independent reference oracle (pointwise, boolean-aware).
   **Independence contract:** it imports nothing from the package and parses the DSL itself,
   so one parser bug can't corrupt both sides of the validation matrix.
-- **`src/zanzibar/connectedstore/`** — the composed system (Zanzibar/Leopard split):
+- **`src/zanzibar/store/`** — the composed system (Zanzibar/Leopard split):
   `RelationTuple` + permanent `TupleLog` = source of truth, graph index = materialized view.
   `TupleSource` (admission-validated writes returning log-id freshness tokens),
   `advance_index` (THE apply step — sync inlines it, async loops it via
-  `ConnectedStore.catch_up`), `build_index` (offline bootstrap), `SchemaRecord` (write-once
+  `Store.catch_up`), `build_index` (offline bootstrap), `SchemaRecord` (write-once
   schema source; compiled artifacts are cache). Composition layer only: it imports both
   backends, they never import it. Schemas are static — a new schema means a new store/index.
 - **Specs** live in `docs/specs/`; code comments cite them by section: bare "spec §N" in
@@ -336,7 +336,7 @@ Module map and pointers: `docs/architecture/overview.md`.
     every sync edge ADD is capped whatever it does to access, revocation-shaped adds under
     `but not` included, and the refusal (`ClosureFanoutExceeded`) is atomic across log, set
     engine and index. Do NOT reintroduce "revocations are exempt" (a sound exemption needs a
-    global sign analysis). Edge REMOVALS are never capped. `ConnectedStore.catch_up` and the
+    global sign analysis). Edge REMOVALS are never capped. `Store.catch_up` and the
     non-bulk `build_index` run inside `ReachabilityIndex.fanout_cap_suspended` (rows already
     committed are applied with a warning). Why: `docs/tk111-stall-aware-freshness-2026-10-02.md`.
   * Path counts past `src/zanzibar/graphindex/core.py::MAX_PATH_COUNT` are refused with
@@ -351,11 +351,11 @@ Module map and pointers: `docs/architecture/overview.md`.
 - **Supported backends: SQLite (dev/test) and PostgreSQL (the server). MySQL is NOT
   supported** — don't reason about it, and don't leave InnoDB facts in comments (one was half
   the justification for a live fail-open, `docs/spec-deviations.md` 2026-07-27). **`READ
-  COMMITTED` is the only accepted isolation level** — `TupleSource`/`ConnectedStore` raise
+  COMMITTED` is the only accepted isolation level** — `TupleSource`/`Store` raise
   `UnsafeIsolationLevel` at construction for anything else, SERIALIZABLE included. The
   dialect-specific surface is deliberately tiny and must stay that way:
   `src/zanzibar/graphindex/core.py::is_sqlite` + `take_row_write_lock`, and
-  `src/zanzibar/connectedstore/source.py::assert_read_isolation`. New dialect branching goes
+  `src/zanzibar/store/source.py::assert_read_isolation`. New dialect branching goes
   *there*, not sprinkled through call sites or prose.
 - **Concurrency**: `ReachabilityIndex._lock_store` (a `FOR UPDATE` store-row lock)
   serializes writers per store on PostgreSQL; it's a no-op on SQLite, which serializes

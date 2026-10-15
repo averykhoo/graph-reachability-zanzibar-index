@@ -68,7 +68,7 @@ verifier (each outbox flip re-derived by BFS over
 direct edges and compared to the closure row) — a violation aborts the commit — and
 runs the checker again post-commit in a fresh session. **"Every commit in the test suite"
 is literal:** paranoia is wired by `tests/wildcard_helpers.make_wildcard_index` and by
-`ConnectedStore.__init__`, which takes `paranoia=` and honours `ZANZIBAR_PARANOIA` but
+`Store.__init__`, which takes `paranoia=` and honours `ZANZIBAR_PARANOIA` but
 **defaults to `'off'`**, so a production deployment that configures nothing runs this layer
 dark (see §4's "Paranoia off" gap). This sentence read "`ConnectedStore` never installs
 it" until 2026-09-19 — true before ZT-P1-3, stale after. An opt-in fourth tier,
@@ -133,7 +133,7 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   the worker's cadence. That is the intended zookie semantics, but it is a
   guarantee *shape*, and callers must not read it as recency.
 * **Multi-writer admission is serialized, but concurrency coverage stays
-  SQLite-shaped.** Multiple `TupleSource`/`ConnectedStore` writer instances on one
+  SQLite-shaped.** Multiple `TupleSource`/`Store` writer instances on one
   store are now correct by construction: each write runs a per-store critical
   section (`_lock_source`, a `FOR UPDATE` lock on the `SchemaRecord` row → catch the
   evaluator up → validate → append, one transaction), so duplicate / remove-existence
@@ -163,11 +163,11 @@ project. The seeded-corruption tests prove each invariant class actually fires.
   this tree outside `docs/history/` as a bug, not as background: one such claim was
   half the justification for accepting `SERIALIZABLE`, which reproduced a live
   authorization fail-open. `READ COMMITTED` is the only accepted isolation level and
-  `TupleSource`/`ConnectedStore` refuse anything else at construction
+  `TupleSource`/`Store` refuse anything else at construction
   (`UnsafeIsolationLevel`). All access is otherwise flavour-agnostic through
   SQLModel/SQLAlchemy; the entire dialect-specific surface is three places —
   `src/zanzibar/graphindex/core.py::is_sqlite`, `src/zanzibar/graphindex/core.py::take_row_write_lock`, and
-  `src/zanzibar/connectedstore/source.py::assert_read_isolation` — and new branching belongs there
+  `src/zanzibar/store/source.py::assert_read_isolation` — and new branching belongs there
   rather than spread across call sites.
 
 ## 5. How to extend without breaking the argument

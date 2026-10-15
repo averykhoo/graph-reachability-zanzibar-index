@@ -73,11 +73,11 @@ def _schema_files() -> tuple[str, ...]:
                         if '__pycache__' not in p.parts))
 
 
-#: TK140 (2026-10-13d) added `src/zanzibar/connectedstore/store.py`: its
+#: TK140 (2026-10-13d) added `src/zanzibar/store/_store.py`: its
 #: `_reject_unlogged_adoption` refuses a store SHAPE (tuples the log cannot replay), and
 #: engine.py's `_reject_unlogged_write` (ZT-P1-8a + TK140) is now in scope by its name.
 FILES = _schema_files() + ('tests/oracle.py', 'src/zanzibar/setengine/engine.py',
-                           'src/zanzibar/connectedstore/store.py')
+                           'src/zanzibar/store/_store.py')
 SHAPE_EXCEPTIONS = frozenset({'UnsupportedByGraphIndex', 'CyclicDerivedDependency'})
 SHAPE_FUNCTION_PREFIXES = ('_validate_', '_reject_')
 HEADER = 'REFUSED SHAPE'
@@ -112,7 +112,7 @@ HEADER = 'REFUSED SHAPE'
 #: `oracle.py::_reject_unsupported_openfga_line` got its own block instead of
 #: ``WHY/INSTEAD: see above``): 50 / 25 / 2 / 1.
 MIN_HEADERS = {LIB: 50, 'tests/oracle.py': 25, 'src/zanzibar/setengine/engine.py': 2,
-               'src/zanzibar/connectedstore/store.py': 1}
+               'src/zanzibar/store/_store.py': 1}
 #: In-scope raises the scope rule must keep seeing (anti-vacuity, replacing the per-file
 #: "no in-scope raise found" assert, which cannot hold per SUBMODULE). Measured 2026-10-06
 #: with `in_scope_raises`: 25 over the schema package (boolean 2, compiler 11,

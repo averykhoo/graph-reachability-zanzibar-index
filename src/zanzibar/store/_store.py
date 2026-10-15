@@ -1,4 +1,4 @@
-"""ConnectedStore: source-of-truth tuples + materialized graph index, composed
+"""Store: source-of-truth tuples + materialized graph index, composed
 (connected-store spec §1/§4).
 
 NOTE (spec §1): the synchronous coupling here is a **temporary schedule, not
@@ -66,7 +66,7 @@ class LookupNotFresh(StaleRead):
     stale enumeration is how a revoked principal stays listed in a revocation UI, and
     silently swapping id domains is a different bug in a nicer costume.
 
-    RECOVERABLE: run the apply step (``ConnectedStore.catch_up()`` -- an instance may
+    RECOVERABLE: run the apply step (``Store.catch_up()`` -- an instance may
     run it; it IS the async worker's body) or wait for the worker, then retry. For a
     single yes/no decision, ``check(..., at_least=...)`` has the fallback and needs no
     catch-up."""
@@ -88,21 +88,21 @@ class IndexStalled(LookupNotFresh):
     RECOVERABLE once the stall clears: any successful ``catch_up`` batch ends it. A
     stall recorded on a transient failure (a lock timeout, a lost connection) clears on
     the next good batch. A poison row needs operator action, and
-    ``ConnectedStore.stall_error`` says which row failed and why. Since TK112 the
+    ``Store.stall_error`` says which row failed and why. Since TK112 the
     fan-out cap is suspended in ``catch_up``, so the poison row left is a path-count
     overflow (``PathCountExceeded``). It never clears by itself, not even when a later
     REMOVE undoes it, because that REMOVE waits behind it. Remove the tuple at the
-    source, then ``connectedstore.rebuild_index`` (TK121,
+    source, then ``store.rebuild_index`` (TK121,
     ``docs/tk121-stall-recovery-2026-10-04.md``)."""
 
 
 class UnloggedTuplesPresent(RuntimeError):
-    """``ConnectedStore`` refused to adopt a store id whose ``RelationTuple`` rows the
+    """``Store`` refused to adopt a store id whose ``RelationTuple`` rows the
     ``TupleLog`` does not account for (TK140; 0.0.4 trial BROKEN-3, p09).
 
-    A ``ConnectedStore`` open that CREATES the index's cursor starts the graph index
+    A ``Store`` open that CREATES the index's cursor starts the graph index
     empty and advances it from the log alone. Tuples written without a log row -- by a
-    standalone ``SetEngine`` on the same id, before any ``ConnectedStore`` claimed it --
+    standalone ``SetEngine`` on the same id, before any ``Store`` claimed it --
     would be invisible to the index (``check`` False while the set engine says True), and
     removing one would raise ``InvariantViolation`` ("corruption"). The bootstrap for a
     store that already has tuples is ``save_schema`` + ``build_index``, which materialise
@@ -156,29 +156,29 @@ def _reject_unlogged_adoption(session: Session, store_id: str) -> None:
     if n_tuples == n_add - n_remove:
         return
     session.rollback()
-    # REFUSED SHAPE (TK140): a ConnectedStore born over RelationTuple rows that no
+    # REFUSED SHAPE (TK140): a Store born over RelationTuple rows that no
     # TupleLog row accounts for (written by a standalone SetEngine on the same id).
     # WHY: the index is born empty and advanced from the log only, so those tuples are
     # invisible to it: check says False while the set engine says True, and removing one
     # raises InvariantViolation (0.0.4 trial BROKEN-3, p09).
     # INSTEAD: save_schema(session, id, schema) if the store has none, commit, then
     # build_index(session, id) -- it materialises the index from the RelationTuple
-    # snapshot -- and open ConnectedStore(session, id) without schema=.
+    # snapshot -- and open Store(session, id) without schema=.
     raise UnloggedTuplesPresent(
         f'store {store_id!r} already has {n_tuples} RelationTuple row(s) but its tuple '
         f'log accounts for {n_add - n_remove} (ADD {n_add} - REMOVE {n_remove}): they were '
         f'written without the log (by a standalone SetEngine on this store id), and a '
-        f'ConnectedStore index born here would never see them -- check would answer '
+        f'Store index born here would never see them -- check would answer '
         f'False while the set engine answers True, and removing one would be reported '
         f'as corruption (TK140). To adopt an existing tuple store: '
-        f'zanzibar.connectedstore.save_schema(session, {store_id!r}, schema) if it has '
+        f'zanzibar.store.save_schema(session, {store_id!r}, schema) if it has '
         f'no schema yet, session.commit(), then '
-        f'zanzibar.connectedstore.build_index(session, {store_id!r}) (it builds the index '
-        f'from the stored tuples), then ConnectedStore(session, {store_id!r}). Nothing '
+        f'zanzibar.store.build_index(session, {store_id!r}) (it builds the index '
+        f'from the stored tuples), then Store(session, {store_id!r}). Nothing '
         f'was written by this refused open.')
 
 
-class ConnectedStore:
+class Store:
     """One permission store, end to end: validated writes into the tuple log +
     synchronously-maintained graph index; index-served reads with freshness
     fallback."""
@@ -253,7 +253,7 @@ class ConnectedStore:
 
         Precedence: this argument (when not ``None``) > the ``ZANZIBAR_PARANOIA``
         environment variable (``off``/``residue``/``full``, or ``0``/``1``) >
-        ``ConnectedStore.DEFAULT_PARANOIA``. So an operator can turn the layer up or
+        ``Store.DEFAULT_PARANOIA``. So an operator can turn the layer up or
         off in a deployment without a code change, and a caller that has made an
         explicit choice is never overridden by the environment.
         """
@@ -449,7 +449,7 @@ class ConnectedStore:
             self.session.commit()
         except Exception as rec:
             self.session.rollback()
-            exc.add_note(f'ConnectedStore: recording the index stall ALSO failed '
+            exc.add_note(f'Store: recording the index stall ALSO failed '
                          f'({type(rec).__name__}: {rec}); untokened reads may still '
                          f'be served from the stalled index until it is recorded')
 

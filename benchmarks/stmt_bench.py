@@ -1,9 +1,9 @@
-"""Statements-per-operation benchmark on a REAL ``ConnectedStore`` (P12-M, wave 0).
+"""Statements-per-operation benchmark on a REAL ``Store`` (P12-M, wave 0).
 
 Unlike ``scale_bench.py`` / ``set_engine_bench.py`` -- which drive
 ``SetEngine.add_tuple`` / ``WildcardIndex.add_tuple`` directly through the
 ``build_set`` / ``build_graph`` harness paths and thereby BYPASS the composition
-layer entirely -- this bench drives a live ``connectedstore.ConnectedStore`` (sync
+layer entirely -- this bench drives a live ``store.Store`` (sync
 schedule), so every P12 composition round-trip (log INSERT, ``_lock_store``, cursor
 refresh, ``log_rows`` re-read, ``outbox_watermark``, cursor UPDATE, cascade) is on
 the measured path.
@@ -15,12 +15,12 @@ listener on the engine. In-memory SQLite makes wall-time a weak secondary signal
 statement COUNT is exactly what the production target -- PostgreSQL, the supported
 server -- pays per op, one network round trip each.
 
-Paranoia note: ``ConnectedStore`` opens the graph index via
+Paranoia note: ``Store`` opens the graph index via
 ``schema_io.open_graph_index`` -> ``ReachabilityIndex(session, store_id)`` directly;
 it never calls ``install_paranoia``, and its constructor exposes no paranoia flag.
 So the invariant checker is OFF here by construction (the production-realistic
-mode) -- there is no knob to turn it on through ``ConnectedStore``. Reported as
-``paranoia=off (unreachable via ConnectedStore)``.
+mode) -- there is no knob to turn it on through ``Store``. Reported as
+``paranoia=off (unreachable via Store)``.
 
 Run:
 
@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy import event
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.schema import Entity, RelationalTriple
 
 
@@ -210,7 +210,7 @@ def bool_reverses():
 # Fan-out K (rewrite triples yielded by ruleset.apply for a written raw tuple)
 # ---------------------------------------------------------------------------
 
-def fanout_k(store: ConnectedStore, raw) -> int:
+def fanout_k(store: Store, raw) -> int:
     sp = Ellipsis if raw[0] == '...' else raw[0]
     tr = RelationalTriple(Entity(raw[1], raw[2]), raw[3],
                           Entity(raw[4], raw[5]), sp)
@@ -256,7 +256,7 @@ def measure(name: str, schema: str, gen, checks, lookups, reverses):
     session = Session(engine)
 
     with count_statements(counter) as ctor:
-        store = ConnectedStore(session, name, schema=schema)
+        store = Store(session, name, schema=schema)
     ctor_n = ctor['n']
 
     tuples = gen()
@@ -402,8 +402,8 @@ def render(name, r):
 
 
 def main():
-    print('# Statements-per-operation baseline (real ConnectedStore, sync)\n')
-    print('paranoia=off (unreachable via ConnectedStore; ReachabilityIndex opened '
+    print('# Statements-per-operation baseline (real Store, sync)\n')
+    print('paranoia=off (unreachable via Store; ReachabilityIndex opened '
           'directly, no install_paranoia)\n')
 
     t0 = time.perf_counter()

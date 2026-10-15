@@ -30,7 +30,7 @@ from zanzibar.schema import (AdmissionRejected, SchemaInfo,
 
 @dataclass
 class LookupResult:
-    """What ``lookup`` / ``lookup_reverse`` return (also via ``ConnectedStore``).
+    """What ``lookup`` / ``lookup_reverse`` return (also via ``Store``).
 
     * ``node_ids``: ids of ``zanzibar.graphindex.Node`` rows in this store. Resolve them with
       ``session.exec(select(Node).where(Node.id.in_(result.node_ids)))``; each node is a
@@ -270,7 +270,7 @@ class WildcardIndex:
         next ordinary grant naming ANY folder (``user:u1 editor folder:f1``: no wildcard,
         no userset, not the crossable relation) is then permanently refused, because
         minting ``folder:f1``'s middle emits the out-bridge that closes the loop. Through
-        ``ConnectedStore`` that write is admission-validated by the set engine, lands in
+        ``Store`` that write is admission-validated by the set engine, lands in
         the permanent log, and wedges ``catch_up`` on every subsequent call. The measured
         map is docs/tk70-detonation-2026-09-17.md; the instrument is
         formal/probes/tk70_latent_cycle_sweep_2026-09-17.py.
@@ -568,7 +568,7 @@ class WildcardIndex:
         (two different raw tuples may derive the same edge and must retire
         independently) -- it is NOT the raw-tuple API. Zanzibar raw tuples are a SET;
         set-semantics idempotence lives one layer up, at the tuple boundary
-        (connectedstore.TupleSource / the harness adapters). Do not feed raw user
+        (store.TupleSource / the harness adapters). Do not feed raw user
         writes here directly unless you deduplicate them yourself."""
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._add_tuple_trusted(subject_predicate, s_type, s_name, relation, o_type, o_name)
@@ -587,7 +587,7 @@ class WildcardIndex:
         the check provably always passes, so it is pure redundant work. The public
         ``add_tuple`` above (used directly by tests/harness) keeps validating. The
         ONLY sanctioned caller of this trusted entry point is ``_apply_row`` in
-        ``src/zanzibar/connectedstore/apply.py``; do not widen that."""
+        ``src/zanzibar/store/apply.py``; do not widen that."""
         self._assert_derived_exclusivity(relation, o_type)
         # Lock BEFORE resolution, exactly like core.add_edge (blind-audit C2): a
         # concurrent remove_node in the resolve-then-mutate gap would hand us stale
@@ -642,7 +642,7 @@ class WildcardIndex:
         CONTRACT as ``_add_tuple_trusted``: identifiers must originate from an
         admission-validated raw tuple routed through ``RuleSet.apply``; the skipped
         check provably always passes here, so accept/reject behaviour is unchanged.
-        Sole sanctioned caller: ``_apply_row`` in ``src/zanzibar/connectedstore/apply.py``."""
+        Sole sanctioned caller: ``_apply_row`` in ``src/zanzibar/store/apply.py``."""
         self._assert_derived_exclusivity(relation, o_type)
         self.idx._lock_store()   # lock before resolution (blind-audit C2)
         try:

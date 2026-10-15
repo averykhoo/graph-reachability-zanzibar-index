@@ -1,6 +1,6 @@
 import pytest
 from sqlmodel import Session, create_engine, SQLModel
-from zanzibar.graphindex.models import Store, Node, PermissionDelta
+from zanzibar.graphindex.models import IndexStore, Node, PermissionDelta
 from types import EllipsisType
 
 def test_permission_delta_fields():
@@ -15,7 +15,7 @@ def test_store_model():
     SQLModel.metadata.create_all(engine)
     
     with Session(engine) as session:
-        store = Store(id="tenant_1", description="test tenant")
+        store = IndexStore(id="tenant_1", description="test tenant")
         session.add(store)
         session.commit()
         session.refresh(store)

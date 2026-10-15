@@ -6,22 +6,22 @@ Review record: ``docs/tk123-api-review-2026-10-14.md`` rows A16 and A53.
 * A16 -- ``advance_index(..., proc=None)`` on a schema with boolean (``and`` / ``but not``)
   relations applied the log to the leaf families only and never ran the delta processor's
   cascade, so the derived families were never maintained. Reachable with names from
-  ``zanzibar.connectedstore.__all__`` alone (``ensure_cursor`` + ``open_graph_index`` give a
+  ``zanzibar.store.__all__`` alone (``ensure_cursor`` + ``open_graph_index`` give a
   cursor and a ``(widx, ruleset)``, but no processor). Review probe output, before the fix::
 
       advance_index(proc=None) applied 3 rows, no error
         graph check alice viewer doc:d -> False
         source (set engine) alice -> True
 
-  Fix: ``connectedstore/apply.py::_require_proc_for_boolean_schema`` raises
+  Fix: ``store/apply.py::_require_proc_for_boolean_schema`` raises
   ``MissingDeltaProcessor`` when ``ruleset.compiled.plans`` is non-empty and ``proc`` is
   None. A pure-union schema still takes ``proc=None``.
 
-* A53 -- a ``SetEngine`` opened on a store id a ``ConnectedStore`` owns (it has a
+* A53 -- a ``SetEngine`` opened on a store id a ``Store`` owns (it has a
   ``SchemaRecord``) answered under whatever schema it was GIVEN. With the store's
   ``but not banned`` dropped it returned a stale ALLOW. Review probe output, before::
 
-      ConnectedStore cs check (persisted BOOL schema): OK -> False
+      Store cs check (persisted BOOL schema): OK -> False
       SetEngine on cs id, persisted schema: OK -> False
       SetEngine on cs id, DIFFERENT schema (no but-not): OK -> True
 
@@ -30,7 +30,7 @@ Review record: ``docs/tk123-api-review-2026-10-14.md`` rows A16 and A53.
   object-wildcard shapes, equal ``SchemaAST``), via
   ``setengine/engine.py::_assert_schema_matches_record``. ``SchemaMismatch`` moved to
   ``zanzibar.schema.errors`` so the set engine raises it without importing the
-  composition layer; ``zanzibar.connectedstore.SchemaMismatch`` is the same class. A
+  composition layer; ``zanzibar.store.SchemaMismatch`` is the same class. A
   standalone store id (no record) is unchanged: it trusts the schema it is given.
 
 SABOTAGE (2026-10-14, literal observed output). Runner: an anchored byte replace per
@@ -89,9 +89,9 @@ import warnings
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-import zanzibar.connectedstore as cs
+import zanzibar.store as cs
 import zanzibar.schema as zschema
-from zanzibar.connectedstore import ConnectedStore, SchemaRecord
+from zanzibar.store import Store, SchemaRecord
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.setengine import SetEngine
 from zanzibar.setengine import engine as engine_mod
@@ -210,7 +210,7 @@ type user
 
 def _governed_store(e):
     with Session(e) as s:
-        store = ConnectedStore(s, 'cs', schema=BOOL)
+        store = Store(s, 'cs', schema=BOOL)
         store.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd')
         store.add_tuple('...', 'user', 'alice', 'banned', 'doc', 'd')
         s.commit()
@@ -221,7 +221,7 @@ def test_a53_dropping_but_not_on_a_governed_store_is_refused():
     e = _mem()
     _governed_store(e)
     with Session(e) as s:
-        assert ConnectedStore(s, 'cs').check('...', 'user', 'alice', 'viewer', 'doc', 'd') is False
+        assert Store(s, 'cs').check('...', 'user', 'alice', 'viewer', 'doc', 'd') is False
     with Session(e) as s:
         with pytest.raises(cs.SchemaMismatch) as ei:
             SetEngine(s, 'cs', BOOL.replace(' but not banned', ''))
@@ -251,7 +251,7 @@ def test_a53_object_wildcard_shapes_must_match_too():
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')        # object wildcards are an unproven extension
         with Session(e) as s:
-            ConnectedStore(s, 'cs', schema=UNION, object_wildcard_shapes=shapes)
+            Store(s, 'cs', schema=UNION, object_wildcard_shapes=shapes)
         with Session(e) as s:
             assert SetEngine(s, 'cs', UNION, object_wildcard_shapes=shapes).log_governed
         with Session(e) as s:
@@ -276,9 +276,9 @@ def test_a53_standalone_store_without_a_record_is_unchanged():
 
 def test_a53_schema_mismatch_is_one_class_across_layers():
     """Moved to the shared layer, not duplicated: every import path is the same class,
-    so an existing ``except zanzibar.connectedstore.SchemaMismatch`` still catches the set
+    so an existing ``except zanzibar.store.SchemaMismatch`` still catches the set
     engine's refusal."""
-    from zanzibar.connectedstore.schema_io import SchemaMismatch as via_io
+    from zanzibar.store.schema_io import SchemaMismatch as via_io
     from zanzibar.schema.errors import SchemaMismatch as via_errors
     assert cs.SchemaMismatch is via_io is via_errors is zschema.SchemaMismatch
     assert issubclass(via_errors, ValueError)

@@ -178,7 +178,7 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
 }
 
 #: label -> (schema_text, tuple, expected) where expected is "ADMITTED" or the name of the
-#: exception class raised. Each is written through BOTH `ConnectedStore.add_tuple`
+#: exception class raised. Each is written through BOTH `Store.add_tuple`
 #: (TupleSource admission + synchronous graph apply) and a standalone `SetEngine.add_tuple`.
 STORE_PROBES: dict[str, tuple[str, object, str]] = {
     "storeValid.untainted/userset-subject-on-bare-arm": ("""

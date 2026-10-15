@@ -31,9 +31,9 @@ Three findings, three sections:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, func, select
 
-import zanzibar.connectedstore.source as source_mod
-from zanzibar.connectedstore import ConnectedStore, LookupNotFresh, TupleLog, TupleSource
-from zanzibar.connectedstore.source import SNAPSHOT_ATTEMPTS
+import zanzibar.store.source as source_mod
+from zanzibar.store import Store, LookupNotFresh, TupleLog, TupleSource
+from zanzibar.store.source import SNAPSHOT_ATTEMPTS
 from zanzibar.graphindex.models import Node
 from zanzibar.setengine import SetEngine, RelationTuple, UnloggedWriteRefused
 
@@ -85,7 +85,7 @@ def test_the_hazard_is_real(session):
     because ``TupleSource`` legitimately uses it (it appends the log row itself). Here
     it is called with no append, i.e. it plays the exact role the public method used to
     play for any caller holding ``source.engine``."""
-    cs = ConnectedStore(session, 'cs', schema=SCHEMA)
+    cs = Store(session, 'cs', schema=SCHEMA)
     token = cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
     session.commit()
     assert token > 0 and cs.check('...', 'user', 'u1', 'viewer', 'doc', 'd1') is True
@@ -106,7 +106,7 @@ def test_the_hazard_is_real(session):
 
 
 def test_direct_add_on_a_logged_store_is_refused(session):
-    cs = ConnectedStore(session, 'cs', schema=SCHEMA)
+    cs = Store(session, 'cs', schema=SCHEMA)
     cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
     session.commit()
 
@@ -126,7 +126,7 @@ def test_direct_add_on_a_logged_store_is_refused(session):
 def test_direct_remove_on_a_logged_store_is_refused(session):
     """The fail-OPEN half: an unlogged remove would leave the grant materialized in the
     index, which keeps answering ALLOW for good."""
-    cs = ConnectedStore(session, 'cs', schema=SCHEMA)
+    cs = Store(session, 'cs', schema=SCHEMA)
     cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
     session.commit()
 
@@ -148,7 +148,7 @@ def test_direct_remove_on_a_logged_store_is_refused(session):
 def test_the_engine_attribute_is_read_only(session):
     """Reads through ``source.engine`` are legitimate and must keep working; swapping
     the engine out from under the watermark bookkeeping must not."""
-    cs = ConnectedStore(session, 'cs', schema=SCHEMA)
+    cs = Store(session, 'cs', schema=SCHEMA)
     cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
     session.commit()
     assert cs.source.engine.check('...', 'user', 'u1', 'viewer', 'doc', 'd1') is True
@@ -186,7 +186,7 @@ def test_a_standalone_set_engine_is_untouched(session):
 def _async_store(session):
     """Async schedule: writes land in the source of truth only, so the index lags by
     exactly as many log rows as were written -- the lag a token exists to detect."""
-    return ConnectedStore(session, 'cs', schema=SCHEMA, sync=False)
+    return Store(session, 'cs', schema=SCHEMA, sync=False)
 
 
 def test_lookup_without_a_token_is_unchanged(session):
@@ -262,7 +262,7 @@ def test_a_satisfied_token_is_served_from_the_index(session):
     """Sync schedule: the cursor rides the head, so a tokened lookup is the ordinary
     index read plus one integer comparison. Pins that the guard costs nothing and
     changes no answer when the demand IS met."""
-    cs = ConnectedStore(session, 'cs', schema=SCHEMA)
+    cs = Store(session, 'cs', schema=SCHEMA)
     token = cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
     session.commit()
     assert cs.cursor.applied_log_id == token
@@ -282,8 +282,8 @@ def test_a_stale_in_memory_cursor_is_refreshed_before_refusing(tmp_path):
     engine = create_engine(url)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as sw, Session(engine) as sr:
-        writer = ConnectedStore(sw, 'cs', schema=SCHEMA, sync=False)
-        reader = ConnectedStore(sr, 'cs', sync=False)       # cursor loaded at 0
+        writer = Store(sw, 'cs', schema=SCHEMA, sync=False)
+        reader = Store(sr, 'cs', sync=False)       # cursor loaded at 0
         assert reader.cursor.applied_log_id == 0
 
         token = writer.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
@@ -322,7 +322,7 @@ def _watermark_script(monkeypatch, values):
 
 
 def test_consistent_rebuild_retries_until_the_pair_agrees(session, monkeypatch):
-    cs = ConnectedStore(session, 'cs', schema=SCHEMA)
+    cs = Store(session, 'cs', schema=SCHEMA)
     cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
     session.commit()
     src = cs.source
@@ -348,7 +348,7 @@ def test_consistent_rebuild_retries_until_the_pair_agrees(session, monkeypatch):
 def test_consistent_rebuild_falls_back_to_the_shared_lock(session, monkeypatch):
     """Under a sustained write stream the optimistic loop can lose every time; it must
     terminate by locking, not by spinning or by returning an inconsistent pair."""
-    cs = ConnectedStore(session, 'cs', schema=SCHEMA)
+    cs = Store(session, 'cs', schema=SCHEMA)
     cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
     session.commit()
     src = cs.source

@@ -6,9 +6,9 @@ the refused row is already in the log. ``catch_up`` then stalls in front of it f
 and every later row waits behind it -- including a REMOVE of the very tuple that caused
 it. Reads stay correct (the TK111 stall marker), but the index is unavailable.
 
-The recovery is ``connectedstore.rebuild_index``: remove the offending tuple at the
+The recovery is ``store.rebuild_index``: remove the offending tuple at the
 SOURCE, then rebuild the index in place from the snapshot. In place because a
-``ConnectedStore`` always reads the index under its own store id. Decision and procedure:
+``Store`` always reads the index under its own store id. Decision and procedure:
 ``docs/tk121-stall-recovery-2026-10-04.md``.
 
 What these tests pin:
@@ -32,9 +32,9 @@ from sqlalchemy import func
 from sqlmodel import Session, SQLModel, create_engine, select
 
 import zanzibar.graphindex.core as core
-from zanzibar.connectedstore import (ConnectedStore, IndexStalled, TupleSource, build_index,
+from zanzibar.store import (Store, IndexStalled, TupleSource, build_index,
                             rebuild_index, save_schema)
-from zanzibar.connectedstore.models import IndexCursor
+from zanzibar.store.models import IndexCursor
 from zanzibar.graphindex.models import DeltaOutbox, Edge, Node, ResidueRef, Residue
 from zanzibar.setengine.models import RelationTuple
 from tests import oracle as O
@@ -95,7 +95,7 @@ def _assert_index_agrees(cs, schema, grid):
 
 @pytest.mark.parametrize('bulk', [True, False])
 def test_k31_poison_row_recovers_by_source_remove_then_rebuild(session, bulk):
-    cs = ConnectedStore(session, 'st', schema=DIAMOND, sync=False)
+    cs = Store(session, 'st', schema=DIAMOND, sync=False)
     _stall_on_poison(cs)
     # The operator's starting point: the stall names the refused closure row.
     assert 'PathCountExceeded' in cs.stall_error and '2147483648' in cs.stall_error
@@ -140,7 +140,7 @@ def test_rebuild_that_cannot_succeed_changes_nothing(session, bulk):
     refused with the bound's own type -- and it must leave the old index, its stall
     marker and the read behaviour EXACTLY as they were. That is what makes the entry
     point safe to try."""
-    cs = ConnectedStore(session, 'st', schema=DIAMOND, sync=False)
+    cs = Store(session, 'st', schema=DIAMOND, sync=False)
     _stall_on_poison(cs)
     before = _counts(session)
     edges_before = _edges_proj(session, 'st')
@@ -167,8 +167,8 @@ def test_rebuild_that_cannot_succeed_changes_nothing(session, bulk):
 def test_rebuild_refuses_concurrent_writes_and_changes_nothing(session, monkeypatch):
     """The watermark re-check is shared with build_index: a write that lands during
     the rebuild is refused, and the refusal is atomic like every other one."""
-    import zanzibar.connectedstore.build as build_mod
-    cs = ConnectedStore(session, 'st', schema=DIAMOND, sync=False)
+    import zanzibar.store.build as build_mod
+    cs = Store(session, 'st', schema=DIAMOND, sync=False)
     _stall_on_poison(cs)
     cs.remove_tuple(*POISON)
     before = _counts(session)
@@ -208,7 +208,7 @@ def test_rebuilt_state_equals_a_fresh_build_on_a_boolean_schema(bulk):
     fails to clear then shows up as a difference (or as an id no node owns)."""
     tuples = _boolean_tuples(nusers=3, ngroups=3, ndocs=3)
     with Session(_engine()) as s:
-        cs = ConnectedStore(s, 'st', schema=_BOOLEAN, sync=True)
+        cs = Store(s, 'st', schema=_BOOLEAN, sync=True)
         for t in tuples:
             cs.add_tuple(*t)
         for t in tuples[::4]:                  # churn: the live index is not a fresh build
@@ -290,12 +290,12 @@ def test_replica_reader_sees_the_recovery_after_refresh(tmp_path, monkeypatch):
     poison = _diamond_writes(3)[-1][1]
     engine = _engine(f'sqlite:///{tmp_path / "st.db"}')
     with Session(engine) as ws, Session(engine) as rs:
-        worker = ConnectedStore(ws, 'st', schema=DIAMOND, sync=False)
+        worker = Store(ws, 'st', schema=DIAMOND, sync=False)
         for op, t in _diamond_writes(3) + [('-', MALLORY)]:
             worker.add_tuple(*t) if op == '+' else worker.remove_tuple(*t)
         with pytest.raises(PathCountExceeded):
             worker.catch_up()
-        reader = ConnectedStore(rs, 'st', schema=DIAMOND, sync=False)
+        reader = Store(rs, 'st', schema=DIAMOND, sync=False)
         assert reader.index_stalled
         with pytest.raises(IndexStalled):
             reader.lookup('...', 'user', 'mallory')

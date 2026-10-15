@@ -29,7 +29,7 @@ This module pins the replacement contract:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
+from zanzibar.graphindex import ReachabilityIndex, IndexStore, WildcardIndex
 from zanzibar.graphindex.core import AdmissionRejected as CoreAdmissionRejected
 from zanzibar.graphindex.invariants import InvariantViolation
 from zanzibar.setengine import SetEngine
@@ -68,7 +68,7 @@ def _core():
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    session.add(Store(id='adm'))
+    session.add(IndexStore(id='adm'))
     session.commit()
     return session, ReachabilityIndex(session, store_id='adm')
 
@@ -78,9 +78,9 @@ def _core():
 # --------------------------------------------------------------------------- #
 
 def test_admission_rejected_is_a_valueerror_subclass():
-    """BACKWARD COMPATIBILITY, and it is load-bearing: `zanzibar.connectedstore.store._write`,
+    """BACKWARD COMPATIBILITY, and it is load-bearing: `zanzibar.store._store._write`,
     `tests/parity.py`, `tests/test_matrix.py`'s backends, `zanzibar.graphindex.processor`'s
-    cycle guard and `zanzibar.connectedstore.apply._apply_row` all catch `ValueError` around
+    cycle guard and `zanzibar.store.apply._apply_row` all catch `ValueError` around
     a write. Breaking this subclassing silently changes all of them."""
     assert issubclass(AdmissionRejected, ValueError)
     assert AdmissionRejected is CoreAdmissionRejected      # re-exported, one class
@@ -300,7 +300,7 @@ def test_set_engine_refusals_are_admission_rejected():
     """The peer backend raises the SAME class, so a rejection is one type
     system-wide (`SetEngine._validate` + the missing-tuple rejection). The composed
     store's admission gate IS the set engine, so this is what
-    `zanzibar.connectedstore.store._write`'s narrowed handler keys on."""
+    `zanzibar.store._store._write`'s narrowed handler keys on."""
     session = Session(create_engine('sqlite:///:memory:'))
     SQLModel.metadata.create_all(session.get_bind())
     eng = SetEngine(session, 's', SCHEMA)

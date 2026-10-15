@@ -56,9 +56,9 @@ class AdmissionRejected(ValueError):
 
     **Subclassing ``ValueError`` is deliberate and load-bearing**, not an accident of
     convenience: every existing caller and test catches ``ValueError`` around a write
-    (``zanzibar.connectedstore.store._write``'s narrow rejection path, ``tests/parity.py``,
+    (``zanzibar.store._store._write``'s narrow rejection path, ``tests/parity.py``,
     ``tests/test_matrix.py``'s backends, ``zanzibar.graphindex.processor``'s cycle guard,
-    ``zanzibar.connectedstore.apply._apply_row``'s ValueError->InvariantViolation promotion).
+    ``zanzibar.store.apply._apply_row``'s ValueError->InvariantViolation promotion).
     All of those keep working unchanged. Narrowing to ``AdmissionRejected`` is strictly
     OPT-IN, and the only thing it buys is the ability to tell a correct refusal from an
     internal-contract ``ValueError``, which is a bug.
@@ -70,7 +70,7 @@ class AdmissionRejected(ValueError):
     ``zanzibar.graphindex.core`` re-exports it for convenience.
 
     NOTE the caller-relativity: the same raise can be a refusal at ADMISSION and
-    corruption further downstream. ``zanzibar.connectedstore.apply._apply_row`` replays an
+    corruption further downstream. ``zanzibar.store.apply._apply_row`` replays an
     already-admission-validated log row, so it promotes ANY ``ValueError`` (this class
     included) to ``InvariantViolation``. That promotion is the caller's judgement, and
     this class does not weaken it -- EXCEPT for ``ClosureFanoutExceeded``, whose whole
@@ -82,7 +82,7 @@ class IndexResourceLimit(AdmissionRejected):
     """The graph index declined to MATERIALISE an admitted write: a resource limit
     over the closure, not a property of the tuple and the schema.
 
-    The common base of the refusals ``zanzibar.connectedstore.apply._apply_row`` must NOT promote
+    The common base of the refusals ``zanzibar.store.apply._apply_row`` must NOT promote
     to ``InvariantViolation`` (see ``ClosureFanoutExceeded`` for why that promotion is
     wrong for this family). Two members: ``ClosureFanoutExceeded`` (``ZT-P1-6a``) and
     ``PathCountExceeded`` (``TK111``). ``_apply_row`` catches THIS class, so a new member
@@ -97,7 +97,7 @@ class PathCountExceeded(IndexResourceLimit):
     K-layer diamond chain makes it ``2**K``. The column is ``INTEGER``: int4 on
     PostgreSQL, int64 on SQLite. Before ``TK111`` the write failed at FLUSH with a raw
     ``DataError`` (PostgreSQL, K=31) or ``OverflowError`` (SQLite, K=63) -- a refusal
-    nobody could classify, which ``ConnectedStore._write`` treated as an unknown bug.
+    nobody could classify, which ``Store._write`` treated as an unknown bug.
     The bound is the int4 ceiling on BOTH dialects, so the same write is refused the
     same way on dev SQLite as on the PostgreSQL server. Saturating the count instead
     was rejected: it breaks the exact decrement a later removal relies on.
@@ -108,7 +108,7 @@ class ClosureFanoutExceeded(IndexResourceLimit):
     """The per-write closure fan-out cap refused a write (``ZT-P1-6a``).
 
     A subclass, and the ONE refusal family that must not be promoted to
-    ``InvariantViolation`` by ``zanzibar.connectedstore.apply._apply_row``.
+    ``InvariantViolation`` by ``zanzibar.store.apply._apply_row``.
 
     WHY IT NEEDS ITS OWN TYPE. Every other ``AdmissionRejected`` family is a property
     of the tuple and the schema, so ``TupleSource`` admission decides it BEFORE the row
@@ -123,7 +123,7 @@ class ClosureFanoutExceeded(IndexResourceLimit):
 
     Found 2026-07-29 while measuring the hub-topology DoS: because
     ``AdmissionRejected`` subclasses ``ValueError`` and ``_apply_row`` promotes every
-    ``ValueError``, a tuned-down cap surfaced through ``ConnectedStore`` as
+    ``ValueError``, a tuned-down cap surfaced through ``Store`` as
     ``InvariantViolation('... this is corruption or a validity-parity bug ...')`` --
     the exact opposite of what ``src/zanzibar/graphindex/core.py``'s raise site says in its own
     comment ("not an InvariantViolation, because nothing is corrupt"). It does not bite
@@ -182,7 +182,7 @@ def validate_store_id(store_id, label: str = 'store_id') -> None:
     follow-up, 2026-10-08, pinned by ``tests/test_tk127_store_id.py``).
 
     Called first by every constructor that takes a store id and can persist under it
-    (``ConnectedStore``, ``TupleSource``, ``SetEngine``, ``ReachabilityIndex``) and by
+    (``Store``, ``TupleSource``, ``SetEngine``, ``ReachabilityIndex``) and by
     ``save_schema``, so the refusal precedes any statement. ``None`` used to reach the
     NOT NULL ``store_id`` column as a raw ``IntegrityError``; ``5``, ``b'x'``, ``''`` and
     ``' '`` were accepted as ids no caller meant. The identifier CHARSET is deliberately
@@ -252,13 +252,13 @@ class CyclicDerivedDependency(ValueError):
 class SchemaMismatch(ValueError):
     """An explicit schema disagrees with the store's persisted (immutable) schema.
 
-    Raised by ``zanzibar.connectedstore`` (``ensure_schema``, so ``ConnectedStore(...,
+    Raised by ``zanzibar.store`` (``ensure_schema``, so ``Store(...,
     schema=...)``) and, since `TK123` A53, by ``zanzibar.setengine.SetEngine`` opened on a
     store id that has a ``SchemaRecord``: a set engine answering under a schema other than
     the store's would serve different answers from the same tuples (a dropped ``but not``
     reads as a stale ALLOW). It lives HERE, in the shared layer, so the set engine can raise
-    it without importing the composition layer; ``zanzibar.connectedstore`` re-exports the
-    same class, so ``except zanzibar.connectedstore.SchemaMismatch`` still catches it."""
+    it without importing the composition layer; ``zanzibar.store`` re-exports the
+    same class, so ``except zanzibar.store.SchemaMismatch`` still catches it."""
 
 
 class ShapeRefusedSinceTK137(ValueError):
@@ -269,12 +269,12 @@ class ShapeRefusedSinceTK137(ValueError):
     `parser.py::_reject_unparenthesised_but_not` and
     `parser.py::_validate_restriction_types_declared`.
 
-    It exists for ONE reader: `zanzibar.connectedstore.schema_io` re-parses a store's
+    It exists for ONE reader: `zanzibar.store.schema_io` re-parses a store's
     PERSISTED schema text on every open, so a store saved under 0.0.4 with one of these
     shapes stops opening. Telling that version break apart from corruption needs a type,
     not message matching (review challenge C10 in
     `docs/tk137-dsl-openfga-refusals-2026-10-14.md`); the store layer turns it into
-    `zanzibar.connectedstore.PersistedSchemaRefused`. ``instead`` is the rewrite that keeps
+    `zanzibar.store.PersistedSchemaRefused`. ``instead`` is the rewrite that keeps
     the meaning the 0.0.4 store was serving.
 
     A ``ValueError`` subclass so every caller that catches the parser's ``ValueError`` is

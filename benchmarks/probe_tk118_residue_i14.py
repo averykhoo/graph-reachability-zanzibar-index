@@ -1,7 +1,7 @@
 """TK118 cost probe: what the delta-scoped I14 adds to ``ZANZIBAR_PARANOIA=residue``.
 
 Interleaved A/B (arms alternate inside each round, min-of-ROUNDS), per-write commits
-through the real ``ConnectedStore`` sync path -- the method the 2026-07-26 residue
+through the real ``Store`` sync path -- the method the 2026-07-26 residue
 measurement used (``tests/test_paranoia_wiring.py`` docstring). Arms:
 
   off           no paranoia
@@ -25,7 +25,7 @@ from pathlib import Path
 
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.graphindex import invariants
 
 ROUNDS = 3
@@ -76,7 +76,7 @@ def run_arm(arm, schema, owc, writes):
         engine = create_engine('sqlite:///:memory:')
         SQLModel.metadata.create_all(engine)
         with Session(engine) as s:
-            cs = ConnectedStore(s, 'bench', schema=schema, object_wildcard_shapes=owc,
+            cs = Store(s, 'bench', schema=schema, object_wildcard_shapes=owc,
                                 paranoia='off' if arm == 'off' else 'residue')
             t0 = time.perf_counter()
             for w in writes:

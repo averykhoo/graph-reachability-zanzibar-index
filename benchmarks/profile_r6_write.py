@@ -528,7 +528,7 @@ def target_cascade(scale, incr):
 
 def target_bulk(scale):
     """R6-13/14/15 live in `src/zanzibar/graphindex/bulk_build.py` + `bulk_backfill.py`, which are
-    reached ONLY through `connectedstore.build_index(..., bulk=True)`.
+    reached ONLY through `store.build_index(..., bulk=True)`.
 
     ⚠ `benchmarks._harness.build_graph` does NOT reach them — it replays every routed
     triple through the incremental `widx.add_tuple` and bootstraps derived state with
@@ -543,7 +543,7 @@ def target_bulk(scale):
     tuples = list(spec['gen'](scale))
 
     from sqlmodel import Session, SQLModel, create_engine
-    from zanzibar.connectedstore import build_index
+    from zanzibar.store import build_index
     from benchmarks.bulk_scale_bench import seed_tuples
 
     engine = create_engine('sqlite:///:memory:')

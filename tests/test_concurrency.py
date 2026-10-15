@@ -29,7 +29,7 @@ from sqlalchemy import event
 from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.graphindex import ReachabilityIndex, Store
+from zanzibar.graphindex import ReachabilityIndex, IndexStore
 from tests.dbengine import shared_engine
 
 
@@ -72,7 +72,7 @@ def _add_retry(idx, sess, *args, attempts=300):
 def test_concurrent_overlapping_writes(tmp_path):
     engine = _file_engine(tmp_path, 'conc.db')
     with Session(engine) as s:
-        s.add(Store(id='c'))
+        s.add(IndexStore(id='c'))
         s.commit()
 
     THREADS, CHAIN = 6, 15
@@ -106,7 +106,7 @@ def test_concurrent_reads_are_consistent(tmp_path):
     """Many concurrent readers over a fixed graph all agree (reads take no locks)."""
     engine = _file_engine(tmp_path, 'reads.db')
     with Session(engine) as s:
-        s.add(Store(id='r'))
+        s.add(IndexStore(id='r'))
         s.commit()
     with Session(engine) as sess:
         idx = ReachabilityIndex(sess, 'r')

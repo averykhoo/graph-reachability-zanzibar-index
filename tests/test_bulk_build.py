@@ -23,7 +23,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from zanzibar.schema import AdmissionRejected
-from zanzibar.connectedstore import TupleSource, build_index, save_schema
+from zanzibar.store import TupleSource, build_index, save_schema
 from zanzibar.graphindex.invariants import check_invariants, snapshot_rows
 from zanzibar.graphindex.models import DeltaOutbox, Edge, Node, Residue
 from zanzibar.setengine.models import RelationTuple

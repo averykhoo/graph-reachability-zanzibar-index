@@ -12,14 +12,14 @@ every persisted row, was never validated. Re-run first-hand on the TK125 tree::
     bytes OK True
     space OK True
 
-i.e. ``ConnectedStore(s, None, schema=S)`` leaked the same raw ``IntegrityError`` class as
+i.e. ``Store(s, None, schema=S)`` leaked the same raw ``IntegrityError`` class as
 trial finding B3, and ``5`` / ``b'x'`` / ``''`` / ``' '`` bootstrapped a store and served
 writes under an id no caller could have meant.
 
 DECISION (2026-10-08): ``zanzibar.schema.errors.validate_store_id`` refuses anything but a
 ``str`` with a non-whitespace character, raising ``AdmissionRejected`` (``invalid store_id
 ...``, the TK125 message form) BEFORE any statement touches the database. It is called by
-every constructor that takes a store id and can persist under it -- ``ConnectedStore``,
+every constructor that takes a store id and can persist under it -- ``Store``,
 ``TupleSource``, ``SetEngine``, ``ReachabilityIndex`` -- and by ``save_schema``, the one
 function that inserts the ``SchemaRecord``. The identifier CHARSET is deliberately NOT
 applied: a store id is the caller's key (``tenant:acme``, a UUID), never a tuple field, and
@@ -48,7 +48,7 @@ asserted, sha256-restored), literal summary lines::
     B  ReachabilityIndex's call dropped                      9 failed, 56 passed in 6.90s
     C  save_schema's call dropped                           10 failed, 55 passed in 6.90s
        (the nine save_schema cases + build_index[tuple])
-    D  ConnectedStore's own call dropped                     2 failed, 63 passed in 7.15s
+    D  Store's own call dropped                     2 failed, 63 passed in 7.15s
        (cs-sync/async-tuple: the open-time lock probe binds the id before anything else;
         every other value is still caught one layer down -- the layers are deliberate)
 
@@ -60,10 +60,10 @@ from __future__ import annotations
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.connectedstore import (
-    ConnectedStore, SchemaRecord, TupleLog, TupleSource, build_index, save_schema,
+from zanzibar.store import (
+    Store, SchemaRecord, TupleLog, TupleSource, build_index, save_schema,
 )
-from zanzibar.graphindex import ReachabilityIndex, Store
+from zanzibar.graphindex import ReachabilityIndex, IndexStore
 from zanzibar.schema import AdmissionRejected
 from zanzibar.setengine import RelationTuple, SetEngine
 
@@ -93,13 +93,13 @@ def _engine(tmp_path):
 
 def _nothing_persisted(engine) -> None:
     with Session(engine) as s:
-        for model in (SchemaRecord, TupleLog, RelationTuple, Store):
+        for model in (SchemaRecord, TupleLog, RelationTuple, IndexStore):
             assert s.exec(select(model)).all() == [], model.__name__
 
 
 ENTRY = {
-    'cs-sync': lambda s, sid: ConnectedStore(s, sid, schema=SCHEMA),
-    'cs-async': lambda s, sid: ConnectedStore(s, sid, schema=SCHEMA, sync=False),
+    'cs-sync': lambda s, sid: Store(s, sid, schema=SCHEMA),
+    'cs-async': lambda s, sid: Store(s, sid, schema=SCHEMA, sync=False),
     'tuplesource': lambda s, sid: TupleSource(s, sid),
     'setengine': lambda s, sid: SetEngine(s, sid, SCHEMA),
     'reachability': lambda s, sid: ReachabilityIndex(s, sid),
@@ -117,7 +117,7 @@ def test_bad_store_id_is_refused_before_any_state(tmp_path, entry, label):
         s.commit()  # commit, not rollback: whatever the refusal left behind would land
         _nothing_persisted(engine)
         # the same session is usable afterwards, under a real id
-        cs = ConnectedStore(s, 'ok', schema=SCHEMA)
+        cs = Store(s, 'ok', schema=SCHEMA)
         cs.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
         assert cs.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True
 
@@ -129,7 +129,7 @@ def test_build_index_refuses_a_bad_index_store_id(tmp_path, label):
     "index in place", which is a legitimate call."""
     engine = _engine(tmp_path)
     with Session(engine) as s:
-        ConnectedStore(s, 'src', schema=SCHEMA, sync=False).add_tuple(
+        Store(s, 'src', schema=SCHEMA, sync=False).add_tuple(
             '...', 'user', 'alice', 'viewer', 'doc', 'd1')
         s.commit()
     with Session(engine) as s:
@@ -144,10 +144,10 @@ def test_build_index_refuses_a_bad_index_store_id(tmp_path, label):
 def test_any_non_blank_str_store_id_still_works(tmp_path, sid):
     engine = _engine(tmp_path)
     with Session(engine) as s:
-        cs = ConnectedStore(s, sid, schema=SCHEMA)
+        cs = Store(s, sid, schema=SCHEMA)
         cs.add_tuple('...', 'user', 'alice', 'viewer', 'doc', 'd1')
         s.commit()
     with Session(engine) as s:
-        cs = ConnectedStore(s, sid)
+        cs = Store(s, sid)
         assert cs.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True
         assert cs.check('...', 'user', 'bob', 'viewer', 'doc', 'd1') is False

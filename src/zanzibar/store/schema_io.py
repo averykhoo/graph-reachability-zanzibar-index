@@ -16,7 +16,7 @@ import json
 
 from sqlmodel import Session, select
 
-from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
+from zanzibar.graphindex import ReachabilityIndex, IndexStore, WildcardIndex
 from zanzibar.setengine import SetEngine
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import RuleSet, parse_openfga_schema, parse_schema_ast, validate_store_id
@@ -163,8 +163,8 @@ def open_graph_index(session: Session, store_id: str,
         schema_text, shapes = load_schema(session, store_id)
         with _persisted_schema_parse(store_id):
             ruleset = parse_openfga_schema(schema_text, object_wildcard_shapes=shapes)
-    if create_store_row and session.get(Store, store_id) is None:
-        session.add(Store(id=store_id))
+    if create_store_row and session.get(IndexStore, store_id) is None:
+        session.add(IndexStore(id=store_id))
         session.flush()
     idx = ReachabilityIndex(session, store_id=store_id)
     return WildcardIndex(idx, ruleset.schema_info), ruleset

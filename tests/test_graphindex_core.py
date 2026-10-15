@@ -1,6 +1,6 @@
 import pytest
 from sqlmodel import Session, create_engine, SQLModel
-from zanzibar.graphindex.models import Store
+from zanzibar.graphindex.models import IndexStore
 from zanzibar.graphindex.core import ReachabilityIndex
 
 @pytest.fixture
@@ -9,7 +9,7 @@ def empty_env():
     SQLModel.metadata.create_all(engine)
     
     session = Session(engine)
-    store = Store(id="test_store")
+    store = IndexStore(id="test_store")
     session.add(store)
     session.commit()
     

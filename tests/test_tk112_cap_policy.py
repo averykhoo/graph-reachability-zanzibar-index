@@ -24,7 +24,7 @@ The three witnesses are the P10 scout's, PROBED at cap 20 (sec 6 of the doc abov
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.connectedstore import ConnectedStore, TupleSource, build_index, save_schema
+from zanzibar.store import Store, TupleSource, build_index, save_schema
 from zanzibar.graphindex.core import MAX_CLOSURE_FANOUT_ENV
 from tests import oracle as O
 from zanzibar.schema import ClosureFanoutExceeded
@@ -99,7 +99,7 @@ def _oracle(writes):
 @pytest.mark.parametrize('case', sorted(CASES))
 def test_sync_over_cap_write_is_refused_loudly_and_atomically(session, case):
     setup, (op, t), probe = CASES[case]()
-    cs = ConnectedStore(session, 's', schema=SCHEMA, sync=True)
+    cs = Store(session, 's', schema=SCHEMA, sync=True)
     cs.widx.idx.max_closure_fanout = 0          # build the region freely
     for o, w in setup:
         _do(cs, o, w)
@@ -125,7 +125,7 @@ def test_sync_over_cap_write_is_refused_loudly_and_atomically(session, case):
 @pytest.mark.parametrize('case', sorted(CASES))
 def test_async_apply_is_never_capped(session, case, caplog):
     setup, (op, t), probe = CASES[case]()
-    cs = ConnectedStore(session, 's', schema=SCHEMA, sync=False)
+    cs = Store(session, 's', schema=SCHEMA, sync=False)
     cs.widx.idx.max_closure_fanout = CAP        # tight from the start, never relaxed
     for o, w in setup + [(op, t)]:
         _do(cs, o, w)
@@ -162,7 +162,7 @@ def test_non_bulk_build_index_is_never_capped(session, monkeypatch):
 
 def test_suspend_window_is_reentrant_and_thread_scoped(session):
     import threading
-    cs = ConnectedStore(session, 's', schema=SCHEMA, sync=True)
+    cs = Store(session, 's', schema=SCHEMA, sync=True)
     idx = cs.widx.idx
     seen = []
     with idx.fanout_cap_suspended():

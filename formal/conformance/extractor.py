@@ -387,7 +387,7 @@ def python_graph_state(schema_text: str, tuples, object_wildcards=()) -> dict:
 
 def python_bulk_graph_state(schema_text: str, tuples, object_wildcards=()) -> dict:
     """BULK-BUILD the real graph index from the corpus as a tuple snapshot
-    (`backends.bulk_build_drive` -> `connectedstore.build_index(bulk=True)` ->
+    (`backends.bulk_build_drive` -> `store.build_index(bulk=True)` ->
     `src/zanzibar/graphindex/bulk_build.py`), then extract the SAME canonical state as
     `python_graph_state` — same `extract_sql_state`, same projections P1/P2/P5/P7.
 

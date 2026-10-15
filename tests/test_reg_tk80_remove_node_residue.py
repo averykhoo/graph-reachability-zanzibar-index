@@ -155,7 +155,7 @@ import json
 import pytest
 from sqlmodel import Session, select
 
-from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
+from zanzibar.graphindex import ReachabilityIndex, IndexStore, WildcardIndex
 from zanzibar.graphindex.invariants import check_invariants, check_residue_hygiene
 from zanzibar.graphindex.models import Node, ResidueRef, Residue
 from zanzibar.graphindex.outbox import outbox_watermark
@@ -268,7 +268,7 @@ class _Harness:
             # `paranoia=False` state `assert_paranoia_is_off` checks for.
             assert paranoia is False, 'the co-tenant store installs no paranoia guard'
             self.session = session
-            session.add(Store(id=store_id))
+            session.add(IndexStore(id=store_id))
             session.flush()
             self.widx = WildcardIndex(
                 ReachabilityIndex(session, store_id=store_id), self.rs.schema_info)

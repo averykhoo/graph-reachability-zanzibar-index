@@ -38,14 +38,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
-import zanzibar.connectedstore.apply as apply_mod
-import zanzibar.connectedstore.source as source_mod
-from zanzibar.connectedstore import (ConnectedStore, StaleRead, TupleSource, UnsafeIsolationLevel,
+import zanzibar.store.apply as apply_mod
+import zanzibar.store.source as source_mod
+from zanzibar.store import (Store, StaleRead, TupleSource, UnsafeIsolationLevel,
                             WatermarkGap, advance_index, assert_read_isolation, log_gap,
                             log_rows, log_watermark)
-from zanzibar.connectedstore.models import SchemaRecord, TupleLog
+from zanzibar.store.models import SchemaRecord, TupleLog
 from zanzibar.graphindex.invariants import snapshot_rows
-from zanzibar.graphindex.models import Store
+from zanzibar.graphindex.models import IndexStore
 from zanzibar.setengine import RelationTuple
 from tests.dbengine import requires_rdbms, server_engine, shared_engine
 from tests.oracle import Oracle, OracleTuple
@@ -78,13 +78,13 @@ FAST_S = 0.6
 
 
 def _bootstrap(tmp_path, *store_ids):
-    """One clean database + a bootstrapped ConnectedStore per id. Skips (or hard-fails
+    """One clean database + a bootstrapped Store per id. Skips (or hard-fails
     under ZANZIBAR_PG_REQUIRED=1) when no server DSN is configured."""
     requires_rdbms()
     engine = shared_engine(tmp_path, 'unused-on-postgres.db')
     with Session(engine) as boot:
         for sid in store_ids:
-            ConnectedStore(boot, sid, schema=SCHEMA)
+            Store(boot, sid, schema=SCHEMA)
         boot.commit()
     return engine
 
@@ -180,19 +180,19 @@ def test_lock_ordering_source_lock_is_held_before_the_store_lock(tmp_path):
     """The documented LOCK ORDERING invariant (``source.py:_lock_source`` docstring:
     source lock BEFORE the graph store lock) is what makes the two-lock protocol
     deadlock-free, and it has never been observed. Observe it: hold the graph
-    ``Store`` row, let a writer run, and show that while the writer is queued on
+    ``IndexStore`` row, let a writer run, and show that while the writer is queued on
     THAT lock it is already holding the ``SchemaRecord`` one."""
     engine = _bootstrap(tmp_path, 's')
     done: list = []
     errors: list = []
 
     with Session(engine) as holder:
-        holder.exec(select(Store).where(Store.id == 's').with_for_update()).first()
+        holder.exec(select(IndexStore).where(IndexStore.id == 's').with_for_update()).first()
 
         def writer():
             try:
                 with Session(engine) as sw:
-                    cs = ConnectedStore(sw, 's')
+                    cs = Store(sw, 's')
                     cs.add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
                     done.append(True)
             except Exception as e:                          # pragma: no cover
@@ -247,7 +247,7 @@ def test_concurrent_writers_log_integrity_and_index_equals_replay(tmp_path):
     # (test_open_instance_races_a_concurrent_commit below). Mixing the two would
     # make this test flaky and would stop it testing the lock discipline.
     sessions = [Session(engine) for _ in range(THREADS)]
-    stores = [ConnectedStore(s, 's') for s in sessions]
+    stores = [Store(s, 's') for s in sessions]
 
     def worker(t):
         try:
@@ -282,14 +282,14 @@ def test_concurrent_writers_log_integrity_and_index_equals_replay(tmp_path):
 
         # The materialized index must equal a single-writer replay of the log in id
         # order (the log IS the serialization the lock discipline produces).
-        twin = ConnectedStore(session, 'twin')
+        twin = Store(session, 'twin')
         for raw in logged:
             twin.add_tuple(*raw)
         assert snapshot_rows(session, 's') == snapshot_rows(session, 'twin')
 
         # ...and both agree with the independent oracle over the whole grid.
         oracle = Oracle(SCHEMA, [OracleTuple(*raw) for raw in logged])
-        cs = ConnectedStore(session, 's')
+        cs = Store(session, 's')
         checked = 0
         for q in GRID:
             exp = oracle.check(*q)
@@ -341,7 +341,7 @@ def test_connected_store_refuses_a_repeatable_read_bind(tmp_path):
     rr = server_engine(requires_rdbms(), isolation_level='REPEATABLE READ')
     with Session(rr) as s:
         with pytest.raises(UnsafeIsolationLevel):
-            ConnectedStore(s, 's')
+            Store(s, 's')
         s.rollback()
 
 
@@ -385,7 +385,7 @@ def test_advance_index_raises_watermark_gap_on_a_real_out_of_order_commit(tmp_pa
     the commit -- is genuine PostgreSQL MVCC."""
     engine = _bootstrap(tmp_path, 's')
     with Session(engine) as sr, Session(engine) as sx, Session(engine) as sy:
-        cs = ConnectedStore(sr, 's')
+        cs = Store(sr, 's')
         base = cs.cursor.applied_log_id
         x_id = _raw_log_row(sx, 'x')
         y_id = _raw_log_row(sy, 'y')
@@ -410,7 +410,7 @@ def test_advance_index_raises_watermark_gap_on_a_real_out_of_order_commit(tmp_pa
 
     # Nothing was committed, and a fresh pass applies BOTH rows contiguously.
     with Session(engine) as s2:
-        cs2 = ConnectedStore(s2, 's')
+        cs2 = Store(s2, 's')
         assert cs2.cursor.applied_log_id == base
         assert cs2.catch_up() == 2
         assert cs2.cursor.applied_log_id == y_id
@@ -547,7 +547,7 @@ def test_serializable_bind_is_refused(tmp_path):
     membership."""
     engine = _bootstrap(tmp_path, 's')
     with Session(engine) as s:
-        ConnectedStore(s, 's').add_tuple('...', 'user', 'victim', 'editor', 'doc', 'd1')
+        Store(s, 's').add_tuple('...', 'user', 'victim', 'editor', 'doc', 'd1')
 
     ser = server_engine(requires_rdbms(), isolation_level='SERIALIZABLE')
     with Session(ser) as ss:
@@ -652,7 +652,7 @@ def test_open_instance_races_a_concurrent_commit(tmp_path, monkeypatch):
 
 def test_refresh_evaluator_races_a_concurrent_commit(tmp_path, monkeypatch):
     """The same window on the OTHER opener, which is the more dangerous one:
-    ``refresh_evaluator`` sits on ``ConnectedStore._write``'s error path, so an
+    ``refresh_evaluator`` sits on ``Store._write``'s error path, so an
     ordinary rejected write could enter it -- and its old comment claimed reading the
     watermark first was "conservative", when that ordering IS the window.
 
@@ -765,7 +765,7 @@ def test_read_committed_gives_a_reader_no_stable_snapshot(tmp_path):
     with Session(engine) as sr:
         before = len(sr.exec(select(TupleLog).where(TupleLog.store_id == 's')).all())
         with Session(engine) as sw:
-            ConnectedStore(sw, 's').add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
+            Store(sw, 's').add_tuple('...', 'user', 'u1', 'editor', 'doc', 'd1')
         after = len(sr.exec(select(TupleLog).where(TupleLog.store_id == 's')).all())
         # SAME transaction, two statements, different answers.
         assert (before, after) == (0, 1)

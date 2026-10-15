@@ -109,7 +109,7 @@ reachable from empty by the **synchronous v1 Python write path**, modeled as a c
 > retraction + residue recompute) → the **per-stratum two-round cascade** over the
 > outbox → **drain** to quiescence,
 
-interleaved as Python interleaves them (`connectedstore.advance_index` →
+interleaved as Python interleaves them (`store.advance_index` →
 `DeltaProcessor.run_cascade`). The chain was **add-only** by construction until
 2026-07-19f, when a `remove` constructor — gated on removing a validly-stored tuple
 (`t ∈ T`) from a drained prior state (`cascadeKeys = []`), with the pre-remove
@@ -667,7 +667,7 @@ per-field argument or a Lean witness makes it so.
    in-memory closure pass + bulk INSERTs, T4's closed form evaluated in closed form —
    instead of replaying routed triples through the incremental
    `WildcardIndex.add_tuple` / `DeltaProcessor` path that the Lean `ReachedBy` chain
-   models. `connectedstore.build_index` takes `bulk: bool = True`, so a real bootstrap
+   models. `store.build_index` takes `bulk: bool = True`, so a real bootstrap
    takes this path. Its `bulk=False` side is NOT the modeled path either (this item
    said it was until 2026-09-06): it loads every tuple through `add_tuple` and then runs
    `DeltaProcessor.backfill()`, which `CORRESPONDENCE.md` §7 lists as unmodeled. The

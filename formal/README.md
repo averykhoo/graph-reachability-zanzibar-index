@@ -110,7 +110,7 @@ One of those residuals is a *convention* rather than a missing model (added
 to run the cascade in the same transaction. The Lean model bakes the cascade into
 every write op, so the theorems prove the *algorithm* correct and say nothing about
 the Python forgetting to call it. The composed path always calls it
-(`src/zanzibar/connectedstore/apply.py::advance_index`); the exposure is the bare,
+(`src/zanzibar/store/apply.py::advance_index`); the exposure is the bare,
 exported `zanzibar.graphindex.WildcardIndex` API, where the caller must run
 `DeltaProcessor.run_cascade` itself and nothing notices if it does not. What I9 covers
 at runtime is narrower than "the fixpoint": the opt-in `'fixpoint'` paranoia tier

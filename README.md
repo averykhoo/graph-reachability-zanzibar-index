@@ -52,7 +52,7 @@ src/zanzibar/
   graphindex/          the graph index (closure core, wildcard façade,
                        boolean delta processor, invariants, outbox)
   setengine/           the set engine (bitmap evaluation, MemberSet, interner)
-  connectedstore/      the composed system: source-of-truth tuples + permanent
+  store/               the composed system: source-of-truth tuples + permanent
                        log feeding the index (sync or async), freshness tokens,
                        offline index builds - the Zanzibar/Leopard split
 formal/                Lean 4 machine-checked proofs that the two backend
@@ -222,7 +222,7 @@ negotiable, and each of them is a lesson rather than a preference:
   InnoDB claim about a database nobody used was half the justification for accepting
   an isolation level that reproduced a live authorization fail-open.
 * **Open the engine at `READ COMMITTED` and nothing else.** `TupleSource` and
-  `ConnectedStore` raise `UnsafeIsolationLevel` at construction otherwise —
+  `Store` raise `UnsafeIsolationLevel` at construction otherwise —
   SERIALIZABLE included. Log tailing rests on per-statement freshness; every other
   level pins a snapshot somewhere, and a pinned snapshot lets a committed revocation
   stay invisible while the freshness token certifies the stale ALLOW.
@@ -280,7 +280,7 @@ Implemented as **per-store `TupleLog` log ids** — no snowflake/ULID/lamport cl
 needed. A write returns its log id; a read passes it back as `at_least=` to demand
 "at least this fresh":
 
-* Honored on both `ConnectedStore.check(..., at_least=token)` and
+* Honored on both `Store.check(..., at_least=token)` and
   `TupleSource.check(..., at_least=token)`. The index serves the read iff its cursor
   ≥ token; otherwise it falls back to the set engine, which catches up on demand by
   tailing the committed log delta (O(delta)), or raises `StaleRead` if the session
@@ -542,7 +542,7 @@ from these strings.
 Same questions, same answers, opposite place to spend the work. The **validation matrix**
 (`tests/test_matrix.py`) is what pins "same semantics": a lockstep comparison
 (handwritten expectations · reference oracle · set engine · graph `WildcardIndex` ·
-the composed `ConnectedStore`) over
+the composed `Store`) over
 **both** the union+wildcard fixtures **and** the boolean fixtures (the graph joined the
 boolean grids with the derived-predicate work — the boolean-IVM spec's acceptance
 event), with `check` compared across all backends over the full query grid after every
@@ -632,7 +632,7 @@ read; symbolic (`'*'`) queries read the residue intensionally; ghosts ride the s
   plus delta-scoped verification per transaction. It is **ON by default in the TEST
   helper** (`tests/wildcard_helpers.make_wildcard_index`; pass `paranoia=False` for
   benchmarks or when a test corrupts state deliberately) and **OFF by default in
-  `ConnectedStore`**, which is the deployment-facing class.
+  `Store`**, which is the deployment-facing class.
 
   **If you are deploying this, turn it on: `ZANZIBAR_PARANOIA=residue`.** That tier is
   the runtime detector for the one authorization-escalation class this project has
@@ -642,7 +642,7 @@ read; symbolic (`'*'`) queries read the residue intensionally; ghosts ride the s
   checker, and its scan grows with the number of objects carrying derived state. The
   default is OFF because a silent 5%-and-rising write regression should not be imposed
   on everyone without consent — not because the checking is optional for
-  security-sensitive use. See `ConnectedStore.DEFAULT_PARANOIA` for the numbers.
+  security-sensitive use. See `Store.DEFAULT_PARANOIA` for the numbers.
 
 Scope hooks (loud compile errors, `UnsupportedByGraphIndex`): object wildcards on
 derived relations, and wildcard userset restrictions over derived relations (both need
@@ -689,7 +689,7 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
   the start (`Store`); see `TestMultiStoreIsolation`
 * ~~output the new edges and newly removed edges for external indexing~~
   `DeltaOutbox` + `src/zanzibar/graphindex/outbox.py`'s `drain_deltas` (transactional, replayable)
-* ~~async outbox worker~~ `ConnectedStore(sync=False)` + `catch_up()` — the worker
+* ~~async outbox worker~~ `Store(sync=False)` + `catch_up()` — the worker
   body exists and is tested (lag, crash-retry exactly-once, convergence); a daemon
   would just call it on a timer
 * symmetric subject-keyed residues, to lift the two remaining scope rejections

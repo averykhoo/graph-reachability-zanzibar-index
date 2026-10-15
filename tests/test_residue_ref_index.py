@@ -74,7 +74,7 @@ import json
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.connectedstore import TupleSource, build_index, save_schema
+from zanzibar.store import TupleSource, build_index, save_schema
 from zanzibar.graphindex.invariants import (InvariantViolation, check_invariants,
                                  check_residue_hygiene)
 from zanzibar.graphindex.models import Node, ResidueRef, Residue

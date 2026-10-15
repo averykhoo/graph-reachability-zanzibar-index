@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
+## [Unreleased]
+
+### Changed
+- **Breaking: the composed-system package and its class are renamed** (TK123). There are
+  no compatibility aliases; the old names no longer import.
+  - `zanzibar.connectedstore` is now `zanzibar.store`, and `ConnectedStore` is now `Store`:
+    write `from zanzibar.store import Store`. Every other name in the package keeps its
+    name (`TupleSource`, `build_index`, `save_schema`, ...).
+  - The class's own module is `zanzibar.store._store` (it was `connectedstore/store.py`),
+    so a traceback never shows `zanzibar.store.store.Store`. Import from `zanzibar.store`.
+  - The graph index's bookkeeping model `zanzibar.graphindex.Store` is now `IndexStore`, so
+    it no longer shares a name with the user-facing class. Its table is still
+    `zanzibar_store`, so databases written by 0.0.x open unchanged.
+
 ## [0.0.5] - 2026-10-14
 
 ### Added

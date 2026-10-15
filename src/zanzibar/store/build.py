@@ -151,11 +151,11 @@ def rebuild_index(session: Session, source_store_id: str,
     later row, including the REMOVE that would undo it, so catch-up alone never gets
     past it. Procedure and decision: ``docs/tk121-stall-recovery-2026-10-04.md``.
 
-    In place because a ``ConnectedStore`` always reads the index stored under its own
+    In place because a ``Store`` always reads the index stored under its own
     store id; a separately-built index is one nothing in the composed system can serve.
 
     The source must already be representable: remove the offending tuple at the source
-    FIRST (``ConnectedStore.remove_tuple`` works while stalled -- it only appends to the
+    FIRST (``Store.remove_tuple`` works while stalled -- it only appends to the
     log). A snapshot that still overflows is refused by the build exactly as
     ``build_index`` refuses it.
 

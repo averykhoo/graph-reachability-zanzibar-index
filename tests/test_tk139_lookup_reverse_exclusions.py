@@ -3,7 +3,7 @@
 Property guarded
 ----------------
 Under a subject wildcard (``[user:*]``) on a ``but not`` relation, ``lookup_reverse`` on
-the standalone ``SetEngine`` and on ``ConnectedStore`` (the graph index) render the SAME
+the standalone ``SetEngine`` and on ``Store`` (the graph index) render the SAME
 answer once ids are translated to portable ``(type, name, predicate)`` keys: the same
 concrete subjects, the same marker shapes, and the same ``excluded_node_ids``. A
 list-users caller that follows the PyPI README ("subtract ``excluded_node_ids`` from the
@@ -12,7 +12,7 @@ marker") then lists exactly the oracle's allowed set on BOTH backends.
 Found by the 0.0.4 fresh-user install trial (``docs/pypi-trial-0.0.4-2026-10-13.md``
 BROKEN-1, probe p05): the set engine returned ``markers={('user', '...')}`` with
 ``excluded_node_ids=set()`` -- "every user" -- while its own ``check(mallory)`` was False
-and ``ConnectedStore`` excluded mallory. ``expand`` carried the exclusion in ``neg``;
+and ``Store`` excluded mallory. ``expand`` carried the exclusion in ``neg``;
 ``lookup_reverse`` copied only ``pos`` and ``stars``. Map and census:
 ``docs/tk139-lookup-reverse-exclusions-2026-10-13.md``. The generated-schema twin of this
 pin is S3 in ``tests/test_lookup_oracle.py`` (now two-sided).
@@ -34,7 +34,7 @@ Restored from a byte copy; ``grep -c SABOTAGE`` 0 and ``git diff`` shows only th
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.connectedstore import ConnectedStore
+from zanzibar.store import Store
 from zanzibar.graphindex import Node
 from zanzibar.setengine import ALL_SETOPS, SetEngine
 
@@ -115,7 +115,7 @@ def _assert_agree(schema, tuples, ops):
         se = SetEngine(s, 'set-side', schema, ops=ops)
         for t in tuples:
             se.add_tuple(*t)
-        cs = ConnectedStore(s, 'graph-side', schema=schema)
+        cs = Store(s, 'graph-side', schema=schema)
         for t in tuples:
             cs.add_tuple(*t)
 
@@ -131,7 +131,7 @@ def _assert_agree(schema, tuples, ops):
         assert set_r[1] == graph_r[1], f'{name} markers {set_r[1]} != graph {graph_r[1]}'
         assert set_r[2] == graph_r[2], f'{name} excluded {set_r[2]} != graph {graph_r[2]}'
 
-        for label, render in ((name, set_r), ('ConnectedStore', graph_r)):
+        for label, render in ((name, set_r), ('Store', graph_r)):
             listed = {u for u in CANDIDATES if _listed(render, u)}
             assert listed == allowed, (
                 f'{label}: a list-users UI subtracting excluded_node_ids lists '

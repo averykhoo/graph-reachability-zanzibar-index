@@ -37,7 +37,7 @@ them through the rewrite fan-out, run the delta-processor cascade, advance the
 cursor. Caller commits: applied rows + cursor land atomically ⇒ **exactly-once**;
 a failed batch moves nothing and a retry re-reads the same rows.
 
-* **Sync schedule** (`ConnectedStore(sync=True)`, default): the apply step is
+* **Sync schedule** (`Store(sync=True)`, default): the apply step is
   inlined into every write transaction — cursor rides the log head, reads are
   always fresh. *This coupling is a temporary schedule, not temporary machinery.*
 * **Async schedule** (`sync=False`): writes land in the source of truth only;
@@ -79,11 +79,11 @@ token exceeds the watermark catches up on demand — tailing the committed log d
 into the evaluator (`catch_up_evaluator` → `SetEngine.apply_logged` per row,
 **O(delta)** not O(store)) — the honest per-read cost of demanding freshness from a
 lagging index. This is honored on `TupleSource.check(at_least=…)` too, not only on
-`ConnectedStore.check`. If the token is *still* not visible, the session's read
+`Store.check`. If the token is *still* not visible, the session's read
 snapshot predates the write: the read raises `StaleRead` (call `refresh()` and
 retry) rather than silently serving stale under an explicit freshness demand.
 
-**Multi-instance (HA).** Several `TupleSource`/`ConnectedStore` instances (one
+**Multi-instance (HA).** Several `TupleSource`/`Store` instances (one
 `Session` each) may share a store; each set engine is instance-local in-memory,
 synced from `TupleLog`. Every instance's state is the fold of an exact *prefix* of
 the store's log — **prefix consistency**: instances differ only in recency, never
@@ -118,7 +118,7 @@ front of it, and every later row waits behind it, including a REMOVE of that sam
 tuple. Reads stay correct while stalled (untokened `check` uses the set engine, lookups
 raise `IndexStalled`). The index stays unavailable until an operator acts:
 
-1. `ConnectedStore.stall_error` names the refused write and its closure row.
+1. `Store.stall_error` names the refused write and its closure row.
 2. Remove that tuple at the source (`remove_tuple` works while stalled).
 3. Stop the store's async worker.
 4. `rebuild_index(session, store_id)`, on a clean session.
@@ -129,13 +129,13 @@ runs the same build as `build_index`. It then moves the existing cursor row to t
 watermark and clears the stall, all in one transaction under the store lock. The outbox
 is kept, so its ids stay monotone. If anything fails, nothing changes: a rebuild whose
 snapshot still overflows leaves the old index and its stall marker as they were. The
-rebuild is in place because a `ConnectedStore` always reads the index under its own
+rebuild is in place because a `Store` always reads the index under its own
 store id. Decision: `../tk121-stall-recovery-2026-10-04.md`.
 
 ## Replicas (simulated; the real thing is a follower DB)
 
 A reader session polling a store another session writes to sees consistent
-committed snapshots; `ConnectedStore.refresh()` is the poll API (fresh transaction +
+committed snapshots; `Store.refresh()` is the poll API (fresh transaction +
 rebuilt evaluator + cleared w-id cache). Under async lag: un-tokened reads are
 stale-but-consistent from the index, tokened reads fall back fresh. Local
 simulation uses SQLite WAL + real BEGIN semantics (see the S7 deviations entry for

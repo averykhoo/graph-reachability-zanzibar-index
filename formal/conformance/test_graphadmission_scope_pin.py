@@ -99,7 +99,7 @@ Probe output, literal (`graphadmission_scope_probes.py` inputs, 2026-09-24):
     # (annotation 2026-09-26: the next line's figure was the curated count then; TK106 moved one out)
     corpus sweep, silent-field mirror: 36 curated corpora, 0 failing
 
-(`CS` = `ConnectedStore.add_tuple`, `SE` = standalone `SetEngine.add_tuple`. The two
+(`CS` = `Store.add_tuple`, `SE` = standalone `SetEngine.add_tuple`. The two
 `ttuDirect` labels were later renamed `ttuDirect.untainted/...` and `ttuDirect.derived/...`.)
 
 SABOTAGE (`docs/sabotage-procedure.md`) -- recorded in
@@ -347,11 +347,11 @@ def _schema_outcome(label: str) -> str:
 
 
 def _store_outcomes(label: str) -> tuple[str, str]:
-    from zanzibar.connectedstore import ConnectedStore
+    from zanzibar.store import Store
     from zanzibar.setengine.engine import SetEngine
     schema, tup, _exp = STORE_PROBES[label]
     out = []
-    for make in (lambda s: ConnectedStore(s, "cs", schema=schema),
+    for make in (lambda s: Store(s, "cs", schema=schema),
                  lambda s: SetEngine(s, "se", schema)):
         backend = make(_session())
         try:
@@ -536,7 +536,7 @@ def test_store_probe_outcome_still_holds(label):
     cs, se = _store_outcomes(label)
     exp = STORE_PROBES[label][2]
     assert (cs, se) == (exp, exp), (
-        f"[{label}] ConnectedStore gives {cs}, SetEngine gives {se}, recorded {exp} for "
+        f"[{label}] Store gives {cs}, SetEngine gives {se}, recorded {exp} for "
         f"both. Re-adjudicate the `{_field_of(label)}` row of GRAPHADMISSION_SCOPE.")
 
 

@@ -40,7 +40,7 @@ accepted when an unrelated relation makes it graph-refused
 graph index's admission constraint (a ref-counted closure cannot hold a cycle), not a
 semantic rule -- Zanzibar/OpenFGA accept cyclic tuples, and the oracle evaluates them. With
 no graph partner there is nothing to stay in admission parity with, and refusing would
-need a RuleSet these schemas do not have. ``src/zanzibar/connectedstore/schema_io.py::save_schema``
+need a RuleSet these schemas do not have. ``src/zanzibar/store/schema_io.py::save_schema``
 refuses every graph-refused schema, so only a standalone ``SetEngine`` sees the
 difference. What this module adds is that the accepted cycles are now oracle-checked.
 """

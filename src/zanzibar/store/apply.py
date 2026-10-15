@@ -76,7 +76,7 @@ def _apply_row(row: TupleLog, widx: WildcardIndex, ruleset: RuleSet) -> None:
         # unchanged so the caller sees the cap's own actionable message; note the
         # consequence, which is real: the cursor cannot advance past this row until
         # the cap is raised (or disabled with 0). See ZT-P1-6a. On the async schedule
-        # `ConnectedStore.catch_up` records the stall, and the read path then stops
+        # `Store.catch_up` records the stall, and the read path then stops
         # serving the index (TK111/TK112), so the consequence is an availability loss
         # rather than a stale ALLOW.
         raise
@@ -107,7 +107,7 @@ def _require_proc_for_boolean_schema(ruleset: RuleSet, proc: DeltaProcessor | No
             'relations would build a graph index that disagrees with the set engine: '
             'the derived relations are only maintained by the delta processor. Pass '
             'DeltaProcessor(widx, ruleset.compiled) as proc, or drive the index through '
-            'ConnectedStore (refresh() / catch_up()), which does.')
+            'Store (refresh() / catch_up()), which does.')
 
 
 def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,

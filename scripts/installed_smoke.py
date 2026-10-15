@@ -17,7 +17,7 @@ What it covers:
    chain, ``and``, ``but not``, a ``[user:*]`` wildcard and the per-type
    ``viewer from parent`` idiom (TK126), then again on TK126's "second form"
    (a TTU arm inside ``but not``, which crashed 0.0.2), with the graph index
-   (``ConnectedStore``), two standalone set engines (both ``SetOps``) and an
+   (``Store``), two standalone set engines (both ``SetOps``) and an
    async store all agreeing on every cell of a full check grid; then
    hand-written expectations, lookups and the watermark;
 3. reopening a store from disk (schema read back, same answers);
@@ -165,7 +165,7 @@ def diff(a: dict, b: dict, limit: int = 5) -> list[str]:
     return [f'{k}: {a[k]} vs {b[k]}' for k in a if a[k] != b[k]][:limit]
 
 
-def differential(label, schema, args, engine_at, ConnectedStore, SetEngine,
+def differential(label, schema, args, engine_at, Store, SetEngine,
                  RoaringSets, PySets, Session) -> None:
     """Seeded random writes/removes applied to a sync graph-index store (paranoia
     on), an async store, and two standalone set engines (both ``SetOps``); at three
@@ -181,8 +181,8 @@ def differential(label, schema, args, engine_at, ConnectedStore, SetEngine,
         s_sync = Session(engine_at(f'{label}-sync.db'))
         s_async = Session(engine_at(f'{label}-async.db'))
         s_set = Session(engine_at(f'{label}-set.db'))
-        sync_st = ConnectedStore(s_sync, 'diff-sync', schema=schema, paranoia='residue')
-        async_st = ConnectedStore(s_async, 'diff-async', schema=schema, sync=False)
+        sync_st = Store(s_sync, 'diff-sync', schema=schema, paranoia='residue')
+        async_st = Store(s_async, 'diff-async', schema=schema, sync=False)
         sets = {
             'roaring': SetEngine(s_set, 'diff-set-r', schema, ops=RoaringSets),
             'py': SetEngine(s_set, 'diff-set-p', schema, ops=PySets),
@@ -244,7 +244,7 @@ def main() -> int:
     import sqlmodel
     from sqlmodel import SQLModel, Session, create_engine
     import zanzibar
-    from zanzibar.connectedstore import ConnectedStore
+    from zanzibar.store import Store
     from zanzibar.setengine import SetEngine, PySets, RoaringSets
 
     section('import')
@@ -285,7 +285,7 @@ type doc
 """
     eng = engine_at('perms.db')
     with Session(eng) as s:
-        st = ConnectedStore(s, 'my-app', schema=QUICK)
+        st = Store(s, 'my-app', schema=QUICK)
         tok = st.add_tuple('...', 'user', 'alice', 'member', 'group', 'eng')
         ok(isinstance(tok, int), f'add_tuple returns an int log id, got {tok!r}')
         st.add_tuple('member', 'group', 'eng', 'viewer', 'doc', 'd1')
@@ -295,7 +295,7 @@ type doc
         ok(st.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is False,
            'quickstart: banned alice no longer views d1')
     with Session(eng) as s:
-        st = ConnectedStore(s, 'my-app')          # reopen: schema read back
+        st = Store(s, 'my-app')          # reopen: schema read back
         ok(st.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is False,
            'quickstart reopen: ban persisted')
         ok(st.check('...', 'user', 'alice', 'member', 'group', 'eng') is True,
@@ -303,14 +303,14 @@ type doc
 
     # -- 2. differential: graph index vs set engine vs async -----------------
     for label, schema in (('main', SCHEMA), ('tk126-second-form', SCHEMA_D)):
-        differential(label, schema, args, engine_at, ConnectedStore, SetEngine,
+        differential(label, schema, args, engine_at, Store, SetEngine,
                      RoaringSets, PySets, Session)
 
     # hand-written expectations, independent of both backends
     section('hand-written expectations')
     eng = engine_at('hand.db')
     with Session(eng) as s:
-        st = ConnectedStore(s, 'hand', schema=SCHEMA)
+        st = Store(s, 'hand', schema=SCHEMA)
         st.add_tuple('...', 'folder', 'f0', 'parent', 'folder', 'f1')
         st.add_tuple('...', 'folder', 'f1', 'parent', 'doc', 'd0')
         st.add_tuple('...', 'user', 'u0', 'member', 'group', 'g0')
@@ -343,15 +343,15 @@ type doc
 
     # -- 3. bad input --------------------------------------------------------
     section('bad input')
-    from zanzibar.connectedstore import SchemaMismatch  # noqa: F401 -- public name exists
+    from zanzibar.store import SchemaMismatch  # noqa: F401 -- public name exists
     from zanzibar.schema import AdmissionRejected  # noqa: F401
     eng = engine_at('bad.db')
     with Session(eng) as s:
         # TK124: an empty schema is refused and does NOT brick the store id
-        raises(('ValueError',), lambda: ConnectedStore(s, 'x', schema=''),
+        raises(('ValueError',), lambda: Store(s, 'x', schema=''),
                'TK124: empty schema refused')
         s.rollback()
-        st = ConnectedStore(s, 'x', schema=QUICK)
+        st = Store(s, 'x', schema=QUICK)
         ok(st.add_tuple('...', 'user', 'bob', 'banned', 'doc', 'd1') > 0,
            'TK124: store id usable after the refused empty schema')
         # TK125: None subject predicate is a clean refusal, store stays usable
@@ -372,12 +372,12 @@ type doc
         ok(st.check('...', 'user', 'nobody', 'viewer', 'doc', 'nothing') is False,
            'unknown subject/object reads False')
     with Session(eng) as s:
-        raises(('SchemaMismatch',), lambda: ConnectedStore(s, 'x', schema=SCHEMA),
+        raises(('SchemaMismatch',), lambda: Store(s, 'x', schema=SCHEMA),
                'reopen with a different schema refused')
     with Session(eng) as s:
         # TK136: the same schema with CRLF + a trailing newline is the same schema
         try:
-            st = ConnectedStore(s, 'x', schema=QUICK.replace('\n', '\r\n') + '\r\n')
+            st = Store(s, 'x', schema=QUICK.replace('\n', '\r\n') + '\r\n')
             err = None
         except Exception as e:  # noqa: BLE001 -- reported as a FAIL below
             st, err = None, f'{type(e).__name__}: {str(e)[:200]}'
@@ -386,7 +386,7 @@ type doc
     with Session(eng) as s:
         os.environ['ZANZIBAR_MAX_CLOSURE_FANOUT'] = '3'
         try:
-            st = ConnectedStore(s, 'cap', schema=QUICK)
+            st = Store(s, 'cap', schema=QUICK)
             for u in ('a', 'b', 'c', 'd'):
                 st.add_tuple('...', 'user', u, 'member', 'group', 'big')
             raises(('ClosureFanoutExceeded',),

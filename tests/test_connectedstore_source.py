@@ -12,7 +12,7 @@ S2 (connected-store spec §2.3-§2.6, §5-S2): the source-of-truth write path.
 import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from zanzibar.connectedstore import TupleSource, TupleLog, log_rows, log_watermark, save_schema
+from zanzibar.store import TupleSource, TupleLog, log_rows, log_watermark, save_schema
 from zanzibar.setengine import SetEngine, RelationTuple
 
 _SCHEMA = '''
