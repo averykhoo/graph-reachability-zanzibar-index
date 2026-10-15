@@ -1,7 +1,7 @@
 """
-Invariant checker + paranoia mode for the graph index (boolean spec §8.1/§8.2).
+Invariant checker + paranoia mode for the graph index.
 
-Numbered invariants from the boolean spec §8.2. This module carries the *state*
+Numbered invariants of the graph index. This module carries the *state*
 invariants that can be asserted from a session snapshot:
 
   I1  count algebra: per persisted edge row, ``indirect >= direct`` and ``indirect > 0``
@@ -20,16 +20,16 @@ I11 (read purity) and I12 (rejection cleanliness) are *differential* invariants 
 compare two snapshots -- so they live with the harness (``snapshot_rows`` here provides
 the id-independent snapshot; the ParityEngine does the comparison).
 
-Paranoia mode (boolean spec §8.1): ``install_paranoia(session, ...)`` wires the checker
+Paranoia mode: ``install_paranoia(session, ...)`` wires the checker
 to run pre-commit *inside* the transaction (a violation raises ``InvariantViolation``
 and aborts the commit) and post-commit in a *fresh* session on the same bind (catching
 commit-boundary/session-state bugs). Default ON while prerelease; pass
 ``paranoia=False`` at the wiring site for benchmarks.
 
-**Tiers (ZT-P1-3, 2026-07-26; a fourth added by TK82, 2026-09-19).** Paranoia has four
+**Tiers.** Paranoia has four
 levels, because the full
-checker is an O(store) per-commit cost (measured 4.8x-10x on the write path,
-`benchmarks/results/BASELINE_2026-07-13.md`) and was therefore never wired into
+checker is an O(store) per-commit cost (measured 4.8x-10x on the write path)
+and was therefore never wired into
 production at all -- leaving every runtime corruption detector dark:
 
   ``'off'``      no listeners (the historical production behaviour).
@@ -38,29 +38,26 @@ production at all -- leaving every runtime corruption detector dark:
                  ``Residue`` rows and the node ids those rows reference --
                  O(residue rows + referenced ids), no full node or edge scan, no
                  BFS. This is the tier that owns the dangling
-                 ``upos``/``neg`` id class, i.e. the ZT-P0-1 authorization
-                 escalation (pin: ``tests/test_reg14_residue_gc_elision.py``).
+                 ``upos``/``neg`` id class, i.e. a known authorization
+                 escalation.
                  PLUS I14 crossing-middle completeness, DELTA-SCOPED to the entities
-                 the transaction touched (``check_i14_delta``, TK118): a regression of
-                 the 2026-08-09 middle fix is a fail-OPEN under a negated consumer
-                 (``tests/test_p12_severity_sign.py``), and this tier used to serve it.
+                 the transaction touched (``check_i14_delta``): a regression of
+                 the 2026-08-09 middle fix is a fail-OPEN under a negated consumer,
+                 and this tier used to serve it.
                  Vacuous on a schema with no crossable shape (every plain OpenFGA
                  schema). An untouched entity's I14 state, and an I13 refcount
-                 corruption, stay full-tier only
-                 (``tests/test_tk118_residue_i14.py``).
+                 corruption, stay full-tier only.
                  Pre-commit only, so a violation ABORTS the writing transaction.
-  ``'full'``     everything above: ``check_invariants`` (I1/I2/I3/I13/I14 + I4-I7 +
-                 I10) plus the delta-scoped BFS verifier, pre-commit AND post-commit
+  ``'full'``     everything above: ``check_invariants`` plus the delta-scoped BFS verifier, pre-commit AND post-commit
                  in a fresh session. O(store) per commit, plus O(pairs x edges) for
-                 the verifier (`docs/perf-next-round.md`). Prerelease/test tier.
+                 the verifier. Prerelease/test tier.
   ``'fixpoint'`` everything ``'full'`` runs, PLUS the per-cascade I9 tier
                  (``DeltaProcessor._check_cascade_fixpoint``): after each cascade
                  drains, re-reconcile every key the cascade SCHEDULED and require each
                  to be a fixpoint. It is the only detector for an execution-side
                  missed reconcile -- the settle pass is structurally blind to one
                  within the cascade that skipped it, and no I1-I12 clause fires on the
-                 resulting closure-edge-only staleness (TK74,
-                 docs/tk74-staleness-net-2026-09-18.md sec 9.2 / sec 10.3).
+                 resulting closure-edge-only staleness.
                  O(cascade work), roughly DOUBLING cascade cost -- far past
                  ``'residue'``'s ~+5%, so it is a diagnosis tier, never a production
                  one. Nothing selects it implicitly: it is above ``'full'`` on the
@@ -77,8 +74,16 @@ measured at +4.3%/+5.7% of the sync write path (162/478 per-write commits,
 interleaved A/B, min-of-3) -- cheap next to ``'full'``'s +124%/+303%, but too much
 to impose silently; see ``Store.DEFAULT_PARANOIA``. ``'residue'`` is
 nonetheless the RECOMMENDED production setting: it is the only runtime detector for
-the ZT-P0-1 escalation class.
+that escalation class.
 """
+# Provenance (moved out of the docstring, TK123 item 14): numbering from boolean spec sec 8.2;
+# tiers from ZT-P1-3 (2026-07-26), the fourth by TK82 (2026-09-19); the 4.8x-10x figure is
+# benchmarks/results/BASELINE_2026-07-13.md; the escalation class is ZT-P0-1; check_i14_delta
+# is TK118.
+# Provenance (moved out of the docstring, TK123 item 14): boolean spec §8.1/§8.2; boolean spec
+# §8.1; pin: ``tests/test_reg14_residue_gc_elision.py``; ``tests/test_p12_severity_sign.py``;
+# ``tests/test_tk118_residue_i14.py``; I1/I2/I3/I13/I14 + I4-I7 + I10; `docs/perf-next-
+# round.md`; TK74, docs/tk74-staleness-net-2026-09-18.md sec 9.2 / sec 10.3.
 
 from __future__ import annotations
 
@@ -100,7 +105,12 @@ if TYPE_CHECKING:
 
 class InvariantViolation(AssertionError):
     """A store-state invariant does not hold. Distinct from ValueError (op rejection):
-    a rejection is a *correct* refusal; a violation is corruption."""
+    a rejection is a *correct* refusal; a violation is corruption.
+
+    Deliberately NOT a ``zanzibar.ZanzibarError``: ``except ZanzibarError`` is the handler
+    for refusals and limits, and it must never swallow a report that the stored index is
+    corrupt. Catch this class explicitly (it is an ``AssertionError``) if you catch it at all.
+    """
 
 
 # Allowed (subject.wildcard, object.wildcard) combinations for a DIRECT edge
@@ -139,8 +149,9 @@ def paranoia_at_least(level: str, floor: str) -> bool:
     Use this instead of ``level == PARANOIA_FULL``: an equality test silently EXCLUDES
     every tier added above the one compared, so appending ``'fixpoint'`` would have made
     the strongest tier weaker than ``'full'`` (it would have fallen into the residue
-    branch and lost post-commit re-checking). Pinned by
-    ``tests/test_cascade_fixpoint_tier.py::test_fixpoint_tier_is_at_least_full``."""
+    branch and lost post-commit re-checking)."""
+    # Provenance (moved out of the docstring, TK123 item 14): pinned by
+    # tests/test_cascade_fixpoint_tier.py::test_fixpoint_tier_is_at_least_full.
     return _LEVEL_RANK[level] >= _LEVEL_RANK[floor]
 
 
@@ -164,16 +175,19 @@ _BOOLISH = {'1': PARANOIA_FULL, 'true': PARANOIA_FULL, 'yes': PARANOIA_FULL,
             '0': PARANOIA_OFF, 'false': PARANOIA_OFF, 'no': PARANOIA_OFF}
 
 
-def normalize_paranoia_level(value: 'bool | str | None') -> str:
+def normalize_paranoia_level(value: 'bool | int | str | None') -> str:
     """Coerce a user-supplied paranoia setting to one of ``PARANOIA_LEVELS``.
 
-    ``True``/``False`` map to ``'full'``/``'off'`` so the historical boolean flag
-    keeps working. Anything unrecognized is a loud ``ValueError`` -- a typo'd
-    security switch must never silently mean "off"."""
+    ``True``/``False`` and the ints ``1``/``0`` map to ``'full'``/``'off'``, the same
+    as the strings ``'1'``/``'0'`` the environment variable accepts. Anything
+    unrecognized (``2`` included) is a loud ``ValueError`` -- a typo'd security switch
+    must never silently mean "off"."""
     if value is True:
         return PARANOIA_FULL
     if value is False:
         return PARANOIA_OFF
+    if type(value) is int and value in (0, 1):
+        return PARANOIA_FULL if value else PARANOIA_OFF
     if isinstance(value, str):
         v = value.strip().lower()
         if v in _LEVEL_RANK:
@@ -182,7 +196,7 @@ def normalize_paranoia_level(value: 'bool | str | None') -> str:
             return _BOOLISH[v]
     raise ValueError(
         f'bad paranoia level {value!r}; expected one of {PARANOIA_LEVELS} '
-        f'(or a bool / {sorted(_BOOLISH)})')
+        f'(or a bool, the int 0 / 1, or one of {sorted(_BOOLISH)})')
 
 
 def resolve_paranoia_level(explicit: 'bool | str | None' = None, *,
@@ -220,7 +234,7 @@ def check_invariants(session: Session, store_id: str,
 
     Read that list against the BODY below, not against prose elsewhere: three
     documents gave three different accounts of which invariants run per commit and
-    none of them matched this function (zero-trust review 2026-07-26, P5). This
+    none of them matched this function. This
     headline was one of them -- it stopped at I6 + I10, silently dropping I7 and the
     I13 refcount/degree clause, which is the one that makes the corruption defeating
     bridge and derived-node GC visible at all. An UNDERstated checker docstring is not
@@ -239,6 +253,8 @@ def check_invariants(session: Session, store_id: str,
     Not here, by design: I9 is the processor's fixpoint audit (``audit_fixpoint``) and
     I11/I12 are cross-store snapshot comparisons the test harness makes.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): zero-trust review 2026-07-26,
+    # P5.
     nodes, edges = _load(session, store_id)
     by_id = {n.id: n for n in nodes}
 
@@ -433,7 +449,7 @@ _I14_COLS = (Node.id, Node.type, Node.name, Node.predicate, Node.wildcard,
 
 def check_i14_delta(session: Session, store_id: str, schema_info: 'SchemaInfo',
                     entities: 'set[tuple[str, str]]', types: 'set[str]') -> None:
-    """The cheap tier's I14 (TK118): the full checker's clause, scoped to the
+    """The cheap tier's I14: the full checker's clause, scoped to the
     entities a transaction touched instead of the whole store.
 
     ``entities`` are ``(type, name)`` pairs with a concrete ``Node`` row created,
@@ -446,8 +462,10 @@ def check_i14_delta(session: Session, store_id: str, schema_info: 'SchemaInfo',
 
     Blind spot, by design: a bridge ``Edge`` row changed WITHOUT its endpoints'
     ``reference_count`` moving touches no node; that is I13 corruption, which only the
-    full tier sees (``tests/test_paranoia_wiring.py::test_tier_boundary_is_what_it_says_it_is``).
+    full tier sees.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): TK118;
+    # ``tests/test_paranoia_wiring.py::test_tier_boundary_is_what_it_says_it_is``.
     crossable = schema_info.crossable_shapes
     if not crossable:
         return
@@ -708,12 +726,12 @@ class _ResidueFacts(NamedTuple):
 
 def check_residue_hygiene(session: Session, store_id: str,
                           schema_info: 'SchemaInfo | None' = None) -> None:
-    """The CHEAP paranoia tier (ZT-P1-3): the I6 residue-hygiene family alone.
+    """The CHEAP paranoia tier: the I6 residue-hygiene family alone.
 
     Every clause of I6 except the two that need a full edge scan
     (``neg``/``upos`` overlapping derived-edge holders) -- in particular the
-    **dead node id** clauses, which are the runtime detector for the ZT-P0-1
-    residue-GC escalation (a residue vouching for a recycled rowid).
+    **dead node id** clauses, which are the runtime detector for the
+    residue-GC authorization escalation (a residue vouching for a recycled rowid).
 
     Cost: one indexed ``Residue`` scan for the store, plus one batched
     ``Node WHERE id IN (...)`` fetch of exactly the ids those rows name --
@@ -724,6 +742,8 @@ def check_residue_hygiene(session: Session, store_id: str,
     across commits, it is not security-relevant, and the cheap tier runs pre-commit
     only (where a rolled-back bump would poison that baseline).
     """
+    # Provenance (moved out of the docstring, TK123 item 14): ZT-P0-1.
+    # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-3.
     # COLUMN selects, not entity selects, on both queries: this runs inside every
     # commit, and materializing ORM instances (identity-map bookkeeping, instance
     # state) measured as the bulk of the tier's cost. The lightweight records below
@@ -796,11 +816,12 @@ def snapshot_rows(session: Session, store_id: str) -> tuple[Counter, Counter]:
 
 
 def verify_outbox_deltas(session: Session, store_id: str, after_id: int = 0) -> None:
-    """Delta-scoped verification (boolean spec §8.3): the outbox names exactly the
+    """Delta-scoped verification: the outbox names exactly the
     pairs whose reachability allegedly flipped. For each pair's *final* action in the
     range, recompute reachability by BFS over direct edges and compare with both the
     closure row and the claimed flip. O(affected × local neighbourhood) -- the full
     closure recompute stays a test-suite job, never a per-write cost."""
+    # Provenance (moved out of the docstring, TK123 item 14): boolean spec §8.3.
     rows = outbox_rows(session, store_id, after_id)
     if not rows:
         return
@@ -967,7 +988,7 @@ class _violations_tagged:
 def install_paranoia(session: Session, store_id: str,
                      schema_info: 'SchemaInfo | None' = None, *,
                      level: 'bool | str' = PARANOIA_FULL) -> 'ParanoiaGuard | None':
-    """Wire paranoia mode onto a session (boolean spec §8.1). Returns the guard (or
+    """Wire paranoia mode onto a session. Returns the guard (or
     ``None`` for ``level='off'``).
 
     ``level='full'`` (the default, and what every existing caller gets):
@@ -986,6 +1007,7 @@ def install_paranoia(session: Session, store_id: str,
     second call raises the existing guard's level if the new one is stronger and
     returns it.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): boolean spec §8.1.
     level = normalize_paranoia_level(level)
     registry: dict[str, ParanoiaGuard] = session.info.setdefault('paranoia_guards', {})
     existing = registry.get(store_id)

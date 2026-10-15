@@ -58,11 +58,11 @@ def test_save_load_round_trip(session):
 def test_schema_is_write_once(session):
     save_schema(session, 's1', _SCHEMA)
     session.commit()
-    with pytest.raises(ValueError, match='static'):
+    with pytest.raises(SchemaMismatch, match='static'):
         save_schema(session, 's1', _OTHER)
-    # even re-saving the identical text is a second write: use ensure_schema for that
-    with pytest.raises(ValueError, match='static'):
-        save_schema(session, 's1', _SCHEMA)
+    # TK123 item 20 (A25): re-saving the same schema is a no-op that hands back the row
+    row, ruleset = save_schema(session, 's1', _SCHEMA)
+    assert row.schema_text == _SCHEMA and ruleset is not None
 
 
 def test_invalid_schema_rejected_before_landing(session):

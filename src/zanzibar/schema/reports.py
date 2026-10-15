@@ -1,7 +1,9 @@
 """Opt-in, non-raising scope reports: `w4_fragment_report` (mirror of the Lean decider) and `graph_admission_report`.
 
-Part of `zanzibar.schema`; split out of the single-file module by TK120 (2026-10-06).
+Part of `zanzibar.schema`.
 """
+# Provenance (moved out of the docstring, TK123 item 14): split out of the single-file module
+# by TK120 (2026-10-06).
 from dataclasses import dataclass
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, TTU, Union
 from .parser import _parse_schema_ast_unchecked

@@ -1,20 +1,22 @@
-"""The apply step: tuple-log rows -> graph index (connected-store spec §4).
+"""The apply step: tuple-log rows -> graph index.
 
 ``advance_index`` is the ONLY moving part of index maintenance. The sync schedule
 inlines it into the write transaction (cursor pinned at the log head); the async
 schedule loops it in a worker. Same machinery, two schedules.
 
-Exactly-once comes from transactionality, not bookkeeping (spec §2.6): the caller
+Exactly-once comes from transactionality, not bookkeeping: the caller
 commits applied rows and the cursor advance together; a failed batch moves nothing
 and a retry re-reads the same rows.
 
-Validity was enforced at admission (spec §2.4), so the log contains only appliable
+Validity was enforced at admission, so the log contains only appliable
 ops -- a rejection here is a HARD failure (corruption signal), mirroring the delta
 processor's cycle guard. **One documented exception:** ``IndexResourceLimit``
 (``ClosureFanoutExceeded``, ``PathCountExceeded``) is a resource limit the index applies
 and admission cannot predict, so it escapes that promotion and propagates as itself
 (see ``_apply_row``).
 """
+# Provenance (moved out of the docstring, TK123 item 14): connected-store spec §4.
+# Provenance (moved out of the docstring, TK123 item 14): spec §2.6; spec §2.4.
 
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ from zanzibar.graphindex import WildcardIndex
 from zanzibar.graphindex.invariants import InvariantViolation
 from zanzibar.graphindex.outbox import outbox_watermark
 from zanzibar.graphindex.processor import DeltaProcessor
+from zanzibar.schema.errors import ZanzibarError
 from zanzibar.schema import (Entity, IndexResourceLimit, RelationalTriple,
                                RuleSet, norm_pred as _norm)
 
@@ -47,6 +50,27 @@ def ensure_cursor(session: Session, index_store_id: str,
             f"index {index_store_id!r} already materializes source "
             f"{row.source_store_id!r}, not {source_store_id!r}")
     return row
+
+
+def render_log_row(row: TupleLog) -> str:
+    """One log row in the OpenFGA string form, for messages: ``ADD user:alice viewer
+    doc:d1`` (a userset subject as ``group:eng#member``)."""
+    user = f'{row.subject_type}:{row.subject_name}'
+    if row.subject_predicate != '...':
+        user += f'#{row.subject_predicate}'
+    return f'{row.op} {user} {row.relation} {row.object_type}:{row.object_name}'
+
+
+def _attach_failing_row(exc: BaseException, row: TupleLog) -> None:
+    """Record on ``exc`` which log row the apply step failed on: the attribute
+    ``failing_log_row`` = ``(log id, rendered row)`` and a note in the traceback. The
+    innermost attachment wins (a re-raise through an outer loop keeps it)."""
+    # TK123 item 13: a stalled index used to report only the resource limit, with no
+    # way to find the row to remove at the source.
+    if getattr(exc, 'failing_log_row', None) is None:
+        exc.failing_log_row = (row.id, render_log_row(row))
+        exc.add_note(f'zanzibar: the index apply step failed on log row {row.id}: '
+                     f'{render_log_row(row)}')
 
 
 def _apply_row(row: TupleLog, widx: WildcardIndex, ruleset: RuleSet) -> None:
@@ -82,20 +106,21 @@ def _apply_row(row: TupleLog, widx: WildcardIndex, ruleset: RuleSet) -> None:
         raise
     except ValueError as e:
         raise InvariantViolation(
-            f'log row {row.id} ({row.op}) was rejected by the index -- the log is '
+            f'log row {row.id} ({render_log_row(row)}) was rejected by the index -- the log is '
             f'admission-validated, so this is corruption or a validity-parity bug: {e}'
         ) from e
 
 
-class MissingDeltaProcessor(ValueError):
+class MissingDeltaProcessor(ZanzibarError, ValueError):
     """``advance_index`` was called with ``proc=None`` on a schema with boolean
-    (``and`` / ``but not``) relations (TK123 A16).
+    (``and`` / ``but not``) relations.
 
     The apply step writes only the leaf families; the derived families are maintained by
     the ``DeltaProcessor``'s cascade. Without it the index silently disagrees with the set
     engine (an equivalence failure, measured: a granted user read ``False`` from the index
     and ``True`` from the source), so this is refused instead. A ``ValueError`` subclass,
     as a bad argument is."""
+    # Provenance (moved out of the docstring, TK123 item 14): TK123 A16.
 
 
 def _require_proc_for_boolean_schema(ruleset: RuleSet, proc: DeltaProcessor | None) -> None:
@@ -116,7 +141,7 @@ def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
                   rows_hint: list[TupleLog] | None = None) -> int:
     """Apply log rows past the cursor to the index; advance the cursor; return the
     number of rows applied. The CALLER commits -- applied rows + cursor advance land
-    in one transaction (exactly-once, spec §2.6).
+    in one transaction (exactly-once).
 
     ``batch`` caps how many ``TupleLog`` rows are consumed per call (``None`` =
     drain to the log head). Splitting a caller's logical write burst across several
@@ -125,7 +150,7 @@ def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
     returns a contiguous, strictly ordered slice starting just past the cursor, and
     each batch applies an exact PREFIX of that order. Every intermediate index state
     is therefore a valid causal partial-progress point -- it reflects the source
-    through some earlier log id, never a gap or reordering (spec §4). The cursor
+    through some earlier log id, never a gap or reordering. The cursor
     (``applied_log_id``) advances monotonically to ``rows[-1].id`` each batch, so
     freshness tokens/watermarks only ever move forward; a reader comparing its token
     against the cursor sees a truthful "reflects the source through N", whatever the
@@ -133,13 +158,12 @@ def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
     materialized state or any semantic guarantee.
 
     That whole argument rests on ``rows`` being a contiguous prefix of the LOG, not just
-    of what this snapshot can see, so the advance is contiguity-CHECKED (ZT-P1-5,
-    2026-07-26): a committed row hidden by a pinned read snapshot would otherwise be
+    of what this snapshot can see, so the advance is contiguity-CHECKED: a committed row hidden by a pinned read snapshot would otherwise be
     jumped over and never applied again, with ``_fresh_enough`` certifying the stale
     answers that follow. A detected gap raises ``WatermarkGap`` and the batch commits
     nothing.
 
-    ``rows_hint`` (perf P12b) is the sync fast path: the just-flushed ``TupleLog``
+    ``rows_hint`` is the sync fast path: the just-flushed ``TupleLog``
     rows this transaction appended, handed straight through so ⑤ (re-SELECTing rows
     this transaction wrote) is skipped. It is USED only when it is provably equal to
     what ``log_rows`` would return -- non-empty, its first id is exactly one past the
@@ -151,10 +175,14 @@ def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
 
     ``proc`` is REQUIRED when the schema has boolean (``and`` / ``but not``) relations,
     i.e. when ``ruleset.compiled.plans`` is non-empty, and is refused with
-    ``MissingDeltaProcessor`` before anything is read or written otherwise (TK123 A16).
+    ``MissingDeltaProcessor`` before anything is read or written otherwise.
     Without the cascade the derived families are never maintained, so the index would
     silently answer differently from the set engine. ``None`` is only for pure-union
     schemas, which never cascade."""
+    # Provenance (moved out of the docstring, TK123 item 14): connected-store spec sec 2.6.
+    # Provenance (moved out of the docstring, TK123 item 14): perf P12b.
+    # Provenance (moved out of the docstring, TK123 item 14): spec §4; ZT-P1-5, 2026-07-26;
+    # TK123 A16.
     _require_proc_for_boolean_schema(ruleset, proc)
     # Serialize concurrent appliers on the index store BEFORE reading the cursor:
     # two workers reading the same cursor value would double-apply log rows (a
@@ -186,7 +214,11 @@ def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
     # commit/rollback (advance_index never commits; exactly-once is the caller's, §2.6).
     with widx.idx._node_cache_scope():
         for row in rows:
-            _apply_row(row, widx, ruleset)
+            try:
+                _apply_row(row, widx, ruleset)
+            except Exception as e:
+                _attach_failing_row(e, row)    # TK123 item 13
+                raise
         if proc is not None:
             proc.run_cascade(wm)
     # ZT-P1-5: advance to the CONTIGUOUS head, never blindly to ``rows[-1].id``. The

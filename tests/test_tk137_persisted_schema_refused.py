@@ -20,7 +20,7 @@ refusal, and says how to rewrite it. Every parse site of persisted text is cover
 And it must NOT fire where it would mislead: a fresh schema the CALLER passes keeps the
 parser's own refusal, and a persisted text failing a refusal OLDER than TK137 (which 0.0.4
 could not have saved) keeps its plain ``ValueError``. The mechanism is a type, not message
-matching: the four TK137 refusal sites raise ``zanzibar.schema.errors.ShapeRefusedSinceTK137``
+matching: the four TK137 refusal sites raise ``zanzibar.schema.errors.ShapeNoLongerAccepted``
 (a ``ValueError``), and ``schema_io.py::_persisted_schema_parse`` converts only that.
 
 A 0.0.4-era row is simulated by inserting the ``SchemaRecord`` directly, which is exactly
@@ -52,7 +52,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from zanzibar.store import (Store, PersistedSchemaRefused, SchemaRecord,
                                      build_index, ensure_schema, open_set_engine)
 from zanzibar.schema import parse_schema_ast
-from zanzibar.schema.errors import ShapeRefusedSinceTK137
+from zanzibar.schema.errors import ShapeNoLongerAccepted
 
 BASE = '''type user
 type doc
@@ -112,16 +112,16 @@ def _assert_version_break(exc: PersistedSchemaRefused, store_id: str, name: str)
     assert 'To rewrite: ' in msg and rewrite in msg
     assert 'NEW store id' in msg
     assert isinstance(exc, ValueError)
-    assert isinstance(exc.__cause__, ShapeRefusedSinceTK137)
+    assert isinstance(exc.__cause__, ShapeNoLongerAccepted)
     assert exc.store_id == store_id and exc.instead == exc.refusal.instead
 
 
 @pytest.mark.parametrize('name', sorted(CASES))
 def test_each_tk137_site_raises_the_typed_refusal(name):
-    """The four TK137 refusal sites raise ``ShapeRefusedSinceTK137`` carrying a rewrite; that
+    """The four TK137 refusal sites raise ``ShapeNoLongerAccepted`` carrying a rewrite; that
     type is what the store layer converts."""
     text, refusal, rewrite, fixed = CASES[name]
-    with pytest.raises(ShapeRefusedSinceTK137) as info:
+    with pytest.raises(ShapeNoLongerAccepted) as info:
         parse_schema_ast(text)
     assert refusal in str(info.value) and rewrite in info.value.instead
     parse_schema_ast(fixed)  # the rewrite parses
@@ -185,7 +185,7 @@ def test_a_fresh_schema_keeps_the_parser_refusal(engine, name):
     """Not persisted, so not a version break: the caller's own text keeps the parser's
     refusal and nothing is saved."""
     with Session(engine) as s:
-        with pytest.raises(ShapeRefusedSinceTK137) as info:
+        with pytest.raises(ShapeNoLongerAccepted) as info:
             Store(s, 'fresh', schema=CASES[name][0])
     assert not isinstance(info.value, PersistedSchemaRefused)
     assert VERSION_BREAK not in str(info.value)
@@ -201,6 +201,6 @@ def test_an_older_refusal_of_a_persisted_text_is_not_called_a_version_break(engi
         with pytest.raises(ValueError) as info:
             Store(s, 'corrupt')
     assert not isinstance(info.value, PersistedSchemaRefused)
-    assert not isinstance(info.value, ShapeRefusedSinceTK137)
+    assert not isinstance(info.value, ShapeNoLongerAccepted)
     assert VERSION_BREAK not in str(info.value)
 

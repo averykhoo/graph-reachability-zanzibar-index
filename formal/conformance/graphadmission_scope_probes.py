@@ -25,18 +25,24 @@ from tests.oracle import t as mk_tuple
 
 #: label -> (schema_text, object_wildcard_shapes, expected) where expected is
 #: "ADMITTED" or the name of the exception class `parse_openfga_schema` raises.
+#: 2026-10-15b (TK123, the decided API break: "the schema parsers raise `SchemaError`, still a
+#: `ValueError`", CHANGELOG [Unreleased]): every recorded "ValueError" became "SchemaError".
+#: A pure class RENAME, no refusal appeared or went away: re-measured first-hand over all 18
+#: probes, the 13 former "ValueError" outcomes now raise `SchemaError` (isinstance ValueError
+#: True), the other 5 are unchanged. The pin itself caught it before this edit (observed red,
+#: conf-tile:1/5: `assert 'SchemaError' == 'ValueError'` on 3 probes).
 SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
     "wf/dotted-relation-name": ("""
         type user
         type doc
           define a.b: [user]
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     "nodup/duplicate-define": ("""
         type user
         type doc
           define viewer: [user]
           define viewer: [user]
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     # A derived cycle through a TTU TARGET. Until ASK-1 (2026-09-26) this was the
     # same-type `a: b but not x`, `b: a but not x`; the parser now refuses that as a
     # reference cycle before `_stratify` runs, so only a TTU target still reaches it.
@@ -53,7 +59,7 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
     #
     # Was the LOUD half: an UNTAINTED tupleset with a computed arm. It raised
     # `UnsupportedByGraphIndex` from the graph compiler (`_validate_ttu_tuplesets`) until
-    # TK106; the parse-time check now fires first, so it raises `ValueError`.
+    # TK106; the parse-time check now fires first, so it raises `ValueError` (`SchemaError` since TK123).
     "ttuDirect.untainted/tupleset-with-computed-arm": ("""
         type user
         type folder
@@ -62,7 +68,7 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
           define owner: [folder]
           define parent: owner
           define view: viewer from parent
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     # Was the SILENT half, ADMITTED until TK106: `_validate_ttu_tuplesets` exempts DERIVED
     # tuplesets by design, and `TtuTuplesetsDirect` has no such guard. The container
     # doc#view is tainted through its tupleset reference, so it is a derived def with a
@@ -75,7 +81,7 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
           define blockedp: [folder]
           define parent: [folder] but not blockedp
           define view: viewer from parent
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     # A computed reference to an undeclared relation. ADMITTED until ASK-1 (2026-09-26),
     # when the user decided schemas must be self-consistent; now
     # `src/zanzibar/schema/parser.py::_validate_ast_consistency` refuses it at parse time.
@@ -83,7 +89,7 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
         type user
         type doc
           define viewer: [user] or editor
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     # An undeclared tupleset whose TARGET is untainted. (With a derived target the same
     # shape raised even before ASK-1 -- `w4_scope_probes.py`'s
     # `term.NoTtuTarget/undeclared-tupleset`.)
@@ -93,7 +99,7 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
           define viewer: [user]
         type doc
           define view: viewer from parent
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     # An untainted computed cycle. `RewriteRanked` needs a strictly increasing rank along
     # every untainted rule. ADMITTED until ASK-1 (2026-09-26); OpenFGA refuses it too
     # (`ErrCycle`), and now so does `_validate_ast_consistency`.
@@ -102,12 +108,12 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
         type doc
           define a: [user] or b
           define b: [user] or a
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     "ranked/computed-self-loop": ("""
         type user
         type doc
           define viewer: [user] or viewer
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     # IN scope: TTU recursion (nested folders) puts the edge (folder,parent) -> (folder,
     # viewer), which is not a cycle. The shape a reader most fears is NOT excluded.
     "ranked/in-scope-control(ttu-recursion)": ("""
@@ -146,20 +152,20 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
         type doc
           define parent: [folder]
           define view: viewer.0 from parent
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     "directRestrNotLeaf/dotted-restriction-predicate": ("""
         type user
         type group
           define member: [user]
         type doc
           define viewer: [group#member.0]
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     "computedRefsNotLeaf/dotted-computed-ref": ("""
         type user
         type doc
           define viewer: [user]
           define view: viewer.0
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     # Over the LEAF-routed rules (`schemaRewritesL`): the TTU sits in a derived arm.
     "noLeafSubjects/dotted-ttu-target-in-derived-arm": ("""
         type user
@@ -169,12 +175,12 @@ SCHEMA_PROBES: dict[str, tuple[str, tuple, str]] = {
           define banned: [user]
           define parent: [folder]
           define view: (viewer.0 from parent) but not banned
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
     "keysNonempty/empty-relation-name": ("""
         type user
         type doc
           define : [user]
-        """, (), "ValueError"),
+        """, (), "SchemaError"),
 }
 
 #: label -> (schema_text, tuple, expected) where expected is "ADMITTED" or the name of the

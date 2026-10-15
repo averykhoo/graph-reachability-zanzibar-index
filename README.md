@@ -654,8 +654,10 @@ documented hook).
 Cross-query caching / version-counter invalidation; bitmap snapshot persistence
 (`BitMap.serialize()` blobs — state is in-memory, rebuilt from `RelationTuple` on open); deltas
 from the set engine; wiring the graph backend through `RelationTuple` (harness-level fan-out
-only — `WildcardIndex` is finished code); async outbox workers (the replay property keeps
-the seam viable; SAVEPOINT-per-delta noted in the spec); exposing derived-relation deltas
+only — `WildcardIndex` is finished code); an asynchronous delta processor, i.e. a boolean cascade
+run outside the write transaction (the replay property keeps the seam viable;
+SAVEPOINT-per-delta noted in the spec; index catch-up itself IS async-capable, via
+`Store(sync=False)` + a caller-scheduled `catch_up()`); exposing derived-relation deltas
 to external consumers; automatic outbox pruning (a MANUAL `zanzibar.graphindex.outbox.prune_outbox`
 now exists — retention is the operator's call, and it deliberately keeps the head row so
 SQLite cannot recycle ids out from under a held cursor); residue GC beyond empty-row deletion;

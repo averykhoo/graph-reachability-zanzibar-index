@@ -96,7 +96,7 @@ def run(workload: str, scale: int, backend: str, ops_name: str, checks: int,
     if backend == 'graph':
         idx = f'{workload}_gidx'
         t0 = time.perf_counter()
-        _, be, _ = build_index(session, src, idx, bulk=True)
+        _, be, _ = build_index(session, src, index_store_id=idx, bulk=True)
         build_s = time.perf_counter() - t0
         impl = 'graph:bulk'
     else:

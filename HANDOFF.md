@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-15 -- **0.0.5 = everything through `TK142`/`TK137`/`TK119`/`TK132` plus `TK123` items 1-2** (version bumped, CHANGELOG dated), **Released** (`v0.0.5` on PyPI, CI green). Install trial: 0 BROKEN (`docs/pypi-trial-0.0.5-2026-10-15.md`). Next: `TK123` item 3 (the `connectedstore` -> `store` rename) under `[Unreleased]`; 0.1.0 waits on docs (`TK151`). NEXT: `TK154` (stale lookup ids mistranslate silently), `TK138`, `TK144`, `TK150`. ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-15b -- **`TK123` closed**: the public API break (items 3-26) is in, under CHANGELOG `[Unreleased]` (version stays 0.0.5; `connectedstore` -> `store`, `Store`, string forms, OpenFGA JSON, `result_keys`, `ZanzibarError`, ...). **0.1.0 now waits only on the docs (`TK151`, unblocked).** NOW: `TK154` (stale lookup ids mistranslate silently). NEXT: `TK138`, `TK144` (unblocked), `TK150`. SPLIT rows `TK155`-`TK157` (LATER). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

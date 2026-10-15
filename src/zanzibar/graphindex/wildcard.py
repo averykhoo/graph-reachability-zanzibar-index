@@ -1,15 +1,16 @@
 """
-WildcardIndex: the wildcard-aware façade over ReachabilityIndex (spec §6/§7).
+WildcardIndex: the wildcard-aware façade over ReachabilityIndex.
 
 It materialises the interior wildcard hops as real ref-counted edges (bridges) at
 write time, so that check() stays O(1): at most four point lookups on the unique
 edge index, independent of data size or nesting depth. Only the two hops touching
-the literal query endpoints stay virtual, covered by fixed probes (§3.1).
+the literal query endpoints stay virtual, covered by fixed probes.
 
 This layer does NOT commit; sessions/transactions remain the caller's job (mirrors
 ReachabilityIndex). All errors raise; on cycle rejection the caller's rollback
 restores consistency.
 """
+# Provenance (moved out of the docstring, TK123 item 14): spec §6/§7; §3.1.
 
 from __future__ import annotations
 
@@ -32,14 +33,27 @@ from zanzibar.schema import (AdmissionRejected, SchemaInfo,
 class LookupResult:
     """What ``lookup`` / ``lookup_reverse`` return (also via ``Store``).
 
-    * ``node_ids``: ids of ``zanzibar.graphindex.Node`` rows in this store. Resolve them with
-      ``session.exec(select(Node).where(Node.id.in_(result.node_ids)))``; each node is a
-      ``(type, name, predicate)`` triple, ``predicate`` being the relation or ``"..."`` for a
-      bare subject. Intermediate usersets (``group:eng#member``) are included.
-    * ``markers``: wildcard grants as ``(type, predicate, variant)``; from ``lookup_reverse``,
-      ``("user", "...", "any")`` means every user (a ``[user:*]`` tuple).
+    * ``node_ids``: ids of ``zanzibar.graphindex.Node`` rows in this store.
+      ``Store.result_keys(result)`` turns them into ``(type, name, predicate)`` keys,
+      ``predicate`` being the relation or ``"..."`` for a bare subject. Intermediate usersets
+      (``group:eng#member``) are included. From ``lookup_reverse``, a userset in the result
+      means the userset ITSELF is an allowed subject; it is not a claim about each member
+      (under ``but not banned`` a banned member stays refused), so ask ``check`` about a
+      member instead of expanding the userset.
+    * ``markers``: wildcard grants as ``(type, predicate, variant)``. Variant ``"any"`` is
+      subject-side: from ``lookup_reverse``, ``("user", "...", "any")`` means every user (a
+      ``[user:*]`` tuple). Variant ``"all"`` is object-side and appears only with
+      ``object_wildcard_shapes`` (an extension): from ``lookup``, ``("doc", "reader",
+      "all")`` means reader of every doc (a ``doc:*`` tuple). An ``"all"`` marker from
+      ``lookup_reverse``, or an ``"any"`` marker from ``lookup``, is a by-product of how
+      wildcards are stored and carries no claim on its own.
     * ``excluded_node_ids``: node ids a marker would cover but that are refused (``but not``).
-      The caller subtracts them: "every user except these".
+      The caller subtracts them: "every user except these". ``Store.excluded_keys(result)``
+      gives their keys.
+
+    A subject that a marker already covers may also appear in ``node_ids``; the set
+    engine's ``SetLookupResult`` leaves it out. Compare results by what they cover (the
+    keys, plus every subject of a marker's shape, minus the excluded keys), not as raw sets.
     """
     node_ids: set[int] = field(default_factory=set)               # concrete results
     markers: set[tuple[str, str, str]] = field(default_factory=set)  # (type, predicate, variant) symbolic "all/any"
@@ -50,6 +64,14 @@ class LookupResult:
 
 
 class WildcardIndex:
+    """The graph index's schema-aware layer over ``ReachabilityIndex``: writes, ``check``,
+    ``lookup`` and ``lookup_reverse`` with wildcard (``user:*``) subjects and objects and
+    with ``and`` / ``but not`` relations (which the delta processor maintains).
+
+    Most programs use ``zanzibar.store.Store``, which owns one of these and keeps it in
+    step with the tuple log; build one directly only to drive the graph index alone.
+    """
+
     def __init__(self, idx: ReachabilityIndex, schema_info: SchemaInfo):
         self.idx = idx
         self.schema_info = schema_info
@@ -103,13 +125,14 @@ class WildcardIndex:
 
     @property
     def processor_writes(self) -> bool:
-        """Is the CALLING thread inside the delta processor's write window? (I5)
+        """Is the CALLING thread inside the delta processor's write window?
 
         Read by ``_assert_derived_exclusivity`` (may this write touch a derived-public
         family at all) and ``_derived_write_ctx`` (is the resulting direct edge row a
         derived grant). Both fail CLOSED for a thread that never opened the window --
         the write is refused, and no row is stamped ``derived`` -- so a mis-threaded
         caller is told, loudly, instead of quietly writing authorization state."""
+        # Provenance (moved out of the docstring, TK123 item 14): I5.
         return self._processor_writes_flag.on
 
     @processor_writes.setter
@@ -242,13 +265,14 @@ class WildcardIndex:
         # AdmissionRejected: a cycle refusal (the ZT-P5 star self-edge). Same rule the
         # set engine states on the unsplit node key, so both backends reject the same
         # write with the same class.
+        # Provenance: ZT-P5, docs/spec-deviations.md 2026-07-26.
         raise AdmissionRejected(
             f"wildcard tuple rejected: the routed edge w_any{shape} -> w_all{shape} is a "
             f"cycle by construction -- the shape {shape} is both subject-wildcard bridged "
             f"(concrete -> w_any) and object-wildcard bridged (w_all -> concrete), so every "
             f"present-or-future concrete of that shape closes the loop "
-            f"w_any -> w_all -> concrete -> w_any (ZT-P5, docs/spec-deviations.md "
-            f"2026-07-26; the set engine rejects the same write as a userset-topology cycle)")
+            f"w_any -> w_all -> concrete -> w_any (the set engine rejects the same write as a "
+            f"userset-topology cycle)")
 
     def _reject_latent_star_cycle(self, subject: Node, obj: Node) -> None:
         """Reject a routed edge that would create a PATH ``w_any(T,p) --> w_all(T,p)`` on
@@ -314,15 +338,16 @@ class WildcardIndex:
                 continue
             # AdmissionRejected: a cycle refusal, same class and same rule as the
             # length-1 case above and as the set engine's userset-topology refusal.
+            # Provenance: invariant I14; TK70 (the detonation),
+            # docs/tk70-detonation-2026-09-17.md.
             raise AdmissionRejected(
                 f"wildcard tuple rejected: this edge would complete a path "
                 f"w_any{(t, p)} --> w_all{(t, p)}, which is a cycle by construction -- "
-                f"the shape {(t, p)} is crossable (bridged in AND out), so the I14 "
-                f"crossing middle of every present-or-future entity of type {t!r} closes "
+                f"the shape {(t, p)} is crossable (bridged in AND out), so the crossing "
+                f"middle node of every present-or-future entity of type {t!r} closes "
                 f"the loop w_any --> w_all -> middle -> w_any. Admitting it would defer "
-                f"the refusal onto the next write that mints such an entity (TK70, the "
-                f"detonation; docs/tk70-detonation-2026-09-17.md; the set engine rejects "
-                f"the same write as a userset-topology cycle)")
+                f"the refusal onto the next write that mints such an entity (the set engine "
+                f"rejects the same write as a userset-topology cycle)")
 
     # ------------------------------------------------------------------ #
     # Bridge lifecycle (§7)
@@ -504,13 +529,13 @@ class WildcardIndex:
 
     def backfill(self) -> None:
         """Ensure every existing concrete of a bridged shape has its bridges, and
-        every existing entity of a crossable shape's type has its crossing middles
-        (§7.2 + I14).
+        every existing entity of a crossable shape's type has its crossing middles.
 
         Idempotent; safe to call always. Does not create a w node for a NON-crossable
         shape that has no concrete instances (avoids orphan wildcard nodes); a
         CROSSABLE shape's w nodes arrive with its middles, i.e. exactly when an
         entity of the shape's type exists."""
+        # Provenance (moved out of the docstring, TK123 item 14): §7.2 + I14.
         # Serialize against live writers: the existence probes below are
         # check-then-act on ref-counted bridge edges (blind-audit C2).
         self.idx._lock_store()
@@ -559,8 +584,8 @@ class WildcardIndex:
         (flags the direct edge row Edge.derived; boolean spec §4/I5)."""
         return self.processor_writes and (o_type, relation) in self.schema_info.derived_families
 
-    def add_tuple(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
-                  relation: str, o_type: str, o_name: str) -> None:
+    def add_tuple(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str,
+                  relation: str, object_type: str, object_name: str) -> None:
         """Add one (possibly rewrite-derived) triple as a ref-counted direct edge.
 
         ⚠ MULTIGRAPH SEMANTICS, deliberately: adding the same triple twice counts to
@@ -570,6 +595,7 @@ class WildcardIndex:
         set-semantics idempotence lives one layer up, at the tuple boundary
         (store.TupleSource / the harness adapters). Do not feed raw user
         writes here directly unless you deduplicate them yourself."""
+        s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._add_tuple_trusted(subject_predicate, s_type, s_name, relation, o_type, o_name)
 
@@ -631,8 +657,9 @@ class WildcardIndex:
         finally:
             self.idx._writing_derived = False
 
-    def remove_tuple(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
-                     relation: str, o_type: str, o_name: str) -> None:
+    def remove_tuple(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str,
+                     relation: str, object_type: str, object_name: str) -> None:
+        s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._remove_tuple_trusted(subject_predicate, s_type, s_name, relation, o_type, o_name)
 
@@ -666,7 +693,7 @@ class WildcardIndex:
     def remove_node(self, predicate: str | EllipsisType, entity_type: str,
                     name: str) -> None:
         """Remove a node and all its edges, stripping its materialized wildcard
-        bridges FIRST (spec §remove_tuple: explicit nodes keep bridges for as long
+        bridges FIRST (explicit nodes keep bridges for as long
         as they exist; ``remove_node`` must strip them before the core removal).
 
         The ordering is not cosmetic: the core's node-removal shortcut retires edge
@@ -674,6 +701,7 @@ class WildcardIndex:
         -- stripping bridges through ``remove_edge_by_id`` first keeps the w-node
         refcounts honest, so an orphaned w node can be implicit-GC'd instead of
         lingering with a stale count."""
+        # Provenance (moved out of the docstring, TK123 item 14): spec sec remove_tuple.
         validate_node_identifiers(predicate, entity_type, name)
         if name == '*':
             # AdmissionRejected: a user-facing refusal on the public remove_node API
@@ -761,8 +789,8 @@ class WildcardIndex:
     # Reads (§3.1)
     # ------------------------------------------------------------------ #
 
-    def check(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
-              relation: str, o_type: str, o_name: str) -> bool:
+    def check(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str,
+              relation: str, object_type: str, object_name: str) -> bool:
         """Public read entry: the BL-2 leaf-name fence, then the ordinary probe.
 
         Compiled leaf predicates (``<rel>.<idx>``, spec deviations 2026-08-21b)
@@ -778,6 +806,7 @@ class WildcardIndex:
         Internal readers that legitimately probe leaf names -- the delta
         processor's plan evaluation (``_EvalContext.leaf_check`` /
         ``leaf_stars``) -- enter via ``_check_internal`` below the fence."""
+        s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
         if (o_type, relation) in self.schema_info.leaf_families:
             return False
         return self._check_internal(subject_predicate, s_type, s_name,
@@ -979,13 +1008,15 @@ class WildcardIndex:
         except KeyError:
             return None
 
-    def lookup(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str) -> LookupResult:
+    def lookup(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str) -> LookupResult:
         """Everything the subject can reach. Concrete targets go in node_ids; any wildcard
-        node reached becomes a symbolic marker (spec §6) -- never enumerated to concretes.
+        node reached becomes a symbolic marker -- never enumerated to concretes.
 
-        Derived relations contribute twice (boolean spec §6): materialised derived
+        Derived relations contribute twice: materialised derived
         edges arrive through the ordinary reachable set, and star-covered memberships
         come from a residue scan (shape ∈ stars ∧ subject ∉ neg)."""
+        # Provenance (moved out of the docstring, TK123 item 14): spec §6; boolean spec §6.
+        s_type, s_name = subject_type, subject_name  # TK123 item 7
         s_pred = _norm_pred(subject_predicate)
         result = LookupResult()
 
@@ -1031,14 +1062,16 @@ class WildcardIndex:
             elif concrete and s_node.id in json.loads(row.upos):
                 result.node_ids.add(row.object_node_id)     # edge-free userset membership
 
-    def lookup_reverse(self, relation: str, o_type: str, o_name: str) -> LookupResult:
+    def lookup_reverse(self, relation: str, object_type: str, object_name: str) -> LookupResult:
         """Everything that can reach the object. Symmetric with lookup: w_all/w_any nodes
         in the reverse set become symbolic markers (e.g. 'every T#P').
 
-        On a derived relation (boolean spec §6): concretes are the derived edges'
+        On a derived relation: concretes are the derived edges'
         subjects; the residue's stars render as the existing symbolic markers (variant
         'any': subject-side coverage) and its neg fills ``excluded_node_ids`` so
         "everyone of shape σ except these" is representable without enumeration."""
+        # Provenance (moved out of the docstring, TK123 item 14): boolean spec §6.
+        o_type, o_name = object_type, object_name  # TK123 item 7
         result = LookupResult()
 
         # BL-2 fence, mirroring check's False (and the X2 empty-not-raise

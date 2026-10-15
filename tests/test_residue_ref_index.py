@@ -448,7 +448,7 @@ def test_bulk_built_store_has_a_correct_reverse_index(bulk_session, bulk):
         source.add(*raw)
     bulk_session.commit()
 
-    _, widx, rs = build_index(bulk_session, src, dst, bulk=bulk)
+    _, widx, rs = build_index(bulk_session, src, index_store_id=dst, bulk=bulk)
     bulk_session.commit()
 
     recorded = {o: s for o, s in _recorded_subject_ids(bulk_session, dst).items() if s}

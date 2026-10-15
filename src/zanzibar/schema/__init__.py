@@ -15,8 +15,10 @@ Submodules, leaf first:
 * `reports`       `w4_fragment_report` / `graph_admission_report`
 
 This module re-exports the public names, so `from zanzibar.schema import X` keeps
-working. It was one 3,300-line file (`zanzibar_utils_v1.py`) until TK120 (2026-10-06).
+working.
 """
+# Provenance (moved out of the docstring, TK123 item 14): one 3,300-line file
+# (`zanzibar_utils_v1.py`) until TK120 (2026-10-06).
 from .errors import (
     AdmissionRejected,
     ClosureFanoutExceeded,
@@ -25,13 +27,17 @@ from .errors import (
     IDENTIFIER_CHARSET,
     IndexResourceLimit,
     PathCountExceeded,
+    SchemaError,
     SchemaMismatch,
+    ShapeNoLongerAccepted,
     UnsupportedByGraphIndex,
+    ZanzibarError,
     is_valid_identifier,
     validate_node_identifiers,
     validate_store_id,
     validate_write_identifiers,
 )
+from .tuplestr import MalformedTupleString
 from .syntax import (
     Computed,
     Direct,
@@ -108,71 +114,44 @@ from .syntax import _iter_directs  # noqa: F401
 from .parser import _parse_schema_ast_unchecked  # noqa: F401
 from .boolean import _member_types, _plan_leaves  # noqa: F401
 
+# The public surface (`TK123` item 5). Every import line above stays, so
+# ``from zanzibar.schema import X`` keeps working for the internal names the test and
+# conformance suites use; ``__all__`` lists only what a user is meant to touch.
 __all__ = [
-    'AdmissionRejected',
-    'ClosureFanoutExceeded',
-    'CompiledBooleans',
-    'Computed',
-    'CyclicDerivedDependency',
-    'DependentEdge',
-    'DerivedFamily',
-    'Direct',
-    'DoublyBridgedShapeError',
-    'Entity',
-    'EntityPattern',
-    'Exclusion',
-    'Expr',
-    'Filter',
-    'GRAPH_ADMISSION_REPORTED_FIELDS',
-    'GraphAdmissionReport',
-    'IDENTIFIER_CHARSET',
-    'IndexResourceLimit',
-    'Intersection',
-    'LeafFamily',
-    'LeafSpec',
-    'PClosureLeaf',
-    'PDerivedComputed',
-    'PDerivedTTU',
-    'PDerivedUserset',
-    'PExclusion',
-    'PIntersection',
-    'PUnion',
-    'PathCountExceeded',
-    'Plan',
-    'RelationalTriple',
-    'RelationalTriplePattern',
-    'Restriction',
-    'RewriteFilter',
-    'Rule',
+    # parse / convert / compile
+    'parse_openfga_schema',
+    'parse_openfga_json',
+    'openfga_json_to_dsl',
+    'parse_schema_ast',
+    'unparse_schema_ast',
+    'compile_ruleset',
     'RuleSet',
+    # the AST that parse_schema_ast returns
     'SchemaAST',
-    'SchemaMismatch',
-    'SchemaInfo',
+    'Expr',
+    'Direct',
+    'Restriction',
+    'Computed',
     'TTU',
     'Union',
-    'UnprovenExtensionWarning',
-    'UnsupportedByGraphIndex',
-    'W4FragmentReport',
-    'W4_FRAGMENT_FIELDS',
-    'compile_boolean_schema',
-    'compile_ruleset',
-    'compute_taint',
-    'derive_schema_info',
-    'graph_admission_report',
+    'Intersection',
+    'Exclusion',
+    # identifiers
+    'IDENTIFIER_CHARSET',
     'is_valid_identifier',
-    'norm_pred',
-    'openfga_json_to_dsl',
-    'parse_openfga_json',
-    'parse_openfga_schema',
-    'parse_relation_rule',
-    'parse_schema_ast',
-    'replace_relation',
-    'schema_filters',
-    'unparse_schema_ast',
-    'unproven_extensions',
-    'validate_node_identifiers',
     'validate_store_id',
-    'validate_write_identifiers',
-    'w4_fragment_report',
-    'wildcard_userset_restriction_shapes',
+    # exceptions and the warning
+    'ZanzibarError',
+    'SchemaError',
+    'ShapeNoLongerAccepted',
+    'AdmissionRejected',
+    'IndexResourceLimit',
+    'ClosureFanoutExceeded',
+    'PathCountExceeded',
+    'UnsupportedByGraphIndex',
+    'DoublyBridgedShapeError',
+    'CyclicDerivedDependency',
+    'SchemaMismatch',
+    'MalformedTupleString',
+    'UnprovenExtensionWarning',
 ]

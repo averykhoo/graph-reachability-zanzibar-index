@@ -16,6 +16,7 @@ from zanzibar.schema import (AdmissionRejected, ClosureFanoutExceeded,
                                validate_node_identifiers)
 from .invariants import InvariantViolation
 from .models import DeltaOutbox, Edge, Node, IndexStore
+from zanzibar.schema.errors import ZanzibarError
 
 _log = logging.getLogger(__name__)
 
@@ -27,8 +28,9 @@ _log = logging.getLogger(__name__)
 # It is the mirror of ``InvariantViolation``: rejection = correct refusal (a
 # ``ValueError`` subclass, for backward compatibility with every existing
 # ``except ValueError`` around a write); violation = corruption (an ``AssertionError``
-# subclass, which therefore never enters a ``ValueError`` handler at all).
-__all_exceptions__ = ('AdmissionRejected', 'InvariantViolation', 'WriteLockUnsafe')
+# subclass, which therefore never enters a ``ValueError`` handler at all). Both
+# ``AdmissionRejected`` and ``WriteLockUnsafe`` derive from ``ZanzibarError``;
+# ``InvariantViolation`` deliberately does not.
 
 # Per-batch node-resolution cache sentinels (perf N15). ``_UNCACHED`` distinguishes
 # "key absent from the cache" (do the DB lookup) from ``_MISSING`` ("known-absent this
@@ -129,10 +131,11 @@ SQLITE_BUSY_RETRIES = 4
 SQLITE_BUSY_BACKOFF = 0.01
 
 
-class WriteLockUnsafe(RuntimeError):
+class WriteLockUnsafe(ZanzibarError, RuntimeError):
     """The documented per-store write lock cannot actually be taken on this session's
-    bind, so a write's check-then-act admission is not atomic against other writers
-    (zero-trust review ZT-P1-4). The message names the configuration fix."""
+    bind, so a write's check-then-act admission is not atomic against other writers.
+    The message names the configuration fix."""
+    # Provenance (moved out of the docstring, TK123 item 14): zero-trust review ZT-P1-4.
 
 
 def is_sqlite(session: Session) -> bool:
@@ -175,7 +178,7 @@ def _ensure_sqlite_busy_timeout(session: Session) -> None:
 
 
 def take_row_write_lock(session: Session, lock_select, lock_update) -> None:
-    """Take the per-store write lock for the rest of the transaction (ZT-P1-4).
+    """Take the per-store write lock for the rest of the transaction.
 
     Two arms, one contract ("no other writer can commit against this store until this
     transaction ends"):
@@ -183,8 +186,7 @@ def take_row_write_lock(session: Session, lock_select, lock_update) -> None:
     * **PostgreSQL** (the supported server; this arm is what any non-SQLite dialect
       gets) -- ``lock_select``, a ``SELECT ... FOR UPDATE`` on the store's lock row.
       Unchanged from before this fix, and first exercised for real on 2026-07-27:
-      it blocks a second writer, at ROW granularity, and releases on commit
-      (``tests/test_postgres_ha.py``).
+      it blocks a second writer, at ROW granularity, and releases on commit.
     * **SQLite** -- ``with_for_update()`` compiles to a PLAIN SELECT on pysqlite (no
       ``FOR UPDATE`` in the emitted statement; verified), so the documented lock was a
       silent NO-OP and, worse, pysqlite's default ``isolation_level=''`` runs SELECTs
@@ -201,6 +203,8 @@ def take_row_write_lock(session: Session, lock_select, lock_update) -> None:
     bounded statement-level retry covers the residual; after that the error propagates
     for the caller to retry the transaction (the existing concurrency tests already
     retry ``OperationalError``)."""
+    # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-4;
+    # ``tests/test_postgres_ha.py``.
     if not is_sqlite(session):
         session.exec(lock_select).first()
         return
@@ -229,13 +233,14 @@ def store_lock_statements(store_id: str):
 
 
 def probe_store_write_lock(session: Session, store_id: str) -> None:
-    """Open-time ZT-P1-4 check: take the store write lock for real and verify it held.
+    """Open-time check: take the store write lock for real and verify it held.
 
     SQLite only (off it ``FOR UPDATE`` is genuine, and issuing a lock at open would
     break a legitimate read-only open against a hot standby). Call this as the FIRST
     statement of the transaction: before any read has pinned a WAL snapshot, so lock
     contention WAITS on the busy timeout (an effective ``BEGIN IMMEDIATE``) instead of
     failing instantly with SQLite's write-after-read ``SQLITE_BUSY``."""
+    # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-4.
     if not is_sqlite(session):
         return
     take_row_write_lock(session, *store_lock_statements(store_id))
@@ -243,8 +248,8 @@ def probe_store_write_lock(session: Session, store_id: str) -> None:
 
 
 def assert_write_lock_effective(session: Session) -> None:
-    """Fail loudly, at open time, when this session cannot hold the write lock at all
-    (ZT-P1-4). Dialect-aware: a no-op off SQLite (``FOR UPDATE`` is real there).
+    """Fail loudly, at open time, when this session cannot hold the write lock at all.
+    Dialect-aware: a no-op off SQLite (``FOR UPDATE`` is real there).
 
     The check is EMPIRICAL rather than a guess at the config: the caller has just
     taken the lock, so the raw connection must now be inside a transaction. It is not
@@ -256,21 +261,24 @@ def assert_write_lock_effective(session: Session) -> None:
     Both SAFE configurations pass: pysqlite's DEFAULT (``isolation_level=''``, which
     auto-begins on our lock UPDATE) and the recommended recipe
     (``isolation_level=None`` + a ``begin`` listener emitting ``BEGIN``)."""
+    # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-4.
     if not is_sqlite(session):
         return
     raw = _sqlite_raw_connection(session)
     if getattr(raw, 'in_transaction', False):
         return
+    # Provenance: zero-trust review ZT-P1-4; the recipe below is exercised by
+    # tests/test_connectedstore_multi_instance.py (TK123 item 14 inlined it).
     raise WriteLockUnsafe(
         "SQLite bind: the per-store write lock did NOT hold -- this connection is in "
         "autocommit mode, so it was released the moment it was taken and a write's "
         "check-then-act admission (duplicate detection, remove-existence, cycle "
-        "parity) is not atomic against another writer (zero-trust review ZT-P1-4). "
+        "parity) is not atomic against another writer. "
         "Fix the engine configuration: either leave pysqlite's DEFAULT "
-        "isolation_level ('') in place, or use the documented SQLAlchemy recipe -- a "
-        "'connect' listener setting dbapi.isolation_level = None PLUS a 'begin' "
-        "listener running conn.exec_driver_sql('BEGIN') (see "
-        "tests/test_connectedstore_multi_instance.py). Do NOT open the engine or "
+        "isolation_level ('') in place, or use SQLAlchemy's two-listener recipe: "
+        "@event.listens_for(engine, 'connect') def _c(dbapi_conn, _rec): "
+        "dbapi_conn.isolation_level = None; and @event.listens_for(engine, 'begin') "
+        "def _b(conn): conn.exec_driver_sql('BEGIN'). Do NOT open the engine or "
         "session with isolation_level='AUTOCOMMIT', and do not set the sqlite3 "
         "connection's autocommit=True.")
 
@@ -368,9 +376,10 @@ class ReachabilityIndex:
         raises the cap, and the data never shrinks to let it through. On those paths it
         also bounds nothing it was built for: the stall it guards against is one write
         holding the SOURCE lock, and the async apply holds only the graph store lock.
-        Decision and reasoning: ``docs/tk111-stall-aware-freshness-2026-10-02.md`` sec 7.
         The path-count bound (``MAX_PATH_COUNT``) is a storage-width fact and is NOT
         suspended. Re-entrant: restores whatever was in force before."""
+        # Provenance (moved out of the docstring, TK123 item 14): decision and reasoning:
+        # docs/tk111-stall-aware-freshness-2026-10-02.md sec 7.
         prior = self._fanout_cap_suspended.on
         self._fanout_cap_suspended.on = True
         try:
@@ -637,6 +646,17 @@ class ReachabilityIndex:
             if old_indirect == 0 and new_indirect > 0:
                 self._emit(triple.subject_id, triple.object_id, "ADDED")
 
+    def _render_node(self, node_id: int) -> str:
+        """A node id as ``type:name`` / ``type:name#predicate`` for an error message.
+        One read, on a refusal path only; an id with no row renders as ``node <id>``."""
+        # TK123 item 13: refusals used to print raw node row ids, meaningless to a user.
+        with self.session.no_autoflush:
+            n = self.session.get(Node, node_id)
+        if n is None:
+            return f'node {node_id}'
+        text = f'{n.type}:{n.name}' + ('' if n.predicate == '...' else f'#{n.predicate}')
+        return text + (f' ({n.wildcard} wildcard)' if n.wildcard else '')
+
     def _add_indirect_edges_batch_unsafe(
             self, deltas: list[tuple[int, int, int]],
             node_map: dict[int, Node] | None = None,
@@ -695,7 +715,8 @@ class ReachabilityIndex:
                 if new > MAX_PATH_COUNT:
                     raise PathCountExceeded(
                         f'path count bound exceeded: this edge would give closure row '
-                        f'({from_id} -> {to_id}) {new} distinct derivation paths, over '
+                        f'{self._render_node(from_id)} -> {self._render_node(to_id)} '
+                        f'{new} distinct derivation paths, over '
                         f'the storage limit of {MAX_PATH_COUNT} for store '
                         f'{self.store_id!r}. The count is exact (removals decrement '
                         f'it), so it cannot saturate; restructure the grant graph so '
@@ -887,13 +908,12 @@ class ReachabilityIndex:
             # path, and must not do that here -- admission cannot predict this cap, so
             # a refusal during replay is a resource limit, not a parity bug.
             raise ClosureFanoutExceeded(
-                f'closure fan-out cap exceeded: this edge would materialise {fanout} '
-                f'closure rows ({n_anc} ancestors x {n_desc} descendants + fringes), '
-                f'over the limit of {self.max_closure_fanout} for store '
-                f'{self.store_id!r}. Raise it with '
-                f'ReachabilityIndex(max_closure_fanout=...) or {MAX_CLOSURE_FANOUT_ENV} '
-                f'(0 disables the cap), or split the grant -- this write would hold the '
-                f'store write lock for its whole expansion')
+                f'closure fan-out cap exceeded: this write would add {fanout} '
+                f'permission-closure rows ({n_anc} ancestors x {n_desc} descendants + '
+                f'fringes), over the limit of {self.max_closure_fanout} for store '
+                f'{self.store_id!r}. Raise the limit with the {MAX_CLOSURE_FANOUT_ENV} '
+                f'environment variable (0 disables it), or split the grant -- this '
+                f'write would hold the store write lock for its whole expansion')
 
         # Expand transitive paths. The three loops enumerate DISTINCT concrete
         # pairs (subject is never an ancestor, object never a descendant, no
@@ -1056,11 +1076,13 @@ class ReachabilityIndex:
     def cached_concrete_node(self, predicate: str, entity_type: str,
                              name: str) -> Node | None:
         """Read-only, cache-aware resolution of a CONCRETE node (``wildcard == ''``);
-        returns the node or ``None``, never creates, never promotes implicit->explicit
-        (perf N15). Shares ``node``'s per-batch cache, so a concrete resolved, created,
+        returns the node or ``None``, never creates, never promotes implicit->explicit.
+        Shares ``node``'s per-batch cache, so a concrete resolved, created,
         or evicted through the ``node`` choke point stays coherent with this read path.
         Outside a batch (cache ``None``) it is a single point SELECT -- byte-identical
-        to the pre-N15 ``DeltaProcessor._node``, whose sole implementation this is."""
+        to the former ``DeltaProcessor._node``, whose sole implementation this is."""
+        # Provenance (moved out of the docstring, TK123 item 14): pre-N15.
+        # Provenance (moved out of the docstring, TK123 item 14): perf N15.
         cache = self._node_cache
         key = (predicate, entity_type, name, '')
         if cache is not None:
@@ -1075,7 +1097,7 @@ class ReachabilityIndex:
     def resolve_node_ids(self, keys: list[tuple[str, str, str, str]]
                          ) -> dict[tuple[str, str, str, str], int]:
         """Resolve a SET of node identity tuples ``(predicate, type, name, wildcard)``
-        to ids in ONE statement; read-only (perf R6-6).
+        to ids in ONE statement; read-only.
 
         The read path resolves several identities before it can probe anything, and
         each was its own ``_db_node`` point SELECT: an untainted
@@ -1087,7 +1109,7 @@ class ReachabilityIndex:
         same shape, on the same dialects, as the edge probe this feeds.
 
         CACHE-COHERENT, not cache-bypassing. It serves AND populates the per-batch
-        ``_node_cache`` (N15) exactly as ``node`` / ``cached_concrete_node`` do, so
+        ``_node_cache`` exactly as ``node`` / ``cached_concrete_node`` do, so
         inside a cascade (cache installed and warm) this still costs zero statements;
         replacing warm cache hits with a fresh SELECT would have been a write-path
         regression, and this entry point is on the write path via
@@ -1101,6 +1123,8 @@ class ReachabilityIndex:
         (callers read that as "no such node"), never a ``KeyError``. Callers construct
         the tuples themselves, so ``node``'s encoding validation (name ``'*'`` iff a
         non-empty wildcard) does not apply here."""
+        # Provenance (moved out of the docstring, TK123 item 14): perf R6-6.
+        # Provenance (moved out of the docstring, TK123 item 14): N15.
         cache = self._node_cache
         out: dict[tuple[str, str, str, str], int] = {}
         misses: list[tuple[str, str, str, str]] = []
@@ -1182,8 +1206,9 @@ class ReachabilityIndex:
         Performs the same reverse-reachability cycle pre-check as add_edge, then
         the ref-counted +1 direct-edge update. The façade uses this so it never
         re-resolves names it already resolved. Reachability flips are recorded in
-        the delta outbox (boolean spec §4); drain with zanzibar.graphindex.outbox helpers.
+        the delta outbox; drain with zanzibar.graphindex.outbox helpers.
         """
+        # Provenance (moved out of the docstring, TK123 item 14): boolean spec §4.
         # Serialize the cycle check + ref-counted closure mutation against other writers
         # (held until commit): otherwise the check and the update are separate steps, so
         # concurrent adds can jointly create a cycle or lose count increments. The ids

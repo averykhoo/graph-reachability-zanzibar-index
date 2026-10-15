@@ -95,10 +95,35 @@ def test_cap_boundary_is_the_exact_region_size():
         else:
             with pytest.raises(AdmissionRejected) as exc:
                 idx.add_edge('p', 't', 's', 'p', 't', 'o')
-            assert '24 closure rows' in str(exc.value)
+            assert 'would add 24 permission-closure rows' in str(exc.value)
             assert 'limit of 23' in str(exc.value)
             assert MAX_CLOSURE_FANOUT_ENV in str(exc.value)
         session.close()
+
+
+def test_refusal_message_names_only_the_env_var():
+    """TK123 item 16: a ``Store`` user cannot reach ``ReachabilityIndex(max_closure_fanout=)``,
+    so the refusal must name the ONE knob they have, the environment variable, and say what
+    the number counts in user words ("would add N permission-closure rows").
+
+    Sabotage (2026-10-15): restoring the old ``Raise it with
+    ReachabilityIndex(max_closure_fanout=...) or ZANZIBAR_MAX_CLOSURE_FANOUT`` wording in
+    ``graphindex/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl`` turned this test
+    red: ``AssertionError: assert 'ReachabilityIndex(' not in 'closure fan-out cap
+    exceeded: this write would add 24 ... Raise it with ReachabilityIndex(max_closure_fanout=...)
+    or ZANZIBAR_MAX_CLOSURE_FANOUT ...'``.
+    """
+    session, idx = _store(cap=23)
+    _hub(idx, 4, 4)
+    session.commit()
+    with pytest.raises(ClosureFanoutExceeded) as exc:
+        idx.add_edge('p', 't', 's', 'p', 't', 'o')
+    msg = str(exc.value)
+    assert 'ReachabilityIndex(' not in msg
+    assert 'max_closure_fanout=' not in msg
+    assert f'with the {MAX_CLOSURE_FANOUT_ENV} environment variable' in msg
+    assert 'would add 24 permission-closure rows' in msg
+    session.close()
 
 
 def test_rejection_leaves_no_partial_state():

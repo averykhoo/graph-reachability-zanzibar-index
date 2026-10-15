@@ -11,6 +11,11 @@ Sabotage evidence (2026-10-07, TK122), each applied alone and reverted:
     Q1 flip the README's final `# False` to `# True`   -> 1 failed, 2 passed
     Q2 bump CHANGELOG's newest heading to 0.1.1        -> 1 failed, 2 passed
     Q3 add a static `version = "0.1.0"` to [project]   -> 1 failed, 2 passed
+
+TK123 item 22 (2026-10-15), after retargeting `_EXPECT` to the `print(...)` form:
+
+    Q4 flip the README's `print(...)  # True` to `# False`      -> AssertionError: store.check("user:alice", ...) (red)
+    Q5 unwrap both print(...) lines back to bare store.check() -> "the quickstart lost its checked expectations" (red)
 """
 import os
 import re
@@ -26,7 +31,10 @@ README = ROOT / "PYPI_README.md"
 CHANGELOG = ROOT / "CHANGELOG.md"
 PYPROJECT = ROOT / "pyproject.toml"
 
-_EXPECT = re.compile(r"^(\s*)(store\.check\(.*\))\s*#\s*(True|False)\s*$")
+# TK123 item 22: the quickstart PRINTS its checks (a pasted script shows output), so a
+# checked line is `print(store.check(...))  # True`. A bare `store.check(...)  # True` no
+# longer counts, so reverting to the old form drops below the n >= 2 floor (red).
+_EXPECT = re.compile(r"^(\s*)print\((store\.check\(.*\))\)\s*#\s*(True|False)\s*$")
 
 
 def _quickstart() -> str:

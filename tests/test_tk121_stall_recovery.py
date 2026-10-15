@@ -268,7 +268,7 @@ def test_rebuild_requires_an_existing_index_and_a_clean_session(session):
     with pytest.raises(ValueError, match='rebuild_index replaces an existing index'):
         build_index(session, 'src')
     with pytest.raises(ValueError, match='materializes source'):
-        rebuild_index(session, 'other', 'src')
+        rebuild_index(session, 'other', index_store_id='src')
     session.add(RelationTuple(store_id='x', subject_predicate='...', subject_type='user',
                         subject_name='a', relation='viewer', object_type='doc',
                         object_name='b'))
@@ -276,8 +276,8 @@ def test_rebuild_requires_an_existing_index_and_a_clean_session(session):
         rebuild_index(session, 'src')
     session.rollback()
     # a separate-id index rebuilds against its own source
-    build_index(session, 'src', 'idx')
-    report = rebuild_index(session, 'src', 'idx')
+    build_index(session, 'src', index_store_id='idx')
+    report = rebuild_index(session, 'src', index_store_id='idx')
     assert report[1].check(*MALLORY) is True
     assert session.exec(select(func.count()).select_from(IndexCursor)).one() == 2
 

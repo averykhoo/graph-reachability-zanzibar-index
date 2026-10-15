@@ -1,8 +1,8 @@
-"""build_index: the offline bootstrap builder (connected-store spec §4).
+"""build_index: the offline bootstrap builder.
 
 Materializes a graph index for an EXISTING tuple store: capture the log watermark,
 bulk-load the ``RelationTuple`` snapshot through the rewrite fan-out, run the delta
-processor's ``backfill()`` (the P6 bulk path), and set the cursor to the watermark.
+processor's ``backfill()`` (the bulk path), and set the cursor to the watermark.
 The Leopard paper's offline builder; the async worker then streams the tail.
 Deliberately NOT the async seam -- this is how any index is born, under either
 schedule.
@@ -12,11 +12,16 @@ persisted schema; a separate-id index gets the schema copied so it is
 self-describing too.
 
 ``rebuild_index`` is the same build run IN PLACE over an index that already exists:
-the recovery for an async index stalled behind a log row it can never apply (TK121,
-``docs/tk121-stall-recovery-2026-10-04.md``).
+the recovery for an async index stalled behind a log row it can never apply.
 """
+# Provenance (moved out of the docstring, TK123 item 14): the P6 bulk path.
+# Provenance (moved out of the docstring, TK123 item 14): connected-store spec §4.
+# Provenance (moved out of the docstring, TK123 item 14): TK121, ``docs/tk121-stall-
+# recovery-2026-10-04.md``.
 
 from __future__ import annotations
+
+from typing import NamedTuple
 
 from sqlalchemy import delete
 from sqlmodel import Session, select
@@ -27,71 +32,111 @@ from zanzibar.graphindex.models import ResidueRef, Residue
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.setengine.models import RelationTuple
 from zanzibar.schema import Entity, RelationalTriple, RuleSet
+from zanzibar.schema.errors import ZanzibarError
 
 from .apply import ensure_cursor, _norm
 from .models import IndexCursor
 from .schema_io import _persisted_schema_parse, ensure_schema, load_schema, open_graph_index
-from .source import log_watermark
+from .source import _require_clean_session, log_watermark
 
 
-class BuildReport(tuple):
-    """``build_index``'s return: the historical ``(cursor, widx, ruleset)``
-    3-tuple, plus ``.constructor`` naming WHICH branch actually ran --
+class IndexExists(ZanzibarError, ValueError):
+    """``build_index`` was pointed at an index that already exists: its store id has a
+    cursor or graph state. A fresh build wants a fresh index store id; to throw an
+    existing index's state away and build it again in place, call ``rebuild_index``.
+    A ``ValueError``, as this refusal always was."""
+
+    def __init__(self, index_store_id: str, detail: str):
+        self.index_store_id = index_store_id
+        super().__init__(
+            f"index {index_store_id!r} already exists ({detail}); build_index is for "
+            f"fresh builds (rebuild_index replaces an existing index in place)")
+
+
+class _BuildFields(NamedTuple):
+    cursor: IndexCursor
+    widx: WildcardIndex
+    ruleset: RuleSet
+
+
+class BuildReport(_BuildFields):
+    """``build_index``'s return: a named ``(cursor, widx, ruleset)`` 3-tuple -- the
+    ``IndexCursor`` at the build's watermark, the ``WildcardIndex`` and the compiled
+    ``RuleSet`` -- plus ``.constructor`` naming WHICH branch actually ran --
     ``'bulk'`` (``zanzibar.graphindex.bulk_build``) or ``'incremental'`` (the per-tuple
     ``widx.add_tuple`` replay + ``DeltaProcessor.backfill()``).
 
-    A plain ``tuple`` subclass, so every existing
+    A ``NamedTuple``, so ``report.cursor`` reads by name and every
     ``cursor, widx, ruleset = build_index(...)`` call site is untouched.
 
     WHY THIS FIELD EXISTS. The two constructors are byte-identical in effect by
-    design (P13's correctness bar), so no assertion about the resulting STATE --
+    design, so no assertion about the resulting STATE --
     anywhere, in any test -- can tell them apart. A flipped default, or a silent
     fallback added here, would downgrade every "bulk" test in the repo to a
     second run of the incremental path with nothing going red. Measured
-    2026-09-20 (`docs/tk91-tk80-removal-coverage-2026-09-20.md`): forcing
-    ``if bulk:`` to ``if False:`` left
-    ``formal/conformance/test_conformance_remove.py::test_graph_remove_bulk_build_survivors``
-    at ``26 passed, 104 deselected`` rc=0 while ``bulk_build`` ran 0 times
-    instead of 130. This is the repo's house failure mode -- an assurance step
-    that fails by PASSING -- and ``docs/sabotage-procedure.md`` prefers a
-    mechanical refusal over a doc warning, so callers that need the bulk path
-    refuse on this field (``formal/conformance/backends.py::bulk_build_drive``).
+    2026-09-20: forcing
+    ``if bulk:`` to ``if False:`` left the bulk-build conformance test green
+    while ``bulk_build`` ran 0 times instead of 130 -- an assurance step that
+    fails by PASSING. A mechanical refusal beats a doc warning, so callers
+    that need the bulk path refuse on this field.
 
     The label is assigned INSIDE each branch, AFTER that branch's constructor
     returns, and ``build_index`` gives it no default: deleting an assignment is
     an ``UnboundLocalError``, not a wrong label.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): P13's correctness bar; the
+    # measured sabotage ran
+    # formal/conformance/test_conformance_remove.py::test_graph_remove_bulk_build_survivors;
+    # docs/sabotage-procedure.md.
+    # Provenance (moved out of the docstring, TK123 item 14): `docs/tk91-tk80-removal-
+    # coverage-2026-09-20.md`; ``formal/conformance/backends.py::bulk_build_drive``.
 
     def __new__(cls, cursor: IndexCursor, widx: WildcardIndex,
                 ruleset: RuleSet, constructor: str) -> 'BuildReport':
         if constructor not in ('bulk', 'incremental'):
             raise ValueError(f'unknown build_index constructor {constructor!r}')
-        self = super().__new__(cls, (cursor, widx, ruleset))
+        self = super().__new__(cls, cursor, widx, ruleset)
         self.constructor = constructor
         return self
 
+    def __getnewargs__(self):
+        return (*self, self.constructor)
 
-def build_index(session: Session, source_store_id: str,
+    def _replace(self, **changes) -> 'BuildReport':
+        return BuildReport(*super()._replace(**changes), self.constructor)
+
+    def __repr__(self) -> str:
+        return (f'BuildReport(index_store_id={self.cursor.index_store_id!r}, '
+                f'applied_log_id={self.cursor.applied_log_id}, '
+                f'constructor={self.constructor!r})')
+
+
+def build_index(session: Session, source_store_id: str, *,
                 index_store_id: str | None = None,
-                *, bulk: bool = True,
+                bulk: bool = True,
                 ) -> BuildReport:
     """Build a fresh graph index from a tuple store's current snapshot.
 
-    One transaction (committed on success, rolled back on failure). Refuses to run
-    on an index that already has state -- a fresh build wants a fresh store; use
-    ``advance_index`` to catch an existing index up instead.
+    ``index_store_id`` is keyword-only (default: ``source_store_id``, the in-place
+    index a ``Store`` serves), so the two store ids cannot be swapped by position.
 
-    ``bulk`` (default True, P13) constructs the final pre-backfill state directly via
+    One transaction (committed on success, rolled back on failure). Raises
+    ``IndexExists`` on an index that already has state -- a fresh build wants a fresh
+    store; ``rebuild_index`` replaces an existing index in place.
+
+    ``bulk`` (default True) constructs the final pre-backfill state directly via
     ``zanzibar.graphindex.bulk_build`` -- one in-memory pass + bulk INSERTs -- instead of replaying
     every routed triple through the incremental ``widx.add_tuple``. ``bulk=False`` keeps
     that per-tuple loop; it is byte-identical in effect and is the identity gate's
-    reference side (``tests/test_bulk_build.py``). Everything else (guards, backfill,
+    reference side. Everything else (guards, backfill,
     watermark re-check, cursor) is shared by both paths.
 
-    Returns a `BuildReport`: the ``(cursor, widx, ruleset)`` tuple it has always
+    Returns a `BuildReport`: the named ``(cursor, widx, ruleset)`` tuple it has always
     returned, plus ``.constructor`` naming which of the two branches ran -- the
     only thing that distinguishes them, since their state is identical by design.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): P13.
+    # Provenance (moved out of the docstring, TK123 item 14): ``tests/test_bulk_build.py``.
     index_store_id = index_store_id or source_store_id
 
     _require_clean_session(session, 'build_index')
@@ -113,17 +158,13 @@ def build_index(session: Session, source_store_id: str,
             .where(IndexCursor.index_store_id == index_store_id)
         ).first()
         if existing_cursor is not None:
-            raise ValueError(
-                f"index {index_store_id!r} already exists (cursor at "
-                f"{existing_cursor.applied_log_id}); build_index is for fresh builds "
-                f"(rebuild_index replaces an existing index in place)")
+            raise IndexExists(index_store_id,
+                              f'cursor at {existing_cursor.applied_log_id}')
         has_nodes = session.exec(
             select(Node).where(Node.store_id == index_store_id).limit(1)
         ).first()
         if has_nodes is not None:
-            raise ValueError(
-                f"index store {index_store_id!r} already holds graph state; "
-                f"build_index is for fresh builds")
+            raise IndexExists(index_store_id, 'it already holds graph state')
 
         widx, ruleset = open_graph_index(session, index_store_id, ruleset=boot_ruleset)
         constructor = _materialise(session, source_store_id, index_store_id, widx,
@@ -140,16 +181,16 @@ def build_index(session: Session, source_store_id: str,
         raise
 
 
-def rebuild_index(session: Session, source_store_id: str,
+def rebuild_index(session: Session, source_store_id: str, *,
                   index_store_id: str | None = None,
-                  *, bulk: bool = True,
+                  bulk: bool = True,
                   ) -> BuildReport:
     """Throw away an EXISTING index's graph state and build it again, in place, from
-    the source's current snapshot (TK121). The recovery for an index the async apply
+    the source's current snapshot. The recovery for an index the async apply
     step cannot advance: a logged row the index refuses forever (``PathCountExceeded``
     -- a storage-width bound, never suspended) stalls ``catch_up`` in front of every
     later row, including the REMOVE that would undo it, so catch-up alone never gets
-    past it. Procedure and decision: ``docs/tk121-stall-recovery-2026-10-04.md``.
+    past it.
 
     In place because a ``Store`` always reads the index stored under its own
     store id; a separately-built index is one nothing in the composed system can serve.
@@ -175,6 +216,9 @@ def rebuild_index(session: Session, source_store_id: str,
     Stop the store's async worker first: a write committed during the rebuild makes it
     refuse with "concurrent writes", as ``build_index`` does.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): procedure and decision:
+    # docs/tk121-stall-recovery-2026-10-04.md.
+    # Provenance (moved out of the docstring, TK123 item 14): TK121.
     index_store_id = index_store_id or source_store_id
     _require_clean_session(session, 'rebuild_index')
 
@@ -219,13 +263,6 @@ def rebuild_index(session: Session, source_store_id: str,
     except Exception:
         session.rollback()
         raise
-
-
-def _require_clean_session(session: Session, surface: str) -> None:
-    if session.new or session.dirty or session.deleted:
-        raise ValueError(
-            f'{surface} owns the transaction (commit on success, rollback on '
-            f'failure): call it on a clean session, not one with pending changes')
 
 
 def _materialise(session: Session, source_store_id: str, index_store_id: str,

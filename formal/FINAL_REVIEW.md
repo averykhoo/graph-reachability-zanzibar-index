@@ -28,8 +28,8 @@ number INTO it over restating it.
 | quantity | value |
 |---|---|
 | `formal/conformance/` collected | **1178** |
-| `tests/` collected | **2543** |
-| whole-repo suite | **3721** |
+| `tests/` collected | **2657** |
+| whole-repo suite | **3835** |
 | differential conformance tests | **1095** across **19** files |
 | gate-tooling conformance tests | **83** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **728** |
@@ -39,7 +39,7 @@ number INTO it over restating it.
 | `corpus.SCHEMAS` | **27** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
 | spec-scope corpora (four dicts) | **35** = 27 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1178 (=135+1043), `MIN_TESTS_ALL`=2543, `EXPECTED_MIN_AUDITS`=460 |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1178 (=135+1043), `MIN_TESTS_ALL`=2657, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
 Driven fresh over all **25** `GRAPH_FRAGMENT` corpora through the real graph

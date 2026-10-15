@@ -33,6 +33,41 @@ from here.
 
 ---
 
+## 2026-10-15b — `TK123` closed: the public API break (items 3-26) landed under `[Unreleased]`
+
+rows: TK123 (closed), TK155 / TK156 / TK157 (new, LATER: the SPLIT items), TK154 (NEXT -> NOW), TK33 (read-first re-pathed)
+
+`task lint: clean (13 checks, 274 task file(s) parsed), 28 warning(s)`
+
+`read: show TK123`
+
+`asked: none`
+
+The user asked to finish `TK123` with ultracode subagents doing each subtask ("okay finish up
+tk123, coordinate ultracode subagents to do each subtask but don't do it yourself"). Item 3
+(`connectedstore` -> `store`, `ConnectedStore` -> `Store`, graph `Store` -> `IndexStore`) was
+gated and committed on its own (`36e2ed5`). Items 4-26 were built by per-cluster agents, each
+followed by a skeptical review agent and a fix pass; every landing, review verdict and sabotage
+result is appended dated at the top of
+[`docs/tk123-api-review-2026-10-14.md`](../tk123-api-review-2026-10-14.md), now FROZEN. Pins:
+`tests/test_tk123_*.py`; new module `src/zanzibar/schema/tuplestr.py` (the OpenFGA
+`"user:alice"` / `"group:eng#member"` string forms). CHANGELOG `[Unreleased]` names every break;
+the version stays 0.0.5 (0.1.0 is the release of this break, after `TK151`).
+- **SPLIT rows filed** (no open row covered them): `TK155` `Store.expand` (A26), `TK156`
+  lookup object-type/relation filter (A21b), `TK157` `Store`-level adopt helper (A25b).
+- **Re-rank:** closing `TK123` left no NOW row and the budget is exactly one, so `TK154` (the
+  0.0.5 trial's silent stale-id mistranslation, which touches the lookup-result code item 19
+  rewrote) goes NEXT -> NOW, as the 2026-10-15 plan proposed ("slot TK154 in early").
+- **Close addenda** (on `TK123` / `TK154`, and dated at the top of the review doc): the 13
+  GraphAdmission scope probes moved `ValueError` -> `SchemaError` (item 6's re-rooting only);
+  `MalformedTupleString` kept (item 23's natural refusal); `MIN_TESTS_ALL` ratcheted
+  2543 -> 2657; the PostgreSQL leg ran (`47 passed, 3 skipped`, the budgeted skips; server
+  stopped); `TK154` notes item 19 did not fix it.
+- These records were written first; then the full ten-phase gate ran on the tree and the work
+  was committed by path only after `gate_status.py` said COVERED. Not pushed.
+
+Still owed: nothing.
+
 ## 2026-10-15 — 0.0.5 release: the 2026-10-14 work recovered after a Windows update, gated, committed
 
 rows: TK123 (comment: items 1-2 landed)

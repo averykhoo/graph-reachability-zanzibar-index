@@ -2,19 +2,22 @@
 setengine -- a raw-tuple, bitmap-backed evaluation backend (spec: set-engine).
 
 The opposite endpoint of the memoization spectrum from the graph index: it stores only
-raw set memberships and computes reachability on the fly with bitmap algebra, adding
-boolean operators (`and`, `but not`) the closure index cannot represent.
+raw set memberships and computes reachability on the fly with bitmap algebra, `and` and
+`but not` included. Both backends give the same answers; ``zanzibar.store.Store`` keeps a
+set engine next to the graph index and falls back to it when the index is behind.
 """
 
 from .setops import SetOps, PySets, RoaringSets, DEFAULT_SETOPS, ALL_SETOPS
 from .memberset import MemberSet
 from .models import RelationTuple
-from .engine import (SetEngine, SetEngineBackend, Interner, NodeSets, LookupResult,
+from .engine import (SetEngine, SetEngineBackend, Interner, NodeSets, SetLookupResult,
                      UnloggedWriteRefused)
 
+# The public surface (`TK123` item 5). The import lines above stay, so the internal names
+# (``SetEngineBackend``, ``Interner``, ``NodeSets``, ``DEFAULT_SETOPS``, ``ALL_SETOPS``)
+# still import by name; they are just not part of the API.
 __all__ = [
-    'SetOps', 'PySets', 'RoaringSets', 'DEFAULT_SETOPS', 'ALL_SETOPS',
-    'MemberSet',
-    'RelationTuple', 'SetEngine', 'SetEngineBackend', 'Interner', 'NodeSets', 'LookupResult',
+    'SetEngine', 'SetLookupResult', 'MemberSet', 'RelationTuple',
+    'SetOps', 'PySets', 'RoaringSets',
     'UnloggedWriteRefused',
 ]

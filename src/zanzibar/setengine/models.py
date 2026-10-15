@@ -1,5 +1,5 @@
 """
-Persistence for the set engine (spec §1.2).
+Persistence for the set engine.
 
 ``RelationTuple`` is the missing *source of truth* the repo lacked: a raw-tuple table. The
 graph index stores *derived* edges (post-`RuleSet.apply`), so it cannot serve as ground
@@ -7,9 +7,10 @@ truth for a rewrite-free engine; JSON dumps of bitmaps are opaque and duplicate 
 The set engine rebuilds its in-memory state from these rows on open (replay), the oracle
 reads the same rows, and the validation harness gets one canonical op log.
 
-Bitmap snapshot persistence (`BitMap.serialize()` blobs) is a documented non-goal
-(spec §3/§10); state is in-memory, rebuilt on open.
+Bitmap snapshot persistence (`BitMap.serialize()` blobs) is a documented non-goal;
+state is in-memory, rebuilt on open.
 """
+# Provenance (moved out of the docstring, TK123 item 14): spec §1.2; spec §3/§10.
 
 import time
 

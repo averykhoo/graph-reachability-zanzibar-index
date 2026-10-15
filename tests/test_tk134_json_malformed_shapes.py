@@ -23,7 +23,7 @@ import copy
 
 import pytest
 
-from zanzibar.schema import openfga_json_to_dsl, parse_openfga_json
+from zanzibar.schema import SchemaError, openfga_json_to_dsl, parse_openfga_json
 
 USER = {'type': 'user'}
 
@@ -97,9 +97,11 @@ def test_malformed_shape_is_a_value_error_naming_the_field(label):
     for parse in (parse_openfga_json, openfga_json_to_dsl):
         with pytest.raises(ValueError, match=message) as info:
             parse(copy.deepcopy(model))
-        # ValueError exactly: a KeyError/TypeError is not a ValueError, but pin the class so a
-        # future subclass with a different contract is a deliberate edit, not an accident.
-        assert type(info.value) is ValueError
+        # SchemaError exactly (a ValueError; a KeyError/TypeError is not): pin the class so
+        # a future subclass with a different contract is a deliberate edit, not an accident.
+        # Was ``ValueError`` exactly until TK123 item 6 (2026-10-15) made every schema-parser
+        # refusal a ``SchemaError`` -- that deliberate edit.
+        assert type(info.value) is SchemaError
 
 
 def test_the_table_covers_the_rows_four_repros():

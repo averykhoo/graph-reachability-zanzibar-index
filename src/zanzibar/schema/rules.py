@@ -1,11 +1,13 @@
 """The relational-triple / pattern / rule data model, `SchemaInfo` and `RuleSet`.
 
-Part of `zanzibar.schema`; split out of the single-file module by TK120 (2026-10-06).
+Part of `zanzibar.schema`.
 """
+# Provenance (moved out of the docstring, TK123 item 14): split out of the single-file module
+# by TK120 (2026-10-06).
 from dataclasses import dataclass, field
 from types import EllipsisType
-from .errors import AdmissionRejected, is_valid_identifier
-from .syntax import Computed, Restriction
+from .errors import AdmissionRejected, SchemaError, is_valid_identifier
+from .syntax import Computed, DeclaredRelations, Restriction, no_restriction_reason
 
 
 @dataclass(frozen=True, slots=True, order=True, unsafe_hash=True)
@@ -158,15 +160,16 @@ class RewriteFilter(Filter):
     """An admission Filter that also *routes*: a raw tuple it matches is admitted with
     its relation rewritten to ``rewrite_relation`` (a compiled leaf predicate).
 
-    Boolean spec §3.3: users write derived relations by their public names only; each
+    Users write derived relations by their public names only; each
     ``Direct`` restriction inside a derived relation compiles to one of these, and in
     ``RuleSet.apply`` *every* matching RewriteFilter fires (fan-in expansion, all-match,
     deduped by resulting triple) -- unlike plain Filters, which stay first-match.
 
     Implemented as a subclass rather than a new field on ``Filter`` so the compiled
-    output of pure-union schemas stays byte-identical to its P0 snapshot (Filter reprs
-    unchanged); see docs/spec-deviations.md.
+    output of pure-union schemas stays byte-identical (Filter reprs unchanged).
     """
+    # Provenance (moved out of the docstring, TK123 item 14): boolean spec sec 3.3; the P0
+    # snapshot; docs/spec-deviations.md.
     rewrite_relation: str
 
 
@@ -184,13 +187,14 @@ class Rule:
 
 @dataclass(frozen=True)
 class SchemaInfo:
-    """Wildcard-shape metadata derived from a schema (spec §2.3).
+    """Wildcard-shape metadata derived from a schema.
 
     A *shape* is ``(entity_type, predicate)`` where predicate is ``'...'`` for a bare
     entity or a relation name for a userset. This is intentionally dumb: we never do
     static reachability analysis to elide bridges beyond the bare-shape rule below --
     an unnecessary O(1)-degree bridge is harmless, a missing bridge is a correctness bug.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): spec §2.3.
     subject_wildcard_shapes: frozenset[tuple[str, str]] = frozenset()   # (type, predicate); '...' for bare
     object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset()    # (type, relation)
     # Derived-predicate namespace facts (boolean spec §3.3/§3.4), populated only by a
@@ -226,17 +230,20 @@ class SchemaInfo:
 
         On such a shape ``(T, p)`` the two wildcard nodes compose through any
         concrete ``(T, x, p)`` -- "granted on all T#p" reaches "some T#p reaches ..."
-        the moment one instance exists (wildcard-materialization-spec §3.4). That
-        existential is ENTITY-wise (``tests/oracle.py::instances`` witnesses it with
+        the moment one instance exists. That
+        existential is ENTITY-wise (the reference oracle witnesses it with
         any tuple-mentioned entity of type ``T``, whatever relation mentioned it), so
         the concrete middle must track ENTITY existence rather than node existence:
         the graph index interns ``(T, x, p)`` -- with both bridges -- for every live
-        entity ``x`` of type ``T`` (``WildcardIndex._ensure_entity_middles``,
-        invariant I14; docs/spec-deviations.md 2026-08-09).
+        entity ``x`` of type ``T`` (``WildcardIndex._ensure_entity_middles``).
 
         Because ``bridged_in_shapes`` excludes bare ``(T, '...')`` shapes, plain
         OpenFGA ``[user:*]`` usage is never crossable and keeps costing zero bridges
         and zero middles."""
+        # Provenance (moved out of the docstring, TK123 item 14):
+        # ``tests/oracle.py::instances``; invariant I14, docs/spec-deviations.md 2026-08-09.
+        # Provenance (moved out of the docstring, TK123 item 14): wildcard-materialization-
+        # spec §3.4.
         return self.bridged_in_shapes & self.bridged_out_shapes
 
 
@@ -250,6 +257,9 @@ class RuleSet:
     # Boolean-compile artifacts (boolean spec §3.4); None for pure-union schemas
     # compiled without enable_boolean and for hand-built rulesets.
     compiled: 'CompiledBooleans | None' = None
+    # What the schema declares, for the admission refusal's explanation only (TK123
+    # item 17); set by ``compile_ruleset``, None for hand-built rulesets. Never compared.
+    declared: DeclaredRelations | None = field(default=None, compare=False, repr=False)
 
     def _build_dispatch(self) -> None:
         """Indexed dispatch (boolean spec §1.12): key Filters/Rules by their if-pattern
@@ -318,7 +328,8 @@ class RuleSet:
                 # ONE admission rule, so it carries the rejection type.
                 raise AdmissionRejected(
                     f"tuple {relational_triple} matches no declared type restriction "
-                    f"for derived relation {o_type}#{rel}")
+                    f"for derived relation {o_type}#{rel}"
+                    + no_restriction_reason(self.declared, o_type, rel))
         else:
             # Pure-union relations keep first-match admission semantics, unchanged.
             for _, flt in self._candidates(self._plain_filters, rel):
@@ -359,7 +370,8 @@ class RuleSet:
                 # ValueError, so that promotion is untouched.
                 raise AdmissionRejected(
                     f"tuple {relational_triple} matches no declared type restriction "
-                    f"for {o_type}#{rel}")
+                    f"for {o_type}#{rel}"
+                    + no_restriction_reason(self.declared, o_type, rel))
 
         # Fast path (the dominant case: a direct restriction with no rewrite rule):
         # if no rule can fire on any seed relation the worklist can never grow, and
@@ -399,7 +411,8 @@ def norm_pred(pred: 'str | EllipsisType | None') -> str:
     (the oracle keeps its own by the independence contract).
 
     ``None -> '...'`` is READ-side leniency only. A write validates the RAW predicate
-    first (``validate_write_identifiers`` refuses ``None``), then normalises (TK125)."""
+    first (``validate_write_identifiers`` refuses ``None``), then normalises."""
+    # Provenance (moved out of the docstring, TK123 item 14): TK125.
     return '...' if (pred is Ellipsis or pred is None) else pred
 
 
@@ -407,7 +420,7 @@ def parse_relation_rule(
         rule: str,
 ) -> tuple[list[tuple[str | None, str | None, str | None]], list[tuple[str, str]]]:
     """
-    Parse one bracketed type-restriction list (spec §2.1) into direct assignments:
+    Parse one bracketed type-restriction list into direct assignments:
     (type, predicate, name) tuples, where name is '*' for a wildcard declaration
     (`T:*` / `T:*#P`), else None. The second tuple element is always empty -- it
     held 'X from Y' pairs when this function also parsed rewrite references; the
@@ -420,21 +433,22 @@ def parse_relation_rule(
         "[user:*]" -> ([(user, None, '*')], [])
         "[group:*#member]" -> ([(group, member, '*')], [])
     """
+    # Provenance (moved out of the docstring, TK123 item 14): spec §2.1.
     direct_assignments: list[tuple[str | None, str | None, str | None]] = []
 
     # Bracket lists only (blind-audit S-4: '[user from x]' used to hit a
     # ' from ' fallback branch and silently parse to an empty, un-writable Direct).
     if not rule.startswith('['):
-        raise ValueError(f'expected a bracketed type-restriction list, got {rule!r}')
+        raise SchemaError(f'expected a bracketed type-restriction list, got {rule!r}')
     subjects = rule[1:].split(']')[0].split(',')
     if not any(s.strip() for s in subjects):
-        raise ValueError(f'empty type-restriction list in {rule!r}')
+        raise SchemaError(f'empty type-restriction list in {rule!r}')
     for subject in subjects:
         subject = subject.strip()
         if not subject:
-            raise ValueError(f'empty entry in type-restriction list {rule!r}')
+            raise SchemaError(f'empty entry in type-restriction list {rule!r}')
         if subject.count('#') > 1:
-            raise ValueError(f'malformed restriction {subject!r} (multiple #)')
+            raise SchemaError(f'malformed restriction {subject!r} (multiple #)')
         if '#' in subject:
             # type#relation or type:*#relation
             left, subject_predicate = subject.split('#')
@@ -450,9 +464,9 @@ def parse_relation_rule(
         # garbage like '[group#]' / '[user: *]' previously produced dead,
         # never-matching Filters instead of a parse error (blind-audit S-4)
         if not is_valid_identifier(subject_type):
-            raise ValueError(f'invalid subject type in restriction {subject!r}')
+            raise SchemaError(f'invalid subject type in restriction {subject!r}')
         if subject_predicate is not None and not is_valid_identifier(subject_predicate):
-            raise ValueError(f'invalid userset relation in restriction {subject!r}')
+            raise SchemaError(f'invalid userset relation in restriction {subject!r}')
         direct_assignments.append((subject_type, subject_predicate, subject_name))
     return direct_assignments, []
 

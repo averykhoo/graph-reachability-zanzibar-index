@@ -287,7 +287,7 @@ def _bulk_reference(tuples):
     for raw in tuples:
         src.add(*raw)
     session.commit()
-    _, widx, _ = build_index(session, 'src', 'bulk', bulk=True)
+    _, widx, _ = build_index(session, 'src', index_store_id='bulk', bulk=True)
     return session, widx
 
 

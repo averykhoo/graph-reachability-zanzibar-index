@@ -11,9 +11,9 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-07b
-moved: 2026-10-15
-updated: 2026-10-15
-closed:
+moved: 2026-10-15b
+updated: 2026-10-15b
+closed: 2026-10-15b
 ---
 
 The user asked on 2026-10-07 for a later pass over the public API's naming and ergonomics,
@@ -120,3 +120,9 @@ Accept-list items 1-2 LANDED (written 2026-10-14, uncommitted when a Windows upd
 0.0.5 install trial (docs/pypi-trial-0.0.5-2026-10-15.md): findings that are ALREADY on the accept list, so no new row: F5 bare KeyError on an unknown store id -> item 12 (StoreNotFound); F5 StaleRead for a never-issued token -> item 11; F5 terse SchemaMismatch on reopen -> item 18; F3 internal ids (ZT-, TK, spec sec, tests/, docs/) in docstrings and F12 warning citing formal/ + ASK-2 -> item 14; F12 warning emitted twice per ConnectedStore -> item 15; F13 fanout message naming an unreachable ctor arg -> item 16; F13 undocumented fixpoint paranoia -> item 9; F3 SetEngine.check has no docstring -> item 21; F4 duplicate add returns the head id, F16 ids valid until the next write, F19 never expand a userset node -> item 22 (PYPI_README). Not on the list: TK153 (LATER). The silent stale-id mistranslation (F16, confirmed first-hand) is TK154 (NEXT).
 
 Accept-list item 3 LANDED (the rename, A1/A45): package zanzibar.connectedstore -> zanzibar.store (inner store.py -> _store.py), ConnectedStore -> store/_store.py::Store, graphindex/models.py::Store -> IndexStore (table name zanzibar_store unchanged). No shims. Pins: tests/test_tk123_rename.py (old imports fail, leftover-dir refusal, old-name line scan of src + PYPI_README with a permanent sabotage test). claim_rot re-generated (pure re-path), MIN_TESTS_ALL ratcheted by the 5 new tests. CHANGELOG [Unreleased] Changed + overview.md 'Renamed in TK123' key. Deliberately NOT rewritten: formal/lean comment cites (rebuild cost), HANDOFF, dated/history docs, tasks. Detail: docs/tk123-api-review-2026-10-14.md landing entry 2026-10-15. Full phased gate run before commit. Next action: item 4 (lazy top-level imports), then items 5-26 per the build plan.
+
+### 2026-10-15b
+
+LANDED, all 26 accept-list items. Items 1-2 shipped in 0.0.5 (b17759e); item 3 (connectedstore -> store, ConnectedStore -> Store, graph Store -> IndexStore) in 36e2ed5; items 4-26 in the 2026-10-15b commit: top-level re-exports and trimmed __all__, ZanzibarError base (InvariantViolation stays outside), SetLookupResult rename, clearer argument names, OpenFGA "user:alice" / "group:eng#member" string forms (src/zanzibar/schema/tuplestr.py), Store(schema=...) accepting OpenFGA JSON, StoreNotFound, order-insensitive SchemaMismatch, TablesNotCreated, IndexExists, named BuildReport fields, at_least validation, Store.result_keys / excluded_keys returning (type, name, predicate) keys (settles TK138 D3a), internal ticket ids removed from messages and docstrings, the extension warning shown once, docstrings, and the interim PYPI_README sections (item 22). Pins: tests/test_tk123_*.py. Per-item landings, sabotage evidence and reviews: docs/tk123-api-review-2026-10-14.md (now FROZEN). CHANGELOG [Unreleased] names every break; version stays 0.0.5. SPLIT rows filed: TK155 (Store.expand), TK156 (lookup type/relation filter), TK157 (Store-level adopt helper). Full gate green on the committed tree. 0.1.0 now waits only on the docs (TK151).
+
+Close addenda (agent gate-commit3, first-hand unless marked). (1) GRAPHADMISSION_SCOPE re-adjudicated: formal/conformance/graphadmission_scope_probes.py::SCHEMA_PROBES recorded the exact class name; 13 probes moved "ValueError" -> "SchemaError". That is purely item 6's decided re-rooting (SchemaError subclasses ValueError; no refusal appeared or vanished; the other 5 probes unchanged); provenance comment dated in the file. (2) DECISION: MalformedTupleString (src/zanzibar/schema/tuplestr.py) is a new public exception NOT on the accept list; kept, because it is the natural refusal for item 23's string form (rooted at ZanzibarError, ValueError builtin base kept) and inventing nothing would mean a bare ValueError the item-6 rule forbids. REASONED. (3) PostgreSQL leg RUN (ZANZIBAR_PG_REQUIRED=1, items 10-13/18 touch store sessions): test_postgres_ha, test_concurrency, test_connectedstore_concurrency, test_connectedstore_multi_instance, test_tk140_one_write_path: 47 passed, 3 skipped (the budgeted SQLite-WAL-only skips, MAX_TESTS_SKIPPED_ON_RDBMS=3); server stopped. (4) Floors ratcheted up by doc_counts --generate: MIN_TESTS_ALL 2543 -> 2657; MIN_CONF_ALL unchanged at 1178 (= live).

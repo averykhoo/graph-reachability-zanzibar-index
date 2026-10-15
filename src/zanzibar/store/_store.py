@@ -22,30 +22,38 @@ Transaction semantics: ``write`` commits on success and rolls back on rejection
 
 from __future__ import annotations
 
+import json
+from typing import overload
+
 from sqlalchemy import func
+from sqlalchemy.exc import DBAPIError
 from sqlmodel import Session, select
 
 from zanzibar.graphindex.core import probe_store_write_lock
 from zanzibar.graphindex.invariants import (PARANOIA_ENV_VAR, PARANOIA_OFF,
                                  install_paranoia, resolve_paranoia_level)
 from zanzibar.graphindex.processor import DeltaProcessor
+from zanzibar.graphindex.wildcard import LookupResult
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import AdmissionRejected, validate_store_id
+from zanzibar.schema.errors import SchemaError, ZanzibarError, reject_ellipsis_predicate
+from zanzibar.schema.json_frontend import _reject_duplicate_json_keys, openfga_json_to_dsl
+from zanzibar.schema.tuplestr import lookup_args, lookup_reverse_args, tuple_args
 
 from zanzibar.setengine.models import RelationTuple
 
 from .apply import advance_index, ensure_cursor
 from .models import IndexCursor, TupleLog
-from .schema_io import ensure_schema, open_graph_index
+from .schema_io import TablesNotCreated, ensure_schema, missing_tables, open_graph_index
 # StaleRead lives with the evaluator that raises it first (TupleSource.check);
 # re-exported here for backward compatibility.
-from .source import StaleRead, TupleSource, assert_read_isolation
+from .source import (StaleRead, TupleSource, _require_clean_session, assert_read_isolation,
+                     token_diagnosis, validate_token)
 
 
 class LookupNotFresh(StaleRead):
     """A ``lookup`` / ``lookup_reverse`` carrying an ``at_least`` token could not be
-    served, because the index lags the token and the lookup surface has NO fallback
-    (zero-trust review ZT-P1-8b).
+    served, because the index lags the token and the lookup surface has NO fallback.
 
     ``check`` can fall back to the set engine when the index lags: it returns a bool,
     so which backend answered is invisible. The lookup surfaces cannot, because the two
@@ -57,25 +65,29 @@ class LookupNotFresh(StaleRead):
       DOMAIN of a result depending on how far behind the worker happened to be;
     * markers are ``(type, predicate, variant)`` on the graph and ``(type, predicate)``
       on the set engine, and ``excluded_node_ids`` ("everyone of this shape except
-      these", the ``neg`` channel) is filled on both sides since TK139 but, like
+      these", the ``neg`` channel) is filled on both sides but, like
       ``node_ids``, in each backend's own id domain.
 
     Unifying that contract is a real, breaking API change with its own oracle-gate
-    arc (``docs/architecture/decision-log.md``, round 3). Until it lands, the honest
+    arc. Until it lands, the honest
     behaviour under an explicit freshness demand is to REFUSE: silently serving the
     stale enumeration is how a revoked principal stays listed in a revocation UI, and
     silently swapping id domains is a different bug in a nicer costume.
 
-    RECOVERABLE: run the apply step (``Store.catch_up()`` -- an instance may
-    run it; it IS the async worker's body) or wait for the worker, then retry. For a
+    RECOVERABLE: run the apply step (``Store.catch_up()``, which any instance may
+    run; an async deployment schedules it), then retry. For a
     single yes/no decision, ``check(..., at_least=...)`` has the fallback and needs no
     catch-up."""
+    # Provenance (moved out of the docstring, TK123 item 14): zero-trust review ZT-P1-8b; the
+    # neg channel since TK139.
+    # Provenance (moved out of the docstring, TK123 item 14): ``docs/architecture/decision-
+    # log.md``, round 3.
 
 
 class IndexStalled(LookupNotFresh):
     """An UNTOKENED ``lookup`` / ``lookup_reverse`` was refused because the apply step
     has recorded a stall: the last ``catch_up`` failed to advance past the cursor, so
-    the index's staleness is no longer bounded (TK111/TK112).
+    the index's staleness is no longer bounded.
 
     An untokened read is documented as bounded-stale: the index trails the log by
     whatever the async worker has not applied YET. A row the index cannot apply at all
@@ -88,17 +100,19 @@ class IndexStalled(LookupNotFresh):
     RECOVERABLE once the stall clears: any successful ``catch_up`` batch ends it. A
     stall recorded on a transient failure (a lock timeout, a lost connection) clears on
     the next good batch. A poison row needs operator action, and
-    ``Store.stall_error`` says which row failed and why. Since TK112 the
+    ``Store.stall_error`` says which row failed and why. The
     fan-out cap is suspended in ``catch_up``, so the poison row left is a path-count
     overflow (``PathCountExceeded``). It never clears by itself, not even when a later
     REMOVE undoes it, because that REMOVE waits behind it. Remove the tuple at the
-    source, then ``store.rebuild_index`` (TK121,
-    ``docs/tk121-stall-recovery-2026-10-04.md``)."""
+    source, then ``store.rebuild_index``."""
+    # Provenance (moved out of the docstring, TK123 item 14): TK112.
+    # Provenance (moved out of the docstring, TK123 item 14): TK111/TK112; TK121,
+    # ``docs/tk121-stall-recovery-2026-10-04.md``.
 
 
-class UnloggedTuplesPresent(RuntimeError):
+class UnloggedTuplesPresent(ZanzibarError, RuntimeError):
     """``Store`` refused to adopt a store id whose ``RelationTuple`` rows the
-    ``TupleLog`` does not account for (TK140; 0.0.4 trial BROKEN-3, p09).
+    ``TupleLog`` does not account for.
 
     A ``Store`` open that CREATES the index's cursor starts the graph index
     empty and advances it from the log alone. Tuples written without a log row -- by a
@@ -106,8 +120,42 @@ class UnloggedTuplesPresent(RuntimeError):
     would be invisible to the index (``check`` False while the set engine says True), and
     removing one would raise ``InvariantViolation`` ("corruption"). The bootstrap for a
     store that already has tuples is ``save_schema`` + ``build_index``, which materialise
-    the index from the ``RelationTuple`` snapshot instead of from the log.
-    ``docs/tk140-one-write-path-per-store-2026-10-13.md``."""
+    the index from the ``RelationTuple`` snapshot instead of from the log."""
+    # Provenance (moved out of the docstring, TK123 item 14): TK140; 0.0.4 trial BROKEN-3,
+    # p09; docs/tk140-one-write-path-per-store-2026-10-13.md.
+
+
+def _schema_text(schema) -> str | None:
+    """The DSL text to persist for ``Store(schema=...)`` (TK123 item 26).
+
+    A ``str`` that does not start with ``{`` is DSL and passes through unchanged. An
+    OpenFGA JSON model -- a ``dict``, or a ``str`` starting with ``{`` -- is converted to
+    DSL with ``openfga_json_to_dsl`` BEFORE it is saved or compared, so reopening a store
+    with the same JSON compares DSL with DSL. The ``{"authorization_model": {...}}``
+    envelope an OpenFGA server's ReadAuthorizationModel response wraps a model in is
+    unwrapped. Anything else (a compiled ``RuleSet`` included) is a ``TypeError``."""
+    if schema is None:
+        return None
+    if isinstance(schema, str):
+        if not schema.lstrip().startswith('{'):
+            return schema
+        try:
+            model = json.loads(schema, object_pairs_hook=_reject_duplicate_json_keys)
+        except json.JSONDecodeError as exc:
+            raise SchemaError(f'schema starts with {{ but is not valid OpenFGA JSON: '
+                              f'{exc}') from None
+    elif isinstance(schema, dict):
+        model = schema
+    else:
+        raise TypeError(
+            f'schema must be the DSL text (a str) or an OpenFGA JSON model (a str or a '
+            f'dict), not {type(schema).__name__}'
+            + ('; pass the schema text the RuleSet was compiled from'
+               if type(schema).__name__ == 'RuleSet' else ''))
+    if (isinstance(model, dict) and 'type_definitions' not in model
+            and isinstance(model.get('authorization_model'), dict)):
+        model = model['authorization_model']
+    return openfga_json_to_dsl(model)
 
 
 def _adoption_counts(session: Session, store_id: str) -> tuple[int, int, int]:
@@ -164,13 +212,14 @@ def _reject_unlogged_adoption(session: Session, store_id: str) -> None:
     # INSTEAD: save_schema(session, id, schema) if the store has none, commit, then
     # build_index(session, id) -- it materialises the index from the RelationTuple
     # snapshot -- and open Store(session, id) without schema=.
+    # Provenance: TK140 (one write path).
     raise UnloggedTuplesPresent(
         f'store {store_id!r} already has {n_tuples} RelationTuple row(s) but its tuple '
         f'log accounts for {n_add - n_remove} (ADD {n_add} - REMOVE {n_remove}): they were '
         f'written without the log (by a standalone SetEngine on this store id), and a '
         f'Store index born here would never see them -- check would answer '
         f'False while the set engine answers True, and removing one would be reported '
-        f'as corruption (TK140). To adopt an existing tuple store: '
+        f'as corruption. To adopt an existing tuple store: '
         f'zanzibar.store.save_schema(session, {store_id!r}, schema) if it has '
         f'no schema yet, session.commit(), then '
         f'zanzibar.store.build_index(session, {store_id!r}) (it builds the index '
@@ -179,9 +228,24 @@ def _reject_unlogged_adoption(session: Session, store_id: str) -> None:
 
 
 class Store:
-    """One permission store, end to end: validated writes into the tuple log +
-    synchronously-maintained graph index; index-served reads with freshness
-    fallback."""
+    """One permission store, end to end: validated writes into the tuple log, a graph
+    index maintained from that log, and index-served reads.
+
+    Every write commits and returns a freshness token (an ``int``, the write's log id).
+    With ``sync=True`` (the default) the write also updates the index, so this
+    instance's reads see it at once. With ``sync=False`` the index advances only when
+    ``catch_up()`` runs, which the caller schedules (no worker ships). Until then an
+    UNTOKENED ``check`` / ``lookup`` reads the index as it is and can be stale in both
+    directions, a revoked grant still reading as allowed included. Only a ``check``
+    given ``at_least=token`` falls back to the set engine when the index is behind the
+    token; a tokened lookup raises ``LookupNotFresh`` instead. ``sync`` is per instance
+    and is not stored.
+
+    ``watermark()`` and ``lag()`` are methods, not properties, because each runs a
+    query (``lag()`` a COUNT).
+
+    Give the store a ``Session`` of its own: it commits on open and on every write, and
+    rolls back on a refused write and in ``refresh()``."""
 
     #: Paranoia level when neither the constructor argument nor ``ZANZIBAR_PARANOIA``
     #: says otherwise.
@@ -208,17 +272,22 @@ class Store:
     DEFAULT_PARANOIA = PARANOIA_OFF
 
     def __init__(self, session: Session, store_id: str, *,
-                 schema: str | None = None,
+                 schema: str | dict | None = None,
                  object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
                  ops: SetOps = DEFAULT_SETOPS,
                  sync: bool = True,
-                 paranoia: bool | str | None = None):
+                 paranoia: bool | int | str | None = None):
         """Open (or bootstrap, when ``schema`` is given) a connected store.
+
+        ``schema`` is the OpenFGA DSL text, or an OpenFGA JSON model as a ``dict`` or a
+        JSON string (also wrapped as ``{"authorization_model": {...}}``, the shape an
+        OpenFGA server returns). JSON is converted to DSL before it is saved, so the
+        persisted schema is always DSL. A compiled ``RuleSet`` is not accepted.
 
         A passed schema is persisted write-once via ``ensure_schema``; passing one
         that disagrees with the store's persisted schema is a loud error. "Disagrees"
         means a different PARSED schema: reopening with the same schema re-indented,
-        with CRLF line endings, comments or reordered type blocks is accepted (`TK136`).
+        with CRLF line endings, comments or reordered type blocks is accepted.
 
         ``sync=True`` (default) inlines the apply step into every write (cursor at
         the log head). ``sync=False`` is the async schedule: writes land in the
@@ -226,25 +295,32 @@ class Store:
         loop), and token-carrying ``check``s fall back to the set engine while it
         lags (token-carrying LOOKUPs raise ``LookupNotFresh`` instead -- see there).
 
-        ``paranoia`` wires the runtime invariant layer (``zanzibar.graphindex.invariants``,
-        boolean spec §8.1) into this store's commits. Before this parameter existed
+        ``paranoia`` wires the runtime invariant layer (``zanzibar.graphindex.invariants``)
+        into this store's commits. Before this parameter existed
         the layer had two callers, both tests, so every runtime corruption detector
-        was dark in production (zero-trust review ZT-P1-3). Levels:
+        was dark in production. Levels:
 
         * ``'off'`` / ``False`` -- no checking. **The default** -- see
           ``DEFAULT_PARANOIA`` for the measurement behind that choice.
-        * ``'residue'`` -- **the recommended production setting.** The I6
-          residue-hygiene family, checked pre-commit over the store's residue rows
+        * ``'residue'`` -- **the recommended production setting.** The
+          residue-hygiene invariants, checked pre-commit over the store's residue rows
           and the node ids they name: the runtime detector for the
-          dangling-``upos``/``neg`` corruption class (the ZT-P0-1 authorization
+          dangling-``upos``/``neg`` corruption class (an authorization
           escalation -- a residue vouching for a recycled rowid). O(residue rows),
           no full node/edge scan, no BFS. Measured +4.3%/+5.7% on the sync write
           path at 162/478 per-write commits; reads are untouched.
-        * ``'full'`` / ``True`` -- everything: I1-I7/I10/I13 plus the delta-scoped
+        * ``'full'`` / ``True`` -- every state invariant in that module plus the delta-scoped
           BFS verifier, pre- and post-commit. O(store) per commit -- measured
-          +124%/+303% on the same two workloads (and 4.8-10x in
-          ``benchmarks/results/BASELINE_2026-07-13.md``). A prerelease/test tier;
+          +124%/+303% on the same two workloads (and 4.8-10x on
+          an earlier write benchmark). A prerelease/test tier;
           do not run it under production write load.
+        * ``'fixpoint'`` -- everything ``'full'`` runs, plus a per-cascade check that
+          every derived key a boolean cascade scheduled ended at a fixpoint. Roughly
+          doubles cascade cost: a diagnosis tier, never a production one. Only an
+          explicit ``'fixpoint'`` selects it.
+
+        The ints ``1`` / ``0`` are accepted as ``'full'`` / ``'off'``, like the booleans;
+        any other value raises ``ValueError``.
 
         **Fail-closed:** a violation raises ``InvariantViolation`` inside
         ``before_commit``, so the write's commit never happens and ``_write``'s
@@ -252,58 +328,83 @@ class Store:
         carries the store id, the commit phase, and the violated clause.
 
         Precedence: this argument (when not ``None``) > the ``ZANZIBAR_PARANOIA``
-        environment variable (``off``/``residue``/``full``, or ``0``/``1``) >
+        environment variable (``off``/``residue``/``full``/``fixpoint``, or ``0``/``1``) >
         ``Store.DEFAULT_PARANOIA``. So an operator can turn the layer up or
         off in a deployment without a code change, and a caller that has made an
         explicit choice is never overridden by the environment.
         """
+        # Provenance (moved out of the docstring, TK123 item 14): boolean spec sec 8.1;
+        # residue = the I6 family, ZT-P0-1; full = I1-I7/I10/I13; 4.8-10x is
+        # benchmarks/results/BASELINE_2026-07-13.md.
+        # Provenance (moved out of the docstring, TK123 item 14): `TK136`; zero-trust review
+        # ZT-P1-3.
         # TK127 follow-up (2026-10-08): a non-str / blank store id is refused before any
         # statement (``None`` used to reach the NOT NULL column as a raw IntegrityError).
         validate_store_id(store_id)
+        # TK123 item 26: JSON -> DSL (and the type check) before any statement runs.
+        schema = _schema_text(schema)
+        # TK123 item 10: this class owns its transactions (it commits on success and
+        # rolls back on failure), so a caller's pending ORM rows would ride along.
+        _require_clean_session(session, 'Store')
         self.session = session
         self.store_id = store_id
         self.sync = sync
         self.paranoia = resolve_paranoia_level(paranoia, default=self.DEFAULT_PARANOIA)
-        # ZT-P1-5: refuse a bind whose read snapshot can hide a committed log row --
-        # anything but READ COMMITTED on a real MVCC server -- before anything else
-        # touches the database, because every freshness guarantee in this class rests on
-        # the catch-up reaching the real head. Not theoretical on the supported server: a
-        # SERIALIZABLE bind was shown to certify a revoked grant as ALLOWED
-        # (tests/test_postgres_ha.py::test_serializable_bind_is_refused). Dialect-aware:
-        # a no-op on SQLite, where there is no server-side level to pin.
-        assert_read_isolation(session)
-        # ZT-P1-4: on a SQLite bind, take the real per-store write lock once, right
-        # here, and verify it actually HELD -- an autocommit-configured connection
-        # releases it instantly, which silently un-atomizes every write's check-then-act
-        # admission (two writers both pass, against a state their combined result
-        # invalidates). Fail at open, with the configuration fix in the message, rather
-        # than corrupting state under concurrency later. FIRST statement of the
-        # transaction on purpose (see ``probe_store_write_lock``); released by this
-        # constructor's own bootstrap commit below.
-        probe_store_write_lock(session, store_id)
-        # TK140 (0.0.4 trial BROKEN-3): refuse to be BORN over tuples the log cannot
-        # replay, before anything (the SchemaRecord included) is written.
-        _reject_unlogged_adoption(session, store_id)
-        boot_ruleset = None
-        if schema is not None:
-            # On first bootstrap ensure_schema compiles the schema; reuse that
-            # RuleSet below instead of re-parsing the identical text.
-            _, boot_ruleset = ensure_schema(session, store_id, schema, object_wildcard_shapes)
-            session.flush()
-        # Graph side first: its compiled RuleSet is handed to the set engine so the
-        # shared schema is parsed + compiled once, not once per backend.
-        self.widx, self.ruleset = open_graph_index(session, store_id, ruleset=boot_ruleset)
-        self.source = TupleSource(session, store_id, ops=ops, ruleset=self.ruleset)
-        compiled = self.ruleset.compiled
-        self.proc = (DeltaProcessor(self.widx, compiled)
-                     if compiled is not None and compiled.plans else None)
-        self.cursor = ensure_cursor(session, store_id, store_id)
-        # Blind-audit X3: the bootstrap rows (schema/store/cursor) used to ride the
-        # session transaction un-committed -- so the FIRST rejected write (an
-        # ordinary ValueError!) or one documented refresh() poll rolled them back
-        # and bricked the instance; a read-only open also held the write lock for
-        # its lifetime. The class owns commits everywhere else; it owns this one too.
-        self.session.commit()
+        # TK123 item 12: every failure past this point rolls back BEFORE it propagates, so
+        # a refused open (StoreNotFound above all) never leaves the SQLite write lock
+        # taken by ``probe_store_write_lock`` held on the caller's session.
+        try:
+            # ZT-P1-5: refuse a bind whose read snapshot can hide a committed log row --
+            # anything but READ COMMITTED on a real MVCC server -- before anything else
+            # touches the database, because every freshness guarantee in this class rests on
+            # the catch-up reaching the real head. Not theoretical on the supported server: a
+            # SERIALIZABLE bind was shown to certify a revoked grant as ALLOWED
+            # (tests/test_postgres_ha.py::test_serializable_bind_is_refused). Dialect-aware:
+            # a no-op on SQLite, where there is no server-side level to pin.
+            assert_read_isolation(session)
+            # ZT-P1-4: on a SQLite bind, take the real per-store write lock once, right
+            # here, and verify it actually HELD -- an autocommit-configured connection
+            # releases it instantly, which silently un-atomizes every write's check-then-act
+            # admission (two writers both pass, against a state their combined result
+            # invalidates). Fail at open, with the configuration fix in the message, rather
+            # than corrupting state under concurrency later. FIRST statement of the
+            # transaction on purpose (see ``probe_store_write_lock``); released by this
+            # constructor's own bootstrap commit below.
+            probe_store_write_lock(session, store_id)
+            # TK140 (0.0.4 trial BROKEN-3): refuse to be BORN over tuples the log cannot
+            # replay, before anything (the SchemaRecord included) is written.
+            _reject_unlogged_adoption(session, store_id)
+            boot_ruleset = None
+            if schema is not None:
+                # On first bootstrap ensure_schema compiles the schema; reuse that
+                # RuleSet below instead of re-parsing the identical text.
+                _, boot_ruleset = ensure_schema(session, store_id, schema, object_wildcard_shapes)
+                session.flush()
+            # Graph side first: its compiled RuleSet is handed to the set engine so the
+            # shared schema is parsed + compiled once, not once per backend.
+            self.widx, self.ruleset = open_graph_index(session, store_id, ruleset=boot_ruleset)
+            self.source = TupleSource(session, store_id, ops=ops, ruleset=self.ruleset)
+            compiled = self.ruleset.compiled
+            self.proc = (DeltaProcessor(self.widx, compiled)
+                         if compiled is not None and compiled.plans else None)
+            self.cursor = ensure_cursor(session, store_id, store_id)
+            # Blind-audit X3: the bootstrap rows (schema/store/cursor) used to ride the
+            # session transaction un-committed -- so the FIRST rejected write (an
+            # ordinary ValueError!) or one documented refresh() poll rolled them back
+            # and bricked the instance; a read-only open also held the write lock for
+            # its lifetime. The class owns commits everywhere else; it owns this one too.
+            self.session.commit()
+        except Exception as exc:
+            session.rollback()
+            if isinstance(exc, DBAPIError):
+                # TK123 item 18: a skipped create_all surfaces as the driver's own
+                # message ("no such table" on SQLite, "relation ... does not exist" on
+                # PostgreSQL); ask the inspector instead of matching either text.
+                missing = missing_tables(session)
+                session.rollback()
+                if missing:
+                    raise TablesNotCreated(missing) from exc
+            raise
         # ZT-P1-3: the invariant layer is wired here (AFTER the bootstrap commit, so
         # the checker only ever sees a fully-open store). ``install_paranoia`` is
         # idempotent per (session, store), so a test that installs `full` on top of
@@ -315,17 +416,44 @@ class Store:
     # Writes: one transaction across both halves (sync schedule)
     # ------------------------------------------------------------------ #
 
-    def add_tuple(self, subject_predicate, s_type: str, s_name: str,
-                  relation: str, o_type: str, o_name: str) -> int:
-        return self._write('add', subject_predicate, s_type, s_name,
-                           relation, o_type, o_name)
+    @overload
+    def add_tuple(self, user: str, relation: str, object: str) -> int: ...
+    @overload
+    def add_tuple(self, subject_predicate: str, subject_type: str, subject_name: str,
+                  relation: str, object_type: str, object_name: str) -> int: ...
 
-    def remove_tuple(self, subject_predicate, s_type: str, s_name: str,
-                     relation: str, o_type: str, o_name: str) -> int:
-        return self._write('remove', subject_predicate, s_type, s_name,
-                           relation, o_type, o_name)
+    def add_tuple(self, *args, **kwargs) -> int:
+        """Add one tuple and commit; returns its freshness token (a log id).
+
+        Two call forms, positional or by keyword:
+
+        * the OpenFGA form ``add_tuple(user, relation, object)``:
+          ``add_tuple("user:alice", "viewer", "doc:d1")``, a userset as
+          ``"group:eng#member"``, every user as ``"user:*"``;
+        * six parts ``add_tuple(subject_predicate, subject_type, subject_name, relation,
+          object_type, object_name)``, where ``subject_predicate`` is ``"..."`` for a
+          bare subject: ``add_tuple("...", "user", "alice", "viewer", "doc", "d1")``.
+
+        Adding a tuple that is already stored is a no-op that returns the current
+        watermark. A refused write raises ``AdmissionRejected`` (or a subclass) and
+        changes nothing."""
+        return self._write('add', *tuple_args('add_tuple', args, kwargs))
+
+    @overload
+    def remove_tuple(self, user: str, relation: str, object: str) -> int: ...
+    @overload
+    def remove_tuple(self, subject_predicate: str, subject_type: str, subject_name: str,
+                     relation: str, object_type: str, object_name: str) -> int: ...
+
+    def remove_tuple(self, *args, **kwargs) -> int:
+        """Remove one stored tuple and commit; returns its freshness token (a log id).
+        Takes the same two call forms as ``add_tuple``. Removing a tuple that is not
+        stored raises ``AdmissionRejected`` and changes nothing."""
+        return self._write('remove', *tuple_args('remove_tuple', args, kwargs))
 
     def _write(self, op: str, *raw) -> int:
+        _require_clean_session(self.session, f'Store.{op}_tuple')  # TK123 item 10
+        reject_ellipsis_predicate(raw[0], f'{op}_tuple', write=True)  # TK123 item 9
         # P12b — pending-row drain contract. ``source._append`` stashes each flushed
         # log row in ``source._pending_rows``; we hand those rows to ``advance_index``
         # as a read hint on the sync fast path, then this buffer MUST be empty before
@@ -399,11 +527,13 @@ class Store:
         of log rows applied. This IS the async worker's body -- a daemon would just
         call it on a schedule.
 
-        The closure fan-out cap is SUSPENDED here (TK112, 2026-10-03b): every row is
+        The closure fan-out cap is SUSPENDED here: every row is
         already committed truth, so the cap could only stall the index behind it, never
         refuse the write. An over-cap row is applied with a warning instead. The cap
-        stays in force on the sync path, where its refusal reaches the writer.
-        ``docs/tk111-stall-aware-freshness-2026-10-02.md`` sec 7."""
+        stays in force on the sync path, where its refusal reaches the writer."""
+        # Provenance (moved out of the docstring, TK123 item 14): docs/tk111-stall-aware-
+        # freshness-2026-10-02.md sec 7.
+        # Provenance (moved out of the docstring, TK123 item 14): TK112, 2026-10-03b.
         with self.widx.idx.fanout_cap_suspended():
             return self._catch_up(batch)
 
@@ -444,7 +574,13 @@ class Store:
         try:
             self.session.refresh(self.cursor)
             self.cursor.stalled_after = self.cursor.applied_log_id
-            self.cursor.stall_error = f'{type(exc).__name__}: {exc}'[:2000]
+            # TK123 item 13: name the row the apply step could not get past, so the
+            # operator knows which tuple to remove at the source.
+            failing = getattr(exc, 'failing_log_row', None)
+            where = f'applied through {self.cursor.applied_log_id}'
+            if failing is not None:
+                where += f'; failing row {failing[0]} ({failing[1]})'
+            self.cursor.stall_error = f'{where}: {type(exc).__name__}: {exc}'[:2000]
             self.session.add(self.cursor)
             self.session.commit()
         except Exception as rec:
@@ -456,10 +592,11 @@ class Store:
     @property
     def index_stalled(self) -> bool:
         """True while the last recorded apply failure is still at the cursor, i.e. the
-        index is not merely behind but has failed to advance (TK111/TK112). As fresh
+        index is not merely behind but has failed to advance. As fresh
         as this session's view of the cursor row -- a replica reader sees a stall
         recorded by another instance after its next ``refresh()``, the same window it
         already accepts for every other write."""
+        # Provenance (moved out of the docstring, TK123 item 14): TK111/TK112.
         c = self.cursor
         return c.stalled_after is not None and c.stalled_after == c.applied_log_id
 
@@ -472,7 +609,10 @@ class Store:
         """Replica-reader poll: drop the current read snapshot and every read-path
         cache, so the next queries see the latest committed state coherently
         (fresh transaction + rebuilt evaluator; the graph read path is uncached
-        by design -- blind-audit W2)."""
+        by design). Refused on a session with pending ORM changes,
+        which the rollback would silently discard."""
+        # Provenance (moved out of the docstring, TK123 item 14): blind-audit W2.
+        _require_clean_session(self.session, 'Store.refresh')  # TK123 item 10
         self.session.rollback()
         self.source.refresh_evaluator()
 
@@ -519,34 +659,54 @@ class Store:
         session's committed catch-up and that alone satisfies most tokened reads
         without paying for anything. Where ``check`` then falls back to the set engine,
         this raises: see ``LookupNotFresh`` for why there is no third rung here."""
+        validate_token(at_least)                                            # TK123 item 11
         if self._fresh_enough(at_least):
             return
         self.session.refresh(self.cursor)
         if self._fresh_enough(at_least):
             return
         if at_least is None:
+            # Provenance: TK111 (stall-aware freshness).
             raise IndexStalled(
                 f'{surface}() cannot be served: the index for store {self.store_id!r} '
                 f'is STALLED at log id {self.cursor.applied_log_id} (lag {self.lag()}): '
                 f'the last catch_up() failed to advance past it -- '
                 f'{self.cursor.stall_error} -- so its staleness is unbounded and a '
-                f'revoked principal could stay listed indefinitely (TK111). check() '
+                f'revoked principal could stay listed indefinitely. check() '
                 f'still answers, from the set engine. Clear the stall (a successful '
                 f'catch_up(); for a poison row, remove the tuple at the source and '
                 f'then rebuild_index()) and retry.')
+        # Provenance: zero-trust review ZT-P1-8b.
         raise LookupNotFresh(
             f'{surface}(at_least={at_least}) cannot be served: the index for store '
             f'{self.store_id!r} has applied through {self.cursor.applied_log_id} '
             f'(lag {self.lag()}). Unlike check(), the lookup surfaces have no '
             f'set-engine fallback -- the two backends return different id domains and '
             f'different marker/exclusion shapes, so serving one in place of the other '
-            f'would change the meaning of the result (zero-trust review ZT-P1-8b). '
-            f'Run catch_up() (or wait for the async worker) and retry; for a single '
-            f'decision use check(..., at_least={at_least}), which does fall back.')
+            f'would change the meaning of the result. '
+            f'Run catch_up() and retry; for a single '
+            f'decision use check(..., at_least={at_least}), which does fall back.'
+            + token_diagnosis(self.session, self.store_id, at_least))
 
-    def check(self, subject_predicate, s_type: str, s_name: str,
-              relation: str, o_type: str, o_name: str, *,
-              at_least: int | None = None) -> bool:
+    @overload
+    def check(self, user: str, relation: str, object: str, *,
+              at_least: int | None = None) -> bool: ...
+    @overload
+    def check(self, subject_predicate: str, subject_type: str, subject_name: str,
+              relation: str, object_type: str, object_name: str, *,
+              at_least: int | None = None) -> bool: ...
+
+    def check(self, *args, at_least: int | None = None, **kwargs) -> bool:
+        """Is the user related to the object? Same two call forms as ``add_tuple``:
+        ``check("user:alice", "viewer", "doc:d1")`` or
+        ``check("...", "user", "alice", "viewer", "doc", "d1")``.
+
+        ``at_least`` (a token from a write) demands an answer that reflects the log
+        through that write; a lagging index then falls back to the set engine."""
+        (subject_predicate, s_type, s_name,
+         relation, o_type, o_name) = tuple_args('check', args, kwargs)
+        reject_ellipsis_predicate(subject_predicate, 'check', write=False)  # TK123 item 9
+        validate_token(at_least)                                            # TK123 item 11
         if self._fresh_enough(at_least):
             return self.widx.check(subject_predicate, s_type, s_name,
                                    relation, o_type, o_name)
@@ -577,13 +737,22 @@ class Store:
                 raise StaleRead(
                     f'token {at_least} is not visible in this session snapshot '
                     f'(evaluator at {self.source.evaluator_watermark}); call '
-                    f'refresh() to start a fresh read transaction and retry')
+                    f'refresh() to start a fresh read transaction and retry.'
+                    + token_diagnosis(self.session, self.store_id, at_least))
         return self.source.check(subject_predicate, s_type, s_name,
                                  relation, o_type, o_name)
 
-    def lookup(self, subject_predicate, s_type: str, s_name: str, *,
-               at_least: int | None = None):
+    @overload
+    def lookup(self, user: str, *, at_least: int | None = None) -> LookupResult: ...
+    @overload
+    def lookup(self, subject_predicate: str, subject_type: str, subject_name: str, *,
+               at_least: int | None = None) -> LookupResult: ...
+
+    def lookup(self, *args, at_least: int | None = None, **kwargs) -> LookupResult:
         """List-objects: everything the subject can reach, served by the index.
+
+        The subject is ``lookup("user:alice")`` (or ``"group:eng#member"``) or
+        ``lookup("...", "user", "alice")``.
 
         ``at_least`` demands the index reflect the log through that token. It is
         ENFORCED, not fulfilled by fallback: satisfied demands are served normally,
@@ -591,15 +760,66 @@ class Store:
         revocation surface, where quietly returning the pre-revocation enumeration is
         the failure that matters). Omitting the token keeps the previous behaviour
         exactly: an untokened, bounded-stale index read."""
+        subject_predicate, s_type, s_name = lookup_args('lookup', args, kwargs)
+        reject_ellipsis_predicate(subject_predicate, 'lookup', write=False)  # TK123 item 9
         self._require_index_freshness(at_least, 'lookup')
         return self.widx.lookup(subject_predicate, s_type, s_name)
 
-    def lookup_reverse(self, relation: str, o_type: str, o_name: str, *,
-                       at_least: int | None = None):
-        """List-users: everything that can reach the object. ``at_least`` behaves
-        exactly as in ``lookup`` -- enforced, never silently downgraded."""
+    @overload
+    def lookup_reverse(self, relation: str, object: str, *,
+                       at_least: int | None = None) -> LookupResult: ...
+    @overload
+    def lookup_reverse(self, relation: str, object_type: str, object_name: str, *,
+                       at_least: int | None = None) -> LookupResult: ...
+
+    def lookup_reverse(self, *args, at_least: int | None = None,
+                       **kwargs) -> LookupResult:
+        """List-users: everything that can reach the object's relation, as
+        ``lookup_reverse("viewer", "doc:d1")`` or ``lookup_reverse("viewer", "doc",
+        "d1")``. ``at_least`` behaves exactly as in ``lookup`` -- enforced, never
+        silently downgraded."""
+        relation, o_type, o_name = lookup_reverse_args('lookup_reverse', args, kwargs)
         self._require_index_freshness(at_least, 'lookup_reverse')
         return self.widx.lookup_reverse(relation, o_type, o_name)
 
+    def result_keys(self, res: LookupResult) -> set[tuple[str, str, str]]:
+        """Translate ``res.node_ids`` (from this store's ``lookup`` / ``lookup_reverse``)
+        to ``(type, name, predicate)`` keys, ``predicate`` being the relation or ``"..."``
+        for a bare subject: ``{("doc", "d1", "viewer"), ("group", "eng", "member")}``.
+
+        The key FORMAT is the one ``SetEngine.result_keys`` uses, but the key SET may
+        differ: a subject that a marker already covers may be listed here too (the set
+        engine leaves it out), so compare two results by what they cover -- the keys,
+        plus every subject of a marker's shape, minus the excluded keys -- never by
+        equality of key sets. This is the CONCRETE part of the result only:
+        ``res.markers`` (wildcard grants) and ``excluded_keys(res)`` (the subjects a
+        marker covers but which are refused) complete it, and a marker read without its
+        exclusions over-grants.
+
+        Read a result before the next write: ids are database row ids, and an id whose
+        node a later write removed raises ``KeyError``."""
+        return self._node_keys(res.node_ids, 'node_ids')
+
+    def excluded_keys(self, res: LookupResult) -> set[tuple[str, str, str]]:
+        """Translate ``res.excluded_node_ids`` to ``(type, name, predicate)`` keys: the
+        portable form of "every subject of a marker's shape EXCEPT these". The companion
+        of ``result_keys``; a caller expanding ``res.markers`` must subtract these."""
+        return self._node_keys(res.excluded_node_ids, 'excluded_node_ids')
+
+    def _node_keys(self, ids, field: str) -> set[tuple[str, str, str]]:
+        # One chunked IN per 900 ids (SQLite's bind-parameter limit), via the index's
+        # own batch loader, scoped to this store.
+        nodes = self.widx.idx._load_nodes(ids)
+        missing = sorted(i for i in ids if i not in nodes)
+        if missing:
+            raise KeyError(
+                f'{field} {missing[:5]} name no node in store {self.store_id!r}: the '
+                f'lookup result predates a write that removed them, or it came from '
+                f'another store; run the lookup again')
+        return {(n.type, n.name, n.predicate) for n in nodes.values()}
+
     def watermark(self) -> int:
+        """The newest freshness token in this store's tuple log (0 for an empty log): the
+        token of the latest write by any instance, as far as this session can see. Pass
+        it as ``at_least`` to read through everything written so far."""
         return self.source.watermark()

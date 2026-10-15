@@ -1,7 +1,6 @@
-"""R4-BF -- the in-memory boolean backfill for the bulk builder (design:
-docs/architecture/r4bf-bulk-backfill-design.md).
+"""The in-memory boolean backfill for the bulk builder.
 
-P13 (``bulk_build``) constructs the pre-backfill closure directly; on a boolean
+The bulk builder (``bulk_build``) constructs the pre-backfill closure directly; on a boolean
 schema the total build was then dominated by the per-object SQL-backed
 ``DeltaProcessor.backfill()``. This module computes the SAME final derived state
 (derived edges, residues, from-chain nodes, and their closure/refcount effects)
@@ -10,14 +9,14 @@ W writes the union of load and derived state in one pass.
 
 **Correctness bar (design):** the state produced here + Phase W is byte-IDENTICAL
 to ``build_index(..., bulk=False)`` + ``DeltaProcessor.backfill()`` -- pinned by the
-differential identity gate (``tests/test_bulk_build.py``). Everything below MIRRORS
+differential identity gate. Everything below MIRRORS
 ``DeltaProcessor`` on a FRESH (empty derived state, add-only) build:
 
   * evaluation reuses the COMPILED plan closures ``plan.check_fn`` / ``plan.stars_fn``
     (design 2.2): ``_BulkEvalContext`` implements the SAME 10 callbacks as
     ``processor._EvalContext`` against the in-memory graph, so the boolean-expression
     logic is shared, not reimplemented. Only state ACCESS is mirrored.
-  * ``_reconcile`` mirrors ``DeltaProcessor._reconcile`` (boolean spec §5.3) step for
+  * ``_reconcile`` mirrors ``DeltaProcessor._reconcile`` step for
     step, on empty per-key state: stars fold, neg candidates, from-chain interning
     (bridges immediately, within-stratum visibility), neg, upos, residue, edge audit.
   * iteration mirrors ``backfill()``: ``compiled.strata`` in order, relations in
@@ -25,9 +24,13 @@ differential identity gate (``tests/test_bulk_build.py``). Everything below MIRR
 
 Reachability (the ``check`` / ``check_reachable_by_id`` probes read
 ``indirect_edge_count > 0``) is maintained INCREMENTALLY on every edge add with
-immediate visibility (design §1 visibility subtleties); exact path counts are NOT
+immediate visibility; exact path counts are NOT
 maintained here -- ``bulk_build`` recomputes them once over the FINAL multigraph.
 """
+# Provenance (moved out of the docstring, TK123 item 14): R4-BF; the bulk builder is P13;
+# "design" is docs/architecture/r4bf-bulk-backfill-design.md.
+# Provenance (moved out of the docstring, TK123 item 14): design: docs/architecture/r4bf-bulk-
+# backfill-design.md; ``tests/test_bulk_build.py``; boolean spec §5.3.
 
 from __future__ import annotations
 

@@ -660,8 +660,8 @@ def test_bulk_build_identical_to_incremental(session, corpus):
     assert present, f'[{name}] no tuples landed -- corpus is vacuous'
 
     # Build the SAME snapshot two ways into two separate index stores.
-    _, _, _ = build_index(session, src_store, inc_store, bulk=False)
-    _, widx_bulk, rs_bulk = build_index(session, src_store, bulk_store, bulk=True)
+    _, _, _ = build_index(session, src_store, index_store_id=inc_store, bulk=False)
+    _, widx_bulk, rs_bulk = build_index(session, src_store, index_store_id=bulk_store, bulk=True)
 
     # (0) Belt-and-suspenders: the existing id-independent snapshot must match too.
     assert snapshot_rows(session, inc_store) == snapshot_rows(session, bulk_store), \

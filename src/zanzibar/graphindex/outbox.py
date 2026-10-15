@@ -1,9 +1,10 @@
 """
-Outbox helpers (boolean spec §4/§5.1): watermark + keyset drains over DeltaOutbox.
+Outbox helpers: watermark + keyset drains over DeltaOutbox.
 
 The write paths never materialise ``list[PermissionDelta]`` (spec decision 7); tests
 and back-compat consumers drain a cursor range to a list with ``drain_deltas``.
 """
+# Provenance (moved out of the docstring, TK123 item 14): boolean spec §4/§5.1.
 
 from sqlalchemy import delete
 from sqlmodel import Session, col, select
@@ -33,8 +34,7 @@ def outbox_rows(session: Session, store_id: str, after_id: int = 0) -> list[Delt
 
 
 def prune_outbox(session: Session, store_id: str, before_watermark: int) -> int:
-    """Delete this store's DRAINED outbox rows; return how many were removed
-    (zero-trust review ZT-P1-8, retention).
+    """Delete this store's DRAINED outbox rows; return how many were removed.
 
     ``delta_outbox`` had no ``DELETE`` anywhere: every reachability flip ever
     emitted stayed for the life of the store, even though the cascade -- its only
@@ -68,6 +68,8 @@ def prune_outbox(session: Session, store_id: str, before_watermark: int) -> int:
     re-emit, so it needs no store lock -- but it is a write, so run it in its own
     transaction and commit.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): zero-trust review ZT-P1-8,
+    # retention.
     if before_watermark < 0:
         raise ValueError(
             f'before_watermark must be a non-negative outbox cursor, got {before_watermark}')

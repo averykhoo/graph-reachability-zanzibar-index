@@ -1,7 +1,9 @@
 """`unparse_schema_ast`: SchemaAST -> DSL text.
 
-Part of `zanzibar.schema`; split out of the single-file module by TK120 (2026-10-06).
+Part of `zanzibar.schema`.
 """
+# Provenance (moved out of the docstring, TK123 item 14): split out of the single-file module
+# by TK120 (2026-10-06).
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _iter_directs
 
 
@@ -10,10 +12,10 @@ from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction
 def unparse_schema_ast(ast: SchemaAST) -> str:
     """Render an AST back to DSL text such that ``parse_schema_ast(unparse_schema_ast(a))
     == a`` for every AST a parse can produce. The empty AST is not one of them: it renders
-    as ``""``, which the parser refuses (`TK124`). Operator children inside chains are
+    as ``""``, which the parser refuses. Operator children inside chains are
     parenthesized (the grammar's `unit`); leaves render bare.
 
-    Two rules keep the output inside what the parser accepts since `TK137` (2026-10-14):
+    Two rules keep the output inside what the parser accepts since 0.0.5:
 
     * BOTH operands of ``but not`` render as units, so an operator operand is
       parenthesised: ``Exclusion(Union(a, b), c)`` renders ``(a or b) but not c``. The old
@@ -22,6 +24,8 @@ def unparse_schema_ast(ast: SchemaAST) -> str:
       ``type`` line FIRST, sorted, the way OpenFGA examples declare ``type user`` before
       the types that use it. A restriction to an undeclared type is refused now (S8), and
       a relation-less ``type`` line is not an AST key, so the round trip still holds."""
+      # Provenance (moved out of the docstring, TK123 item 14): TK137 (2026-10-14).
+    # Provenance (moved out of the docstring, TK123 item 14): `TK124`.
 
     def render_restriction(r: Restriction) -> str:
         s = r.type + (':*' if r.wildcard else '')

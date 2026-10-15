@@ -1,8 +1,9 @@
 """`MultiSet`: a `Counter` that refuses negative and non-integer counts.
 
 Used by `core.py::ReachabilityIndex` for its reachable-before/after counts. Moved here
-from the deleted `legacy/index_v1.py` (TK120, 2026-10-06); the class is unchanged.
+from the deleted `legacy/index_v1.py`; the class is unchanged.
 """
+# Provenance (moved out of the docstring, TK123 item 14): TK120, 2026-10-06.
 from collections import Counter
 
 

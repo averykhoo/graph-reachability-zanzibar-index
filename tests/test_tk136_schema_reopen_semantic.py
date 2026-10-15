@@ -9,10 +9,12 @@ schema whose ``parse_schema_ast`` equals the persisted text's, and still raises
 
 Accepted variants: trailing newline, CRLF line endings, a different indent, an added
 comment, a ``model`` / ``schema 1.1`` header, reordered type blocks, reordered ``define``
-lines. Refused: a changed, added or removed relation, a changed ``object_wildcard_shapes``.
+lines, and (since TK123 item 18, 2026-10-15) reordered ``[...]`` restrictions, which
+``schema/syntax.py::first_schema_difference`` compares as sorted lists. Refused: a changed,
+added or removed relation, a changed ``object_wildcard_shapes``.
 
-Pinned as REFUSED although semantically equal: reordered operands of ``or`` and reordered
-``[...]`` restrictions. The AST keeps that order (tuples), and a loud refusal on a reopen
+Pinned as REFUSED although semantically equal: reordered operands of ``or``. The AST
+keeps that order (tuples), and a loud refusal on a reopen
 is the safe side of the write-once contract; widening it needs a canonical form that the
 oracle does not pin, so it is not done here.
 
@@ -68,6 +70,9 @@ type user
     'define_order': BASE.replace(
         '    define owner: [user]\n    define editor: [user] or owner\n',
         '    define editor: [user] or owner\n    define owner: [user]\n'),
+    # TK123 item 18 (2026-10-15): moved here from REFUSED -- a decided behaviour change
+    'restriction_order': BASE.replace('define viewer: [user, group#member]',
+                                      'define viewer: [group#member, user]'),
 }
 
 REFUSED = {
@@ -78,8 +83,6 @@ REFUSED = {
                             .replace('[user] or owner', '[user] or admin'),
     # semantically equal, but the AST keeps the order (module docstring)
     'or_operand_order': BASE.replace('[user] or owner', 'owner or [user]'),
-    'restriction_order': BASE.replace('define viewer: [user, group#member]',
-                                      'define viewer: [group#member, user]'),
 }
 
 

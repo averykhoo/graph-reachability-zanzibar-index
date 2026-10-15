@@ -2,7 +2,7 @@
 id: TK154
 title: stale SetEngine LookupResult ids translate to the wrong keys after a write (no error)
 brief: 0.0.5 trial F16: a stale lookup id is recycled and excluded_keys returns ANOTHER node key, silently
-pri: NEXT
+pri: NOW
 size: S
 deps: []
 related: [TK123, TK139, TK153]
@@ -11,8 +11,8 @@ labels: []
 source: docs/pypi-trial-0.0.5-2026-10-15.md
 source_hash:
 created: 2026-10-15
-moved: 2026-10-15
-updated: 2026-10-15
+moved: 2026-10-15b
+updated: 2026-10-15b
 closed:
 ---
 
@@ -35,3 +35,7 @@ test: drop the epoch check, then watch the recycle repro come back green-and-wro
 - src/zanzibar/setengine/engine.py (`result_keys`, `excluded_keys`)
 
 ## Log
+
+### 2026-10-15b
+
+REASONED (agent gate-commit3, 2026-10-15b; not probed): TK123 item 19 (SetLookupResult rename, Store.result_keys / excluded_keys returning (type, name, predicate) keys) did NOT fix this row. It changes the surface names and adds a key-returning path, but a caller holding ids from an older result still translates them against the CURRENT id map, so a recycled id still names a different entity silently. The fix should be a write-epoch stamp carried on the result and checked at translation, and it must cover BOTH backends: set-engine ids are recycled int32, and graph Node rows are recycled too (SQLite rowid reuse; the Node table has no AUTOINCREMENT), so a graph-side id-bearing result has the same hazard.

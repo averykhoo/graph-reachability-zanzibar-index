@@ -1,16 +1,18 @@
 """
-Set engine storage model + writes (spec §5, §6.1-6.2).
+Set engine storage model + writes.
 
 Stores ONLY raw set memberships; builds no closure. In-memory state is rebuilt from the
-``RelationTuple`` table on open (replay). The evaluator (check/expand/lookups, §6.3-6.5) is
+``RelationTuple`` table on open (replay). The evaluator (check/expand/lookups) is
 added on top of this storage layer.
 """
+# Provenance (moved out of the docstring, TK123 item 14): set-engine spec sec 6.3-6.5.
+# Provenance (moved out of the docstring, TK123 item 14): spec §5, §6.1-6.2.
 
 from __future__ import annotations
 
 import json
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import chain
 from types import EllipsisType
 
@@ -40,7 +42,10 @@ from zanzibar.schema import (
     Intersection,
     Exclusion,
 )
-from zanzibar.schema.errors import SchemaMismatch, ShapeRefusedSinceTK137
+from zanzibar.schema.syntax import (declared_relations, first_schema_difference,
+                                    no_restriction_reason)
+from zanzibar.schema.errors import (SchemaMismatch, ShapeNoLongerAccepted, ZanzibarError,
+                                    reject_ellipsis_predicate)
 from .setops import SetOps, DEFAULT_SETOPS
 from .models import RelationTuple
 from . import memberset as ms
@@ -49,9 +54,9 @@ from .memberset import MemberSet
 NodeKey = tuple[str, str, str]      # (type, name, predicate) flow-graph node
 
 
-class UnloggedWriteRefused(RuntimeError):
+class UnloggedWriteRefused(ZanzibarError, RuntimeError):
     """A direct ``SetEngine.add_tuple``/``remove_tuple`` was refused because this
-    engine is the evaluator of a LOGGED store (zero-trust review ZT-P1-8a).
+    engine is the evaluator of a LOGGED store.
 
     ``add_tuple`` mutates ``RelationTuple`` -- the source of truth -- and appends NOTHING to
     ``TupleLog``. Standalone that is the whole contract (see ``log_governed``). But
@@ -68,6 +73,7 @@ class UnloggedWriteRefused(RuntimeError):
     per-store lock, catch the evaluator up, validate against CURRENT committed state,
     and land the tuple and its log row in ONE transaction. This exception exists so the
     bypass fails LOUDLY at the call instead of corrupting the store quietly."""
+    # Provenance (moved out of the docstring, TK123 item 14): zero-trust review ZT-P1-8a.
 
 
 def _reject_unlogged_write(engine: 'SetEngine', op: str) -> None:
@@ -85,12 +91,13 @@ def _reject_unlogged_write(engine: 'SetEngine', op: str) -> None:
     # no longer revoke it (0.0.4 trial BROKEN-2, p12).
     # INSTEAD: write through Store.add_tuple/remove_tuple (or TupleSource.add/
     # remove); for a standalone engine, use a store id no Store owns.
+    # Provenance: zero-trust review ZT-P1-8a, TK140.
     raise UnloggedWriteRefused(
         f'SetEngine.{op} is refused on store {engine.store_id!r}: the store is tuple-LOGGED '
         f'(a Store/TupleSource owns it -- it has a SchemaRecord), and a direct '
         f'write mutates RelationTuple without appending to TupleLog -- so the graph index, '
         f'replica evaluators and every at_least freshness token would silently miss it, '
-        f'permanently, while lag() reports 0 (zero-trust review ZT-P1-8a, TK140). Write '
+        f'permanently, while lag() reports 0. Write '
         f'through TupleSource.{"add" if op == "add_tuple" else "remove"}() '
         f'(or Store.{op}()), which locks, catches up, validates and appends '
         f'the log row in the same transaction. A standalone SetEngine needs a store id '
@@ -112,12 +119,13 @@ _SCHEMA_RECORD = _sa_table(SCHEMA_RECORD_TABLE, _sa_column('store_id'),
 
 def store_has_schema_record(session: Session, store_id: str) -> bool:
     """True when ``store_id`` has a ``SchemaRecord`` row, i.e. a ``Store`` /
-    ``TupleSource`` owns it and its writes must go through the log (TK140).
+    ``TupleSource`` owns it and its writes must go through the log.
 
     ``has_table`` first: a process that only ever imported ``zanzibar.setengine`` never
     registered the connected-store models, so ``create_all`` did not create the table, and
     on PostgreSQL a SELECT from a missing table would ABORT the caller's transaction. No
     table means no connected store anywhere in this database, so: not governed."""
+    # Provenance (moved out of the docstring, TK123 item 14): TK140.
     if not _sa_inspect(session.connection()).has_table(SCHEMA_RECORD_TABLE):
         return False
     with session.no_autoflush:
@@ -166,15 +174,20 @@ def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
         return
     try:
         stored_ast = parse_schema_ast(stored_text)
-    except ShapeRefusedSinceTK137 as e:
+    except ShapeNoLongerAccepted as e:
+        # Provenance: TK137 (the shapes 0.0.5 stopped accepting).
         raise SchemaMismatch(
             f'SetEngine on store {store_id!r}: the persisted schema of this store uses a shape '
             f'this version refuses ({e}), so it cannot equal the schema passed here, and '
-            f'the store cannot be opened (see CHANGELOG.md 0.0.5, TK137).') from e
-    if stored_ast != ast:
+            f'the store cannot be opened (see the 0.0.5 release notes).') from e
+    diff = first_schema_difference(stored_ast, ast)     # TK123 item 18
+    if diff is not None:
+        diff = (diff.replace('only in the first schema', 'only in the persisted schema')
+                    .replace('only in the second schema', 'only in the schema passed here'))
         raise SchemaMismatch(
             f'SetEngine on store {store_id!r}: the schema passed here disagrees with the '
-            f'persisted schema of this store (a Store owns this store id, and schemas '
+            f'persisted schema of this store, first at {diff} '
+            f'(a Store owns this store id, and schemas '
             f'are write-once). Answering under a different schema would give different '
             f'answers from the same tuples, e.g. a dropped "but not" reads as ALLOW. Open '
             f'it with the persisted schema -- zanzibar.store.open_set_engine('
@@ -219,8 +232,16 @@ def _drive(gen):
         value = None
 
 
-class LookupResult:
-    """Concrete result ids + symbolic wildcard markers (mirrors zanzibar.graphindex LookupResult).
+@dataclass(eq=True)
+class SetLookupResult:
+    """What ``SetEngine.lookup`` / ``lookup_reverse`` return: concrete result ids plus
+    symbolic wildcard markers and their exclusions.
+
+    Named ``SetLookupResult`` so it is never mistaken for the graph index's
+    ``zanzibar.LookupResult`` (which ``Store.lookup`` returns); the three fields have
+    the same names and meanings in both. A dataclass: build one by keyword
+    (``SetLookupResult(node_ids={1}, markers=set(), excluded_node_ids=set())``) and
+    compare with ``==``.
 
     ``node_ids`` are INSTANCE-LOCAL interner ids: the interner recycles int32 handles,
     so an id means nothing to another engine instance (or process) over the same
@@ -228,24 +249,20 @@ class LookupResult:
     ``SetEngine.excluded_keys`` translate them to the stable ``(type, name, predicate)``
     surrogate keys; ``markers`` are already portable ``(type, predicate)`` shapes. The
     portable form for any service boundary is all three -- a marker sent without its
-    exclusions over-grants (TK139)."""
+    exclusions over-grants."""
 
-    def __init__(self):
-        self.node_ids: set[int] = set()               # concrete result ids
-        self.markers: set[tuple[str, str]] = set()    # (type, predicate) star shapes
-        # "everything of a marker's shape EXCEPT these" (the zanzibar.graphindex field's
-        # name and meaning): interned concrete ids a marker would cover but ``check``
-        # refutes. Callers subtract it from the marker. ``lookup`` fills it for a
-        # ``but not`` / ``and`` under an object wildcard -- graph-refused schemas only
-        # (TK116, docs/tk116-oracle-only-setengine-2026-10-04.md sec 2);
-        # ``lookup_reverse`` fills it from ``expand``'s ``neg`` for a ``but not`` / ``and``
-        # under a subject wildcard such as ``[user:*]`` (TK139,
-        # docs/tk139-lookup-reverse-exclusions-2026-10-13.md).
-        self.excluded_node_ids: set[int] = set()
-
-    def __repr__(self):
-        return (f'LookupResult(node_ids={self.node_ids}, markers={self.markers}, '
-                f'excluded_node_ids={self.excluded_node_ids})')
+    #: concrete result ids
+    node_ids: set[int] = field(default_factory=set)
+    #: (type, predicate) star shapes
+    markers: set[tuple[str, str]] = field(default_factory=set)
+    #: "everything of a marker's shape EXCEPT these" (the graph index field's name and
+    #: meaning): interned concrete ids a marker would cover but ``check`` refutes.
+    #: Callers subtract it from the marker. ``lookup`` fills it for a ``but not`` /
+    #: ``and`` under an object wildcard; ``lookup_reverse`` fills it from ``expand``'s
+    #: ``neg`` for a ``but not`` / ``and`` under a subject wildcard such as ``[user:*]``.
+    # Provenance: TK116 (docs/tk116-oracle-only-setengine-2026-10-04.md sec 2) and TK139
+    # (docs/tk139-lookup-reverse-exclusions-2026-10-13.md).
+    excluded_node_ids: set[int] = field(default_factory=set)
 
 
 def _denorm_pred(pred: str) -> str | EllipsisType:
@@ -332,13 +349,13 @@ class Interner:
     *surrogate* (the stable identity, and what ``RelationTuple`` persists), while the int32 id is
     a *reusable internal handle* for the bitmap algebra. Each id carries a reference count
     (how many stored tuples mention it, in either position -- plus one reference per tuple
-    that anchors it as a reverse-dependency candidate key, ``_apply_add``'s §6.4
+    that anchors it as a reverse-dependency candidate key, ``_apply_add``'s
     interning). When the last referencing
     tuple is removed the count reaches zero, the surrogate->id mapping is dropped, the id
     is scrubbed from the population masks, and the id is returned to a free list for reuse.
     This bounds memory by the *live* entity count rather than the lifetime count -- so churn
     of temporary entities cannot leak -- and keeps ids within the uint32 domain roaring
-    needs. (Supersedes the append-only design in spec §5/§10; ``rebuild`` remains the way
+    needs. (Supersedes an earlier append-only design; ``rebuild`` remains the way
     to reconstruct minimal state from the table.)
 
     Star nodes intern like anything else -- ``(T, '*', pred)`` -- and need no any/all
@@ -347,6 +364,8 @@ class Interner:
     is a NodeSets key). ``ids_of_type`` / ``ids_of_shape`` are the population masks the
     MemberSet algebra needs; freeing an id scrubs it from them.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): set-engine spec sec 6.4; sec
+    # 5/10 is the superseded append-only design.
 
     def __init__(self, ops: SetOps):
         self.ops = ops
@@ -413,22 +432,51 @@ class Interner:
 class NodeSets:
     """Direct subjects granted a relation on one object node (the tuple's object side).
 
-    The split is a performance invariant, not cosmetics (spec §5): evaluator recursion
+    The split is a performance invariant, not cosmetics: evaluator recursion
     iterates only ``usersets`` (small, topology-shaped), while ``entities`` bitmaps
     (potentially huge populations) are only ever combined by C-level bulk ops.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): spec §5.
     entities: object      # subject ids with predicate '...' (concrete entities + bare-star sentinels)
     usersets: object      # subject ids with predicate != '...' (concrete usersets + userset-star sentinels)
 
 
 class SetEngine:
-    """Raw-tuple, bitmap-backed reachability engine (storage + writes; §5, §6.1-6.2)."""
+    """Raw-tuple, bitmap-backed reachability engine (storage, writes and reads).
 
-    def __init__(self, session: Session, store_id: str, schema: str, *,
+    State is held in memory: opening the engine replays every stored tuple of the store
+    into bitmaps, so opening costs time and memory in proportion to the store.
+
+    **The caller owns the transaction: this class never commits.** ``add_tuple`` /
+    ``remove_tuple`` stage their ``RelationTuple`` rows on the session; commit it
+    yourself (a ``Store`` does, for the engine it drives). That is the opposite of
+    ``Store``, which commits every write."""
+    # Provenance (moved out of the docstring, TK123 item 14): set-engine spec sec 5, sec
+    # 6.1-6.2.
+
+    def __init__(self, session: Session, store_id: str, schema: str | None = None, *,
                  object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
                  ops: SetOps = DEFAULT_SETOPS,
                  ruleset=None):
+        """Open the set engine on ``store_id``, replaying its stored tuples.
+
+        ``schema`` is the OpenFGA DSL text. It may be omitted for a store a ``Store``
+        created: the engine then reads the persisted schema (and its
+        ``object_wildcard_shapes``). Omitting it for a store with no persisted schema
+        raises ``TypeError``."""
         validate_store_id(store_id)  # TK127 follow-up: before any statement
+        if schema is None:
+            # TK123 item 9: the schema is optional when the store has a SchemaRecord.
+            record = _schema_record_row(session, store_id)
+            if record is None:
+                raise TypeError(
+                    f'SetEngine(session, {store_id!r}) needs schema=...: store '
+                    f'{store_id!r} has no persisted schema to read. Pass the schema text, '
+                    f'or create the store first with Store(session, {store_id!r}, '
+                    f'schema=...)')
+            schema = record[0]
+            if not object_wildcard_shapes:
+                object_wildcard_shapes = frozenset(tuple(s) for s in json.loads(record[1]))
         self.session = session
         self.store_id = store_id
         self.ops = ops
@@ -454,6 +502,7 @@ class SetEngine:
         self.log_governed = False
         self._governance_probed_txn = None
         self.ast = parse_schema_ast(schema)
+        self._declared = None      # admission-message facts, built on the first refusal
         # P9: the per-Direct-node restriction key set is fully determined by the
         # (frozen, lifetime-stable) AST node -- cache it once instead of rebuilding
         # the comprehension on every direct_leaf / direct_expand call. Keyed by
@@ -464,7 +513,14 @@ class SetEngine:
         # the read-time lookup reverse walk (TTU from-chain hop).
         self._object_deps, self._chain_targets = _candidate_reverse_deps(self.ast)
         self._ttu_map = _ttu_reverse_map(self.ast)
-        self.schema_info = derive_schema_info(self.ast, object_wildcard_shapes)
+        # A caller that hands in its compiled RuleSet (``Store`` opens both backends) has
+        # already derived -- and warned about -- this schema; its SchemaInfo is adopted
+        # below anyway. Deriving again here raised UnprovenExtensionWarning a second time
+        # per ``Store`` (TK123 item 15).
+        if ruleset is not None and ruleset.schema_info is not None:
+            self.schema_info = ruleset.schema_info
+        else:
+            self.schema_info = derive_schema_info(self.ast, object_wildcard_shapes)
         self.filters = schema_filters(self.ast)
         # Reproduce the graph backend's raw-write edge graph (same RuleSet) and reject
         # exactly the cycles it rejects -- including from-chain cycles. Since the P7
@@ -606,7 +662,8 @@ class SetEngine:
         self._flow_node_refs: dict[NodeKey, int] = {}
 
     def rebuild(self) -> None:
-        """Replay the RelationTuple table into fresh in-memory state (spec §3, §6.5)."""
+        """Replay the RelationTuple table into fresh in-memory state."""
+        # Provenance (moved out of the docstring, TK123 item 14): spec §3, §6.5.
         self._reset_state()
         rows = self.session.exec(
             select(RelationTuple).where(RelationTuple.store_id == self.store_id).order_by(RelationTuple.id)
@@ -646,16 +703,20 @@ class SetEngine:
     # Writes (§6.1) -- no rewrite expansion, no derived state
     # ------------------------------------------------------------------ #
 
-    def add_tuple(self, subject_predicate, s_type: str, s_name: str,
-                  relation: str, o_type: str, o_name: str) -> bool:
+    def add_tuple(self, subject_predicate, subject_type: str, subject_name: str,
+                  relation: str, object_type: str, object_name: str) -> bool:
         """Add one raw tuple; True if added, False for the idempotent duplicate
-        no-op. Raises ``ValueError`` only from validation, BEFORE any in-memory
+        no-op. Does not commit: the caller commits the session. Raises ``ValueError`` only from validation, BEFORE any in-memory
         mutation (Store's rejection path relies on this to skip the
-        evaluator rebuild). This backend computes no deltas (§6.1).
+        evaluator rebuild). This backend computes no deltas.
 
-        Refused with ``UnloggedWriteRefused`` on a log-governed store (ZT-P1-8a) --
+        Refused with ``UnloggedWriteRefused`` on a log-governed store --
         the guard is HERE rather than on the caller's side because the attribute
         holding this engine is reachable from anywhere the ``TupleSource`` is."""
+        # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-8a.
+        # Provenance (moved out of the docstring, TK123 item 14): §6.1.
+        s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
+        reject_ellipsis_predicate(subject_predicate, 'add_tuple', write=True)  # TK123 item 9
         self._probe_log_governance()           # TK140: a second engine on an owned store
         if self.log_governed:
             _reject_unlogged_write(self, 'add_tuple')
@@ -686,15 +747,19 @@ class SetEngine:
         self._apply_add(s_pred, s_type, s_name, relation, o_type, o_name, pairs=pairs)
         return True
 
-    def remove_tuple(self, subject_predicate, s_type: str, s_name: str,
-                     relation: str, o_type: str, o_name: str) -> None:
-        """Remove one raw tuple. Raises ``ValueError`` only from validation /
+    def remove_tuple(self, subject_predicate, subject_type: str, subject_name: str,
+                     relation: str, object_type: str, object_name: str) -> None:
+        """Remove one raw tuple. Does not commit: the caller commits the session.
+        Raises ``ValueError`` only from validation /
         the missing-tuple rejection, BEFORE any in-memory mutation (same contract
         as ``add_tuple``).
 
-        Refused with ``UnloggedWriteRefused`` on a log-governed store (ZT-P1-8a).
-        This is the fail-OPEN half of that finding: an unlogged REMOVE leaves the
+        Refused with ``UnloggedWriteRefused`` on a log-governed store.
+        This is the fail-OPEN half of that refusal: an unlogged REMOVE leaves the
         grant materialized in the graph index, which keeps answering ALLOW."""
+        # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-8a.
+        s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
+        reject_ellipsis_predicate(subject_predicate, 'remove_tuple', write=True)  # TK123 item 9
         self._probe_log_governance()           # TK140: a second engine on an owned store
         if self.log_governed:
             _reject_unlogged_write(self, 'remove_tuple')
@@ -716,7 +781,11 @@ class SetEngine:
         if not self._tuple_present(s_pred, s_type, s_name, relation, o_type, o_name):
             # AdmissionRejected: validity parity with the graph index's 'Non-existent
             # edge cannot be removed' -- a correct refusal, state untouched.
-            raise AdmissionRejected('non-existent tuple cannot be removed')
+            # TK123 item 22 (A22): name the tuple, in the OpenFGA string form.
+            subject = f'{s_type}:{s_name}' + ('' if s_pred == '...' else f'#{s_pred}')
+            raise AdmissionRejected(
+                f'non-existent tuple cannot be removed: {subject} {relation} '
+                f'{o_type}:{o_name} is not stored')
         row = self._row(s_pred, s_type, s_name, relation, o_type, o_name)
         self.session.delete(row)
         # Flush the delete now. The old per-add ``_row`` SELECT (dropped in P0)
@@ -1128,9 +1197,13 @@ class SetEngine:
             subject=Entity(s_type, s_name), relation=relation,
             object=Entity(o_type, o_name), subject_predicate=_denorm_pred(s_pred))
         if not any(f.apply(triple) for f in self.filters):
+            # TK123 item 17: the same explanation the graph's ``RuleSet.apply`` gives.
+            if self._declared is None:
+                self._declared = declared_relations(self.ast)
             raise AdmissionRejected(
                 f"tuple {s_type}:{s_name}#{s_pred} {relation} {o_type}:{o_name} matches no "
-                f"declared type restriction for {o_type}#{relation}")
+                f"declared type restriction for {o_type}#{relation}"
+                + no_restriction_reason(self._declared, o_type, relation))
 
         # (3) cycle rejection (§6.2): reject usersets whose membership would loop, matching
         #     the graph backend's cycle detection. Side-effect free -- uses existing ids only.
@@ -1246,8 +1319,16 @@ class SetEngine:
     # check -- pointwise, short-circuiting (§6.3)
     # ------------------------------------------------------------------ #
 
-    def check(self, subject_predicate, s_type: str, s_name: str,
-              relation: str, o_type: str, o_name: str) -> bool:
+    def check(self, subject_predicate, subject_type: str, subject_name: str,
+              relation: str, object_type: str, object_name: str) -> bool:
+        """Is the subject related to the object? ``check("...", "user", "alice",
+        "viewer", "doc", "d1")``, where ``subject_predicate`` is ``"..."`` for a bare
+        subject or a relation for a userset (``"member", "group", "eng"``).
+
+        Evaluated on demand over the stored tuples, ``and`` / ``but not`` included. It
+        reads the engine's in-memory state only and issues no database query."""
+        s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
+        reject_ellipsis_predicate(subject_predicate, 'check', write=False)  # TK123 item 9
         s_pred = _norm_pred(subject_predicate)
         subject = (s_type, s_name, s_pred)
         memo: dict[tuple[str, str, str], bool] = {}
@@ -1415,10 +1496,11 @@ class SetEngine:
 
     def expand(self, relation: str, o_type: str, o_name: str,
                memo: dict | None = None) -> MemberSet:
-        """The full member set of (o_type, o_name, relation) as a MemberSet (§6.3).
+        """The full member set of (o_type, o_name, relation) as a MemberSet.
 
         Concrete entity/userset members land in ``pos``; subject wildcards become star
         shapes in ``stars`` (never enumerated). Never interns on read."""
+        # Provenance (moved out of the docstring, TK123 item 14): §6.3.
         if memo is None:
             memo = {}
         inst_memo: dict[str, set[str]] = {}             # N7: per-eval _instances_of_type cache
@@ -1545,8 +1627,8 @@ class SetEngine:
     # Lookups (§6.4)
     # ------------------------------------------------------------------ #
 
-    def lookup_reverse(self, relation: str, o_type: str, o_name: str) -> LookupResult:
-        """Everything that can reach the object: expand rendered as a LookupResult (§6.4).
+    def lookup_reverse(self, relation: str, object_type: str, object_name: str) -> SetLookupResult:
+        """Everything that can reach the object: expand rendered as a SetLookupResult.
 
         Concretes come from the MemberSet's ``pos``; star shapes become symbolic markers
         (never enumerated to concretes); the MemberSet's ``neg`` becomes
@@ -1554,17 +1636,20 @@ class SetEngine:
         same channel the graph index fills from a derived relation's residue. A caller
         listing users must subtract it: under ``define viewer: [user:*] but not banned``
         with a ``user:*`` grant and ``mallory`` banned, the result is the ``('user',
-        '...')`` marker with mallory's id excluded (TK139; before, ``neg`` was dropped
+        '...')`` marker with mallory's id excluded (before 0.0.5, ``neg`` was dropped
         and the result read as "every user"). ``pos`` and ``neg`` are disjoint by
         construction (``memberset._normalize``), so the subtraction is unambiguous."""
+        # Provenance (moved out of the docstring, TK123 item 14): TK139.
+        # Provenance (moved out of the docstring, TK123 item 14): §6.4.
+        o_type, o_name = object_type, object_name  # TK123 item 7
         m = self.expand(relation, o_type, o_name)
-        result = LookupResult()
+        result = SetLookupResult()
         result.node_ids = set(m.pos)
         result.markers = set(m.stars)
         result.excluded_node_ids = set(m.neg)
         return result
 
-    def result_keys(self, res: LookupResult) -> set[NodeKey]:
+    def result_keys(self, res: SetLookupResult) -> set[NodeKey]:
         """Translate ``res.node_ids`` to their stable ``(type, name, predicate)``
         surrogate keys. Interner ids are recycled instance-local handles -- only
         valid against THIS instance, and only until the next write.
@@ -1576,14 +1661,17 @@ class SetEngine:
         exclusions over-grants: under ``define viewer: [user:*] but not banned`` with
         a ``user:*`` grant and ``mallory`` banned, ``lookup_reverse`` is the
         ``('user', '...')`` marker with mallory excluded, and ``result_keys`` alone is
-        ``set()`` (TK139 review, ``docs/tk139-lookup-reverse-exclusions-2026-10-13.md``)."""
+        ``set()``."""
+        # Provenance (moved out of the docstring, TK123 item 14): TK139 review,
+        # ``docs/tk139-lookup-reverse-exclusions-2026-10-13.md``.
         return {self.interner.key(i) for i in res.node_ids}
 
-    def excluded_keys(self, res: LookupResult) -> set[NodeKey]:
+    def excluded_keys(self, res: SetLookupResult) -> set[NodeKey]:
         """Translate ``res.excluded_node_ids`` to stable ``(type, name, predicate)``
         keys: the portable form of "every subject of a marker's shape EXCEPT these".
         The companion of ``result_keys``; a caller expanding ``res.markers`` must
-        subtract these (TK139)."""
+        subtract these."""
+        # Provenance (moved out of the docstring, TK123 item 14): TK139.
         return {self.interner.key(i) for i in res.excluded_node_ids}
 
     def _reverse_neighbors(self, oid: int) -> list[int]:
@@ -1661,78 +1749,87 @@ class SetEngine:
                             out.append(rid)
         return out
 
-    def lookup(self, subject_predicate, s_type: str, s_name: str) -> LookupResult:
-        """Everything the subject can reach (§6.4), via an O(reachable) reverse walk.
+    def lookup(self, subject_predicate, subject_type: str, subject_name: str) -> SetLookupResult:
+        """Everything the subject can reach, found by a reverse walk from the subject.
 
-        The dual of ``expand``: a reverse BFS over membership edges from the subject
-        (seeded by its direct memberships, propagated by ``_reverse_neighbors``'s
-        H1/H2/H3 hops -- the mirror of ``check``'s direct-userset / Computed / TTU
-        recursion). Each surfaced candidate is confirmed by ``check`` (exact under
-        booleans, so an over-approximate candidate that an ``and``/``but not`` excludes
-        is dropped), and only confirmed nodes propagate -- so the walk touches the
-        subject's reachable neighborhood, never the whole store. Replaces the former
-        O(stored-tuples) candidate sweep (``_lookup_sweep``, kept as the differential
-        test reference); the write-time reverse-dependency interning (``_apply_add``)
-        still guarantees every reachable object key has an id for the walk to find.
-        Markers are intensional and exact by construction: one star-object check per
-        declared relation, so star coverage arriving through Computed/TTU hops
-        surfaces without enumerating names.
-
-        N17 -- **wildcard-bridge seeding.** An object-wildcard grant ``s #... rel T:*``
-        makes ``s`` a member of every concrete ``(T, X, rel)``, but the reverse walk
-        only ever reaches the ``(T, '*', rel)`` star node, never the wildcard-covered
-        concrete siblings ``(T, X, rel)``. That is harmless while those concretes are
-        *direct* results -- the intensional marker ``(T, rel)`` covers them exactly
-        (S4) -- but the walk would then silently drop any DOWNSTREAM object whose
-        membership is inherited THROUGH such a concrete node (a TTU from-chain, or a
-        non-wildcard userset restriction), which no marker covers. ``check`` crosses
-        from one object's membership to another's by exactly two mechanisms (see
-        ``member_via_usersets`` / ``ttu_leaf``): (a) a NON-wildcard userset restriction
-        ``[T#r]`` lifts ``T:X#r``'s members onto a grantee, and (b) a TTU from-chain
-        ``R2: r from ts`` evaluates a stored tupleset parent ``T:X`` at ``r``. To keep
-        the whole walk O(reachable) rather than falling back to the O(store) sweep for
-        such schemas, when the walk DEQUEUES any star node ``(T, '*', p)`` (bare or
-        userset; the trigger is per-TYPE and fires before the entity-node skip and
-        regardless of the star node's own check outcome), it bridges T once: for each
-        declared shape ``(T, r0)`` and each relation ``r'`` the injection reaches
-        (``{r0} plus _object_deps[(T, r0)]`` -- ``_owc_bridge_reach[T]``), it enqueues
-        (1) every interned concrete ``(T, X, r')`` (``ids_of_shape`` -- stored userset
-        subjects, TTU chain-target-interned keys, dep-interned keys) so mechanisms (a)
-        and the concrete-parent arm of (b) are seeded, and (2) the star-parent cross
-        for the triple combo owc x star-parent x TTU where NO concrete ``(T, X, r')``
-        is interned: for each object ``Q:q`` that stored ``T:*`` as a tupleset parent
-        (``member_of`` of ``(T, '*', '...')``) and each ``R`` with ``R: r' from ts``,
-        it enqueues ``(Q, q, R)``. Bridged nodes then propagate through the normal
-        confirmed-only walk, so chained shapes compose.
-
-        **Completeness (the bridge trigger + seeds cover every wildcard route):**
-        1. Star-injection of the subject on shape ``(T, rel)`` requires the subject's
-           membership among the star node ``(T, '*', rel)``'s direct members (the only
-           truth source beyond stored-at-X tuples; ``_object_ids`` adds the star node
-           only for shapes). Every such membership route enqueues a star node of T:
-           (i) a direct grant / subject-star sentinel -> the seed's H1 (+ the line-1004
-           H1 star fold); (ii) a stored userset ``u`` at the star node with ``sat(u)``
-           true -> each intermediate hop is check-true and ``member_of``-connected, so
-           ``u`` is visited & confirmed and ``member_of[u]`` contains the star node;
-           (iii) a star userset sentinel ``(T2, '*', p)`` -> any confirmed instance
-           ``(T2, inst, p)`` folds ``member_of[(T2, '*', p)]`` (the H1 star fold),
-           which contains the star node; when the instance key is uninterned under
-           boolean mixing, the stored non-star arm interns it via dep-interning and
-           connects it (mixing requires stored arms). The trigger is per-TYPE (any
-           dequeued ``(T, '*', *)``, bare included), strictly wider than per-shape.
-        2. Given the trigger, every cross-object crossing out of a star-injected
-           concrete is seeded: a userset lift needs a stored subject ``(T, X, r')``
-           -> in ``ids_of_shape``; a TTU crossing from a concrete parent chain-interns
-           ``(T, X, r')`` -> in ``ids_of_shape``; a TTU crossing from a STAR parent is
-           seeded by the explicit star-parent cross (and ``(Q, q, R)`` is dep-interned
-           by the parent-tuple write). Chained shapes compose because bridged nodes
-           propagate through the normal confirmed-only walk, which can dequeue further
-           star nodes.
-        3. Soundness is unconditional: every candidate is confirmed by ``check`` before
-           entering ``node_ids`` or propagating, and ``n == '*'`` nodes never enter
-           ``node_ids`` (markers carry them)."""
+        Returns a ``SetLookupResult``: the concrete objects the subject has a relation
+        to, plus intensional ``(type, relation)`` markers meaning "every object of that
+        type", each with the objects it excludes (under ``but not`` / ``and``). The
+        cost is proportional to what the subject can reach, not to the store size;
+        every result is confirmed by ``check``, so the answer is exact."""
+        # Implementation notes (moved out of the docstring, TK123 item 14 / A40):
+        # The dual of ``expand``: a reverse BFS over membership edges from the subject
+        # (seeded by its direct memberships, propagated by ``_reverse_neighbors``'s
+        # H1/H2/H3 hops -- the mirror of ``check``'s direct-userset / Computed / TTU
+        # recursion). Each surfaced candidate is confirmed by ``check`` (exact under
+        # booleans, so an over-approximate candidate that an ``and``/``but not`` excludes
+        # is dropped), and only confirmed nodes propagate -- so the walk touches the
+        # subject's reachable neighborhood, never the whole store. Replaces the former
+        # O(stored-tuples) candidate sweep (``_lookup_sweep``, kept as the differential
+        # test reference); the write-time reverse-dependency interning (``_apply_add``)
+        # still guarantees every reachable object key has an id for the walk to find.
+        # Markers are intensional and exact by construction: one star-object check per
+        # declared relation, so star coverage arriving through Computed/TTU hops
+        # surfaces without enumerating names.
+        #
+        # N17 -- **wildcard-bridge seeding.** An object-wildcard grant ``s #... rel T:*``
+        # makes ``s`` a member of every concrete ``(T, X, rel)``, but the reverse walk
+        # only ever reaches the ``(T, '*', rel)`` star node, never the wildcard-covered
+        # concrete siblings ``(T, X, rel)``. That is harmless while those concretes are
+        # *direct* results -- the intensional marker ``(T, rel)`` covers them exactly
+        # (S4) -- but the walk would then silently drop any DOWNSTREAM object whose
+        # membership is inherited THROUGH such a concrete node (a TTU from-chain, or a
+        # non-wildcard userset restriction), which no marker covers. ``check`` crosses
+        # from one object's membership to another's by exactly two mechanisms (see
+        # ``member_via_usersets`` / ``ttu_leaf``): (a) a NON-wildcard userset restriction
+        # ``[T#r]`` lifts ``T:X#r``'s members onto a grantee, and (b) a TTU from-chain
+        # ``R2: r from ts`` evaluates a stored tupleset parent ``T:X`` at ``r``. To keep
+        # the whole walk O(reachable) rather than falling back to the O(store) sweep for
+        # such schemas, when the walk DEQUEUES any star node ``(T, '*', p)`` (bare or
+        # userset; the trigger is per-TYPE and fires before the entity-node skip and
+        # regardless of the star node's own check outcome), it bridges T once: for each
+        # declared shape ``(T, r0)`` and each relation ``r'`` the injection reaches
+        # (``{r0} plus _object_deps[(T, r0)]`` -- ``_owc_bridge_reach[T]``), it enqueues
+        # (1) every interned concrete ``(T, X, r')`` (``ids_of_shape`` -- stored userset
+        # subjects, TTU chain-target-interned keys, dep-interned keys) so mechanisms (a)
+        # and the concrete-parent arm of (b) are seeded, and (2) the star-parent cross
+        # for the triple combo owc x star-parent x TTU where NO concrete ``(T, X, r')``
+        # is interned: for each object ``Q:q`` that stored ``T:*`` as a tupleset parent
+        # (``member_of`` of ``(T, '*', '...')``) and each ``R`` with ``R: r' from ts``,
+        # it enqueues ``(Q, q, R)``. Bridged nodes then propagate through the normal
+        # confirmed-only walk, so chained shapes compose.
+        #
+        # **Completeness (the bridge trigger + seeds cover every wildcard route):**
+        # 1. Star-injection of the subject on shape ``(T, rel)`` requires the subject's
+        #    membership among the star node ``(T, '*', rel)``'s direct members (the only
+        #    truth source beyond stored-at-X tuples; ``_object_ids`` adds the star node
+        #    only for shapes). Every such membership route enqueues a star node of T:
+        #    (i) a direct grant / subject-star sentinel -> the seed's H1 (+ the H1 star
+        #    fold); (ii) a stored userset ``u`` at the star node with ``sat(u)``
+        #    true -> each intermediate hop is check-true and ``member_of``-connected, so
+        #    ``u`` is visited & confirmed and ``member_of[u]`` contains the star node;
+        #    (iii) a star userset sentinel ``(T2, '*', p)`` -> any confirmed instance
+        #    ``(T2, inst, p)`` folds ``member_of[(T2, '*', p)]`` (the H1 star fold),
+        #    which contains the star node; when the instance key is uninterned under
+        #    boolean mixing, the stored non-star arm interns it via dep-interning and
+        #    connects it (mixing requires stored arms). The trigger is per-TYPE (any
+        #    dequeued ``(T, '*', *)``, bare included), strictly wider than per-shape.
+        # 2. Given the trigger, every cross-object crossing out of a star-injected
+        #    concrete is seeded: a userset lift needs a stored subject ``(T, X, r')``
+        #    -> in ``ids_of_shape``; a TTU crossing from a concrete parent chain-interns
+        #    ``(T, X, r')`` -> in ``ids_of_shape``; a TTU crossing from a STAR parent is
+        #    seeded by the explicit star-parent cross (and ``(Q, q, R)`` is dep-interned
+        #    by the parent-tuple write). Chained shapes compose because bridged nodes
+        #    propagate through the normal confirmed-only walk, which can dequeue further
+        #    star nodes.
+        # 3. Soundness is unconditional: every candidate is confirmed by ``check`` before
+        #    entering ``node_ids`` or propagating, and ``n == '*'`` nodes never enter
+        #    ``node_ids`` (markers carry them).
+        # Provenance (moved out of the docstring, TK123 item 14): §6.4.
+        s_type, s_name = subject_type, subject_name  # TK123 item 7
+        reject_ellipsis_predicate(subject_predicate, 'lookup', write=False)  # TK123 item 9
         s_pred = _norm_pred(subject_predicate)
-        result = LookupResult()
+        result = SetLookupResult()
         for (t, rel) in self.ast:                          # declared (type, relation)
             if self.check(s_pred, s_type, s_name, rel, t, '*'):
                 result.markers.add((t, rel))
@@ -1808,7 +1905,7 @@ class SetEngine:
                     queue.append(nxt)
         return result
 
-    def _lookup_sweep(self, s_pred, s_type: str, s_name: str, result: LookupResult) -> None:
+    def _lookup_sweep(self, s_pred, s_type: str, s_name: str, result: SetLookupResult) -> None:
         """Exact O(stored-tuples) candidate sweep: every interned relation key is a
         candidate, confirmed by ``check`` (sound under booleans). The write-time
         reverse-dependency interning (``_apply_add``) guarantees TTU/Computed-only

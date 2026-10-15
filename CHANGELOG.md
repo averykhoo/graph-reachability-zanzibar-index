@@ -8,6 +8,29 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
 
 ## [Unreleased]
 
+The public API break of `TK123`: the first-hour review of 0.0.x, accepted in full. There
+are no compatibility aliases. What breaks a 0.0.5 caller, in short:
+
+- `zanzibar.connectedstore` is now `zanzibar.store`, `ConnectedStore` is now `Store`, and
+  the graph index's `Store` model is now `IndexStore`.
+- Keyword names are `subject_type` / `subject_name` / `object_type` / `object_name` (not
+  `s_type` / `s_name` / `o_type` / `o_name`).
+- The set engine's result type is `SetLookupResult`.
+- `build_index` / `rebuild_index` take `index_store_id` by keyword only.
+- The Python `Ellipsis` is refused as a subject predicate.
+- A `Store` refuses a `Session` with pending ORM changes.
+- `__all__` lists only the public surface.
+- `ShapeRefusedSinceTK137` is now `ShapeNoLongerAccepted`.
+- The parsers raise `SchemaError` (still a `ValueError`).
+- `at_least` must be `None` or an `int >= 0`; `True` and negative values are refused.
+- Opening a `Store` on a database without the `zanzibar_*` tables raises
+  `TablesNotCreated` (a `RuntimeError`) instead of the driver's own SQLAlchemy error.
+- Many exception and warning messages are reworded (see Changed); code that matches on
+  message text may need updating. Exception classes and their builtin bases are unchanged
+  except where listed here.
+
+Each is detailed below, under Changed or Added.
+
 ### Changed
 - **Breaking: the composed-system package and its class are renamed** (TK123). There are
   no compatibility aliases; the old names no longer import.
@@ -19,6 +42,150 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
   - The graph index's bookkeeping model `zanzibar.graphindex.Store` is now `IndexStore`, so
     it no longer shares a name with the user-facing class. Its table is still
     `zanzibar_store`, so databases written by 0.0.x open unchanged.
+- **Breaking: documented keyword names** (TK123). The tuple parameters are now
+  `subject_predicate`, `subject_type`, `subject_name`, `relation`, `object_type`,
+  `object_name` on `add_tuple` / `remove_tuple` / `check` / `lookup` / `lookup_reverse` of
+  `Store`, `SetEngine` and `WildcardIndex` (and `TupleSource.add` / `remove` / `check`).
+  Positional calls are unchanged; keyword calls using the old `s_type` / `s_name` / `o_type`
+  / `o_name` must be renamed.
+- **Breaking: the set engine's result type is `SetLookupResult`** (TK123), so it is never
+  confused with the graph index's `zanzibar.LookupResult` that `Store.lookup` returns. It is
+  now a dataclass (keyword constructor, `==`) with the same three fields;
+  `zanzibar.setengine.LookupResult` no longer exists.
+- **Breaking: `build_index` / `rebuild_index` take `index_store_id` by keyword only**
+  (TK123): write `build_index(session, "src", index_store_id="idx")`.
+- **Breaking: the subject predicate `...` (Python `Ellipsis`) is refused** at the public
+  entries of `Store`, `TupleSource` and `SetEngine` (TK123): the bare predicate is the
+  string `"..."`. Writes raise `AdmissionRejected`, reads raise `TypeError`. (`None` on a
+  read still means bare.)
+- **Breaking: `Store` refuses a `Session` with pending ORM changes** (TK123), at open, on
+  every write and in `refresh()`, with a `ValueError`. It commits and rolls back its own
+  transactions, so a caller's pending rows used to be committed with a write or silently
+  discarded by a rollback. Commit or roll back your own changes first.
+- **Breaking: each subpackage's `__all__` lists only the public surface** (TK123). Internal
+  helpers are gone from it (for example the compiler's plan nodes and `compute_taint` in
+  `zanzibar.schema`; `SetEngineBackend`, `Interner`, `NodeSets`, `DEFAULT_SETOPS` and
+  `ALL_SETOPS` in `zanzibar.setengine`; `PermissionDelta` in `zanzibar.graphindex`;
+  `advance_index`, `ensure_cursor`, `log_rows` and the other log helpers in `zanzibar.store`).
+  They still import by name; only `from ... import *` and the documented surface change.
+- **Breaking: `ShapeRefusedSinceTK137` is renamed `ShapeNoLongerAccepted`** (TK123), now a
+  `SchemaError` subclass and exported from the top level. It is the parser's refusal of a
+  shape that 0.0.4 and earlier accepted.
+- **Breaking: the schema parsers raise `SchemaError`** instead of a bare `ValueError` (TK123). Code that
+  checks `type(e) is ValueError` must change; `except ValueError` still works.
+- **Breaking: `at_least` is validated** (TK123): it must be `None` or an `int >= 0` (`TypeError` /
+  `ValueError` otherwise; `True` is refused). When a token cannot be satisfied, the error
+  now says if the token was issued by ANOTHER store, or if it is past the newest log id the
+  session can see (not issued yet, or committed after this session's snapshot).
+- **Reopening with reordered restrictions is accepted** (TK123): `[user, group#member]` and
+  `[group#member, user]` are the same schema. A `SchemaMismatch` now names the first
+  differing `type#relation` (or the differing `object_wildcard_shapes`).
+- **`save_schema` of the schema a store already has is a no-op** (TK123): it returns the
+  stored row, as reopening a `Store` with that schema does. A different schema raises
+  `SchemaMismatch` (still a `ValueError`) naming the first difference, instead of a plain
+  `ValueError`.
+- **`build_index` returns a named tuple** (TK123): `BuildReport` has the fields `cursor`,
+  `widx`, `ruleset` (it still unpacks as `cursor, widx, ruleset = ...` and keeps
+  `.constructor`), and a short `repr`.
+- **`UnprovenExtensionWarning` is raised once per `Store` and points at your code**
+  (TK123): opening a `Store` on a schema with a wildcard extension used to warn twice and
+  attribute the warning to a library line; it now warns once, at the line that called
+  `Store(...)`, `parse_openfga_schema(...)` or `SetEngine(...)`. A `SetEngine` handed a
+  compiled `RuleSet` no longer warns again. The message says how to silence it
+  (`warnings.filterwarnings('ignore', category=zanzibar.UnprovenExtensionWarning)`) and still
+  starts with `UNPROVEN:`.
+- **A stalled index names its row** (TK123): the exception from `catch_up()` carries
+  `failing_log_row` (log id and the tuple, e.g. `ADD group:b#member member group:c`) and a
+  note, `Store.stall_error` reads `applied through N; failing row M (...)`, and a
+  `PathCountExceeded` names its nodes as `type:name#relation` instead of row ids.
+- **Clearer admission refusals** (TK123): a tuple no restriction admits now says why, the
+  same way on both backends: the type is not declared (with a did-you-mean), the type has
+  no such relation (did-you-mean), the relation is computed only, or which subjects it
+  admits. A `type:name` passed as a type or name field gets a hint to split it or use the
+  three-argument form. Removing a tuple that is not stored names it:
+  `non-existent tuple cannot be removed: user:alice viewer doc:d1 is not stored`.
+- **`ClosureFanoutExceeded` names the knob you have** (TK123): the message reads "this
+  write would add N permission-closure rows" and says to raise the limit with the
+  `ZANZIBAR_MAX_CLOSURE_FANOUT` environment variable (`0` disables it), instead of
+  pointing at a `ReachabilityIndex` argument a `Store` user cannot reach.
+- **Error messages and `help()` text no longer cite repository-internal references**
+  (TK123): task ids, review-finding ids, spec section numbers and `docs/` / `tests/` /
+  `formal/` paths, none of which ship in the wheel, are gone from exception and warning
+  messages and from public docstrings. The SQLite write-lock refusal (`WriteLockUnsafe`)
+  now spells out the two-listener SQLAlchemy recipe instead of naming a test file.
+  `LookupNotFresh` no longer tells you to "wait for the async worker" (none ships; run
+  `catch_up()`), and `compile_ruleset(enable_boolean=False)` on a boolean schema says to
+  use the default `enable_boolean=True`. Internal-corruption reports (`InvariantViolation`)
+  keep their invariant ids.
+- `SetOps` prints as `SetOps('roaring')` instead of a dataclass repr full of lambda
+  addresses (TK123).
+
+### Added
+- **The OpenFGA tuple form** (TK123): `Store.add_tuple("user:alice", "viewer", "doc:d1")`,
+  with a userset as `"group:eng#member"` and every user as `"user:*"`; the same for
+  `remove_tuple`, `check(user, relation, object, *, at_least=None)`, `lookup("user:alice")`,
+  `lookup_reverse("viewer", "doc:d1")`, and `TupleSource.add` / `remove` / `check` (whose
+  `check` now has an explicit signature instead of `*q`). The six-part form still works;
+  the form is chosen by keyword (`user` / `object`) or by the number of arguments. A
+  malformed string raises the new `MalformedTupleString` (a `ZanzibarError` and a
+  `ValueError`) naming the expected form.
+- **`Store(schema=...)` accepts an OpenFGA JSON model** (TK123): a `dict`, a JSON string,
+  or either wrapped as `{"authorization_model": {...}}`. It is converted to DSL before it
+  is saved, so the persisted schema is always DSL and reopening with the same JSON is
+  accepted. Any other type, a compiled `RuleSet` included, raises `TypeError` naming `str`
+  and `dict` (it used to fail with `AttributeError: 'RuleSet' object has no attribute
+  'strip'`).
+- **`Store.result_keys(result)` / `Store.excluded_keys(result)`** (TK123): read a
+  `lookup` / `lookup_reverse` result as `(type, name, predicate)` keys, the same key
+  format `SetEngine.result_keys` / `excluded_keys` use, with no SQL on the `Node` table.
+  The key sets may differ (the graph index can also list a subject a marker already
+  covers), so compare results by what they cover, not by key-set equality. An id whose
+  node a later write removed raises `KeyError`. The PyPI quickstart uses them.
+  `Store.lookup` / `lookup_reverse` are annotated `-> LookupResult`.
+- **Top-level imports** (TK123): `from zanzibar import Store, LookupResult,
+  parse_openfga_schema` and every exception class, `WriteLockUnsafe` included (it was in no
+  `__all__`). They load lazily, so `import zanzibar` and `import zanzibar.schema` still do not
+  import the database stack.
+- **`zanzibar.ZanzibarError`**, the root of every exception the library raises on purpose,
+  and **`zanzibar.SchemaError`** (a `ZanzibarError` and a `ValueError`), raised for every
+  schema the parsers refuse. Each existing exception keeps its builtin base, so
+  `except ValueError` / `except RuntimeError` handlers are unchanged. `InvariantViolation`
+  (store corruption) is deliberately NOT a `ZanzibarError`, so `except ZanzibarError` never
+  swallows it.
+- `zanzibar.store` re-exports the exceptions a `Store` raises (`AdmissionRejected`,
+  `ClosureFanoutExceeded`, `PathCountExceeded`, `IndexResourceLimit`, `SchemaError`,
+  `CyclicDerivedDependency`, `WriteLockUnsafe`); `zanzibar.graphindex` exports
+  `WriteLockUnsafe`, `prune_outbox` and `outbox_watermark`.
+- **`StoreNotFound`** (TK123): opening a store id that was never created raises it
+  instead of a bare `KeyError`. It is a `ZanzibarError` and still a `KeyError`; its message
+  says how to create the store (`Store(session, id, schema=...)`) and is not quoted twice.
+  The failed open now rolls back, so it no longer holds the SQLite write lock.
+- **`TablesNotCreated`** (TK123): opening a `Store` on a database without the `zanzibar_*`
+  tables says to run `SQLModel.metadata.create_all(engine)`, instead of the driver's own
+  `no such table` / `relation ... does not exist` error. `.missing` lists the tables.
+- **`IndexExists`** (TK123): `build_index` over an index that already exists raises it
+  (a `ZanzibarError` and still a `ValueError`), pointing at `rebuild_index`.
+- `SetEngine(session, store_id)` may omit the schema when a `Store` created the store: it
+  reads the persisted schema (TK123).
+- `Store(paranoia=...)` documents `'fixpoint'` and accepts the ints `1` / `0` as
+  `'full'` / `'off'` (TK123).
+- Docstrings for the table models (`Node`, `Edge`, `SchemaRecord`, `TupleLog`,
+  `IndexCursor`), `WildcardIndex`, `SetEngine.check` and `Store.watermark`; the
+  `LookupResult` docstring and the PyPI page explain the `"any"` / `"all"` markers and
+  that a userset listed by `lookup_reverse` is itself allowed, not each of its members
+  (TK123). The `Store` docstring now says that only a TOKENED `check` falls back to the set
+  engine (an untokened read of a lagging async index can be stale, a revoke included) and
+  that `sync` is per instance; the `SetEngine` docstring says it never commits (the caller
+  does) and that its state is rebuilt in memory on open.
+- **New PyPI page sections** (TK123; interim, to be folded into the full documentation):
+  freshness tokens and async mode (what a token is, including that a duplicate add returns
+  the current watermark rather than a row of its own; the caller-scheduled `catch_up()` loop, stale untokened
+  reads after a grant or a revoke, per-instance `sync`), stall recovery, wildcards, an
+  exception table, sessions / transactions / threads, and memory and storage (state rebuilt
+  in memory on open, the permanent tuple log, pruning the delta outbox with
+  `prune_outbox` / `outbox_watermark`). The quickstart now prints its checks. The page's
+  imports, the `Store` attributes it names, its exception table and its async, wildcard and
+  pruning claims are pinned by tests.
 
 ## [0.0.5] - 2026-10-14
 

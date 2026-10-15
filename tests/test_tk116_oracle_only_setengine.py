@@ -431,7 +431,7 @@ def test_lookup_marker_carries_its_exclusions(k):
     sec 2). Before the fix ``lookup(user:n1)`` returned the marker ``(doc, viewer)`` --
     "every doc" -- with nothing to say ``doc:n2`` is subtracted: a FAIL-OPEN, while
     ``check`` said False. Literal pre-fix output:
-    ``LookupResult(node_ids={2}, markers={('doc', 'viewer')})``."""
+    ``SetLookupResult(node_ids={2}, markers={('doc', 'viewer')})``."""
     pe = ParityEngine(_OWC_ON_DERIVED.schema, object_wildcard_shapes=_OWC_ON_DERIVED.owc)
     try:
         assert pe.add_tuple(*_u('viewer', 'doc', '*'))

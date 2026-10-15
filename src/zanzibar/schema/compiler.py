@@ -1,11 +1,14 @@
 """`compile_ruleset` (schema -> graph-index rules), wildcard scope refusals, and the DSL front door `parse_openfga_schema`.
 
-Part of `zanzibar.schema`; split out of the single-file module by TK120 (2026-10-06).
+Part of `zanzibar.schema`.
 """
+# Provenance (moved out of the docstring, TK123 item 14): split out of the single-file module
+# by TK120 (2026-10-06).
 from dataclasses import replace
+import os
 import warnings
 from .errors import DoublyBridgedShapeError, UnsupportedByGraphIndex
-from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _directs_only, _iter_directs, _iter_ttus
+from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _directs_only, _iter_directs, _iter_ttus, declared_relations
 from .rules import Filter, Rule, RuleSet, SchemaInfo, _restriction_pattern, _rewrite_rule, norm_pred
 from .parser import parse_schema_ast
 from .boolean import _member_types, compile_boolean_schema, compute_taint
@@ -15,11 +18,12 @@ def derive_schema_info(
         ast: SchemaAST,
         object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
 ) -> SchemaInfo:
-    """Derive wildcard-shape metadata from the AST (spec §2.3).
+    """Derive wildcard-shape metadata from the AST.
 
     Subject-wildcard shapes come from every ``T:*`` / ``T:*#P`` restriction anywhere in
     the schema. Object-wildcard shapes have no DSL syntax and are declared by the caller.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): spec §2.3.
     subject_wildcard_shapes: set[tuple[str, str]] = set()
     for expr in ast.values():
         for direct in _iter_directs(expr):
@@ -52,11 +56,13 @@ class UnprovenExtensionWarning(UserWarning):
     """A schema uses a wildcard extension beyond OpenFGA that the formal proofs do not cover.
 
     The three extensions (wildcard usersets ``[T:*#p]``, star tuplesets, object wildcards)
-    are excluded from the headline equivalence theorems' premise
-    (``FullScope.lean::W4Fragment`` fields ``wsBare`` / ``bareStar`` / ``ttuStarFree``), so
-    backend agreement on them rests on the differential tests alone. Kept by user decision
-    2026-09-26 (task ``ASK-2``); this warning is how a caller learns that. Silence it with
-    ``warnings.filterwarnings('ignore', category=UnprovenExtensionWarning)``."""
+    are outside the premise of the formal equivalence proofs, so agreement between the two
+    backends on them rests on the differential tests alone. The warning is raised once per
+    ``Store`` (or ``parse_openfga_schema`` / ``SetEngine`` call) and points at the caller's
+    line. Silence it with
+    ``warnings.filterwarnings('ignore', category=zanzibar.UnprovenExtensionWarning)``."""
+    # Provenance: excluded by `FullScope.lean::W4Fragment` fields wsBare / bareStar /
+    # ttuStarFree; kept by user decision 2026-09-26 (ASK-2).
 
 
 def unproven_extensions(ast: SchemaAST,
@@ -84,15 +90,26 @@ def unproven_extensions(ast: SchemaAST,
     return found
 
 
+# Every frame inside the installed package is skipped when the warning picks its source
+# line, so it is attributed to the CALLER's own line (``Store(...)``,
+# ``parse_openfga_schema(...)``, ``SetEngine(...)``) however deep the library call chain
+# is (TK123 item 15; a fixed ``stacklevel`` pointed at a library line on the ``Store``
+# path). The trailing separator keeps a sibling directory such as ``zanzibar_x`` out.
+_PACKAGE_DIR_PREFIX = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
+
+
 def _warn_unproven_extensions(ast: SchemaAST, object_wildcard_shapes) -> None:
     found = unproven_extensions(ast, object_wildcard_shapes)
     if found:
+        # Provenance (kept out of the user-facing text, TK123 item 14): the extensions are
+        # outside `FullScope.lean::W4Fragment`; kept by user decision ASK-2 (2026-09-26).
         warnings.warn(
             'UNPROVEN: this schema uses wildcard extensions beyond OpenFGA ('
             + '; '.join(found) + '). They are not covered by the formal equivalence '
-            'proofs (formal/, W4Fragment); graph-index / set-engine agreement on them is '
-            'established by tests only. See task ASK-2.',
-            UnprovenExtensionWarning, stacklevel=3)
+            'proofs, so agreement between the graph index and the set engine on them '
+            'rests on differential tests only. Silence this with '
+            "warnings.filterwarnings('ignore', category=zanzibar.UnprovenExtensionWarning).",
+            UnprovenExtensionWarning, skip_file_prefixes=(_PACKAGE_DIR_PREFIX,))
 
 
 def _restriction_filter(r: Restriction, object_type: str, relation_name: str) -> Filter:
@@ -100,12 +117,13 @@ def _restriction_filter(r: Restriction, object_type: str, relation_name: str) ->
 
 
 def schema_filters(ast: SchemaAST) -> list[Filter]:
-    """Every strict direct-restriction Filter in the schema, booleans included (spec §6.2).
+    """Every strict direct-restriction Filter in the schema, booleans included.
 
     Unlike ``compile_ruleset`` this never raises on ``and`` / ``but not`` -- it walks the
     Direct leaves inside boolean branches too. The set engine reuses these Filters for
     write-validity parity with the graph backend without materialising any RuleSet.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): spec §6.2.
     out: list[Filter] = []
     for (object_type, relation_name), expr in ast.items():
         for direct in _iter_directs(expr):
@@ -126,12 +144,10 @@ def _emit_expr(expr: Expr, object_type: str, relation_name: str,
         # historical refusal (`compile_ruleset` docstring): this emitter builds plain
         # Filters/Rules only, and booleans need the derived-predicate compiler.
         # INSTEAD: compile with the default ``enable_boolean=True`` (boolean spec §3).
-        # NOTE: the message's own suggestion is stale ("use the set engine": since P7 the
-        # graph index compiles booleans itself; only this opt-in mode refuses them).
         raise UnsupportedByGraphIndex(
-            f"relation {object_type}#{relation_name} uses boolean operator {op!r}; "
-            f"the graph index materialises closures and cannot ingest boolean relations "
-            f"(use the set engine)")
+            f"relation {object_type}#{relation_name} uses boolean operator {op!r}, "
+            f"which enable_boolean=False refuses; compile with the default "
+            f"enable_boolean=True to support it")
     elif isinstance(expr, Direct):
         for r in expr.restrictions:
             out.append(_restriction_filter(r, object_type, relation_name))
@@ -201,19 +217,19 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
             # NOT refused (TK126), so no rename is needed.
             if hit:
                 undeclared = ts_key not in ast
+                # Provenance: invariant I5 (exclusivity); the decision-15 scope family.
                 raise UnsupportedByGraphIndex(
                     f"relation {object_type}#{relation}: TTU {e.target_rel!r} from "
                     f"{e.tupleset_rel!r} can reach the boolean-tainted relation(s) "
                     f"{', '.join(f'{t}#{e.target_rel}' for t in hit)}, but the "
                     f"containing relation is not itself tainted, so it would compile "
                     f"to a plain rewrite rule carrying derived state on its subject "
-                    f"predicate (I5 exclusivity). "
+                    f"predicate (only the delta processor may write a derived relation). "
                     + (f"The tupleset {object_type}#{e.tupleset_rel} is undeclared; "
                        f"declare it, e.g. 'define {e.tupleset_rel}: [<type>]'. "
                        if undeclared else
                        "A checked parse taints such a relation, so this AST is "
-                       "hand-built/unchecked or the taint analysis regressed. ")
-                    + "(decision-15 family)")
+                       "hand-built/unchecked or the taint analysis regressed. "))
     for (object_type, relation), expr in ast.items():
         for e in _iter_ttus(expr):
             ts_key = (object_type, e.tupleset_rel)
@@ -256,18 +272,20 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
 
 def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
                     enable_boolean: bool = True) -> RuleSet:
-    """Compile an AST into the graph index's Filters/Rules (spec §2.3).
+    """Compile an AST into the graph index's Filters/Rules.
 
-    Boolean (`and` / `but not`) relations compile into derived predicates (boolean
-    spec §3): untainted relations byte-identically to the pure-union path, tainted
+    Boolean (`and` / `but not`) relations compile into derived predicates: untainted relations byte-identically to the pure-union path, tainted
     ones into leaf routing + executable plans on ``RuleSet.compiled``, with
     ``RuleSet.schema_info`` enriched with the derived/leaf namespace facts.
-    ``UnsupportedByGraphIndex`` survives only for the decision-15 scope rejections;
-    derived-dependency cycles raise ``ValueError``.
+    ``UnsupportedByGraphIndex`` survives only for the wildcard-object scope rejections;
+    derived-dependency cycles raise ``CyclicDerivedDependency`` (a ``ValueError``).
 
-    ``enable_boolean=False`` restores the historical refusal (the pre-P7 behavior):
+    ``enable_boolean=False`` restores the historical refusal:
     the first boolean operator raises ``UnsupportedByGraphIndex``.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): the decision-15 scope family;
+    # enable_boolean=False is the pre-P7 behaviour.
+    # Provenance (moved out of the docstring, TK123 item 14): spec §2.3; boolean spec §3.
     if not enable_boolean:
         _validate_ttu_tuplesets(ast, frozenset())
         rules_and_filters: list[Rule | Filter] = []
@@ -276,7 +294,8 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
         schema_info = _expand_object_wildcard_shapes(rules_and_filters, schema_info)
         _reject_doubly_bridged_shapes(ast, schema_info)
         schema_info = _node_removal_fence(rules_and_filters, schema_info)
-        return RuleSet(rules_and_filters, schema_info=schema_info)
+        return RuleSet(rules_and_filters, schema_info=schema_info,
+                       declared=declared_relations(ast))
 
     tainted = compute_taint(ast)
     _validate_ttu_tuplesets(ast, tainted)
@@ -299,7 +318,8 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
                                   declared_shapes)
     _reject_doubly_bridged_shapes(ast, schema_info)
     schema_info = _node_removal_fence(rules_and_filters, schema_info)
-    return RuleSet(rules_and_filters, schema_info=schema_info, compiled=compiled)
+    return RuleSet(rules_and_filters, schema_info=schema_info, compiled=compiled,
+                   declared=declared_relations(ast))
 
 
 def _node_removal_fence(rules_and_filters: list, schema_info: SchemaInfo) -> SchemaInfo:
@@ -326,8 +346,9 @@ def _node_removal_fence(rules_and_filters: list, schema_info: SchemaInfo) -> Sch
 
     def need(value, what):
         if value is None:
+            # Provenance: the TK113 fence.
             raise ValueError(f'_node_removal_fence: {what} is a match-any pattern; the '
-                             f'TK113 fence cannot name the shape it would have to refuse')
+                             f'node-removal fence cannot name the shape it would have to refuse')
         return value
 
     admitted: dict[tuple[str, str], set[tuple[str, str]]] = {}
@@ -398,13 +419,13 @@ def wildcard_userset_restriction_shapes(ast: SchemaAST) -> frozenset[tuple[str, 
     that the class is safe to admit. **That clause was REFUTED by measurement.** The
     graph index under-reported on exactly this class -- an object-wildcard grant
     crossing a star-tupleset TTU with no interned node of the shape -- disagreeing with
-    the oracle AND with both set engines (docs/spec-deviations.md 2026-08-09; fixed by
-    the entity-wise crossing middle, invariant I14). The NARROWING itself still stands
+    the oracle AND with both set engines (fixed by the entity-wise crossing middle).
+    The NARROWING itself still stands
     on its own argument: the F1/F2 danger is a writable userset SUBJECT creating a
     latent cycle and innocent-write lockout, which a through-shape does not enable.
     Admitting the class was right; the unanimity cited for it was not true.
 
-    ⚠ CORRECTION (ZT-P5-NEW, 2026-07-26). The original justification for this narrowing
+    ⚠ CORRECTION (2026-07-26). The original justification for this narrowing
     also claimed that a through-shape *"is never a writable userset subject -- reg11's
     dangerous writes self-cycle and are rejected on both backends, so nothing
     persists"*. **That second clause is FALSE.** A through-shape ``(T, target)`` CAN be
@@ -419,10 +440,13 @@ def wildcard_userset_restriction_shapes(ast: SchemaAST) -> frozenset[tuple[str, 
     ``zanzibar.graphindex.wildcard.WildcardIndex._reject_star_self_edge`` (the graph-side mirror of
     ``SetEngine._would_cycle``'s raw-level ``u == v`` rule). Do not re-derive "therefore
     through-shapes are harmless" from this docstring: they are harmless *to the compile
-    gate*, nothing more. See docs/spec-deviations.md 2026-07-17 + 2026-07-26.
+    gate*, nothing more.
 
     This is the precise left factor of the doubly-bridged precondition (see
     ``_reject_doubly_bridged_shapes``)."""
+    # Provenance (moved out of the docstring, TK123 item 14): docs/spec-deviations.md
+    # 2026-08-09 (invariant I14); the correction below is ZT-P5-NEW (2026-07-26); docs/spec-
+    # deviations.md 2026-07-17 + 2026-07-26.
     shapes: set[tuple[str, str]] = set()
     for expr in ast.values():
         for direct in _iter_directs(expr):
@@ -483,6 +507,8 @@ def _reject_doubly_bridged_shapes(ast: SchemaAST, schema_info: SchemaInfo) -> No
         # (closest legal form: covers only the groups written, not every group), or remove
         # the shape from ``object_wildcard_shapes`` -- it may arrive by propagation through
         # a TTU head, so the declared shape to drop can be upstream. Neither is in OpenFGA.
+        # Provenance: decision-15 scope family; docs/spec-deviations.md 2026-07-17 (a
+        # lift would be the symmetric subject-keyed residue design).
         raise DoublyBridgedShapeError(
             f"shape(s) {offending} are BOTH a wildcard-userset shape (a T:*#p "
             f"restriction) and an object-wildcard shape; a wildcard write on such a "
@@ -491,9 +517,7 @@ def _reject_doubly_bridged_shapes(ast: SchemaAST, schema_info: SchemaInfo) -> No
             f"bridges), so the graph accepts the wildcard write then permanently rejects "
             f"every later innocent concrete write of that shape -- set/graph divergences "
             f"plus innocent-write lockout. Neither wildcard usersets nor object-wildcard "
-            f"tuple objects exist in OpenFGA; lift via the symmetric subject-keyed "
-            f"residue design if ever needed (decision-15 scope family; see "
-            f"docs/spec-deviations.md 2026-07-17)")
+            f"tuple objects exist in OpenFGA: declare only one of the two for this shape")
 
 
 def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,
@@ -543,11 +567,13 @@ def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,
             # object wildcard may flow into a boolean relation; drop the shape, or drop the
             # arm of the boolean relation that reads the wildcarded relation (that changes
             # its answers).
+            # Provenance (all four refusals in this function): the decision-15 scope
+            # family; the TTU-target one is blind-audit D4; the star-tupleset one is the v1
+            # scope hook in docs/spec-deviations.md.
             raise UnsupportedByGraphIndex(
                 f"object-wildcard shape ({t}, {r.rsplit('.', 1)[0]}) expands onto the "
                 f"compiled leaf predicate ({t}, {r}) through the rewrite rules; "
-                f"wildcard-object state cannot feed a derived relation (decision-15 "
-                f"family)")
+                f"wildcard-object state cannot feed a derived relation")
 
     for key in sorted(tainted):
         for ttu in _iter_ttus(ast[key]):
@@ -564,7 +590,7 @@ def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,
                     f"'{ttu.target_rel} from {ttu.tupleset_rel}' in derived relation "
                     f"{key[0]}#{key[1]}; derived-TTU parent enumeration reads stored "
                     f"tupleset tuples directly and cannot see object-wildcard (w_all) "
-                    f"state (decision-15 family)")
+                    f"state")
             ts_expr = ast.get(ts_key)
             if ts_expr is None:
                 continue
@@ -580,8 +606,7 @@ def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,
                             f"object-wildcard shape ({restr.type}, {ttu.target_rel}) "
                             f"is the TTU target of derived relation {key[0]}#{key[1]}; "
                             f"derived evaluation probes the closure directly and "
-                            f"cannot see object-wildcard (w_all) state (decision-15 "
-                            f"family, blind-audit D4)")
+                            f"cannot see object-wildcard (w_all) state")
                     if (restr.wildcard and restr.predicate == '...'
                             and (restr.type, ttu.target_rel) in tainted):
                         # REFUSED SHAPE: a star tupleset ``[folder:*]`` whose TTU target is
@@ -596,8 +621,8 @@ def _reject_object_wildcard_scope(ast: SchemaAST, tainted: frozenset,
                             f"[{restr.type}:*] on {ttu.tupleset_rel!r} derives the "
                             f"wildcard userset shape ({restr.type}, {ttu.target_rel}) "
                             f"over the derived relation {restr.type}#{ttu.target_rel}, "
-                            f"which needs symbolic composition through residues (v1 "
-                            f"scope hook; see spec-deviations)")
+                            f"which needs symbolic composition through residues, which the "
+                            f"graph index does not support")
 
 
 def parse_openfga_schema(
@@ -607,7 +632,7 @@ def parse_openfga_schema(
         enable_boolean: bool = True,
 ) -> RuleSet:
     """Parse + compile an OpenFGA-style schema (see ``parse_schema_ast``) into a graph-index
-    RuleSet (spec §2.1/§2.3).
+    RuleSet.
 
     Pipeline: ``parse_schema_ast`` -> ``derive_schema_info`` -> ``compile_ruleset``.
     ``object_wildcard_shapes`` are ``(object_type, relation)`` pairs enabling wildcard
@@ -615,9 +640,12 @@ def parse_openfga_schema(
     syntax and so must be declared here.
 
     Boolean (`and` / `but not`) schemas compile into derived predicates maintained by
-    the delta processor (boolean spec §3/§5) -- the P7 matrix flip. Pass
+    the delta processor. Pass
     ``enable_boolean=False`` for the historical refusal behavior.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): the P7 matrix flip.
+    # Provenance (moved out of the docstring, TK123 item 14): spec §2.1/§2.3; boolean spec
+    # §3/§5.
     ast = parse_schema_ast(schema)
     schema_info = derive_schema_info(ast, object_wildcard_shapes)
     return compile_ruleset(ast, schema_info, enable_boolean=enable_boolean)

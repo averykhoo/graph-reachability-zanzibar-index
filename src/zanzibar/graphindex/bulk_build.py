@@ -1,4 +1,4 @@
-"""P13 -- the bulk closure builder for ``build_index`` (design: docs/architecture/p13-bulk-build-design.md).
+"""The bulk closure builder for ``build_index``.
 
 Constructs the graph index's final pre-backfill state DIRECTLY -- one in-memory pass
 over the tuple snapshot plus bulk writes -- instead of replaying every routed triple
@@ -7,7 +7,7 @@ O(ancestors x descendants) closure-region update per triple).
 
 **Correctness bar (design):** the state this builds is byte-IDENTICAL to what the
 incremental add-only load produces, modulo auto-assigned row ids. It is pinned by the
-differential identity gate in ``tests/test_bulk_build.py``; no new proof obligation
+differential identity test suite; no new proof obligation
 arises, since the incremental path (which stays the default online apply step) carries
 the entire verification story and this is merely an alternative constructor of the same
 modeled state (T4's closed-form path counts, computed directly).
@@ -20,11 +20,11 @@ Phases (design "Bulk algorithm"):
   B  bridge edges from the declared bridged shapes (concrete->w_any / w_all->concrete),
      multiplicity 1, existence-checked (mirrors ``_ensure_bridges``), plus -- for every
      CROSSABLE shape (bridged in AND out) -- the entity-tracking crossing middles with
-     their bridges (I14; mirrors ``_ensure_entity_middles``).
+     their bridges (mirrors ``_ensure_entity_middles``).
   C  topological sort of the direct graph; a cycle is a corruption signal.
   P  sparse integer DP in reverse topo order: ``P(a, b) = m(a, b) + sum_v m(a, v)*P(v, b)``
      -- the total weighted path count (== incremental ``indirect_edge_count``).
-  D  (R4-BF, boolean schemas only) in-memory boolean backfill: compute the FINAL derived
+  D  (boolean schemas only) in-memory boolean backfill: compute the FINAL derived
      state (derived edges, residues, from-chain nodes and their closure/refcount effects)
      over ``m``, byte-identical to running ``DeltaProcessor.backfill()`` per object -- see
      ``zanzibar.graphindex.bulk_backfill``.
@@ -32,9 +32,14 @@ Phases (design "Bulk algorithm"):
      incident direct multiplicities), edges (direct=m, indirect=P, derived flag from the
      processor-written pairs), residues, and one outbox ADDED row per final pair.
 
-On a non-boolean schema Phase D is skipped and this is exactly the P13 pre-backfill build;
+On a non-boolean schema Phase D is skipped and this is exactly the pre-backfill build;
 ``store.build_index``'s bulk branch no longer runs ``DeltaProcessor.backfill()``.
 """
+# Provenance (moved out of the docstring, TK123 item 14): phase D is R4-BF.
+# Provenance (moved out of the docstring, TK123 item 14): P13; the identity gate is
+# tests/test_bulk_build.py; I14 middles.
+# Provenance (moved out of the docstring, TK123 item 14): design: docs/architecture/p13-bulk-
+# build-design.md.
 
 from __future__ import annotations
 

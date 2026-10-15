@@ -1,7 +1,9 @@
 """Boolean derived-predicate compilation: plan nodes, compiled artifacts, taint, strata.
 
-Part of `zanzibar.schema`; split out of the single-file module by TK120 (2026-10-06).
+Part of `zanzibar.schema`.
 """
+# Provenance (moved out of the docstring, TK123 item 14): split out of the single-file module
+# by TK120 (2026-10-06).
 from dataclasses import dataclass, replace
 from functools import reduce
 from typing import Callable
@@ -183,7 +185,8 @@ class PDerivedTTU:
     """``target from tupleset`` where the *target* is derived (tupleset untainted):
     ∃ tupleset-parent p: derived check (subject, target, p). ``parent_types`` are the
     tupleset's member entity types, resolved at compile so the processor never walks
-    the AST (boolean spec §1.11)."""
+    the AST."""
+    # Provenance (moved out of the docstring, TK123 item 14): boolean spec §1.11.
     target_rel: str
     tupleset_rel: str
     positive: bool
@@ -218,7 +221,8 @@ class LeafSpec:
 
 @dataclass(frozen=True, slots=True)
 class LeafFamily:
-    """Namespace classification for one leaf predicate family (I4)."""
+    """Namespace classification for one leaf predicate family."""
+    # Provenance (moved out of the docstring, TK123 item 14): I4.
     owner_relation: str
     object_type: str
     index: int
@@ -236,8 +240,9 @@ class DerivedFamily:
 
 @dataclass(frozen=True, slots=True)
 class DependentEdge:
-    """One invalidation fan-out edge (boolean spec §5.2): when the keyed relation's
+    """One invalidation fan-out edge: when the keyed relation's
     state changes on some object, ``dependent`` must reconcile."""
+    # Provenance (moved out of the docstring, TK123 item 14): boolean spec §5.2.
     dependent: tuple[str, str]          # (object_type, relation)
     via: str                            # 'computed' | 'userset' | 'ttu'
     tupleset_rel: str | None = None
@@ -263,7 +268,8 @@ class Plan:
 
 @dataclass
 class CompiledBooleans:
-    """The AOT compile output for a boolean-enabled schema (boolean spec §3.4)."""
+    """The AOT compile output for a boolean-enabled schema."""
+    # Provenance (moved out of the docstring, TK123 item 14): boolean spec §3.4.
     tainted: frozenset[tuple[str, str]]
     namespace: dict[tuple[str, str], LeafFamily | DerivedFamily]   # (type, predicate) ->
     plans: dict[tuple[str, str], Plan]
@@ -376,9 +382,11 @@ def _member_types(object_type: str, relation: str, ast: SchemaAST,
 
 
 def compute_taint(ast: SchemaAST) -> frozenset[tuple[str, str]]:
-    """Tainted = reaches an Intersection/Exclusion through the schema reference graph
-    (boolean spec §3.1). Tainted relations become derived predicates; untainted ones
-    compile byte-identically to today (the P0 snapshot gate)."""
+    """Tainted = reaches an Intersection/Exclusion through the schema reference graph.
+    Tainted relations become derived predicates; untainted ones
+    compile byte-identically to a schema without boolean operators."""
+    # Provenance (moved out of the docstring, TK123 item 14): the P0 snapshot gate.
+    # Provenance (moved out of the docstring, TK123 item 14): boolean spec §3.1.
     mentions = {key: _mentions(key, expr, ast) for key, expr in ast.items()}
     tainted = {key for key, expr in ast.items() if _contains_boolean(expr)}
     changed = True
@@ -509,11 +517,12 @@ def _build_plan_tree(key: tuple[str, str], expr: Expr, tainted: frozenset,
                         # lacks. INSTEAD: ``[group#member]`` with one tuple per group
                         # (closest legal form: covers only the groups written), or make
                         # ``group#member`` plain.
+                        # Provenance: v1 scope hook, docs/spec-deviations.md.
                         raise UnsupportedByGraphIndex(
                             f"relation {object_type}#{relation}: wildcard userset "
                             f"restriction [{r.type}:*#{r.predicate}] over the derived "
                             f"relation {r.type}#{r.predicate} needs symbolic composition "
-                            f"through residues (v1 scope hook; see spec-deviations)")
+                            f"through residues, which the graph index does not support")
                     nodes.append(PDerivedUserset(r.type, r.predicate,
                                                  alloc(None, userset=r, positive=positive),
                                                  positive))
@@ -767,9 +776,10 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
     """Compile every tainted relation: plans + leaf routing appended to
     ``rules_and_filters``; returns the artifacts and a SchemaInfo enriched with the
     derived/leaf namespace facts. Derived-dependency cycles raise ``ValueError``.
-    The decision-15-family scope restrictions live in
+    The wildcard-object scope restrictions live in
     ``_reject_object_wildcard_scope``, which the caller runs after shape expansion
     (they must see the expanded shape set, not just the declared one)."""
+    # Provenance (moved out of the docstring, TK123 item 14): the decision-15 scope family.
     namespace: dict[tuple[str, str], LeafFamily | DerivedFamily] = {}
     plans: dict[tuple[str, str], Plan] = {}
     dependents: dict[tuple[str, str], list[DependentEdge]] = {}
@@ -838,9 +848,10 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
                     bad = sorted(t for t in types if (t, sp) in derived)
                 if bad:
                     ip = rf.if_pattern
+                    # Provenance: invariant I5 (exclusivity), boolean spec sec 3.3.
                     raise ValueError(
-                        f'internal compiler invariant (I5 exclusivity, boolean spec '
-                        f'§3.3): the rewrite rule from {ip.object_type}#{ip.relation} '
+                        f'internal compiler invariant (only the delta processor may write a '
+                        f'derived relation): the rewrite rule from {ip.object_type}#{ip.relation} '
                         f'into {then_t}#{then_rel} carries a derived subject predicate '
                         f'{sp!r}: it would produce subject nodes on the derived '
                         f'relation(s) {", ".join(f"{t}#{sp}" for t in bad)} through a '

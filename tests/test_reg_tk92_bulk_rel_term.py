@@ -206,7 +206,7 @@ def _build(tuples, *, bulk):
     for raw in tuples:
         src.add(*raw)
     session.commit()
-    _, widx, _ = build_index(session, 'src', 'idx', bulk=bulk)
+    _, widx, _ = build_index(session, 'src', index_store_id='idx', bulk=bulk)
     return session, widx
 
 

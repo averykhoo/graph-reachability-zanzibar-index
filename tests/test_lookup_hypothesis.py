@@ -135,7 +135,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from zanzibar.schema import AdmissionRejected
 from zanzibar.setengine import ALL_SETOPS, SetEngine
-from zanzibar.setengine.engine import LookupResult
+from zanzibar.setengine.engine import SetLookupResult
 from tests.test_lookup_oracle import _names_by_type, _subject_candidates
 from zanzibar.schema import parse_schema_ast
 
@@ -172,7 +172,7 @@ def test_owc_bridge_walk_vs_sweep(corpus, ops, seed):
                          if k[2] != '...' and k[1] != '*']
             for subj in subjects:
                 res = se.lookup(*subj)
-                ref = LookupResult()
+                ref = SetLookupResult()
                 se._lookup_sweep(subj[0], subj[1], subj[2], ref)
                 ref.markers = res.markers          # same intensional markers
                 walk_cov = _covered(res, keyed_ids)

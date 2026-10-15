@@ -553,7 +553,7 @@ def target_bulk(scale):
     print(f'  dataset: {len(tuples):,} raw tuples -> {nrows:,} deduped RelationTuple rows')
 
     def work():
-        _cur, widx, _rs = build_index(session, 'src', 'idx', bulk=True)
+        _cur, widx, _rs = build_index(session, 'src', index_store_id='idx', bulk=True)
         return widx, nrows
 
     (widx, ntup), stats, table = _profile(work)

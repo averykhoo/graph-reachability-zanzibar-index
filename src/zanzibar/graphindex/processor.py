@@ -1,5 +1,5 @@
 """
-DeltaProcessor: stratified IVM for derived (boolean) relations (boolean spec §5).
+DeltaProcessor: stratified IVM for derived (boolean) relations.
 
 The processor consumes the closure's own outbox stream and maintains, per derived
 relation, (a) materialised derived edges for concretely-supported members and (b) a
@@ -15,8 +15,9 @@ Evaluation context: no recursion anywhere -- closure-leaves are wildcard-aware p
 probes, derived leaves read persisted edge+residue state of strictly earlier strata.
 A processor write that the core rejects as a cycle is a HARD failure
 (``InvariantViolation``), never an op rejection: stratification makes derived cycles
-impossible, so a hit means a corrupted store (boolean spec §7).
+impossible, so a hit means a corrupted store.
 """
+# Provenance (moved out of the docstring, TK123 item 14): boolean spec §5; boolean spec §7.
 
 from __future__ import annotations
 
@@ -45,14 +46,15 @@ class SettlePass(NamedTuple):
     ``keys`` are the derived keys still reachable from undrained outbox rows after the
     budgeted rounds; ``changed`` is the subset whose reconcile was NOT a fixpoint, which
     is the genuine-staleness signal the cascade raises on. A cascade that drained
-    cleanly records None, not an empty pass. See TK73 /
-    docs/tk73-cascade-quiesce-gc-2026-09-17.md."""
+    cleanly records None, not an empty pass."""
+    # Provenance (moved out of the docstring, TK123 item 14): TK73, docs/tk73-cascade-quiesce-
+    # gc-2026-09-17.md.
     keys: tuple[Key, ...]
     changed: tuple[Key, ...]
 
 
 class FixpointTier(NamedTuple):
-    """What the opt-in ``'fixpoint'`` paranoia tier looked at and concluded (TK82).
+    """What the opt-in ``'fixpoint'`` paranoia tier looked at and concluded.
 
     ``keys`` is the cascade's SCHEDULED-key union -- every key placed in
     ``_run_cascade``'s per-round ``keys`` map, plus the terminal ``leftover`` -- and
@@ -62,8 +64,10 @@ class FixpointTier(NamedTuple):
 
     ⚠ Reading this is the ONLY way to observe the tier's verdict after the fact:
     ``reconcile`` is a REPAIRING mutator, so calling it again returns False both on
-    state that was already a fixpoint and on state the tier just repaired.
-    See docs/tk82-cascade-fixpoint-tier-2026-09-19.md."""
+    state that was already a fixpoint and on state the tier just repaired."""
+    # Provenance (moved out of the docstring, TK123 item 14): TK82, docs/tk82-cascade-
+    # fixpoint-tier-2026-09-19.md.
+    # Provenance (moved out of the docstring, TK123 item 14): TK82.
     keys: tuple[Key, ...]
     changed: tuple[Key, ...]
 
@@ -226,7 +230,8 @@ class _EvalContext:
         return out
 
 class DeltaProcessor:
-    """Maintains derived-relation state from the outbox stream (boolean spec §5)."""
+    """Maintains derived-relation state from the outbox stream."""
+    # Provenance (moved out of the docstring, TK123 item 14): boolean spec §5.
 
     def __init__(self, widx: WildcardIndex, compiled: CompiledBooleans):
         self.widx = widx
@@ -300,11 +305,13 @@ class DeltaProcessor:
         return self._residue_state(object_type, rel, obj_name)[0]
 
     def derived_check(self, object_type: str, rel: str, obj_name: str, s: SubjectKey) -> bool:
-        """The §6 derived membership check: edge probe + residue (point reads).
+        """The derived membership check: edge probe + residue (point reads).
 
         Delegates to the façade's ``_check_derived`` -- the read path and the
         processor's reconcile MUST share one implementation, or a semantics fix in
-        one (e.g. the blind-audit P4 upos rule) silently diverges the other."""
+        one (e.g. the ``upos`` rule) silently diverges the other."""
+        # Provenance (moved out of the docstring, TK123 item 14): boolean spec sec 6; the upos
+        # rule is blind-audit P4.
         sp, st, sn = s
         return self.widx._check_derived(sp, st, sn, rel, object_type, obj_name)
 
@@ -364,8 +371,9 @@ class DeltaProcessor:
         """Names x of userset subjects (t, x, p) holding a stored tuple on the storage
         leaf (obj, leaf).
 
-        Memoized inside an open ``_stored_cache_scope`` (perf R6-10) -- see that
+        Memoized inside an open ``_stored_cache_scope`` -- see that
         method's docstring for why a cascade/reconcile-scoped memo is exact."""
+        # Provenance (moved out of the docstring, TK123 item 14): perf R6-10.
         cache = self._stored_cache
         key = ('us', object_type, obj_name, leaf, t, p)
         if cache is not None:
@@ -1311,9 +1319,10 @@ class DeltaProcessor:
             if isinstance(fam, LeafFamily):
                 # `raise`, not `assert`: survives `python -O` (ZT-P1-2, 2026-07-26).
                 if o_name == '*':
+                    # Provenance: the decision-15 scope family (compiler.py::_reject_object_wildcard_scope).
                     raise InvariantViolation(
-                        'wildcard-object delta mapped to a derived key '
-                        '(decision-15 shape leaked)')
+                        'wildcard-object delta mapped to a derived key (a wildcard-object '
+                        'shape the compiler should have refused reached the cascade)')
                 key = (o_type, fam.owner_relation, o_name)
                 if s_name == '*':
                     full(key)              # symbolic delta: §5.4 full-object rule
@@ -1394,13 +1403,13 @@ class DeltaProcessor:
                 raise AssertionError(f'unknown dependency via {edge.via!r}')
 
     def run_cascade(self, txn_start_watermark: int) -> None:
-        """The in-transaction cascade (§5.1): per stratum round, map the frontier's
+        """The in-transaction cascade: per stratum round, map the frontier's
         deltas (plus pending residue bumps) to keys, reconcile each, advance.
 
         A TWO-CACHE wrapper around ``_run_cascade``; both scopes are reentrant and both
         close before the caller commits, so the paranoia checker reads true state.
 
-        (1) The per-batch node-resolution cache (perf N15): the cascade re-resolves the
+        (1) The per-batch node-resolution cache: the cascade re-resolves the
         same concrete subject/object/leaf nodes across every reconcile, leaf probe and
         residue read of a round, so one scope over the whole cascade collapses the
         ``node`` SELECTs (with negative caching for the many absent probes). Being
@@ -1409,22 +1418,26 @@ class DeltaProcessor:
         the outermost -- exercised under paranoia either way. See
         ``ReachabilityIndex._node_cache_scope``.
 
-        (2) The stored-tuple enumeration memo (perf R6-10), installed cascade-wide
+        (2) The stored-tuple enumeration memo, installed cascade-wide
         because the raw stored tuples it reads cannot change inside a cascade -- the
         full premise, and the two places it must NOT be installed or widened, are in
         ``_stored_cache_scope``'s own docstring. Unlike (1) this one is NOT installed
         by ``advance_index``, deliberately: that scope spans the raw-write apply loop.
 
-        (3) TK82's opt-in ``'fixpoint'`` tier runs AFTER both scopes close, not inside
+        (3) The opt-in ``'fixpoint'`` paranoia tier runs AFTER both scopes close, not inside
         them. That is the stronger question -- a memoized node resolution or stored-tuple
         enumeration cannot mask a divergence the check exists to see -- it is what
-        docs/tk74-staleness-net-2026-09-18.md sec 10.3 actually measured (its instrument
+        an earlier staleness measurement actually observed (its instrument
         wrapped this public method), and one call site here covers all three of
         ``_run_cascade``'s normal exits, where a check placed inside would have to be
         repeated at each and silently skipped by the next one added. ⚠ Bound: under
         ``advance_index`` an OUTER node-cache scope spans the apply loop, so there the
         tier still runs inside *that* one; the tier closes its own scopes, not a
         caller's."""
+        # Provenance (moved out of the docstring, TK123 item 14): the fixpoint tier is TK82;
+        # the measurement is docs/tk74-staleness-net-2026-09-18.md sec 10.3.
+        # Provenance (moved out of the docstring, TK123 item 14): perf N15; perf R6-10.
+        # Provenance (moved out of the docstring, TK123 item 14): §5.1.
         self._tier = None
         self._tier_union = set() if paranoia_at_least(
             paranoia_level(self.session, self.store_id), PARANOIA_FIXPOINT) else None
@@ -1643,10 +1656,12 @@ class DeltaProcessor:
         return names
 
     def backfill(self, chunk_size: int = 200) -> None:
-        """Bootstrap/repair derived state from existing leaf data (§5.5): per stratum
+        """Bootstrap/repair derived state from existing leaf data: per stratum
         in topo order, reconcile every object with any positive-leaf state. Chunked,
         idempotent, mirroring the wildcard ``backfill()`` precedent; doubles as the
-        recovery path when I9 finds an inconsistent key."""
+        recovery path when ``audit_fixpoint`` finds an inconsistent key."""
+        # Provenance (moved out of the docstring, TK123 item 14): the I9 invariant.
+        # Provenance (moved out of the docstring, TK123 item 14): §5.5.
         for stratum in self.compiled.strata:
             for (object_type, rel) in stratum:
                 names = sorted(self._live_keys_of(object_type, rel))
@@ -1661,10 +1676,10 @@ class DeltaProcessor:
     # ------------------------------------------------------------------ #
 
     def audit_fixpoint(self) -> None:
-        """I9: reconcile of every live derived key produces zero changes. On a hit,
-        ``backfill()`` is the recovery path (§5.5).
+        """Assert that reconciling every live derived key produces zero changes. On a hit,
+        ``backfill()`` is the recovery path.
 
-        Contract (TK85, 2026-10-13) -- this is a REPAIRING MUTATOR, not a read-only
+        Contract -- this is a REPAIRING MUTATOR, not a read-only
         check. It walks strata in topo order and calls ``reconcile`` on each live
         derived key; on the FIRST key whose reconcile changed anything it has ALREADY
         WRITTEN that key's repair, then raises ``InvariantViolation``. Every later key
@@ -1685,10 +1700,12 @@ class DeltaProcessor:
         the ``'fixpoint'`` tier (``_check_cascade_fixpoint``); a key that was never
         SCHEDULED is outside that tier by construction, and this audit is the only
         detector for that class. Production callers: none -- it is reached from
-        ``tests/`` and, on the composed system, via the public ``Store.proc``
+        the test suite and, on the composed system, via the public ``Store.proc``
         attribute (``None`` when the schema has no boolean relation). The whole-store
         repair ``backfill()`` does have a production caller, ``build_index(bulk=False)``.
         """
+        # Provenance (moved out of the docstring, TK123 item 14): invariant I9.
+        # Provenance (moved out of the docstring, TK123 item 14): §5.5; TK85, 2026-10-13.
         for stratum in self.compiled.strata:
             for (object_type, rel) in stratum:
                 for obj_name in sorted(self._live_keys_of(object_type, rel)):

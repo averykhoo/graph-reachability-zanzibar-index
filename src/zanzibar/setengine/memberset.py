@@ -1,5 +1,5 @@
 """
-``MemberSet`` -- the star-closed set algebra (spec §4).
+``MemberSet`` -- the star-closed set algebra.
 
 Plain bitmaps cannot represent "all users except bob". A ``MemberSet`` closes the
 representation over subject wildcards:
@@ -22,15 +22,17 @@ set ``E`` and target star set ``S`` for the operation, then renormalize
     neg = starpop − E      # starred ids that must be excluded
 
 which restores ``ext = E`` exactly while keeping ``stars = S`` for intensional queries.
-The star bookkeeping per op mirrors the §3 star × boolean table:
+The star bookkeeping per op mirrors the star × boolean table:
 
     union     S = stars_a | stars_b        (covered if either)
     intersect S = stars_a & stars_b        (covered iff both)          -- '*' ∈ A∧B
     subtract  S = stars_a - stars_b        (covered in A, not in B)    -- '*' ∈ A−B
 
-This module has NO engine dependencies (spec §4); it is validated by a brute-force
+This module has NO engine dependencies; it is validated by a brute-force
 property suite under both ``SetOps`` implementations.
 """
+# Provenance (moved out of the docstring, TK123 item 14): set-engine spec sec 3.
+# Provenance (moved out of the docstring, TK123 item 14): spec §4; spec §4.
 
 from __future__ import annotations
 

@@ -1,7 +1,9 @@
 """The schema AST (`Direct`/`Computed`/`TTU`/`Union`/`Intersection`/`Exclusion`) and walkers over it.
 
-Part of `zanzibar.schema`; split out of the single-file module by TK120 (2026-10-06).
+Part of `zanzibar.schema`.
 """
+# Provenance (moved out of the docstring, TK123 item 14): split out of the single-file module
+# by TK120 (2026-10-06).
 from dataclasses import dataclass
 
 
@@ -93,3 +95,92 @@ def _directs_only(expr: Expr) -> bool:
     if isinstance(expr, Union):
         return all(_directs_only(c) for c in expr.children)
     return False
+
+
+# ---- user-facing explanations (TK123 items 17, 18) ----
+
+def _render_restriction(r: Restriction) -> str:
+    name = f'{r.type}:*' if r.wildcard else r.type
+    return name if r.predicate == '...' else f'{name}#{r.predicate}'
+
+
+@dataclass(frozen=True, slots=True)
+class DeclaredRelations:
+    """What a schema declares, for admission messages: the known types (object types
+    plus every type a restriction names), each type's relation names, and each
+    ``(type, relation)``'s direct restrictions rendered (empty = computed only)."""
+    types: frozenset[str]
+    relations: dict[str, tuple[str, ...]]
+    restrictions: dict[tuple[str, str], tuple[str, ...]]
+
+
+def declared_relations(ast: SchemaAST) -> DeclaredRelations:
+    relations: dict[str, list[str]] = {}
+    restrictions: dict[tuple[str, str], tuple[str, ...]] = {}
+    types: set[str] = set()
+    for (t, rel), expr in ast.items():
+        types.add(t)
+        relations.setdefault(t, []).append(rel)
+        rs = [r for d in _iter_directs(expr) for r in d.restrictions]
+        types.update(r.type for r in rs)
+        restrictions[(t, rel)] = tuple(dict.fromkeys(_render_restriction(r) for r in rs))
+    return DeclaredRelations(frozenset(types),
+                             {t: tuple(sorted(rs)) for t, rs in relations.items()},
+                             restrictions)
+
+
+def no_restriction_reason(declared: 'DeclaredRelations | None', object_type: str,
+                          relation: str) -> str:
+    """Why no declared type restriction admits a tuple on ``object_type#relation``:
+    an undeclared type, an undeclared relation (with a did-you-mean), a relation that is
+    computed only, or a subject outside the declared restrictions. One wording for both
+    backends, so their refusals stay identical."""
+    import difflib
+    if declared is None:
+        return ''
+    if object_type not in declared.types:
+        near = difflib.get_close_matches(object_type, sorted(declared.types), n=1)
+        hint = f"; did you mean {near[0]!r}?" if near else ''
+        return f": type {object_type!r} is not declared in the schema{hint}"
+    rels = declared.relations.get(object_type, ())
+    if relation not in rels:
+        if not rels:
+            return f": type {object_type!r} declares no relations"
+        near = difflib.get_close_matches(relation, rels, n=1)
+        hint = f"did you mean {near[0]!r}?" if near else f"it declares {', '.join(rels)}"
+        return f": type {object_type!r} declares no relation {relation!r}; {hint}"
+    allowed = declared.restrictions.get((object_type, relation), ())
+    if not allowed:
+        return (f": {object_type}#{relation} has no direct type restriction (it is "
+                f"computed from other relations), so tuples cannot be written to it")
+    return f": it admits only {', '.join(allowed)}"
+
+
+def _canonical_expr(expr: Expr) -> Expr:
+    """``expr`` with every restriction list sorted, so two schemas that list the same
+    restrictions in a different order compare equal."""
+    if isinstance(expr, Direct):
+        return Direct(tuple(sorted(expr.restrictions,
+                                   key=lambda r: (r.type, r.predicate, r.wildcard))))
+    if isinstance(expr, Union):
+        return Union(tuple(_canonical_expr(c) for c in expr.children))
+    if isinstance(expr, Intersection):
+        return Intersection(tuple(_canonical_expr(c) for c in expr.children))
+    if isinstance(expr, Exclusion):
+        return Exclusion(_canonical_expr(expr.base), _canonical_expr(expr.subtract))
+    return expr
+
+
+def first_schema_difference(a: SchemaAST, b: SchemaAST) -> str | None:
+    """``None`` when the two schemas are the same up to the order of restriction lists
+    (and of type blocks and ``define`` lines, which the AST already ignores); otherwise
+    the first differing ``type#relation`` (sorted order), with which side declares it."""
+    for key in sorted(set(a) | set(b)):
+        t, rel = key
+        if key not in a:
+            return f'{t}#{rel} (declared only in the second schema)'
+        if key not in b:
+            return f'{t}#{rel} (declared only in the first schema)'
+        if _canonical_expr(a[key]) != _canonical_expr(b[key]):
+            return f'{t}#{rel}'
+    return None

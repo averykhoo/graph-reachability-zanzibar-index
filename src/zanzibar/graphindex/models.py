@@ -32,6 +32,16 @@ class IndexStore(SQLModel, table=True):
 
 
 class Node(SQLModel, table=True):
+    """One node of the graph index, in table ``zanzibar_node``: an entity, a userset or a
+    relation on an object, written ``(type, name, predicate)``.
+
+    ``predicate`` is the relation (``doc:d1#viewer`` is ``("doc", "d1", "viewer")``) or
+    ``"..."`` for a bare entity (``user:alice`` is ``("user", "alice", "...")``).
+    ``wildcard`` is ``""`` for a concrete node and ``"any"`` / ``"all"`` for the nodes that
+    stand for a ``*`` name. The ``node_ids`` of a ``LookupResult`` are this table's ``id``
+    values; ``Store.result_keys`` reads them for you. The library maintains the rows:
+    read them, never write them.
+    """
     __tablename__ = "zanzibar_node"
     __table_args__ = (
         UniqueConstraint('store_id', 'predicate', 'type', 'name', 'wildcard',
@@ -61,6 +71,13 @@ class Node(SQLModel, table=True):
 
 
 class Edge(SQLModel, table=True):
+    """One edge of the graph index's materialized transitive closure, in table
+    ``zanzibar_edge``: ``subject_id`` reaches ``object_id`` (both ``Node`` ids).
+
+    The counts record how many direct tuples and how many derivation paths support the
+    edge, so a removal knows when the edge goes; ``derived`` marks an edge the
+    ``and`` / ``but not`` processor wrote. Maintained by the library: read, never write.
+    """
     __tablename__ = "zanzibar_edge"
     __table_args__ = (
         UniqueConstraint('store_id', 'subject_id', 'object_id', name='zanzibar_edge_unique_constraint'),
@@ -93,15 +110,17 @@ class Edge(SQLModel, table=True):
 
 class Residue(SQLModel, table=True):
     """Persisted symbolic wildcard state per (object node, derived relation): the
-    ``(stars, neg)`` record `check` consults alongside the edge probe (boolean spec §4).
+    ``(stars, neg)`` record `check` consults alongside the edge probe.
 
     ``object_node_id`` is the derived relation's public object node, whose identity
     already encodes the relation; ``relation`` is denormalized (unindexed) purely for
     debuggability/inspection -- no query filters on it (residue scans go by
     ``store_id`` or ``object_node_id``). ``stars``/``neg`` are JSON (list of [type, predicate]
-    shapes / list of concrete subject node ids) -- layout adaptable per spec §4;
+    shapes / list of concrete subject node ids) -- layout adaptable;
     cursor-free, one row per object. Empty residues are deleted, never stored.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): spec sec 4.
+    # Provenance (moved out of the docstring, TK123 item 14): boolean spec §4.
     __tablename__ = "zanzibar_residue"
     __table_args__ = (
         UniqueConstraint('store_id', 'object_node_id', name='zanzibar_residue_unique'),
@@ -127,23 +146,27 @@ class ResidueRef(SQLModel, table=True):
     One row per ``(residue object, subject id)`` pair in ``Residue.neg | upos``.
     Exists so the node-release paths can ask "does ANY residue reference this node?"
     with an indexed seek instead of decoding every residue row in the store: the scan
-    it replaces was measured at ~15 us/residue row and went quadratic under churn
-    (docs/spec-deviations.md 2026-07-29b). It is the index ``ZT-P0-1``'s own note
-    named -- "a subject-id -> residue index maintained in ``_store_residue``, never a
-    leaf-kind whitelist" -- see the N3-WITHDRAWN block at the head of ``processor.py``.
+    it replaces was measured at ~15 us/residue row and went quadratic under churn.
+    It is the index a security review called for: "a subject-id -> residue index
+    maintained in ``_store_residue``, never a leaf-kind whitelist".
 
     DERIVED, not authoritative. ``Residue.neg``/``upos`` remain the source of truth
-    and ``invariants.py`` I6 keeps decoding that JSON directly; a new I6 clause asserts
+    and the residue-hygiene invariants keep decoding that JSON directly; a clause there asserts
     the two AGREE in both directions. That split is deliberate: an invariant that read
     this table instead of the JSON would be a mirror of the thing it checks, which is
-    the failure mode ``docs/sabotage-procedure.md`` calls "the mirror instrument".
+    a known failure mode ("the mirror instrument").
 
     No foreign keys, deliberately. ``subject_node_id`` may legitimately be observed
-    dangling mid-transaction, and a dangling id is precisely the ZT-P0-1 corruption
-    class I6 exists to DETECT -- an FK would let the database silently prevent (on
+    dangling mid-transaction, and a dangling id is precisely the corruption
+    class the residue-hygiene invariants exist to DETECT -- an FK would let the database silently prevent (on
     PostgreSQL) or silently ignore (on SQLite, where FK enforcement is off by default)
     the very state the checker must be able to see.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): ZT-P0-1's own note; the
+    # N3-WITHDRAWN block at the head of processor.py; I6 is the residue-hygiene invariant
+    # family; the mirror instrument is docs/sabotage-procedure.md; ZT-P0-1 corruption class.
+    # Provenance (moved out of the docstring, TK123 item 14): docs/spec-deviations.md
+    # 2026-07-29b.
     __tablename__ = "zanzibar_residue_ref"
     __table_args__ = (
         # Serves the subject-keyed lookup (`store_id AND subject_node_id`) as a
@@ -164,16 +187,17 @@ class ResidueRef(SQLModel, table=True):
 
 
 class DeltaOutbox(SQLModel, table=True):
-    """The delta stream (boolean spec §4/§5.1): every reachability flip inserts a row
+    """The delta stream: every reachability flip inserts a row
     inside the writing transaction. The autoincrement id is the cursor; the cascade
     reads by keyset pagination from its starting watermark. Replayable, memory-flat,
-    and the seam for a future async worker (spec §13).
+    and the seam for a future async worker.
 
     Endpoints are denormalized (type/name/predicate captured at emission): implicit-
     node GC can delete an endpoint's node row inside the same transaction, and the
-    processor must still be able to map the flip to its derived key (see
-    docs/spec-deviations.md P4).
+    processor must still be able to map the flip to its derived key.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): see docs/spec-deviations.md P4.
+    # Provenance (moved out of the docstring, TK123 item 14): boolean spec §4/§5.1; spec §13.
     __tablename__ = "zanzibar_delta_outbox"
     __table_args__ = (
         # Composite replaces the single `store_id` index (N5 audit 2026-07-14): serves

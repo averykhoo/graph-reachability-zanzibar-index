@@ -1,16 +1,17 @@
 """
-The pluggable set-representation seam (spec §1.1).
+The pluggable set-representation seam.
 
 All set state and algebra in the engine go through ``SetOps`` -- a factory pair, not a
 class hierarchy, because ``pyroaring`` bitmaps and builtin ``set`` already share the
 operator surface the engine needs (``in``, ``|``, ``&``, ``-``, ``add``, ``discard``,
 iteration, ``len``, ``bool``). Never write ``isinstance`` checks against either type.
 
-Rationale (spec §1.1): builtin ``set`` is typically faster for small, membership-heavy
+Rationale: builtin ``set`` is typically faster for small, membership-heavy
 work (no C-boundary crossing, no bitmap construction); roaring wins on large
 populations and bulk union/intersection/difference -- exactly the ``expand`` path. Ship
 both, default roaring, and let the benchmark inform the per-deployment choice.
 """
+# Provenance (moved out of the docstring, TK123 item 14): spec §1.1; spec §1.1.
 
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class SetOps:
     """A factory pair selecting the concrete set representation.
 
@@ -33,6 +34,11 @@ class SetOps:
     new: Callable[..., object]      # (Iterable[int] = ()) -> MutSet
     freeze: Callable[..., object]   # (Iterable[int] = ()) -> FrozSet
     update: Callable[[object, object], None]  # (MutSet, Iterable[int]) -> None, in place
+
+    def __repr__(self) -> str:
+        # Short on purpose: the generated dataclass repr printed three lambda addresses,
+        # which is what ``help(Store)`` showed for the ``ops=`` default.
+        return f'SetOps({self.name!r})'
 
 
 PySets = SetOps(

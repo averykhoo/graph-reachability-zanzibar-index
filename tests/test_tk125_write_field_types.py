@@ -227,16 +227,25 @@ def test_non_str_remove_node_field_is_refused(entry, field, bad_label):
 
 
 @pytest.mark.parametrize('entry', ['cs-sync', 'cs-async', 'setengine'])
-@pytest.mark.parametrize('pred', [None, Ellipsis, '...'])
+@pytest.mark.parametrize('pred', [None, '...'])
 def test_reads_stay_lenient_about_the_bare_predicate(entry, pred):
     """Reads are lenient by contract (CLAUDE.md "Gotchas"): ``None`` still reads as the
     bare predicate. Guards against an over-eager TK125 fix that tightens ``norm_pred``
-    (the shared READ normaliser) instead of the write path. And ``Ellipsis`` stays a
-    legal WRITE form of the bare predicate."""
+    (the shared READ normaliser) instead of the write path.
+
+    ``Ellipsis`` USED to be pinned here as a legal write (and read) form of the bare
+    predicate. TK123 item 9 (user-accepted 2026-10-14) refuses it at the public entries
+    of ``Store`` / ``TupleSource`` / ``SetEngine``: a write raises ``AdmissionRejected``,
+    a read ``TypeError``, both asserted below. Pinned positively in
+    ``tests/test_tk123_safety_messages.py`` too."""
     write, _remove, _state, present = ENTRY_POINTS[entry]()
-    write(Ellipsis, *GOOD[1:])
+    with pytest.raises(AdmissionRejected, match=r"string '\.\.\.'"):
+        write(Ellipsis, *GOOD[1:])
+    write('...', *GOOD[1:])
     assert present()
     cs_or_engine_check = write.__self__.check
     if entry == 'cs-async':
         write.__self__.catch_up()
     assert cs_or_engine_check(pred, *GOOD[1:]) is True
+    with pytest.raises(TypeError, match=r"string '\.\.\.'"):
+        cs_or_engine_check(Ellipsis, *GOOD[1:])

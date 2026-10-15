@@ -138,7 +138,7 @@ def main(workload='demorgans', scale=40):
 
     bb._BulkBackfill.__init__ = patched_init
     try:
-        build_index(session, f'{workload}_src', f'{workload}_gidx', bulk=True)
+        build_index(session, f'{workload}_src', index_store_id=f'{workload}_gidx', bulk=True)
     finally:
         bb._BulkBackfill.__init__ = orig_init
         bb._BulkBackfill._reconcile = orig_rec

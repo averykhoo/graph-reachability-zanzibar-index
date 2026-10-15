@@ -112,7 +112,7 @@ def test_separate_index_store(session):
     src.add('...', 'user', 'u1', 'blocked', 'doc', 'd1')
     session.commit()
 
-    cursor, widx, ruleset = build_index(session, 'src', 'idx')
+    cursor, widx, ruleset = build_index(session, 'src', index_store_id='idx')
     assert cursor.source_store_id == 'src' and cursor.index_store_id == 'idx'
     assert widx.check('...', 'user', 'ghost', 'viewer', 'doc', 'd1') is True
     assert widx.check('...', 'user', 'u1', 'viewer', 'doc', 'd1') is False

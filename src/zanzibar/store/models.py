@@ -1,19 +1,23 @@
-"""Persistence for the connected store (connected-store spec §3).
+"""Persistence for the connected store.
 
-``SchemaRecord`` -- the store's schema SOURCE, write-once (spec §2.1/§2.2: schemas are
+``SchemaRecord`` -- the store's schema SOURCE, write-once (schemas are
 static everywhere; compiled artifacts are cache, recompiled on open, never stored).
 
-``TupleLog`` -- the permanent, append-only tuple event log (spec §2.3): the audit
+``TupleLog`` -- the permanent, append-only tuple event log: the audit
 log, the replay source, and the token domain. Written in the same transaction as the
 ``RelationTuple`` mutation; never cleared (compaction is a documented hook). ``RelationTuple``
 stays the current-state snapshot; this is the history.
 
-``IndexCursor`` -- "this graph index reflects that tuple store through log row N"
-(spec §4). Applied rows and the cursor advance commit in one transaction: that
-transactionality IS the exactly-once guarantee (spec §2.6). It also carries the
+``IndexCursor`` -- "this graph index reflects that tuple store through log row N".
+Applied rows and the cursor advance commit in one transaction: that
+transactionality IS the exactly-once guarantee. It also carries the
 apply step's STALL marker (``stalled_after``), which the read path consults so an
-index that cannot advance is never served as if it were merely behind (TK111).
+index that cannot advance is never served as if it were merely behind.
 """
+# Provenance (moved out of the docstring, TK123 item 14): connected-store spec sec 2.1/2.2.
+# Provenance (moved out of the docstring, TK123 item 14): connected-store spec §3.
+# Provenance (moved out of the docstring, TK123 item 14): spec §2.3; spec §4; spec §2.6;
+# TK111.
 
 import time
 
@@ -22,6 +26,11 @@ from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
 class SchemaRecord(SQLModel, table=True):
+    """A store's schema, in table ``zanzibar_schema_record``: one row per store id,
+    written once (``save_schema``, or the first ``Store(..., schema=...)``) and never
+    changed. ``schema_text`` is the DSL as given (OpenFGA JSON is stored converted to
+    DSL); ``object_wildcard_shapes`` is a JSON list of ``[type, relation]`` pairs.
+    """
     __tablename__ = "zanzibar_schema_record"
 
     store_id: str = Field(primary_key=True)
@@ -31,6 +40,13 @@ class SchemaRecord(SQLModel, table=True):
 
 
 class TupleLog(SQLModel, table=True):
+    """The append-only log of accepted writes, in table ``zanzibar_tuple_log``: the
+    source of truth both backends are built from.
+
+    One row per accepted ``add_tuple`` (``op="ADD"``) or ``remove_tuple``
+    (``op="REMOVE"``). A row's ``id`` is the freshness token the write returned and the
+    position an index cursor counts in. Rows are never updated or deleted.
+    """
     __tablename__ = "zanzibar_tuple_log"
     __table_args__ = (
         # Composite replaces the single `store_id` index (N5 audit 2026-07-14):
@@ -53,6 +69,14 @@ class TupleLog(SQLModel, table=True):
 
 
 class IndexCursor(SQLModel, table=True):
+    """How far a graph index has applied its source store's tuple log, in table
+    ``zanzibar_index_cursor``: one row per index store id.
+
+    ``applied_log_id`` is the last ``TupleLog`` id the index reflects. ``stalled_after``
+    and ``stall_error`` are set when the index cannot apply the next row (see
+    ``Store.index_stalled``), and cleared once a row applies again (after ``rebuild_index``,
+    say).
+    """
     __tablename__ = "zanzibar_index_cursor"
     __table_args__ = (
         UniqueConstraint('index_store_id', name='zanzibar_index_cursor_unique'),

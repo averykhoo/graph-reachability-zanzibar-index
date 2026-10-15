@@ -1219,7 +1219,7 @@ def test_graph_reverse_star_object_on_derived_is_empty(load_fga_schema):
     """Regression pin for the FIXED gap X2: WildcardIndex.lookup_reverse on a
     derived relation with o_name='*' raised ValueError (_get_concrete ->
     core.node reserved-name guard) instead of the empty result that check()
-    (False, deviations P7 #3) and the set engine (empty LookupResult) give for
+    (False, deviations P7 #3) and the set engine (empty SetLookupResult) give for
     the same query. Fixed: the derived branch short-circuits o_name='*' to the
     empty result (decision 15: no object-star state can exist)."""
     from tests.test_processor import build

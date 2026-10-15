@@ -1,8 +1,10 @@
 """Tokenizer + recursive-descent parser for the OpenFGA-style DSL, and the parse-time refusals.
 
-Part of `zanzibar.schema`; split out of the single-file module by TK120 (2026-10-06).
+Part of `zanzibar.schema`.
 """
-from .errors import IDENTIFIER_CHARSET, ShapeRefusedSinceTK137, is_valid_identifier
+# Provenance (moved out of the docstring, TK123 item 14): split out of the single-file module
+# by TK120 (2026-10-06).
+from .errors import IDENTIFIER_CHARSET, SchemaError, ShapeNoLongerAccepted, is_valid_identifier
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _RESERVED, _directs_only, _iter_directs, _iter_ttus
 from .rules import parse_relation_rule
 
@@ -23,14 +25,14 @@ def _tokenize_relation_body(body: str) -> list[tuple[str, str]]:
         elif c == '[':
             j = body.find(']', i)
             if j == -1:
-                raise ValueError(f"unterminated '[' in relation body {body!r}")
+                raise SchemaError(f"unterminated '[' in relation body {body!r}")
             tokens.append(('bracket', body[i:j + 1]))
             i = j + 1
         elif c == ']':
             # a ']' outside a bracket previously made the word-scan below produce a
             # zero-length token without advancing i -- an infinite loop on any
             # schema typo like '[user]]' (blind-audit S-1: a DoS on schema text)
-            raise ValueError(f"unexpected ']' in relation body {body!r}")
+            raise SchemaError(f"unexpected ']' in relation body {body!r}")
         elif c == '(':
             tokens.append(('lparen', '('))
             i += 1
@@ -73,11 +75,11 @@ class _RelationParser:
 
     def parse(self) -> Expr:
         if not self.tokens:
-            raise ValueError(f"relation {self.relation!r}: empty definition")
+            raise SchemaError(f"relation {self.relation!r}: empty definition")
         expr = self._parse_expr()
         if self.pos != len(self.tokens):
             _, text = self._peek()
-            raise ValueError(f"relation {self.relation!r}: unexpected token {text!r}")
+            raise SchemaError(f"relation {self.relation!r}: unexpected token {text!r}")
         return expr
 
     def _parse_expr(self) -> Expr:
@@ -121,7 +123,7 @@ class _RelationParser:
                     # readings grant different subjects.
                     # INSTEAD: parenthesise the intended reading: ``(a or b) and c`` or
                     # ``a or (b and c)``.
-                    raise ValueError(
+                    raise SchemaError(
                         f"relation {self.relation!r}: mixing 'or' and 'and' without "
                         f"parentheses is ambiguous")
                 self.pos += 1
@@ -138,7 +140,7 @@ class _RelationParser:
             self.pos += 1
             expr = self._parse_expr()
             if self._peek()[0] != 'rparen':
-                raise ValueError(f"relation {self.relation!r}: expected ')'")
+                raise SchemaError(f"relation {self.relation!r}: expected ')'")
             self.pos += 1
             return expr
         return self._parse_leaf()
@@ -155,17 +157,17 @@ class _RelationParser:
             ))
         if kind == 'word':
             if text in _RESERVED:
-                raise ValueError(f"relation {self.relation!r}: unexpected {text!r}")
+                raise SchemaError(f"relation {self.relation!r}: unexpected {text!r}")
             self.pos += 1
             if self._peek() == ('word', 'from'):
                 self.pos += 1
                 k3, t3 = self._peek()
                 if k3 != 'word' or t3 in _RESERVED:
-                    raise ValueError(f"relation {self.relation!r}: expected a relation after 'from'")
+                    raise SchemaError(f"relation {self.relation!r}: expected a relation after 'from'")
                 self.pos += 1
                 return TTU(target_rel=text, tupleset_rel=t3)
             return Computed(text)
-        raise ValueError(f"relation {self.relation!r}: unexpected end of expression")
+        raise SchemaError(f"relation {self.relation!r}: unexpected end of expression")
 
 
 def _reject_unparenthesised_but_not(relation: str) -> None:
@@ -183,7 +185,7 @@ def _reject_unparenthesised_but_not(relation: str) -> None:
     # ``and``s, or exactly one ``but not``).
     # INSTEAD: parenthesise the intended reading -- ``(a or b) but not c``,
     # ``a but not (b or c)``, ``(a but not b) or c``.
-    raise ShapeRefusedSinceTK137(
+    raise ShapeNoLongerAccepted(
         f"relation {relation!r}: 'but not' may not share a level with 'or', 'and' or "
         f"another 'but not'; parenthesise the intended reading, e.g. '(a or b) but not c' "
         f"or 'a but not (b or c)'",
@@ -206,7 +208,7 @@ def _reject_conditional_restriction(relation: str, bracket: str) -> None:
         # INSTEAD: none -- conditions are unsupported. Where the condition is a stored fact,
         # model it as a relation: ``define viewer: [user] but not suspended``.
         if len(words) >= 2 and words[1] == 'with':
-            raise ValueError(
+            raise SchemaError(
                 f"relation {relation!r}: conditional type restriction {part.strip()!r}: "
                 f"OpenFGA conditions ('with') are not supported")
 
@@ -230,7 +232,7 @@ def _validate_header_line(words: list[str], line: str) -> None:
     # INSTEAD: ``schema 1.1``. Schema 1.2's additions (``module``, ``extend type``) are not
     # supported.
     if head == 'schema' and (len(words) < 2 or words[1] != '1.1'):
-        raise ShapeRefusedSinceTK137(
+        raise ShapeNoLongerAccepted(
             f"unsupported schema version line {line!r}: only 'schema 1.1' is implemented "
             f"(schema 1.2 modules and 'extend type' are not supported)",
             instead=("change the line to 'schema 1.1', or delete it (the header is "
@@ -244,7 +246,7 @@ def _validate_header_line(words: list[str], line: str) -> None:
     # INSTEAD: one keyword per line, each ``define`` on its own line under a bare
     # ``relations``, and a comment on its own line (``# people``, then ``relations``).
     if len(words) > (2 if head == 'schema' else 1):
-        raise ShapeRefusedSinceTK137(
+        raise ShapeNoLongerAccepted(
             f"{head!r} line with extra words {line!r}: a 'model', 'schema 1.1' or "
             f"'relations' line must stand alone (put each define, and each comment, on its "
             f"own line)",
@@ -276,7 +278,7 @@ def _reject_unsupported_openfga_line(head: str, line: str) -> None:
     # relations into the ``type`` block). Model a condition that is a stored fact as a
     # relation: ``define viewer: [user] but not suspended``.
     if head in _UNSUPPORTED_OPENFGA_HEADS:
-        raise ValueError(
+        raise SchemaError(
             f"{_UNSUPPORTED_OPENFGA_HEADS[head]} are not supported: {line!r}")
 
 
@@ -295,19 +297,19 @@ def _validate_declared_name(kind: str, name: str) -> None:
     # INSTEAD: name it inside ``[A-Za-z0-9_/@+=-]`` (``.`` is also allowed in a TYPE name),
     # e.g. ``define can_view: [user]``.
     if not is_valid_identifier(name):
-        raise ValueError(
+        raise SchemaError(
             f"declared {kind} name {name!r}: must match [{IDENTIFIER_CHARSET}] (1-256 chars), "
             f"the write identifier charset, or no write could ever reach it")
 
 
 def parse_schema_ast(schema: str) -> SchemaAST:
-    """Parse an OpenFGA-style DSL string into ``{(object_type, relation): Expr}`` (spec §2.2).
+    """Parse an OpenFGA-style DSL string into ``{(object_type, relation): Expr}``.
 
     The language is a subset of the OpenFGA schema 1.1 DSL (no conditions, modules or
     ``extend type``) plus this library's wildcard extensions (``UnprovenExtensionWarning``)
-    and a few syntax extensions kept on purpose (`TK137`, 2026-10-14): several ``[...]``
+    and a few syntax extensions kept on purpose: several ``[...]``
     blocks in one definition, a ``[...]`` block that is not the first operand, no header, and
-    a ``define`` with no ``relations`` line. Since `TK137` the header must be ``schema 1.1``,
+    a ``define`` with no ``relations`` line. Since 0.0.5 the header must be ``schema 1.1``,
     header lines stand alone, ``but not`` may not share a level with another operator, and
     every restriction type must be declared (`_validate_restriction_types_declared`).
 
@@ -315,6 +317,8 @@ def parse_schema_ast(schema: str) -> SchemaAST:
     including boolean (``and`` / ``but not``) definitions -- refusing booleans is
     compilation's job, not parsing's.
     """
+    # Provenance (moved out of the docstring, TK123 item 14): TK137.
+    # Provenance (moved out of the docstring, TK123 item 14): spec §2.2; `TK137`, 2026-10-14.
     ast, declared_types = _parse_schema_ast_declared(schema)
     _validate_ast_consistency(ast)
     _validate_restriction_types_declared(ast, declared_types)
@@ -351,7 +355,7 @@ def _parse_schema_ast_declared(schema: str) -> tuple[SchemaAST, frozenset[str]]:
             continue
         if head == 'type':
             if len(words) != 2:
-                raise ValueError(f'malformed type declaration: {line!r}')
+                raise SchemaError(f'malformed type declaration: {line!r}')
             current_type = words[1]
             _validate_declared_name('type', current_type)
             # duplicate type blocks silently merged before -- a pasted schema with a
@@ -360,15 +364,15 @@ def _parse_schema_ast_declared(schema: str) -> tuple[SchemaAST, frozenset[str]]:
             # above.
             # INSTEAD: put every relation of the type under ONE ``type doc`` block.
             if current_type in seen_types:
-                raise ValueError(f'duplicate type declaration: {current_type!r}')
+                raise SchemaError(f'duplicate type declaration: {current_type!r}')
             seen_types.add(current_type)
         elif head == 'define':
             if not current_type:
-                raise ValueError("Relation definition without type context")
+                raise SchemaError("Relation definition without type context")
             relation_name, colon, body = line[len('define'):].strip().partition(':')
             relation_name = relation_name.strip()
             if not colon:
-                raise ValueError(f'malformed relation definition (missing colon): {line!r}')
+                raise SchemaError(f'malformed relation definition (missing colon): {line!r}')
             # Empty-name lock (TK55, 2026-09-06): `define : [user]` used to parse and
             # compile to a Filter on relation ''. No write can ever land on '' (the
             # identifier charset is 1-256 chars), but a COMPUTED reference to it
@@ -383,7 +387,7 @@ def _parse_schema_ast_declared(schema: str) -> tuple[SchemaAST, frozenset[str]]:
             # REFUSED SHAPE (TK55): an empty declared relation name, ``define : [user]``.
             # WHY: the comment above. INSTEAD: name it -- ``define viewer: [user]``.
             if not relation_name:
-                raise ValueError(
+                raise SchemaError(
                     f"type {current_type!r}: a declared relation name may not be empty "
                     f"({line!r})")
             # Lexical collision lock (boolean spec §3.2): '.' is reserved for synthetic
@@ -393,7 +397,7 @@ def _parse_schema_ast_declared(schema: str) -> tuple[SchemaAST, frozenset[str]]:
             # comment above.
             # INSTEAD: use ``_`` -- ``define can_view: [user]`` rather than ``can.view``.
             if '.' in relation_name:
-                raise ValueError(
+                raise SchemaError(
                     f"relation {relation_name!r}: '.' is reserved for compiled leaf "
                     f"predicates and cannot appear in a declared relation name")
             _validate_declared_name('relation', relation_name)
@@ -404,7 +408,7 @@ def _parse_schema_ast_declared(schema: str) -> tuple[SchemaAST, frozenset[str]]:
             # ``define viewer: [user] or editor`` (``and`` / ``but not`` if that is the
             # intended combination).
             if (current_type, relation_name) in ast:
-                raise ValueError(
+                raise SchemaError(
                     f'duplicate relation definition: {current_type}#{relation_name}')
             tokens = _tokenize_relation_body(body.strip())
             ast[(current_type, relation_name)] = _RelationParser(tokens, relation_name).parse()
@@ -412,7 +416,7 @@ def _parse_schema_ast_declared(schema: str) -> tuple[SchemaAST, frozenset[str]]:
             _reject_unsupported_openfga_line(head, line)
             # silently dropping unrecognized lines lost or misattributed whole
             # relation definitions (blind-audit S-3)
-            raise ValueError(f'unrecognized schema line: {line!r}')
+            raise SchemaError(f'unrecognized schema line: {line!r}')
 
     _validate_declares_a_type(seen_types, ast)
     _validate_ast_references(ast)
@@ -445,7 +449,7 @@ def _validate_restriction_types_declared(ast: SchemaAST, declared_types) -> None
                 # the spelling in the restriction (``[user]``).
                 if r.type not in declared_types:
                     star = ':*' if r.wildcard else ''
-                    raise ShapeRefusedSinceTK137(
+                    raise ShapeNoLongerAccepted(
                         f'{object_type}#{relation}: restriction [{r.type}{star}] names an '
                         f'undeclared type {r.type!r}; declare it (type {r.type}) or fix the '
                         f'spelling',
@@ -472,7 +476,7 @@ def _validate_declares_a_type(seen_types: set[str], ast: SchemaAST) -> None:
     # INSTEAD: declare the types, e.g. ``model\n  schema 1.1\ntype user\ntype doc\n
     # relations\n    define viewer: [user]``.
     if not seen_types:
-        raise ValueError(
+        raise SchemaError(
             'schema declares no type (empty, comments only, or only the model / schema '
             'header); a store would persist it write-once and refuse every write')
     # REFUSED SHAPE (TK124, TK127 follow-up): types but no relation anywhere -- ``type user``,
@@ -485,7 +489,7 @@ def _validate_declares_a_type(seen_types: set[str], ast: SchemaAST) -> None:
     # INSTEAD: declare the relations, e.g. ``type user\ntype doc\n  relations\n
     # define viewer: [user]``.
     if not ast:
-        raise ValueError(
+        raise SchemaError(
             'schema declares no relation (its types have no `define` lines); a store would '
             'persist it write-once and refuse every write')
 
@@ -501,7 +505,7 @@ def _validate_ast_references(ast: SchemaAST) -> None:
         # the compiler's leaf predicates, so a reference reads or writes compiled state.
         # INSTEAD: reference the public relation -- ``[doc#viewer]``, ``viewer``.
         if '.' in name and name != '...':
-            raise ValueError(
+            raise SchemaError(
                 f"{where}: {name!r} is inside the reserved leaf namespace "
                 f"('.' in referenced relation names)")
 
@@ -586,7 +590,7 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
                 # INSTEAD: declare it (``type group`` / ``define member: [user]``), or write
                 # ``[group]`` if a group object itself was meant.
                 if r.predicate != '...' and (r.type, r.predicate) not in ast:
-                    raise ValueError(
+                    raise SchemaError(
                         f'{where}: restriction [{r.type}#{r.predicate}] names an undeclared '
                         f'relation {r.type}#{r.predicate}')
         out = deps.setdefault((object_type, relation), set())
@@ -597,7 +601,7 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
                 # INSTEAD: declare it on the SAME type (``define editor: [user]``), or fix
                 # the spelling.
                 if (object_type, ref.relation) not in ast:
-                    raise ValueError(
+                    raise SchemaError(
                         f'{where}: references undeclared relation {object_type}#{ref.relation}')
                 out.add((object_type, ref.relation))
                 continue
@@ -605,7 +609,7 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
             # ``parent``). WHY: see above. INSTEAD: declare the link on the same type,
             # ``define parent: [folder]``.
             if (object_type, ref.tupleset_rel) not in ast:
-                raise ValueError(
+                raise SchemaError(
                     f'{where}: tupleset of {ref.target_rel!r} from {ref.tupleset_rel!r} is '
                     f'undeclared relation {object_type}#{ref.tupleset_rel}')
             out.add((object_type, ref.tupleset_rel))
@@ -619,7 +623,7 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
             # above. INSTEAD: declare it on the parent type (``type folder`` /
             # ``define viewer: [user]``), or let the tupleset admit a type that has it.
             if not any((t, ref.target_rel) in ast for t in candidates):
-                raise ValueError(
+                raise SchemaError(
                     f'{where}: {ref.target_rel!r} from {ref.tupleset_rel!r} is an undeclared '
                     f'relation on every tupleset type {sorted(candidates)}')
     # Depth-first cycle search over "depends on" edges, reporting the first cycle found.
@@ -643,7 +647,7 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
                 # legal: ``define member: [user, group#member]`` or
                 # ``define viewer: [user] or viewer from parent``.
                 cycle = path[path.index(nxt):] + [nxt]
-                raise ValueError(
+                raise SchemaError(
                     'reference cycle: relations depend on themselves through schema '
                     'references: ' + ' -> '.join(f'{t}#{r}' for t, r in cycle))
             elif nxt not in state:
@@ -686,7 +690,7 @@ def _validate_tuplesets_direct(ast: SchemaAST) -> None:
             # REFUSED SHAPE (TK106): a tupleset with computed, ``from``, ``and`` or
             # ``but not`` arms. WHY and INSTEAD: the docstring above.
             if ts_key in ast and not _directs_only(ast[ts_key]):
-                raise ValueError(
+                raise SchemaError(
                     f'{object_type}#{relation}: {ttu.target_rel!r} from '
                     f'{ttu.tupleset_rel!r}: a tupleset must be direct (only type '
                     f'restrictions such as [folder] or [folder, doc]), but '
@@ -716,7 +720,7 @@ def _validate_tuplesets_direct(ast: SchemaAST) -> None:
                     for r in d.restrictions:
                         if r.predicate != '...':
                             star = ':*' if r.wildcard else ''
-                            raise ValueError(
+                            raise SchemaError(
                                 f'{object_type}#{relation}: {ttu.target_rel!r} from '
                                 f'{ttu.tupleset_rel!r}: a tupleset may not restrict to a '
                                 f'userset (OpenFGA rule), but '
@@ -808,7 +812,7 @@ def _validate_stratified_negation(ast: SchemaAST) -> None:
                     k = parent[k]
                     path.append(k)
                 cycle = [src] + path[::-1]
-                raise ValueError(
+                raise SchemaError(
                     'recursion through negation: relations depend on themselves through a '
                     '"but not" subtrahend, which has no single meaning: '
                     + ' -> '.join(f'{t}#{r}' for t, r in cycle)

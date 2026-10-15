@@ -142,7 +142,7 @@ def test_p12_second_engine_on_an_owned_store_is_log_governed(tmp_path):
         with pytest.raises(UnloggedWriteRefused) as exc:
             se.remove_tuple(*ALICE)
         msg = str(exc.value)
-        assert 'TK140' in msg and 'Store.remove_tuple' in msg
+        assert 'Store.remove_tuple' in msg and 'TK140' not in msg   # TK123 item 14
         with pytest.raises(UnloggedWriteRefused):
             se.add_tuple(*BOB)
         s.commit()
@@ -192,7 +192,7 @@ def test_p09_adoption_of_unlogged_tuples_is_refused(tmp_path):
         with pytest.raises(UnloggedTuplesPresent) as exc:
             Store(s, 'app', schema=SCHEMA)
         msg = str(exc.value)
-        assert 'build_index' in msg and 'save_schema' in msg and 'TK140' in msg
+        assert 'build_index' in msg and 'save_schema' in msg and 'TK140' not in msg  # TK123 i14
         assert not s.in_transaction()                     # no SQLite write lock held
         assert s.get(SchemaRecord, 'app') is None         # nothing landed
     with Session(eng) as other:                           # another writer is not blocked
@@ -396,7 +396,7 @@ def test_a_separate_id_built_index_does_not_govern_the_source_engine_twice(tmp_p
         cs = Store(s, 'src', schema=SCHEMA)
         cs.add_tuple(*ALICE)
     with Session(eng) as s:
-        build_index(s, 'src', 'src-idx')
+        build_index(s, 'src', index_store_id='src-idx')
     with Session(eng) as s:
         cs = Store(s, 'src')
         cs.add_tuple(*BOB)

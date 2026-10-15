@@ -107,6 +107,7 @@ def test_paranoia_off_installs_nothing_and_does_not_check(session, load_fga_sche
     row = _residue(session)
     row.upos = json.dumps([_dead_id(session)])
     session.add(row)
+    session.flush()  # TK123 item 10: a Store refuses ORM-pending rows
     cs.add_tuple('...', 'user', 'carol', 'editor', 'doc', 'd3')
     assert cs.check('...', 'user', 'carol', 'editor', 'doc', 'd3') is True
     assert json.loads(_residue(session).upos) != [], 'the tampering must have committed'
@@ -145,6 +146,7 @@ def test_paranoia_aborts_the_write_on_a_dangling_residue_id(session, load_fga_sc
     row = _residue(session)
     row.upos = json.dumps([_dead_id(session)])
     session.add(row)
+    session.flush()  # TK123 item 10: a Store refuses ORM-pending rows
 
     with pytest.raises(InvariantViolation) as exc:
         cs.add_tuple('...', 'user', 'carol', 'editor', 'doc', 'd3')
@@ -169,6 +171,7 @@ def test_residue_tier_catches_dangling_neg_ids_too(session, load_fga_schema):
     row = _residue(session)
     row.neg = json.dumps([_dead_id(session)])
     session.add(row)
+    session.flush()  # TK123 item 10: a Store refuses ORM-pending rows
     with pytest.raises(InvariantViolation, match='I6.*dead node id'):
         cs.add_tuple('...', 'user', 'dave', 'editor', 'doc', 'd4')
 
@@ -181,6 +184,7 @@ def test_tier_boundary_is_what_it_says_it_is(session, load_fga_schema):
     node = session.exec(select(Node).where(Node.store_id == STORE)).first()
     node.reference_count += 7
     session.add(node)
+    session.flush()  # TK123 item 10: a Store refuses ORM-pending rows
     cheap.add_tuple('...', 'user', 'erin', 'editor', 'doc', 'd5')   # commits happily
 
     engine2 = create_engine('sqlite:///:memory:')
@@ -190,6 +194,7 @@ def test_tier_boundary_is_what_it_says_it_is(session, load_fga_schema):
         n2 = s2.exec(select(Node).where(Node.store_id == STORE)).first()
         n2.reference_count += 7
         s2.add(n2)
+        s2.flush()  # TK123 item 10: a Store refuses ORM-pending rows
         with pytest.raises(InvariantViolation, match='I13'):
             full.add_tuple('...', 'user', 'erin', 'editor', 'doc', 'd5')
 
@@ -229,6 +234,7 @@ def test_env_var_actually_wires_the_checker(session, load_fga_schema, monkeypatc
     row = _residue(session)
     row.upos = json.dumps([_dead_id(session)])
     session.add(row)
+    session.flush()  # TK123 item 10: a Store refuses ORM-pending rows
     with pytest.raises(InvariantViolation, match='I6'):
         cs.add_tuple('...', 'user', 'carol', 'editor', 'doc', 'd3')
 
@@ -287,6 +293,7 @@ def test_reinstall_upgrades_in_place_instead_of_stacking(session, load_fga_schem
     node = session.exec(select(Node).where(Node.store_id == STORE)).first()
     node.reference_count += 3
     session.add(node)
+    session.flush()  # TK123 item 10: a Store refuses ORM-pending rows
     with pytest.raises(InvariantViolation, match='I13'):
         cs.add_tuple('...', 'user', 'frank', 'editor', 'doc', 'd6')
 
@@ -299,6 +306,7 @@ def test_off_store_can_still_be_wired_by_a_later_install(session, load_fga_schem
     row = _residue(session)
     row.upos = json.dumps([_dead_id(session)])
     session.add(row)
+    session.flush()  # TK123 item 10: a Store refuses ORM-pending rows
     with pytest.raises(InvariantViolation, match='I6'):
         cs.add_tuple('...', 'user', 'grace', 'editor', 'doc', 'd7')
 

@@ -115,6 +115,7 @@ def _assert_agree(schema, tuples, ops):
         se = SetEngine(s, 'set-side', schema, ops=ops)
         for t in tuples:
             se.add_tuple(*t)
+        s.commit()   # TK123 item 10: a Store refuses a session with pending rows
         cs = Store(s, 'graph-side', schema=schema)
         for t in tuples:
             cs.add_tuple(*t)

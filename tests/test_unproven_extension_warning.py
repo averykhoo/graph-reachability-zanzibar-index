@@ -104,3 +104,59 @@ def test_openfga_surface_is_silent(build):
         warnings.simplefilter('always')
         build()
     assert [w for w in caught if issubclass(w.category, UnprovenExtensionWarning)] == []
+
+
+# --------------------------------------------------------------------------- #
+# TK123 item 15: ONE warning per Store, attributed to the caller's own line.
+# --------------------------------------------------------------------------- #
+
+def _caught_unproven(build):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        build()
+    return [w for w in caught if issubclass(w.category, UnprovenExtensionWarning)]
+
+
+@pytest.mark.parametrize('sync', [True, False], ids=['sync', 'async'])
+def test_exactly_one_warning_per_store_at_the_callers_line(sync):
+    """Bootstrapping a ``Store`` and reopening it each raise the warning exactly ONCE, and
+    the warning's source file is THIS file (the line that constructed the ``Store``), not a
+    library line. ``SetEngine`` adopts the ``RuleSet`` the store already compiled instead of
+    deriving (and warning) again.
+
+    Sabotage (2026-10-15), each observed red, then restored:
+    - ``setengine/engine.py::SetEngine.__init__`` reverted to an unconditional
+      ``derive_schema_info(...)``: ``assert 2 == 1``, ``2 failed, 1 passed`` (bootstrap and
+      reopen both warned twice, the 0.0.5 behaviour; the direct-entry test stays green).
+    - ``schema/compiler.py::_warn_unproven_extensions`` reverted to ``stacklevel=3``:
+      ``assert '...compiler.py' == '...on_warning.py'``, ``3 failed`` (the warning
+      pointed at a library line instead of this file).
+    """
+    from zanzibar import Store
+    session = Session(create_engine('sqlite:///:memory:'))
+    SQLModel.metadata.create_all(session.get_bind())
+    boot = _caught_unproven(lambda: Store(session, 's', schema=USERSET_STAR, sync=sync))
+    session.commit()
+    reopen = _caught_unproven(lambda: Store(session, 's', sync=sync))
+    for ws in (boot, reopen):
+        assert len(ws) == 1, [str(w.message) for w in ws]
+        assert ws[0].filename == __file__, ws[0].filename
+
+
+def test_direct_entry_points_point_at_the_caller():
+    """``parse_openfga_schema`` and a standalone ``SetEngine`` also attribute the warning to
+    the calling file (a fixed ``stacklevel`` only fits one call depth)."""
+    for build in (lambda: parse_openfga_schema(USERSET_STAR),
+                  lambda: _set_engine(USERSET_STAR, frozenset())):
+        ws = _caught_unproven(build)
+        assert len(ws) == 1
+        assert ws[0].filename == __file__, ws[0].filename
+
+
+def test_message_carries_no_repo_internal_references():
+    """The wheel ships no ``formal/`` directory and no task tracker: the message names
+    neither (TK123 item 14), and says how to silence it."""
+    msg = str(_caught_unproven(lambda: parse_openfga_schema(USERSET_STAR))[0].message)
+    for leak in ('formal/', 'W4Fragment', 'ASK-', 'TK1', 'See task'):
+        assert leak not in msg, (leak, msg)
+    assert "filterwarnings('ignore', category=zanzibar.UnprovenExtensionWarning)" in msg

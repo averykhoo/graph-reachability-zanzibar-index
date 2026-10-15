@@ -1,4 +1,4 @@
-"""The source-of-truth write path (connected-store spec §2.3/§2.4/§4).
+"""The source-of-truth write path.
 
 ``TupleSource`` owns a tuple store: every write is validated up front (charset,
 type restrictions, wildcard shapes, and -- for index-compilable schemas -- the graph
@@ -6,16 +6,16 @@ backend's cycle parity via the set engine's flow graph), then lands the ``Relati
 mutation and the ``TupleLog`` append in the SAME transaction. Rejected writes
 leave no row anywhere; a rolled-back transaction discards tuple and log together.
 
-Validity at admission (spec §2.4) is what keeps the log replayable: it contains only
+Validity at admission is what keeps the log replayable: it contains only
 index-appliable ops, so a rejection during index apply is a corruption signal, never
 an op rejection.
 
-Write ops return the log id -- the freshness token (spec §2.5): an index whose
+Write ops return the log id -- the freshness token: an index whose
 cursor is >= the token reflects this write. Duplicate adds are idempotent no-ops
 (raw tuples are a SET) and return the current watermark, which trivially satisfies
 the token contract.
 
-Tokens are STORE-LOCAL (blind-audit X6): the token domain is this store's own
+Tokens are STORE-LOCAL: the token domain is this store's own
 ``TupleLog`` id sequence, so a token minted against one store means nothing to
 another (log ids are per-database autoincrements, not a global clock). Comparing or
 carrying tokens across stores is a category error; multi-store consistency needs an
@@ -32,33 +32,40 @@ the critical section, log ids commit in id order per store -- ``id > watermark``
 tailing (this evaluator's tailer and ``advance_index``'s cursor alike) can never
 skip a row. A single-writer deployment degrades to one uncontended lock plus one empty
 indexed SELECT per write. (On a SQLite bind that lock is a no-op UPDATE of the same row
-rather than ``FOR UPDATE``, which pysqlite renders to nothing -- zero-trust review
-ZT-P1-4; see ``_lock_source``.)
+rather than ``FOR UPDATE``, which pysqlite renders to nothing; see ``_lock_source``.)
 """
+# Provenance (moved out of the docstring, TK123 item 14): blind-audit X6.
+# Provenance (moved out of the docstring, TK123 item 14): zero-trust review ZT-P1-4.
+# Provenance (moved out of the docstring, TK123 item 14): connected-store spec §2.3/§2.4/§4.
+# Provenance (moved out of the docstring, TK123 item 14): spec §2.4; spec §2.5.
 
 from __future__ import annotations
+
+from typing import overload
 
 from sqlalchemy import update
 from sqlmodel import Session, select
 
 from zanzibar.graphindex.core import is_sqlite, take_row_write_lock
 from zanzibar.schema import validate_store_id
+from zanzibar.schema.errors import ZanzibarError
+from zanzibar.schema.errors import reject_ellipsis_predicate
+from zanzibar.schema.tuplestr import tuple_args
 from zanzibar.setengine import SetEngine
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 
 from .models import SchemaRecord, TupleLog
-from .schema_io import open_set_engine
+from .schema_io import StoreNotFound, open_set_engine
 
 
-class StaleRead(RuntimeError):
+class StaleRead(ZanzibarError, RuntimeError):
     """A read carrying an ``at_least`` token could not be satisfied: the index lags
     the token AND the write is not visible in this session's read snapshot. Start a
     fresh snapshot (``refresh()``) and retry."""
 
 
-class WatermarkGap(RuntimeError):
-    """A watermark/cursor advance would have SKIPPED committed log rows (zero-trust
-    review ZT-P1-5) -- refused instead of proceeding.
+class WatermarkGap(ZanzibarError, RuntimeError):
+    """A watermark/cursor advance would have SKIPPED committed log rows -- refused instead of proceeding.
 
     Both watermarks ("the evaluator reflects the log through here" and the index
     cursor's "reflects the source through N") used to advance straight to the newest
@@ -67,8 +74,7 @@ class WatermarkGap(RuntimeError):
 
     * **Out-of-order commit, at the SUPPORTED level.** PostgreSQL assigns a log id at
       INSERT and publishes it at COMMIT, so a LOWER id can become visible after a
-      higher one; a catch-up that ran in between saw a hole (reproduced in
-      ``tests/test_postgres_ha.py::test_log_gap_finds_a_row_committed_out_of_id_order``).
+      higher one; a catch-up that ran in between saw a hole.
     * **A pinned read snapshot**, under any level above READ COMMITTED: an earlier read
       in the transaction fixes the view and a concurrent commit stays invisible for good.
       That one is fenced off at construction instead (``assert_read_isolation``), because
@@ -83,6 +89,9 @@ class WatermarkGap(RuntimeError):
     reader/writer merely acted on a stale snapshot. Roll back to start a fresh one
     (``Store.refresh()`` / ``TupleSource.refresh_evaluator()``) and retry the
     operation; a fresh snapshot sees the missing rows and applies them normally."""
+    # Provenance (moved out of the docstring, TK123 item 14): reproduced in
+    # tests/test_postgres_ha.py::test_log_gap_finds_a_row_committed_out_of_id_order.
+    # Provenance (moved out of the docstring, TK123 item 14): zero-trust review ZT-P1-5.
 
 
 #: Optimistic attempts at a self-consistent (watermark, rebuild) pair before
@@ -93,10 +102,11 @@ class WatermarkGap(RuntimeError):
 SNAPSHOT_ATTEMPTS = 3
 
 
-class UnsafeIsolationLevel(RuntimeError):
+class UnsafeIsolationLevel(ZanzibarError, RuntimeError):
     """This session's bind runs at an isolation level under which a committed log row
     can stay invisible for the lifetime of a transaction, so log tailing / the cursor
-    advance cannot be trusted (zero-trust review ZT-P1-5). The message names the fix."""
+    advance cannot be trusted. The message names the fix."""
+    # Provenance (moved out of the docstring, TK123 item 14): zero-trust review ZT-P1-5.
 
 
 #: Isolation levels the log-tailing design is safe under. Exactly one.
@@ -125,8 +135,8 @@ SAFE_ISOLATION_LEVELS = frozenset({'READ COMMITTED'})
 
 
 def assert_read_isolation(session: Session) -> None:
-    """Refuse to open against a bind whose read snapshot can hide a committed log row
-    (ZT-P1-5). Dialect-aware, and deliberately silent where the question does not
+    """Refuse to open against a bind whose read snapshot can hide a committed log row.
+    Dialect-aware, and deliberately silent where the question does not
     apply:
 
     * **SQLite** -- not applicable. There is no server-side isolation level to pin; a
@@ -134,6 +144,7 @@ def assert_read_isolation(session: Session) -> None:
       the write fails loudly with ``SQLITE_BUSY`` instead. Checking would be a false
       alarm (pysqlite reports ``SERIALIZABLE`` regardless of configuration).
     * **A dialect that cannot report its level** -- skipped rather than guessed at."""
+    # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-5.
     if is_sqlite(session):
         return
     try:
@@ -142,24 +153,24 @@ def assert_read_isolation(session: Session) -> None:
         return
     if level is None or level.upper() in SAFE_ISOLATION_LEVELS:
         return
+    # Provenance: zero-trust review ZT-P1-5; the SERIALIZABLE claim is pinned by
+    # tests/test_postgres_ha.py::test_serializable_bind_is_refused.
     raise UnsafeIsolationLevel(
         f'isolation level {level!r} is unsafe for this store: a committed tuple-log '
         f'row can stay invisible for the whole transaction, so a catch-up silently '
         f'stops short and the watermark advance would skip it permanently -- while '
-        f'at_least tokens keep certifying the stale answers (zero-trust review '
-        f'ZT-P1-5). Open the engine with READ COMMITTED -- '
+        f'at_least tokens keep certifying the stale answers. Open the engine with READ COMMITTED -- '
         f'create_engine(url, isolation_level="READ COMMITTED") -- which is the only '
         f'level this design is safe under. SERIALIZABLE is NOT an alternative: on '
         f'PostgreSQL it pins a snapshot without aborting on this access pattern, and '
-        f'reproduces exactly the hazard named above '
-        f'(tests/test_postgres_ha.py::test_serializable_bind_is_refused).')
+        f'reproduces exactly the hazard named above.')
 
 
 def log_gap(session: Session, store_id: str, after_id: int, head_id: int,
             applied_ids) -> int | None:
     """The lowest COMMITTED log id in ``(after_id, head_id]`` for the store that is not
     in ``applied_ids`` -- i.e. a row that advancing a watermark to ``head_id`` would
-    skip permanently (ZT-P1-5). ``None`` when the advance is contiguous.
+    skip permanently. ``None`` when the advance is contiguous.
 
     Two properties make this both sound and nearly free:
 
@@ -179,14 +190,15 @@ def log_gap(session: Session, store_id: str, after_id: int, head_id: int,
     PostgreSQL a locking read under a PINNED snapshot (REPEATABLE READ / SERIALIZABLE)
     is served from the TRANSACTION SNAPSHOT like any other read: measured, ``FOR SHARE``
     returned ``[]`` for a row committed after the snapshot, and ``log_gap`` returned
-    ``None`` -- blind to exactly the row it exists to find
-    (``tests/test_postgres_ha.py::test_log_gap_locking_read_surfaces_a_snapshot_hidden_row``).
+    ``None`` -- blind to exactly the row it exists to find.
 
     So the real guarantee is upstream: ``assert_read_isolation`` admits READ COMMITTED
     and nothing else, and under READ COMMITTED every statement -- locking or not -- sees
     the newest commit. The gap check is sound BECAUSE of that gate, not because of the
     lock hint. Weakening ``SAFE_ISOLATION_LEVELS`` therefore silently disarms this
     function too; the two must be read together."""
+    # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-5;
+    # ``tests/test_postgres_ha.py::test_log_gap_locking_read_surfaces_a_snapshot_hidden_row``.
     if head_id - after_id == len(applied_ids):
         return None
     stmt = (select(TupleLog.id)
@@ -223,6 +235,59 @@ def log_rows(session: Session, store_id: str, after_id: int = 0,
     if limit is not None:
         stmt = stmt.limit(limit)
     return list(session.exec(stmt).all())
+
+
+def validate_token(at_least) -> None:
+    """``at_least`` is ``None`` or a freshness token: a non-negative ``int`` (a ``bool``
+    is refused although it is an ``int``)."""
+    # TK123 item 11: a str/float/bool token used to reach a SQL comparison or a silent
+    # ``<`` and either crash deep in the read path or be accepted as 0/1.
+    if at_least is None:
+        return
+    if type(at_least) is bool or not isinstance(at_least, int):
+        raise TypeError(f'at_least must be None or an int token returned by a write, '
+                        f'got {at_least!r}')
+    if at_least < 0:
+        raise ValueError(f'at_least must be >= 0, got {at_least}')
+
+
+def token_diagnosis(session: Session, store_id: str, token: int) -> str:
+    """Why a freshness token cannot be satisfied, when the log says more than "not
+    yet": the token belongs to ANOTHER store, or it is past the newest log id this
+    session can see. Empty string otherwise. Called on the refusal path only.
+
+    It never says "never issued": a session pinned on an older snapshot (a SQLite WAL
+    reader, say) legitimately cannot see a token another session just got."""
+    from sqlalchemy import func
+    owner = session.exec(select(TupleLog.store_id).where(TupleLog.id == token)).first()
+    if owner is not None and owner != store_id:
+        return (f' Token {token} was returned by a write to store {owner!r}, not '
+                f'{store_id!r}: a token is only meaningful for the store that issued it.')
+    head = session.exec(select(func.max(TupleLog.id))).one() or 0
+    if token > head:
+        return (f' Token {token} is past the newest log id this session can see '
+                f'({head}): it was not issued yet, or it was committed after this '
+                f"session's read snapshot began; refresh() and retry.")
+    return ''
+
+
+def _require_clean_session(session: Session, surface: str) -> None:
+    """Refuse a ``Session`` that carries pending ORM changes.
+
+    ``Store`` (open, every write, ``refresh``), ``build_index`` and ``rebuild_index``
+    own their transaction: they commit on success and roll back on failure, so a
+    caller's pending rows would be committed with them, or silently discarded.
+
+    It sees ORM-pending objects only (``session.new`` / ``dirty`` / ``deleted``). A
+    statement the caller already executed in the open transaction (``session.execute``
+    of raw SQL, or a flushed object) is invisible to it."""
+    # TK123 item 10: Store did not check at all, so a caller's pending row rode along
+    # into the store's commit (or was dropped by its rollback).
+    if session.new or session.dirty or session.deleted:
+        raise ValueError(
+            f'{surface} owns the transaction (commit on success, rollback on '
+            f'failure): call it on a clean session, not one with pending changes '
+            f'(commit or roll back your own changes first)')
 
 
 class TupleSource:
@@ -271,7 +336,13 @@ class TupleSource:
             else:
                 self._engine.rebuild()
 
-        self.evaluator_watermark = self._consistent_rebuild(_open_or_rebuild)
+        try:
+            self.evaluator_watermark = self._consistent_rebuild(_open_or_rebuild)
+        except StoreNotFound:
+            # TK123 item 12: release whatever the open took (a FOR SHARE row lock on
+            # PostgreSQL) before reporting that the store does not exist.
+            session.rollback()
+            raise
         # ZT-P1-8a: from here on this engine is LOG-GOVERNED -- direct
         # ``add_tuple``/``remove_tuple`` on it are refused, because they would mutate
         # the source of truth with no ``TupleLog`` row and nothing downstream (index
@@ -297,7 +368,7 @@ class TupleSource:
 
     @property
     def engine(self) -> SetEngine:
-        """The online evaluator, READ-ONLY (ZT-P1-8a).
+        """The online evaluator, READ-ONLY.
 
         Kept as a public attribute because reads through it are legitimate and used
         (``check``/``expand``/``lookup`` against always-fresh in-memory state), but a
@@ -307,6 +378,7 @@ class TupleSource:
         ``UnloggedWriteRefused`` rather than silently writing ``RelationTuple`` with no log
         row. Both halves are needed -- privacy alone would not have helped, since a
         rename cannot stop a caller that already holds the object."""
+        # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-8a.
         assert self._engine is not None
         return self._engine
 
@@ -467,12 +539,25 @@ class TupleSource:
         self._locked_txn = (self.session.get_transaction(),
                             self.session.get_nested_transaction())
 
-    def add(self, subject_predicate, s_type: str, s_name: str,
-            relation: str, o_type: str, o_name: str) -> int:
+    @overload
+    def add(self, user: str, relation: str, object: str) -> int: ...
+    @overload
+    def add(self, subject_predicate: str, subject_type: str, subject_name: str,
+            relation: str, object_type: str, object_name: str) -> int: ...
+
+    def add(self, *args, **kwargs) -> int:
         """Add a raw tuple; returns the freshness token (log id).
+
+        Two call forms, as on ``Store.add_tuple``: ``add("user:alice", "viewer",
+        "doc:d1")`` (OpenFGA ``user, relation, object``) or ``add("...", "user",
+        "alice", "viewer", "doc", "d1")`` (``subject_predicate, subject_type,
+        subject_name, relation, object_type, object_name``).
 
         Idempotent on duplicates (raw tuples are a set): no state change, no log
         row, current watermark returned."""
+        (subject_predicate, s_type, s_name,
+         relation, o_type, o_name) = tuple_args('add', args, kwargs)
+        reject_ellipsis_predicate(subject_predicate, 'add', write=True)  # TK123 item 9
         # The multi-instance critical section: lock, then catch the evaluator up to
         # the committed head (under the lock no new commit can appear), so admission
         # below validates against CURRENT store state and the log append lands
@@ -483,7 +568,7 @@ class TupleSource:
         # a later rollback of this transaction leaves the evaluator truthful.
         self._lock_source()
         self.catch_up_evaluator()
-        s_pred = '...' if subject_predicate is Ellipsis else subject_predicate
+        s_pred = subject_predicate
         # ``_add_tuple_direct``, not ``add_tuple``: this instance marked the engine
         # log-governed, so the public method now refuses (ZT-P1-8a). WE are the
         # sanctioned writer -- the ``_append`` two lines down is the log row that
@@ -497,14 +582,23 @@ class TupleSource:
         self._advance_watermark(token)
         return token
 
-    def remove(self, subject_predicate, s_type: str, s_name: str,
-               relation: str, o_type: str, o_name: str) -> int:
-        """Remove a raw tuple; returns the freshness token (log id). Raises
-        ``ValueError`` (and logs nothing) if the tuple is not present."""
+    @overload
+    def remove(self, user: str, relation: str, object: str) -> int: ...
+    @overload
+    def remove(self, subject_predicate: str, subject_type: str, subject_name: str,
+               relation: str, object_type: str, object_name: str) -> int: ...
+
+    def remove(self, *args, **kwargs) -> int:
+        """Remove a raw tuple; returns the freshness token (log id). Same two call
+        forms as ``add``. Raises ``AdmissionRejected`` (a ``ValueError``; logs nothing)
+        if the tuple is not present."""
+        (subject_predicate, s_type, s_name,
+         relation, o_type, o_name) = tuple_args('remove', args, kwargs)
+        reject_ellipsis_predicate(subject_predicate, 'remove', write=True)  # TK123 item 9
         # Same multi-instance critical section as ``add`` (see there).
         self._lock_source()
         self.catch_up_evaluator()
-        s_pred = '...' if subject_predicate is Ellipsis else subject_predicate
+        s_pred = subject_predicate
         # ``_remove_tuple_direct``: see the note in ``add`` (ZT-P1-8a).
         self._engine._remove_tuple_direct(s_pred, s_type, s_name,
                                           relation, o_type, o_name)
@@ -552,11 +646,12 @@ class TupleSource:
         return row.id
 
     def pop_pending_rows(self) -> list[TupleLog]:
-        """Return the row(s) flushed since the last pop and reset the buffer (perf P12b).
+        """Return the row(s) flushed since the last pop and reset the buffer.
 
         The sync write path drains this right after a successful append to hand
         ``advance_index`` the exact rows it would otherwise re-SELECT; the rollback/except
         paths drain-and-discard it so no row ever survives into a later transaction."""
+        # Provenance (moved out of the docstring, TK123 item 14): perf P12b.
         row, self._pending_row = self._pending_row, None
         return [] if row is None else [row]
 
@@ -564,18 +659,31 @@ class TupleSource:
     # Reads (the always-fresh online evaluator)
     # ------------------------------------------------------------------ #
 
-    def check(self, *q, at_least: int | None = None) -> bool:
-        """Evaluate a check against the online evaluator; ``at_least`` demands the
-        evaluator reflect the log through that token first (catch up O(delta) on
-        demand; ``StaleRead`` if the token is not visible in this session's
-        snapshot -- rollback/refresh and retry)."""
+    @overload
+    def check(self, user: str, relation: str, object: str, *,
+              at_least: int | None = None) -> bool: ...
+    @overload
+    def check(self, subject_predicate: str, subject_type: str, subject_name: str,
+              relation: str, object_type: str, object_name: str, *,
+              at_least: int | None = None) -> bool: ...
+
+    def check(self, *args, at_least: int | None = None, **kwargs) -> bool:
+        """Evaluate a check against the online evaluator, in either call form
+        (``check("user:alice", "viewer", "doc:d1")`` or six parts, as on
+        ``Store.check``). ``at_least`` (``None`` or a non-negative ``int`` token)
+        demands the evaluator reflect the log through that token first (catch up
+        O(delta) on demand; ``StaleRead`` if the token is not visible in this
+        session's snapshot -- rollback/refresh and retry)."""
+        q = tuple_args('check', args, kwargs)
+        validate_token(at_least)
         if at_least is not None and self.evaluator_watermark < at_least:
             self.catch_up_evaluator()
             if self.evaluator_watermark < at_least:
                 raise StaleRead(
                     f'token {at_least} is not visible in this session snapshot '
                     f'(evaluator at {self.evaluator_watermark}); rollback to start '
-                    f'a fresh read transaction, refresh the evaluator, and retry')
+                    f'a fresh read transaction, refresh the evaluator, and retry.'
+                    + token_diagnosis(self.session, self.store_id, at_least))
         return self.engine.check(*q)
 
     def catch_up_evaluator(self, batch: int | None = None) -> int:
@@ -587,8 +695,7 @@ class TupleSource:
         drain query).
 
         Visibility: the rows tailed are this SESSION's read snapshot -- a long-lived
-        read session must ``rollback()`` first to advance its snapshot (blind-audit
-        X2). Gap-freedom relies on the writer lock discipline (``_lock_source``):
+        read session must ``rollback()`` first to advance its snapshot. Gap-freedom relies on the writer lock discipline (``_lock_source``):
         the log append happens inside the per-store critical section, so ids commit
         in id order per store and ``id > watermark`` tailing never skips a row.
         After a rollback of this instance's OWN uncommitted write the watermark may
@@ -598,6 +705,7 @@ class TupleSource:
         ``apply_logged``'s ``RuntimeError`` propagates: a presence mismatch during
         trusted replay means the watermark is corrupt, and the loud failure is the
         point -- recovery is ``refresh_evaluator()``."""
+        # Provenance (moved out of the docstring, TK123 item 14): blind-audit X2.
         total = 0
         while True:
             rows = log_rows(self.session, self.store_id,
