@@ -13,7 +13,7 @@ source_hash:
 created: 2026-10-13c
 moved: 2026-10-14
 updated: 2026-10-14
-closed:
+closed: 2026-10-14
 ---
 
 Found by the 2026-10-13 OpenFGA claims audit; probe and sources in
@@ -59,3 +59,9 @@ REVIEW: CHANGES-NEEDED; fixes in progress (2026-10-14). Not merged.
 OPEN USER QUESTION R1 (C10, a goal question, so it goes to the user, not decided here): stores persisted under <= 0.0.4 whose schema text has a now-refused shape (H2, S7, S8) cannot reopen (schema_io.py::open_set_engine re-parses with the checked parser) and there is no migration path. Coordinator default pending the user's word: accept the break in the API-break release, with a clear "persisted by <= 0.0.4, refused since TK137: <reason>" message at load/open and a CHANGELOG line.
 Sequencing (C8): TK137 steps 1-2 (the unparser) land before or with TK123's A36.
 Filed: TK147 (LATER) object_wildcard_shapes naming an undeclared type or relation is accepted (C7, out of DSL scope). Next action: land the review fixes, run the phased gate, raise R1 with the user. Not closed here.
+
+LANDED: commit be62738. Both checked parsers (and parse_openfga_json, before its round trip) now refuse the shapes OpenFGA refuses, each with a REFUSED SHAPE / WHY / INSTEAD block in both parsers: H1 a schema version other than 1.1 (stricter than OpenFGA, which also takes 1.2; only 1.1 is implemented and the version used to be ignored), H2 extra words or a trailing comment on model / schema / relations lines, S7 an unparenthesised but not sharing a level with or / and / but not, S8 a restriction to an undeclared type (checked against the final declared set, so forward references stay legal). S9 still refuses but names the feature. Kept and documented as extensions: H3, H4, S5, S6, S10, S11, X1, X2. unparse_schema_ast emits relationless types first and renders but-not operands as units, so the unparser reaches no new refusal. Sabotage SA1-SA15 + SA-F red in tests/test_tk137_openfga_dsl_refusals.py; _FUZZ_TRIALS 6000 -> 12000. Gate: tests-tile 1-4 in the commit, and lean + conf-tile 1-5 green on the combined round tree (e3581aa message).
+User decision R1 (C10), 2026-10-14, verbatim: "i'm willing to bet there are zero users now so backwards compat isn't an issue, but we can always bump a minor version if there's an issue". So the default stands: a store persisted by <= 0.0.4 whose schema uses a now-refused shape does not reopen, and says so legibly (src/zanzibar/connectedstore/schema_io.py::_persisted_schema_parse raises PersistedSchemaRefused, quoting the refusal and the rewrite that keeps the 0.0.4 meaning; pinned by tests/test_tk137_persisted_schema_refused.py). No lenient mode.
+Plan doc docs/tk137-dsl-openfga-refusals-2026-10-14.md is FROZEN now (banner added 2026-10-14).
+Stays open: TK147 (LATER, object_wildcard_shapes naming an undeclared type or relation is accepted, C7). The user-facing write-up of the refused shapes belongs to the docs rows (TK143 and the Diataxis docs row filed 2026-10-14).
+Next action: none on this row. The CHANGELOG line for the break ships with the next release (TK123's).

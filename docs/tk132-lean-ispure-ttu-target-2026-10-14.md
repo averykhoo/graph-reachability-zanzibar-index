@@ -1,11 +1,15 @@
 # `TK132`: the Lean `isPure` TTU arm asks by NAME, Python by `(type, relation)`. The measured scout
 
-**ACTIVE-PLAN, opened 2026-10-14. The body is provenance, not a living status.** This is the
+**FROZEN 2026-10-14, at `TK132`'s close — provenance, not a living document.** Status
+lines below are as-of-then and several may now be false; live state: `HANDOFF.md` + the
+session ledger, and `python scripts/task.py show TK132`. Corrections are appended dated at
+the top, never edited into the body. Landed in commit `22d4b16`.
+
+Was ACTIVE-PLAN from 2026-10-14 until that close; the body is provenance. This is the
 scout-only map for task row `TK132`. One scouting agent (`scout-TK132`) produced it on
 2026-10-14 and edited no file under `src/`, `tests/`, `formal/` or `tasks/`. The live state
 is the task row (`python scripts/task.py show TK132`), never this file. Corrections are
-appended **dated at the top** and are never edited into the body. Freeze this file when
-`TK132` closes.
+appended **dated at the top** and are never edited into the body. Frozen at that close (banner above).
 
 Provenance labels used on every claim:
 - **READ**: the cited `file::symbol` was read first-hand on 2026-10-14.

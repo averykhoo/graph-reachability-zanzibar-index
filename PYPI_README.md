@@ -107,7 +107,9 @@ above; markers without their exclusions grant too much.
   whichever is declared first; the two are never silently merged.
 * **One write path per store id.** Write a `ConnectedStore`'s store through the
   `ConnectedStore` only. A standalone `SetEngine` opened on the same id can read it, but its
-  `add_tuple` / `remove_tuple` raise `UnloggedWriteRefused`. A `ConnectedStore` will not
+  `add_tuple` / `remove_tuple` raise `UnloggedWriteRefused`, and it must be given the
+  store's own schema (`zanzibar.connectedstore.open_set_engine(session, id)` loads it); a
+  different one raises `SchemaMismatch`. A `ConnectedStore` will not
   take over an id that a standalone `SetEngine` already wrote to (`UnloggedTuplesPresent`).
   To adopt such a store, call `save_schema(session, id, schema)`, commit, then
   `build_index(session, id)`, then open `ConnectedStore(session, id)`.

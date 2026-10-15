@@ -249,6 +249,18 @@ class CyclicDerivedDependency(ValueError):
     raise."""
 
 
+class SchemaMismatch(ValueError):
+    """An explicit schema disagrees with the store's persisted (immutable) schema.
+
+    Raised by ``zanzibar.connectedstore`` (``ensure_schema``, so ``ConnectedStore(...,
+    schema=...)``) and, since `TK123` A53, by ``zanzibar.setengine.SetEngine`` opened on a
+    store id that has a ``SchemaRecord``: a set engine answering under a schema other than
+    the store's would serve different answers from the same tuples (a dropped ``but not``
+    reads as a stale ALLOW). It lives HERE, in the shared layer, so the set engine can raise
+    it without importing the composition layer; ``zanzibar.connectedstore`` re-exports the
+    same class, so ``except zanzibar.connectedstore.SchemaMismatch`` still catches it."""
+
+
 class ShapeRefusedSinceTK137(ValueError):
     """A schema shape that zanzibar-index 0.0.4 and earlier ACCEPTED and `TK137`
     (2026-10-14) refuses: a ``schema`` line naming a version but ``1.1`` (H1), extra words on

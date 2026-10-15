@@ -13,7 +13,7 @@ source_hash:
 created: 2026-09-27d
 moved: 2026-10-14
 updated: 2026-10-14
-closed:
+closed: 2026-10-14
 ---
 
 Filed 2026-09-27d from the P13 build (docs/p13-claim-rot-gate-2026-09-27.md). The new prose-number lint (formal/conformance/claim_rot.py, verify.sh step 4d3) found seven uncited ratio claims in formal/CORRESPONDENCE.md on its first run; each was marked past (dated + pastness word) so the lint passes. One of them, the keyLeafRewrites row's "50/50 schemas" leaf-rule comparison, came from a one-off 2026-08-16 probe that NO test re-runs, so nobody knows whether it still holds. Either turn the comparison into a test (and cite it in the row's sentence, which the lint accepts) or delete the number and say what was checked. Do not just leave it marked past -- that is the lint's escape hatch, not a verification.
@@ -52,3 +52,8 @@ X6 expected refusals: zero. Sweep ALL_CORPORA + fixtures + witnesses + tk126 SER
 Also in the doc (X7-X13): move witness constants into corpus.py rather than importing test_tk126 (X7); comment on P21 at close (X8); fix both stale rc comments in runner.py (X9); add an (a or a) but not c witness so multiset vs set matters (X10); assert the mismatch set EQUALS _TK132_EXPECTED keys, and land TK119 before TK132, never two lake builds at once (X13).
 
 STATUS: the build is starting in the main tree (2026-10-14). Nothing landed yet. Open: the build, its sabotage record, the phased gate. Not closed here.
+
+LANDED: commit e3581aa, then the flip in 22d4b16 (TK132). The keyLeafRewrites "50/50 schemas" ratio is now a gated differential test against the Lean definition itself: zcli mode "leaf-rules" (formal/lean/ZanzibarProofs/Cli.lean::leafRulesJson) prints schemaRewrites S and leafRewrites S, and formal/conformance/test_conformance_leaf_rules.py compares each half with the Rules from compile_ruleset as a multiset (untainted order and within-key leaf order too) over every curated corpus, every fga fixture, the witnesses W1-W7 (W7 makes the multiset choice load-bearing) and the TK126 SERVED schemas. Zero expected refusals; floors by name plus MIN_MATCHED_NONEMPTY_LEAF. At e3581aa the four TK132-class sources (TK126 D, D_nested, SlXt, WIT:W3) were positive pins, never xfails; 22d4b16 flipped all four, so the disagreeing set must now be EMPTY and the floor went 44 -> 49. Sabotage (a)-(f) in the e3581aa message, (a)+(b) permanent in test_python_side_sabotages_are_caught. formal/CORRESPONDENCE.md keyLeafRewrites row and the Audit.lean comment cite the test, no ratio. Gate: lean, conf-tile 1-5, tests-tile 1-4 PASSED on the round tree, gate_status COVERED.
+Plan doc docs/tk119-leaf-rules-differential-2026-10-14.md is FROZEN now, with the builder's owed corrections appended first (X10 is no longer UNVERIFIED: W7's Lean side was run and emits a -> viewer.0 twice, as Python does).
+Stays open: TK152 (LATER) for the build's leftovers: the stale 50/50 figure and the within-key-only order sentence in GraphIndex/LeafRules.lean's docstrings, the X7 SERVED duplicate in tests/test_tk126_ttu_target_name_collision.py, and the zcli rc-5 paragraph in CORRESPONDENCE.md. P21 is commented (X8): the leaf-rules mode is the channel it wants for NoLeafSubjects over schemaRewritesL.
+Next action: TK152.

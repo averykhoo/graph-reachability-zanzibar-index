@@ -1,10 +1,15 @@
 # `TK142` -- why the lookup-oracle gates miss a dropped `lookup_reverse` exclusion (2026-10-14)
 
-**ACTIVE-PLAN, opened 2026-10-14 -- the body is provenance, not a living status.** This is
+**FROZEN 2026-10-14, at `TK142`'s close — provenance, not a living document.** Status
+lines below are as-of-then and several may now be false; live state: `HANDOFF.md` + the
+session ledger, and `python scripts/task.py show TK142`. Corrections are appended dated at
+the top, never edited into the body. Landed in commit `b7d15f5`.
+
+Was ACTIVE-PLAN from 2026-10-14 until that close; the body is provenance. This is
 the scouting map for `TK142`, measured by the `scout-TK142` agent on 2026-10-14. Every figure
 below is as-of that date. Live state is the task row (`python scripts/task.py show TK142`)
 and `python scripts/gate_status.py`, never this file. Corrections append **dated at the
-top**, never edited into the body. Freeze it when `TK142` closes.
+top**, never edited into the body. Frozen at that close (banner above).
 
 Provenance labels: **READ** (first-hand read of the tree), **PROBE** (first-hand run by
 `scout-TK142`, output quoted literally), **REASONED**, **UNVERIFIED**. Line numbers are as of

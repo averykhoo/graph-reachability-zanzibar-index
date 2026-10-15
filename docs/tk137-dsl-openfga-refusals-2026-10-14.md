@@ -1,11 +1,16 @@
 # `TK137` — DSL shapes OpenFGA refuses: the measured plan
 
-**ACTIVE-PLAN, opened 2026-10-14 — the body is provenance, not a living status.** This is
+**FROZEN 2026-10-14, at `TK137`'s close — provenance, not a living document.** Status
+lines below are as-of-then and several may now be false; live state: `HANDOFF.md` + the
+session ledger, and `python scripts/task.py show TK137`. Corrections are appended dated at
+the top, never edited into the body. Landed in commit `be62738`.
+
+Was ACTIVE-PLAN from 2026-10-14 until that close; the body is provenance. This is
 the execution map for `TK137` (`python scripts/task.py show TK137`), produced by one scout
 (`scout-TK137`, a workflow subagent, opus) on 2026-10-14 against HEAD `0b09687`. Every figure
 below is as-of that date. Live state is the task row and `python scripts/gate_status.py`,
 never this file. Corrections append **dated at the top**, never edited into the body.
-Freeze it when `TK137` closes.
+Frozen at that close (banner above).
 
 **Provenance labels.** first-hand READ = the scout read the line itself. first-hand PROBE = a
 script the scout ran against this tree; its literal output is quoted. REASONED = inferred,

@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
-## [Unreleased]
+## [0.0.5] - 2026-10-14
 
 ### Added
 - `SetEngine.excluded_keys(result)`: the portable `(type, name, predicate)` form of a
@@ -44,6 +44,25 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
   store was serving (`instead` attribute), so the break does not read as corruption.
 
 ### Fixed
+- `advance_index(..., proc=None)` on a schema with `and` / `but not` relations now raises
+  `zanzibar.connectedstore.MissingDeltaProcessor` (a `ValueError`) before reading or writing
+  anything, and the message names the fix: pass `DeltaProcessor(widx, ruleset.compiled)`, or
+  let `ConnectedStore` advance the index (`refresh()` / `catch_up()`). Before, it applied the
+  log without maintaining the `and` / `but not` relations, so the graph index silently
+  disagreed with the set engine: with `define viewer: [user] but not banned` and alice
+  granted, the index said False and the set engine True. A schema with only unions still
+  takes `proc=None` (TK123).
+- A `SetEngine` opened on a store id that a `ConnectedStore` owns (the id has a persisted
+  schema) now compares the schema it is given with the store's and raises `SchemaMismatch`
+  if they differ, by the same rule as `ConnectedStore(..., schema=...)`: the parsed schema
+  and the declared `object_wildcard_shapes` must be equal, so formatting and the order of
+  `type` / `define` lines do not matter. Before, it answered under whatever schema it was
+  given: with the store's `but not banned` dropped, a banned user read as allowed.
+  `zanzibar.connectedstore.open_set_engine(session, store_id)` opens one with the store's
+  own schema. A `SetEngine` on a store id no `ConnectedStore` owns is unchanged: it uses
+  the schema it is given. `SchemaMismatch` now lives in `zanzibar.schema.errors` and is also
+  exported from `zanzibar.schema`; `zanzibar.connectedstore.SchemaMismatch` is the same
+  class, so existing `except` clauses still catch it (TK123).
 - A `relations` line with a `define` on it (`relations define viewer: [user]`) parsed and
   silently dropped the relation. It is now refused (TK137).
 - `SetEngine.lookup_reverse` now fills `excluded_node_ids` with the subjects a `but not`
@@ -66,6 +85,15 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
   commit, `build_index(session, id)`, then `ConnectedStore(session, id)` (TK140).
 
 ### Documentation
+- **A userset is not a member of itself here, unlike OpenFGA** (documented, not changed;
+  TK138). OpenFGA counts `doc:1#banned` as a member of `doc:1#banned`, and so of every
+  relation built on it; this library does not, except through a `from` parent. The
+  security-relevant case: with `define vx: [user, doc#banned] but not banned` and the tuple
+  `doc:1#banned vx doc:1`, checking `doc:1#banned` for `vx` on `doc:1` is allowed here and
+  denied by OpenFGA. The opposite also happens: `define vy: [user, doc#editor] and editor`
+  with `doc:1#editor vy doc:1` is denied here and allowed by OpenFGA. Only userset subjects
+  are affected; plain users and `user:*` are not. The PyPI README lists it. Adopting
+  OpenFGA's rule is planned for a later minor version, because it changes answers.
 - The READMEs now state that a grant on every instance (`folder:*`) does not reach a grant
   on "any" instance while no instance exists, with a zero-folders example. This strict
   reading is the current mode; a lenient mode may come later, in all backends together

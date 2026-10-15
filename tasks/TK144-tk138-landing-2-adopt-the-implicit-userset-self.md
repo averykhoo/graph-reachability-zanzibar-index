@@ -2,7 +2,7 @@
 id: TK144
 title: TK138 landing 2: adopt the implicit userset self-relation in all four corners, one atomic change
 brief: one atomic Python+Lean change set; never one corner alone; behind TK123/TK119/TK132
-pri: LATER
+pri: NEXT
 size: L
 deps: [TK123, TK119, TK132]
 related: [TK138]

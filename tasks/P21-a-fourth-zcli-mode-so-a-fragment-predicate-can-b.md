@@ -11,8 +11,8 @@ labels: [formal]
 source: board
 source_hash: ea8db643136e
 created: 2026-08-31b
-moved: 2026-10-13d
-updated: 2026-10-13d
+moved: 2026-10-14
+updated: 2026-10-14
 closed:
 ---
 
@@ -69,3 +69,7 @@ Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked
 ### 2026-10-13d
 
 Sprint re-rank 2026-10-13d (user-approved in chat): stays LATER, first in line after HS-5 when a NEXT slot frees. TK3 gave its slot to TK123 (user put the rename in NEXT); P21 gave its slot to TK138.
+
+### 2026-10-14
+
+From TK119 (closed 2026-10-14, commit e3581aa; challenge X8 in docs/tk119-leaf-rules-differential-2026-10-14.md). zcli now has a "leaf-rules" mode (formal/lean/ZanzibarProofs/Cli.lean::leafRulesJson) that prints schemaRewrites S and leafRewrites S as JSON, differentially checked against compile_ruleset by formal/conformance/test_conformance_leaf_rules.py. That is the channel this row wants for NoLeafSubjects over schemaRewritesL: the predicate can be evaluated on the emitted rules instead of mirrored. Left for this row on purpose (its Traps): the "exactly three modes" wording in the test_leaf_namespace_correspondence.py follow-up; do not call the mirror machine-checked until this row makes it so.

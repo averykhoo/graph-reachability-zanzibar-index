@@ -87,6 +87,29 @@ def _apply_row(row: TupleLog, widx: WildcardIndex, ruleset: RuleSet) -> None:
         ) from e
 
 
+class MissingDeltaProcessor(ValueError):
+    """``advance_index`` was called with ``proc=None`` on a schema with boolean
+    (``and`` / ``but not``) relations (TK123 A16).
+
+    The apply step writes only the leaf families; the derived families are maintained by
+    the ``DeltaProcessor``'s cascade. Without it the index silently disagrees with the set
+    engine (an equivalence failure, measured: a granted user read ``False`` from the index
+    and ``True`` from the source), so this is refused instead. A ``ValueError`` subclass,
+    as a bad argument is."""
+
+
+def _require_proc_for_boolean_schema(ruleset: RuleSet, proc: DeltaProcessor | None) -> None:
+    """Refuse ``proc=None`` when ``ruleset`` compiled boolean plans (TK123 A16)."""
+    compiled = ruleset.compiled
+    if proc is None and compiled is not None and compiled.plans:
+        raise MissingDeltaProcessor(
+            'advance_index(..., proc=None) on a schema with boolean (and / but not) '
+            'relations would build a graph index that disagrees with the set engine: '
+            'the derived relations are only maintained by the delta processor. Pass '
+            'DeltaProcessor(widx, ruleset.compiled) as proc, or drive the index through '
+            'ConnectedStore (refresh() / catch_up()), which does.')
+
+
 def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
                   ruleset: RuleSet, proc: DeltaProcessor | None, *,
                   batch: int | None = None,
@@ -124,7 +147,15 @@ def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
     contract above stays literally true: same contiguous prefix, same monotone cursor
     advance, same exactly-once shape. Any mismatch (empty hint, or a store reopened
     ``sync=True`` with leftover async-era lag between the cursor and the hint) falls
-    back to ``log_rows`` exactly as today."""
+    back to ``log_rows`` exactly as today.
+
+    ``proc`` is REQUIRED when the schema has boolean (``and`` / ``but not``) relations,
+    i.e. when ``ruleset.compiled.plans`` is non-empty, and is refused with
+    ``MissingDeltaProcessor`` before anything is read or written otherwise (TK123 A16).
+    Without the cascade the derived families are never maintained, so the index would
+    silently answer differently from the set engine. ``None`` is only for pure-union
+    schemas, which never cascade."""
+    _require_proc_for_boolean_schema(ruleset, proc)
     # Serialize concurrent appliers on the index store BEFORE reading the cursor:
     # two workers reading the same cursor value would double-apply log rows (a
     # lost-update on ref-counted state). A real ``SELECT ... FOR UPDATE`` on the

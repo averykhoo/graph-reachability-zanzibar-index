@@ -13,7 +13,7 @@ source_hash:
 created: 2026-10-13d
 moved: 2026-10-14
 updated: 2026-10-14
-closed:
+closed: 2026-10-14
 ---
 
 Filed by the TK139 review (session 2026-10-13d). The broad lookup-oracle gates in
@@ -57,3 +57,8 @@ BUILT (worktree-wf_9a094007-20b-11 @69080d4, tests only, 2 files: tests/test_loo
 
 OPEN, filed as rows (LATER; the requested label tests is not in tasks/config.json vocabulary, so filed unlabelled): TK148 forward lookup exclusion channel caught only by scripted pins (C4, F1); TK145 TestLookupSurfaceMachine catches G1 about half the time (C2); TK146 hypothesis Phase.reuse / example DB can fake a sabotage catch (C3).
 Next action: coordinator merges 69080d4, runs the phased gate, then closes TK142. Not closed here.
+
+LANDED: commit b7d15f5 (tests only: tests/test_lookup_oracle.py, tests/test_tk116_oracle_only_setengine.py). Broad lookup-oracle gates now reach lookup_reverse exclusions: _Gate counters set_reverse_neg / set_reverse_neg_graph_joined / graph_reverse_excl (set_forward_excl counted only); gate_boolean seeds [0,1,4] with a tripwire on seed 4; gate_demorgans_reverse walk_steps [6,12] with a tripwire on 12; new test_lookup_oracle_gate_generated_schemas_exclusion_witness; a set_reverse_neg > 0 tripwire on the TK116 walk. Sabotage in the commit message: M1, M2, G1 and the row's original src mutant each go red (the original was 9 passed, now 3 failed). Done-when met on both sides. Full phased gate (lean, conf-tile 1-5, tests-tile 1-4) green on the combined round tree (counts in the e3581aa message).
+Plan doc docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md is FROZEN now (banner added 2026-10-14).
+Stays open: TK148 (forward SetEngine.lookup exclusion channel, F1, caught only by scripted pins), TK145 (TestLookupSurfaceMachine catches G1 about half the time), TK146 (hypothesis Phase.reuse / example DB can fake a sabotage catch). All LATER.
+Next action: none on this row; the residuals are TK145/TK146/TK148.

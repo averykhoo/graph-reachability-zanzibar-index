@@ -8,6 +8,7 @@ added on top of this storage layer.
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from dataclasses import dataclass
 from itertools import chain
@@ -39,6 +40,7 @@ from zanzibar.schema import (
     Intersection,
     Exclusion,
 )
+from zanzibar.schema.errors import SchemaMismatch, ShapeRefusedSinceTK137
 from .setops import SetOps, DEFAULT_SETOPS
 from .models import RelationTuple
 from . import memberset as ms
@@ -104,7 +106,8 @@ def _reject_unlogged_write(engine: 'SetEngine', op: str) -> None:
 #: ``SchemaRecord.__tablename__`` by ``tests/test_tk140_one_write_path.py``, so a rename
 #: cannot silently turn the probe into "never governed".
 SCHEMA_RECORD_TABLE = 'zanzibar_schema_record'
-_SCHEMA_RECORD = _sa_table(SCHEMA_RECORD_TABLE, _sa_column('store_id'))
+_SCHEMA_RECORD = _sa_table(SCHEMA_RECORD_TABLE, _sa_column('store_id'),
+                           _sa_column('schema_text'), _sa_column('object_wildcard_shapes'))
 
 
 def store_has_schema_record(session: Session, store_id: str) -> bool:
@@ -124,6 +127,58 @@ def store_has_schema_record(session: Session, store_id: str) -> bool:
             .limit(1)
         ).first()
     return row is not None
+
+
+def _schema_record_row(session: Session, store_id: str):
+    """``(schema_text, object_wildcard_shapes_json)`` of ``store_id``'s ``SchemaRecord``,
+    or ``None`` when it has none (TK123 A53). Same ``has_table`` guard and raw-table read
+    as ``store_has_schema_record``; read ONCE, at construction."""
+    if not _sa_inspect(session.connection()).has_table(SCHEMA_RECORD_TABLE):
+        return None
+    with session.no_autoflush:
+        return session.execute(
+            _sa_select(_SCHEMA_RECORD.c.schema_text, _SCHEMA_RECORD.c.object_wildcard_shapes)
+            .where(_SCHEMA_RECORD.c.store_id == store_id)
+            .limit(1)
+        ).first()
+
+
+def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
+                                  object_wildcard_shapes) -> None:
+    """Raise ``SchemaMismatch`` unless ``(schema, object_wildcard_shapes)`` is the
+    store's persisted schema (TK123 A53).
+
+    The comparison is ``connectedstore.schema_io.ensure_schema``'s (`TK136`): equal
+    declared object-wildcard shapes, and the texts parse to an equal ``SchemaAST`` (so
+    whitespace, comments and the order of type blocks or ``define`` lines do not matter).
+    Identical text short-circuits, so the store's own opens (``open_set_engine`` passes
+    the stored text) never re-parse."""
+    stored_text, stored_shapes_json = record
+    stored_shapes = frozenset(tuple(s) for s in json.loads(stored_shapes_json))
+    if stored_shapes != frozenset(object_wildcard_shapes):
+        raise SchemaMismatch(
+            f'SetEngine on store {store_id!r}: its object_wildcard_shapes disagree with the '
+            f'persisted schema of this store (a ConnectedStore owns this store id, and schemas are '
+            f'write-once). Open it with the persisted schema -- '
+            f'zanzibar.connectedstore.open_set_engine(session, {store_id!r}) loads it -- or '
+            f'use a store id no ConnectedStore owns.')
+    if stored_text == schema:
+        return
+    try:
+        stored_ast = parse_schema_ast(stored_text)
+    except ShapeRefusedSinceTK137 as e:
+        raise SchemaMismatch(
+            f'SetEngine on store {store_id!r}: the persisted schema of this store uses a shape '
+            f'this version refuses ({e}), so it cannot equal the schema passed here, and '
+            f'the store cannot be opened (see CHANGELOG.md 0.0.5, TK137).') from e
+    if stored_ast != ast:
+        raise SchemaMismatch(
+            f'SetEngine on store {store_id!r}: the schema passed here disagrees with the '
+            f'persisted schema of this store (a ConnectedStore owns this store id, and schemas '
+            f'are write-once). Answering under a different schema would give different '
+            f'answers from the same tuples, e.g. a dropped "but not" reads as ALLOW. Open '
+            f'it with the persisted schema -- zanzibar.connectedstore.open_set_engine('
+            f'session, {store_id!r}) loads it -- or use a store id no ConnectedStore owns.')
 
 
 def _drive(gen):
@@ -492,6 +547,15 @@ class SetEngine:
         # TK140: after the schema has compiled (a refused schema issues no statement),
         # before the replay SELECT.
         self._probe_log_governance()
+        if self.log_governed:
+            # TK123 A53: a governed store's engine must answer under the STORE's schema,
+            # so read the record's schema and refuse a mismatch (``SchemaMismatch``)
+            # before replaying a single tuple. One extra read, on governed opens only; a
+            # standalone store (no record) is unchanged: it trusts the schema it is given.
+            record = _schema_record_row(self.session, self.store_id)
+            if record is not None:
+                _assert_schema_matches_record(self.store_id, record, schema, self.ast,
+                                              object_wildcard_shapes)
         self.rebuild()
 
     def _probe_log_governance(self) -> None:

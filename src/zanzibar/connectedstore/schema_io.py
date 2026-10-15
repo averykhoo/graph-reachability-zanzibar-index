@@ -20,13 +20,11 @@ from zanzibar.graphindex import ReachabilityIndex, Store, WildcardIndex
 from zanzibar.setengine import SetEngine
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import RuleSet, parse_openfga_schema, parse_schema_ast, validate_store_id
-from zanzibar.schema.errors import ShapeRefusedSinceTK137
+# ``SchemaMismatch`` moved to ``zanzibar.schema.errors`` (TK123 A53) so the set engine can
+# raise it without importing this layer; re-exported here, the same class object.
+from zanzibar.schema.errors import SchemaMismatch, ShapeRefusedSinceTK137  # noqa: F401
 
 from .models import SchemaRecord
-
-
-class SchemaMismatch(ValueError):
-    """An explicit schema disagrees with the store's persisted (immutable) schema."""
 
 
 class PersistedSchemaRefused(ValueError):

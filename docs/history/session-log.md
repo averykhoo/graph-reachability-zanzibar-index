@@ -33,6 +33,35 @@ from here.
 
 ---
 
+## 2026-10-15 — 0.0.5 release: the 2026-10-14 work recovered after a Windows update, gated, committed
+
+rows: TK123 (comment: items 1-2 landed)
+
+`task lint: clean (13 checks, 269 task file(s) parsed), 25 warning(s)`
+
+`read: board + note`
+
+`asked: none`
+
+**The 2026-10-14 session(s) left no ledger entry.** They committed `TK142`, `TK137`,
+`TK119` and `TK132` (`b7d15f5`..`22d4b16`), then wrote `TK123` accept-list items 1-2
+(`MissingDeltaProcessor`, the `SetEngine` schema-vs-`SchemaRecord` check), the 0.0.5 bump and
+CHANGELOG date, the `TK150` / `TK151` / `TK152` rows and the `TK150` fan-out cost doc +
+bench, all uncommitted, while running the gate for the 0.0.5 release the user had asked for
+("go for the 0.0.5 release", `TK123` Log 2026-10-14). A Windows update then took the machine
+down mid-gate.
+- **The `tests-tile:4/4` FAILED row of 2026-10-14 22:50 is environmental, not code**: all 28
+  failures are child interpreters exiting `3221225794` = `0xC0000142`
+  (`STATUS_DLL_INIT_FAILED`) with empty output, in subprocess-spawning tests
+  (`test_tasktool.py` sabotage runs, `test_tk120_package_layout.py`,
+  `test_reg15_security_hardening.py`): the OS refusing new processes as it went down.
+  First-hand READ of `.gate-runs/20261014-225032-tests-tile-4of4.log`.
+- This session read the uncommitted `src/` diff (coherent, complete; pinned by
+  `tests/test_tk123_equivalence_refusals.py`), wrote these records first, then ran the full
+  gate on the tree before committing.
+
+Still owed: nothing.
+
 ## 2026-10-13d — `TK141` start banner landed; `TK139` + `TK140` (the 0.0.4 trial's 3 BROKEN) fixed, unreleased
 
 rows: TK141 (closed), TK139 (closed), TK140 (closed), TK142 (new, NOW); addendum: TK85 (closed),

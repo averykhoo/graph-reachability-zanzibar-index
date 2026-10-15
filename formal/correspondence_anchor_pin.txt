@@ -295,7 +295,7 @@ formal/conformance/test_grid_independence.py::test_declared_keys_agree_on_every_
 formal/conformance/test_grid_independence.py::test_the_two_parsers_are_really_different_code	py:function	b87d3abdd3939ab0
 formal/conformance/w4_scope_probes.py::SCOPE_PROBES	py:assign	104516d12a182a45
 src/zanzibar/connectedstore/apply.py::_apply_row	py:function	a0bb061c28be41fb
-src/zanzibar/connectedstore/apply.py::advance_index	py:function	1abd1a3c30478d0e
+src/zanzibar/connectedstore/apply.py::advance_index	py:function	e37666db0dffad2b
 src/zanzibar/connectedstore/build.py::_materialise	py:function	62430a3254c77a5d
 src/zanzibar/connectedstore/build.py::rebuild_index	py:function	8bd6f659c28118fd
 src/zanzibar/connectedstore/source.py::TupleSource._lock_source	py:function	93d03986be2bc7fd

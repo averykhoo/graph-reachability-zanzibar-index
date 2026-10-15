@@ -13,7 +13,7 @@ source_hash:
 created: 2026-10-08
 moved: 2026-10-14
 updated: 2026-10-14
-closed:
+closed: 2026-10-14
 ---
 
 The Lean leaf-allocation model asks whether a TTU arm is PURE by relation NAME:
@@ -84,3 +84,8 @@ WHY the two headline statements moved (verbatim): the two statements gain a sche
 SABOTAGES, each red first (literal in the history note): S1 revert arm -> lrXt_cross_type_kept, hLTU_load_bearing.3, slXt_not_*, lrW3 red; S2 same-type -> stD_leaves (S2b: lrStD_no_ttu_rule) red; S3 wrong-def lookup -> stD_leaves red; S5 .all->.any -> ONLY lrMix red, Python any-control raises (permanent); S6 drop hNK -> discharge build red; S4 Python name test (permanent, both modules) -> exactly D/D_nested/SlXt/W3 (rules) and SlXt/D/D_nested (state).
 
 BUILDS: lake build ZanzibarProofs rc=0, zcli rc=0, Audit standard axioms only, statement/definition/anchor/claim-rot pins regenerated and green, both conformance modules green. The full phased gate is run after this comment; its verdict is in the commit message. NEXT ACTION: close TK132 once that commit lands (freeze the ACTIVE-PLAN doc then).
+
+LANDED: commit 22d4b16, design L-A amended by X1/X2/X6. GraphIndex/Leaf.lean::isPure's .ttu arm now asks the target over every parent type of the tupleset (ttuParentTypes, .all), as src/zanzibar/schema/boolean.py::_is_pure does; the leaf fact the cascade proofs read off the old name test is now the explicit decidable carry LeafRules.lean::LeafTtuTargetsUnderived, discharged from W4Fragment.computedOrDirect plus NodupKeys (X1). Witnesses: lrXt_cross_type_kept (inverted), SMix / lrMix_mixed_parent_drop (X2), SlW3 / lrW3 (X6), SDup. TK119's four TK132 pins flipped and were deleted: the leaf-rules differential now requires an EMPTY disagreeing set. New formal/conformance/test_conformance_tk132_leaf_rows.py compares leaf-row state. Sabotages S1-S6 each red first (literal output in formal/history/tk132-ispure-parent-types-2026-10-14.md). Gate: lean, conf-tile 1-5, tests-tile 1-4 all PASSED, gate_status COVERED (commit message). The formal/CORRESPONDENCE.md sec 7.1 TK126 gap is closed.
+Plan doc docs/tk132-lean-ispure-ttu-target-2026-10-14.md is FROZEN now (banner added 2026-10-14).
+Stays open: X3, the accepted scope loss: runCascade2_no_abort and cascade2_drains gain the carry, which is false on D / D_nested / SlXt, so they no longer cover those shapes (their old coverage was of a model that was not the code). Buying D back (design L-B, X5 cost estimate) is TK133. TK149 (LATER): the Lean graph mode under-reports a .ttu inside a derived def (the 2026-08-14 fail-closed class), positively pinned, not hidden.
+Next action: none on this row; the scope loss lives on TK133 and the graph-mode gap on TK149.

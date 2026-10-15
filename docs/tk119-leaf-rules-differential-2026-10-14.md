@@ -1,6 +1,11 @@
 # `TK119` — the leaf-rule claim becomes a differential test against the Lean definition
 
-**ACTIVE-PLAN, opened 2026-10-14 — the body is provenance, not a living status.** Scout map
+**FROZEN 2026-10-14, at `TK119`'s close — provenance, not a living document.** Status
+lines below are as-of-then and several may now be false; live state: `HANDOFF.md` + the
+session ledger, and `python scripts/task.py show TK119`. Corrections are appended dated at
+the top, never edited into the body. Landed in commit `e3581aa` (its `TK132` pins flipped in `22d4b16`).
+
+Was ACTIVE-PLAN from 2026-10-14 until that close; the body is provenance. Scout map
 for task row `TK119` (the `keyLeafRewrites` row of `formal/CORRESPONDENCE.md` carries a
 "50/50 schemas" leaf-rule comparison from a one-off 2026-08-16 probe that no test re-runs).
 The DECISION is on the row (2026-10-14 log entry, user-approved): a new `zcli` mode
@@ -9,7 +14,7 @@ The DECISION is on the row (2026-10-14 log entry, user-approved): a new `zcli` m
 Produced by one scouting agent (`scout-TK119`) on 2026-10-14. No file under `src/`, `tests/`,
 `formal/` or `tasks/` was edited. Live state is the task row
 (`python scripts/task.py show TK119`), never this file. Corrections append **dated at the
-top**, never edited into the body. Freeze it when `TK119` closes.
+top**, never edited into the body. Frozen at that close (banner above).
 
 Provenance labels used on every claim:
 - **READ** — first-hand read of the cited `file::symbol` on 2026-10-14.
@@ -22,6 +27,42 @@ Provenance labels used on every claim:
 Line numbers are as of 2026-10-14 and will rot. The `file::symbol` is the anchor.
 
 ## Corrections
+
+### Corrections 2026-10-14 (build, appended at close)
+
+Transcribed at `TK119`'s close by the round-4 `rows` bookkeeping agent from the builder's
+notes (agent `build-TK119`, gitignored `.scratch/now-next-2/build-TK119.md`) and the commit
+messages of `e3581aa` / `22d4b16`. To a reader these are agent evidence; the labels are the
+builder's unless marked.
+
+- **X10 is no longer UNVERIFIED.** Witness `W7`, `(a or a) but not c`
+  (`formal/conformance/corpus.py::LEAF_RULE_WITNESSES`), ran through `zcli mode="leaf-rules"`:
+  the Lean side emits `a -> viewer.0` twice, exactly as Python does (builder PROBE). It is the
+  one duplicated-rule witness (`formal/conformance/test_conformance_leaf_rules.py::_DUPLICATE_RULE_WITNESSES`),
+  and the multiset control sabotage (Python dedups duplicated arms) turned 3 tests red, the
+  `W7` param among them (commit `e3581aa` message).
+- **Measured at build (builder PROBE), superseding sec 0 / C1 figures:** 66 sources;
+  disagreeing = {`TK126:D`, `TK126:D_nested`, `TK126:SlXt`, `WIT:W3`}, as predicted; 62
+  matched; matched non-empty leaf halves **44**, not 43 (W7 added: 32 corpus/fixtures + 7
+  witnesses + 5 `TK126`). `TK132` (`22d4b16`) then flipped all four: the disagreeing set
+  must be EMPTY, `SMix` joined the witnesses, and the floor went 44 -> 49
+  (`formal/conformance/test_conformance_leaf_rules.py::MIN_MATCHED_NONEMPTY_LEAF`, READ).
+- **Sabotage record** lives in the `e3581aa` commit message and the module docstring; it is
+  not restated here.
+- **Left open by the build** (first-hand READ by the `rows` agent on 2026-10-14 that each is
+  still true; filed as one follow-up row, named in `TK119`'s close message):
+  1. `formal/lean/ZanzibarProofs/GraphIndex/LeafRules.lean`'s "Measured before it was
+     written" docstring still states the 2026-08-16 "50 / 50 schemas match" figure (:92,
+     dated 2026-10-14), and its "Order mirrors `compile_ruleset`" sentence (:127) holds
+     within a key only (C2). The builder deferred it to `TK132`, which did not touch it.
+  2. X7: `tests/test_tk126_ttu_target_name_collision.py::SERVED` is still its own dict
+     rather than an import of `formal/conformance/corpus.py::TK126_SERVED_SCHEMAS` (a drift
+     test holds the two equal).
+  3. `formal/CORRESPONDENCE.md`'s zcli exit-code paragraph still says rc `5` means "an
+     `"ops"` stream passed in spec mode"; per the builder, rc 5 now covers the spec,
+     fragment and (since `TK119`) leaf-rules modes. The conformance-module table there
+     was not updated for the new module either (builder note, UNVERIFIED by `rows`).
+  4. X8: the `P21` comment is made at close (`task.py comment P21`), not owed any more.
 
 ### Corrections 2026-10-14 (challenge)
 

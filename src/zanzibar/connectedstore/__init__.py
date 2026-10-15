@@ -11,7 +11,7 @@ from .schema_io import (PersistedSchemaRefused, SchemaMismatch, ensure_schema, l
                         open_graph_index, open_set_engine, save_schema)
 from .source import (StaleRead, TupleSource, UnsafeIsolationLevel, WatermarkGap,
                      assert_read_isolation, log_gap, log_rows, log_watermark)
-from .apply import advance_index, ensure_cursor
+from .apply import MissingDeltaProcessor, advance_index, ensure_cursor
 from .build import build_index, rebuild_index
 from .store import (ConnectedStore, IndexStalled, LookupNotFresh, PARANOIA_ENV_VAR,
                     UnloggedTuplesPresent)
@@ -28,6 +28,7 @@ __all__ = [
     "assert_read_isolation",
     "log_gap",
     "advance_index",
+    "MissingDeltaProcessor",
     "ensure_cursor",
     "build_index",
     "rebuild_index",
