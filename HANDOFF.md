@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-16 -- **`TK154` + `TK150` closed** (stale lookup ids now refused on both backends; fan-out cap stays 100k, N=1,000 measured). **0.1.0 = all open release items, no rush (user)**; under CHANGELOG `[Unreleased]`, version stays 0.0.5; `TK151` (docs, `TK143` merged in) lands LAST. NOW: `TK153`. NEXT, in user order: `TK147`, then `TK138`/`TK144` last (the board lists by id). Then `TK155`-`TK157`; `TK158`/`TK159` filed LATER. ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-16b -- PostgreSQL leg run green after `TK154` (PG node-id non-reuse now tested; sabotage plugin tracked in `formal/probes/`; `TK160` filed LATER). **0.1.0 = all open release items, no rush (user)**; version stays 0.0.5 under CHANGELOG `[Unreleased]`; `TK151` lands LAST. NOW: `TK153`. NEXT, in user order: `TK147`, then `TK138`/`TK144` last. Then `TK155`-`TK157`. ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

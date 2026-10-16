@@ -67,7 +67,8 @@ def _set_engine_recycle_sequence(se: SetEngine):
 
 
 def test_set_engine_recycled_id_is_refused_not_translated(mem_engine):
-    """A2/A3. Sabotage observed 2026-10-16 (monkeypatch plugin): S1 (both raises in
+    """A2/A3. Sabotage observed 2026-10-16 (plugin
+    ``formal/probes/tk154_sabotage_plugin_2026_10_16.py``): S1 (both raises in
     ``_check_id_stamp`` removed) and S2 (``frees`` not bumped in ``Interner.release``) each
     go red here at A3 with ``Failed: DID NOT RAISE StaleLookupIds`` (A2 still raises via
     the missing-id path); the value it then returns, ``{('doc', 'd', 'banned')}``, is

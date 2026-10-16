@@ -33,6 +33,37 @@ from here.
 
 ---
 
+## 2026-10-16b — the owed PostgreSQL leg run: green; PG node-id non-reuse now tested; sabotage plugin tracked
+
+rows: TK154 (comment), TK160 (new, LATER)
+
+`task lint: clean (13 checks, 277 task file(s) parsed), 26 warning(s)`
+
+`read: show TK154`
+
+`asked: none`
+
+User asked two things: whether the TK154 sabotage plugin (gitignored, cited by test
+docstrings) needs saving, and to run the PostgreSQL leg the 2026-10-16 entry left unrun.
+- **PostgreSQL leg** (local `scripts/pg_local.sh` cluster, `ZANZIBAR_PG_REQUIRED=1`):
+  `tests/test_postgres_ha.py` 17 passed; then `tests-tile:1/4`..`4/4` with
+  `ZANZIBAR_TEST_DSN` exported, every phase PASSED (2,685 passed, 3 skipped = the budgeted
+  SQLite-only snapshot tests).
+- **"PostgreSQL never reuses node ids" is now tested**:
+  `tests/test_postgres_ha.py::test_tk154_graph_node_ids_are_never_reused_on_postgresql` and the
+  permanent control `::test_tk154_sabotage_control_restarted_sequence_translates_wrong`
+  (rewinding the id sequence makes a held result name another node). Sabotage observed: that
+  rewind inserted into the main test gives `AssertionError: assert not ({1} & {1, 2})`.
+- **Plugin saved**: `formal/probes/tk154_sabotage_plugin_2026_10_16.py` (underscored because
+  `-p` imports it), usage in its docstring; all four modes re-run from there with the doc's
+  failed counts (4 / 2 / 4 / 1). Doc and test docstring repointed.
+- One unrelated red on a full-module rerun, not reproduced in 5 reruns: the lock-discipline
+  test's non-vacuity guard (`observer only sampled 1 times`). Filed `TK160` (LATER).
+
+**Still owed:** nothing.
+
+---
+
 ## 2026-10-16 — `TK154` + `TK150` closed; 0.1.0 = all open items; `TK143` merged into `TK151`
 
 rows: TK154 (closed), TK150 (closed), TK143 (closed, merged into TK151), TK151 (scope), TK153 (LATER -> NEXT -> NOW), TK147 (LATER -> NEXT), TK144 (order note), TK158 / TK159 (new, LATER)

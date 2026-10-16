@@ -11,8 +11,8 @@ labels: []
 source: docs/pypi-trial-0.0.5-2026-10-15.md
 source_hash:
 created: 2026-10-15
-moved: 2026-10-16
-updated: 2026-10-16
+moved: 2026-10-16b
+updated: 2026-10-16b
 closed: 2026-10-16
 ---
 
@@ -48,3 +48,7 @@ Tests: tests/test_tk154_stale_lookup_ids.py (14). First-hand 2026-10-16: green 1
 UNVERIFIED: PostgreSQL never reuses node ids (REASONED: identity column). Gate: see the commit carrying this close.
 
 Gate addendum 2026-10-16 (session, first-hand): tests-tile 2/4 went red on tests/test_tk123_no_internal_refs.py (refuse_reusable_node_ids docstring cited TK154; reworded, id moved to a comment) and tests-tile 4/4 on tests/test_tk79_outbox_replica.py::test_late_gc_rows_are_load_bearing, whose membership-level half REQUIRED SQLite to re-hand the GC-d node id to user:u9 (the exact hazard TK154 removes). That half now pins the opposite (id never re-handed; u9 gets a higher id); green, and red under SAB154=S3 with "id 9 was re-handed to a new node". Closure-level half unchanged.
+
+### 2026-10-16b
+
+2026-10-16b PostgreSQL leg RUN (was owed). (1) tests/test_postgres_ha.py vs local pg_local.sh cluster, ZANZIBAR_PG_REQUIRED=1: 17 passed. (2) tests-tile:1/4..4/4 with ZANZIBAR_TEST_DSN: all PASSED, 2685 passed + 3 skipped (the budgeted SQLite-only snapshot tests). (3) "PostgreSQL never reuses node ids" is now TESTED, not reasoned: tests/test_postgres_ha.py::test_tk154_graph_node_ids_are_never_reused_on_postgresql + permanent control ::test_tk154_sabotage_control_restarted_sequence_translates_wrong (ALTER SEQUENCE ... RESTART WITH the removed id makes the held result name another node). Sabotage observed: that rewind inserted into the main test -> AssertionError: assert not ({1} & {1, 2}). (4) The sabotage plugin moved from gitignored .scratch/tk150-154/sab154_plugin.py to formal/probes/tk154_sabotage_plugin_2026_10_16.py; all four modes re-run there: S1 4 failed, S2 2 failed, S3 4 failed, S4 1 failed (same failed counts as the doc's table; module now 14 tests), none 14 passed. One unrelated one-off red on the leg filed as a new LATER row (non-vacuity guard of the lock-discipline test). Next action: none on TK154.

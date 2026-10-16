@@ -125,7 +125,7 @@ UNMODELED (Lean `Id := SubjectRef`) and a counter does not change recycling;
 `lookup_reverse` still renders `expand` (the stamp is metadata, not algorithm). No Lean
 change. `--generate` moved exactly those three lines; `--check` rc 0 afterwards.
 
-**Sabotage (PROBE; applied by a pytest plugin, `.scratch/tk150-154/sab154_plugin.py`, that
+**Sabotage (PROBE; applied by a pytest plugin, now tracked as `formal/probes/tk154_sabotage_plugin_2026_10_16.py` (moved from `.scratch/tk150-154/sab154_plugin.py` 2026-10-16; all four modes re-run there with the same failed counts), that
 monkeypatches at configure time, so the shared source was never edited):**
 
 | id | guard removed | result | literal first red |

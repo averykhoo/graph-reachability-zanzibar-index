@@ -40,8 +40,8 @@ from sqlmodel import Session, select
 
 import zanzibar.store.apply as apply_mod
 import zanzibar.store.source as source_mod
-from zanzibar.store import (Store, StaleRead, TupleSource, UnsafeIsolationLevel,
-                            WatermarkGap, advance_index, assert_read_isolation, log_gap,
+from zanzibar.store import (Store, StaleLookupIds, StaleRead, TupleSource,
+                            UnsafeIsolationLevel, WatermarkGap, advance_index, assert_read_isolation, log_gap,
                             log_rows, log_watermark)
 from zanzibar.store.models import SchemaRecord, TupleLog
 from zanzibar.graphindex.invariants import snapshot_rows
@@ -771,3 +771,57 @@ def test_read_committed_gives_a_reader_no_stable_snapshot(tmp_path):
         assert (before, after) == (0, 1)
         assert sr.in_transaction()
         sr.rollback()
+
+
+# --- TK154 on the server: node ids are never re-handed ----------------------------------
+TK154_SCHEMA = 'model\n  schema 1.1\ntype user\ntype doc\n  relations\n    define reader: [user]\n'
+
+
+def _tk154_reuse_sequence(store: Store):
+    """A held result naming user:a; remove it (its node is collected); add user:b on
+    another doc. Mirrors ``tests/test_tk154_stale_lookup_ids.py::_graph_reuse_sequence``."""
+    store.add_tuple('user:a', 'reader', 'doc:d')
+    r = store.lookup_reverse('reader', 'doc:d')
+    assert store.result_keys(r) == {('user', 'a', '...')}
+    store.remove_tuple('user:a', 'reader', 'doc:d')
+    return r
+
+
+def test_tk154_graph_node_ids_are_never_reused_on_postgresql(tmp_path):
+    """TK154's SQLite fix is ``sqlite_autoincrement``; on PostgreSQL the claim is that the
+    identity sequence never re-hands a removed node's id, so a held id goes MISSING
+    (``StaleLookupIds``) and never names another node. Until 2026-10-16 that was reasoned,
+    not tested. Store opening also runs ``refuse_reusable_node_ids``, which must be a
+    no-op here. The ``..._control`` test below proves the sequence matters.
+
+    Sabotage observed 2026-10-16 (the control's ``ALTER SEQUENCE ... RESTART WITH`` the
+    removed id, inserted before ``add_tuple('user:b', ...)``): red at the overlap check,
+    ``AssertionError: assert not ({1} & {1, 2})``."""
+    requires_rdbms()
+    engine = server_engine(clean=True)
+    with Session(engine) as s:
+        store = Store(s, 'g', schema=TK154_SCHEMA)
+        r = _tk154_reuse_sequence(store)
+        store.add_tuple('user:b', 'reader', 'doc:e')
+        assert not set(r.node_ids) & set(s.exec(text('select id from zanzibar_node')).scalars())
+        with pytest.raises(StaleLookupIds, match='run the lookup again'):
+            store.result_keys(r)
+        assert store.result_keys(store.lookup_reverse('reader', 'doc:e')) == {('user', 'b', '...')}
+
+
+def test_tk154_sabotage_control_restarted_sequence_translates_wrong(tmp_path):
+    """PERMANENT instrument control: rewind ``zanzibar_node``'s id sequence to the removed
+    node's id (what a reusing allocator would do) and the held result silently names a
+    DIFFERENT node instead of raising. So the test above is red if PostgreSQL ever
+    re-hands ids, and its fixture really frees an id."""
+    requires_rdbms()
+    engine = server_engine(clean=True)
+    with Session(engine) as s:
+        store = Store(s, 'g', schema=TK154_SCHEMA)
+        r = _tk154_reuse_sequence(store)
+        seq = s.exec(text("select pg_get_serial_sequence('zanzibar_node', 'id')")).scalar()
+        assert seq
+        s.exec(text(f'ALTER SEQUENCE {seq} RESTART WITH {min(r.node_ids)}'))
+        store.add_tuple('user:b', 'reader', 'doc:e')
+        keys = store.result_keys(r)                      # no raise: the id was reused
+        assert keys and keys != {('user', 'a', '...')}
