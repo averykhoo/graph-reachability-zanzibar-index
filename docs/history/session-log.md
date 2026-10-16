@@ -59,6 +59,13 @@ docstrings) needs saving, and to run the PostgreSQL leg the 2026-10-16 entry lef
   failed counts (4 / 2 / 4 / 1). Doc and test docstring repointed.
 - One unrelated red on a full-module rerun, not reproduced in 5 reruns: the lock-discipline
   test's non-vacuity guard (`observer only sampled 1 times`). Filed `TK160` (LATER).
+- **`.scratch/tk150-154/` swept** (user asked). A sonnet audit agent classed all 168 entries
+  DERIVABLE/SUPERSEDED, none SALVAGE, but its "verbatim" evidence was false: an 8-word-chunk
+  check against the tracked tree found ~0 % overlap for every note but `doc_correction.md`
+  (98 %). The session compared content first-hand instead: decision, D2 rejection, all three
+  review findings and the TK150 tables/census are in the two docs, paraphrased. The one gap
+  (why a 0.0.x file is refused, not warned) went onto `TK154`'s Log. Directory sent to the
+  Recycle Bin with the audit report and this session's PG-leg logs.
 
 **Still owed:** nothing.
 
