@@ -11,8 +11,8 @@ labels: []
 source: docs/tk138-userset-self-relation-2026-10-14.md
 source_hash:
 created: 2026-10-14
-moved: 2026-10-14
-updated: 2026-10-14
+moved: 2026-10-16
+updated: 2026-10-16
 closed:
 ---
 
@@ -39,3 +39,7 @@ Sequenced behind TK123 (the lookup channel: `LookupResult` carries `(type, name,
 - `docs/tk138-userset-self-relation-2026-10-14.md` (Decision recommendation, Corrections C1-C7, sections 3 and 5).
 
 ## Log
+
+### 2026-10-16
+
+USER 2026-10-16 (in chat): "push 144 down to the bottom of next" -- work it after every other NEXT row (TK147, TK150, TK153, and TK138 only as its parent). The board sorts a tier by id and has no rank field, so the order is recorded here and in the HANDOFF banner, not in frontmatter. In scope for 0.1.0 (user: all open items).

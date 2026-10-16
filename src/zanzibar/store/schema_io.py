@@ -90,6 +90,50 @@ class TablesNotCreated(ZanzibarError, RuntimeError):
             f"zanzibar.store, before opening a Store")
 
 
+class TablesOutdated(ZanzibarError, RuntimeError):
+    """The ``zanzibar_node`` table in this SQLite database was created by zanzibar-index
+    0.0.x without ``AUTOINCREMENT``, so SQLite can reuse a deleted node's id and a
+    ``LookupResult`` held across a write could name the wrong node. ``table`` is the
+    table name. 0.1.0 does not migrate 0.0.x files: create the zanzibar tables in a new
+    database file (``SQLModel.metadata.create_all(engine)`` after importing
+    ``zanzibar.store``) and write the tuples again."""
+    # Provenance: TK154 (docs/tk154-stale-lookup-ids-2026-10-16.md).
+
+    def __init__(self, table: str = 'zanzibar_node'):
+        self.table = table
+        super().__init__(
+            f"table {table!r} in this SQLite database has no AUTOINCREMENT (it was created "
+            f"by zanzibar-index 0.0.x), so a deleted node's id can be reused and a "
+            f"LookupResult held across a write could name the wrong node. Create the "
+            f"zanzibar tables in a NEW database file (SQLModel.metadata.create_all(engine), "
+            f"after importing zanzibar.store) and write the tuples again; 0.1.0 does not "
+            f"migrate 0.0.x files")
+
+    def __reduce__(self):
+        # args holds only the message; without this, unpickling/copying would call
+        # __init__(message) and set .table to the whole message.
+        return (self.__class__, (self.table,))
+
+
+def refuse_reusable_node_ids(session: Session) -> None:
+    """On SQLite, refuse a ``zanzibar_node`` table created without AUTOINCREMENT (raises
+    ``TablesOutdated``): such a table re-hands a removed node's id, so a held lookup result
+    could name a different node. A no-op on other dialects, and when the table does not
+    exist (``TablesNotCreated`` covers that)."""
+    # TK154. Dialect gate is graphindex/core.py::is_sqlite, the one dialect seam.
+    from sqlalchemy import text
+    from zanzibar.graphindex.core import is_sqlite
+    if not is_sqlite(session):
+        return
+    ddl = session.connection().execute(
+        text("select sql from sqlite_master where type='table' and name='zanzibar_node'")
+    ).scalar()
+    if ddl is None:
+        return          # no table at all: the caller's TablesNotCreated path reports it
+    if 'AUTOINCREMENT' not in ddl.upper():
+        raise TablesOutdated('zanzibar_node')
+
+
 def missing_tables(session: Session) -> list[str]:
     """The ``zanzibar_*`` tables of the package's models that the session's database
     lacks. Dialect-neutral: it asks the inspector, never parses a driver message."""

@@ -39,6 +39,7 @@ _LAZY = {
     'UnprovenExtensionWarning': 'zanzibar.schema.compiler',
     # the backends
     'UnloggedWriteRefused': 'zanzibar.setengine.engine',
+    'StaleLookupIds': 'zanzibar.setengine.engine',
     'WriteLockUnsafe': 'zanzibar.graphindex.core',
     'InvariantViolation': 'zanzibar.graphindex.invariants',
     # the store
@@ -53,6 +54,7 @@ _LAZY = {
     'StoreNotFound': 'zanzibar.store.schema_io',
     'IndexExists': 'zanzibar.store.build',
     'TablesNotCreated': 'zanzibar.store.schema_io',
+    'TablesOutdated': 'zanzibar.store.schema_io',
 }
 
 __all__ = ['__version__', *_LAZY]
@@ -85,10 +87,11 @@ if TYPE_CHECKING:  # pragma: no cover -- for type checkers and IDEs only
                                         SchemaMismatch, ShapeNoLongerAccepted,
                                         UnsupportedByGraphIndex, ZanzibarError)
     from zanzibar.schema.tuplestr import MalformedTupleString
-    from zanzibar.setengine.engine import UnloggedWriteRefused
+    from zanzibar.setengine.engine import StaleLookupIds, UnloggedWriteRefused
     from zanzibar.store._store import (IndexStalled, LookupNotFresh, Store,
                                        UnloggedTuplesPresent)
     from zanzibar.store.apply import MissingDeltaProcessor
     from zanzibar.store.build import IndexExists
-    from zanzibar.store.schema_io import PersistedSchemaRefused, StoreNotFound, TablesNotCreated
+    from zanzibar.store.schema_io import (PersistedSchemaRefused, StoreNotFound,
+                                          TablesNotCreated, TablesOutdated)
     from zanzibar.store.source import StaleRead, UnsafeIsolationLevel, WatermarkGap

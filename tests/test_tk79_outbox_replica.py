@@ -322,8 +322,19 @@ def oracle_true_seen(rs, grid) -> bool:
 
 def test_late_gc_rows_are_load_bearing():
     """The "a replica MUST see them" half, as a permanent sabotage: drop exactly the rows
-    emitted inside a reconcile-time GC and the replica goes wrong, first at the closure
-    level and then, after SQLite recycles the GC'd node id, at the membership level."""
+    emitted inside a reconcile-time GC and the replica goes wrong at the closure level.
+
+    The membership-level half changed with TK154 (2026-10-16). Before it, SQLite recycled
+    the GC'd node id (rowid = max + 1) for the next fresh node, user:u9, so the replica's
+    stale pair read as a FALSE claim "user:u9 is a viewer of folder:x". ``zanzibar_node`` is
+    now AUTOINCREMENT, so the id is never re-handed: the stale pair names a node that no
+    longer exists (loud: ``Store.result_keys`` raises ``StaleLookupIds``) instead of a
+    different, live one. Observed 2026-10-16 when this ran against the TK154 tree with the
+    old precondition: ``AssertionError: precondition: id 9 was expected to be reused for
+    user:u9, got None``. Sabotage: with autoincrement switched off
+    (``.scratch``-only plugin ``SAB154=S3``) the ``never re-handed`` assertion below goes red,
+    observed 2026-10-16: ``AssertionError: id 9 was re-handed to a new node: zanzibar_node
+    lost AUTOINCREMENT ... Node(id=9, predicate='...', name='u9', ...)``."""
     g = GraphBackend(SCHEMA, frozenset())
     try:
         windows = _instrument_gc(g.proc, g.session, 'g')
@@ -350,11 +361,11 @@ def test_late_gc_rows_are_load_bearing():
             f'dropping the late rows should strand exactly the GC\'d node\'s pairs; '
             f'stale={sorted(stale)}')
 
-        # Membership level: later writes reuse the id (SQLite rowid = max + 1; 7 and 8
-        # go to user:u8 and admin@folder:q, so the next fresh node, user:u9, gets 9).
-        # The stream (``drain_deltas``) carries node IDS only, so reading the replica's
-        # stale pair as a claim about user:u9 resolves the id against the primary's
-        # ``Node`` table -- which is what any id-keyed consumer has to do.
+        # Membership level (TK154): the stream (``drain_deltas``) carries node IDS only, so an
+        # id-keyed consumer resolves the replica's stale pair against the primary's ``Node``
+        # table. Before TK154 later writes re-handed the GC'd id to user:u9 and the stale
+        # pair became a false claim about u9. Now the id is never re-handed, so it resolves
+        # to NO node at all.
         writes = [('...', 'user', 'u8', 'admin', 'folder', 'q'),
                   ('...', 'user', 'u9', 'editor', 'folder', 'x')]
         for raw in writes:
@@ -362,11 +373,11 @@ def test_late_gc_rows_are_load_bearing():
             replica.catch_up(g.session, 'g')
         primary = _primary_pairs(g.session, 'g')
         assert replica.pairs == primary
-        recycled = g.session.get(Node, gc_node)
-        assert recycled is not None and (recycled.predicate, recycled.type,
-                                         recycled.name) == ('...', 'user', 'u9'), (
-            f'precondition: id {gc_node} was expected to be reused for user:u9, got '
-            f'{recycled} -- SQLite id allocation changed; re-derive the witness')
+        assert g.session.get(Node, gc_node) is None, (
+            f'id {gc_node} was re-handed to a new node: zanzibar_node lost AUTOINCREMENT, '
+            f'so a stale id can name a DIFFERENT live node again (TK154)')
+        u9 = g.widx._get_concrete('...', 'user', 'u9')
+        assert u9 is not None and u9.id > gc_node, (u9, gc_node)
         viewer_x = g.widx._get_concrete('viewer', 'folder', 'x')
         assert viewer_x is not None
         claim = (gc_node, viewer_x.id)
@@ -374,8 +385,8 @@ def test_late_gc_rows_are_load_bearing():
         assert claim in deficient, 'the deficient replica no longer carries the stale pair'
         assert claim not in replica.pairs and claim not in primary
 
-        # The claim is TYPE-LEGAL (viewer admits [user]) and FALSE: u9 is only an editor
-        # of folder:x and an admin of nothing. Control in the other direction: u8, an
+        # The stale claim names a dead id, so it can no longer be read as one about u9 --
+        # and u9 is indeed NOT a viewer: only an editor of folder:x and an admin of nothing. Control in the other direction: u8, an
         # admin of folder:q, IS a viewer of folder:x through the star parent, so the
         # query shape is one the oracle and the primary can answer True.
         surviving = [OracleTuple('...', 'folder', '*', 'parent', 'folder', 'x')] + [

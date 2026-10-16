@@ -34,6 +34,7 @@ from zanzibar.graphindex.invariants import (PARANOIA_ENV_VAR, PARANOIA_OFF,
                                  install_paranoia, resolve_paranoia_level)
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.graphindex.wildcard import LookupResult
+from zanzibar.setengine.engine import StaleLookupIds
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import AdmissionRejected, validate_store_id
 from zanzibar.schema.errors import SchemaError, ZanzibarError, reject_ellipsis_predicate
@@ -44,7 +45,8 @@ from zanzibar.setengine.models import RelationTuple
 
 from .apply import advance_index, ensure_cursor
 from .models import IndexCursor, TupleLog
-from .schema_io import TablesNotCreated, ensure_schema, missing_tables, open_graph_index
+from .schema_io import (TablesNotCreated, TablesOutdated, ensure_schema, missing_tables,
+                        open_graph_index, refuse_reusable_node_ids)
 # StaleRead lives with the evaluator that raises it first (TupleSource.check);
 # re-exported here for backward compatibility.
 from .source import (StaleRead, TupleSource, _require_clean_session, assert_read_isolation,
@@ -60,9 +62,10 @@ class LookupNotFresh(StaleRead):
     backends do not return the same thing:
 
     * ``node_ids`` are graph ``Node`` row ids on one side and instance-local,
-      RECYCLED interner ids on the other (``SetEngine.result_keys`` is the portable
-      form; the graph has no twin) -- so a fallback would silently change the id
-      DOMAIN of a result depending on how far behind the worker happened to be;
+      RECYCLED interner ids on the other (``SetEngine.result_keys`` and
+      ``Store.result_keys`` are each side's portable form, in different id
+      domains) -- so a fallback would silently change the id DOMAIN of a result
+      depending on how far behind the worker happened to be;
     * markers are ``(type, predicate, variant)`` on the graph and ``(type, predicate)``
       on the set engine, and ``excluded_node_ids`` ("everyone of this shape except
       these", the ``neg`` channel) is filled on both sides but, like
@@ -371,6 +374,13 @@ class Store:
             # transaction on purpose (see ``probe_store_write_lock``); released by this
             # constructor's own bootstrap commit below.
             probe_store_write_lock(session, store_id)
+            # TK154: a 0.0.x SQLite file's zanzibar_node reuses deleted ids; refuse it.
+            # Inside this transaction on purpose: the bootstrap commit (or the rollback
+            # below) ends the read, whereas a read AFTER the commit left the session holding
+            # a stale WAL snapshot, so the next write raised "database is locked"
+            # (tests/test_zt_p1_hardening.py::test_no_false_gap_when_log_ids_interleave_across_stores,
+            # PROBE 2026-10-16). A missing table is left to the TablesNotCreated path.
+            refuse_reusable_node_ids(session)
             # TK140 (0.0.4 trial BROKEN-3): refuse to be BORN over tuples the log cannot
             # replay, before anything (the SchemaRecord included) is written.
             _reject_unlogged_adoption(session, store_id)
@@ -796,8 +806,9 @@ class Store:
         marker covers but which are refused) complete it, and a marker read without its
         exclusions over-grants.
 
-        Read a result before the next write: ids are database row ids, and an id whose
-        node a later write removed raises ``KeyError``."""
+        Read a result before the next write: ids are database row ids, which are never
+        reused; an id whose node a later write removed raises ``StaleLookupIds`` (a
+        ``KeyError``)."""
         return self._node_keys(res.node_ids, 'node_ids')
 
     def excluded_keys(self, res: LookupResult) -> set[tuple[str, str, str]]:
@@ -812,10 +823,10 @@ class Store:
         nodes = self.widx.idx._load_nodes(ids)
         missing = sorted(i for i in ids if i not in nodes)
         if missing:
-            raise KeyError(
-                f'{field} {missing[:5]} name no node in store {self.store_id!r}: the '
-                f'lookup result predates a write that removed them, or it came from '
-                f'another store; run the lookup again')
+            raise StaleLookupIds(
+                field, missing,
+                f'they name no node in store {self.store_id!r}: the lookup result '
+                f'predates a write that removed them, or it came from another store')
         return {(n.type, n.name, n.predicate) for n in nodes.values()}
 
     def watermark(self) -> int:

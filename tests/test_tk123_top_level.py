@@ -162,7 +162,7 @@ _EXPECTED_ALL = {
         'MalformedTupleString'},
     'zanzibar.setengine': {
         'SetEngine', 'SetLookupResult', 'MemberSet', 'RelationTuple', 'SetOps', 'PySets',
-        'RoaringSets', 'UnloggedWriteRefused'},
+        'RoaringSets', 'UnloggedWriteRefused', 'StaleLookupIds'},
     'zanzibar.graphindex': {
         'ReachabilityIndex', 'WildcardIndex', 'LookupResult', 'Node', 'Edge', 'IndexStore',
         'AdmissionRejected', 'InvariantViolation', 'WriteLockUnsafe', 'outbox_watermark',
@@ -172,7 +172,8 @@ _EXPECTED_ALL = {
         'SchemaRecord', 'TupleLog', 'PARANOIA_ENV_VAR', 'StaleRead', 'LookupNotFresh',
         'IndexStalled', 'UnloggedTuplesPresent', 'WatermarkGap', 'UnsafeIsolationLevel',
         'MissingDeltaProcessor', 'SchemaMismatch', 'PersistedSchemaRefused', 'SchemaError',
-        'StoreNotFound', 'TablesNotCreated', 'IndexExists', 'BuildReport',
+        'StoreNotFound', 'TablesNotCreated', 'TablesOutdated', 'StaleLookupIds', 'IndexExists',
+        'BuildReport',
         'CyclicDerivedDependency', 'AdmissionRejected', 'IndexResourceLimit',
         'ClosureFanoutExceeded', 'PathCountExceeded', 'WriteLockUnsafe', 'MalformedTupleString'},
 }
@@ -225,6 +226,7 @@ _BUILTIN_BASE = {
     'UnsafeIsolationLevel': RuntimeError, 'LookupNotFresh': RuntimeError,
     'IndexStalled': RuntimeError, 'UnloggedTuplesPresent': RuntimeError,
     'StoreNotFound': KeyError, 'TablesNotCreated': RuntimeError, 'IndexExists': ValueError,
+    'StaleLookupIds': KeyError, 'TablesOutdated': RuntimeError,   # TK154
 }
 _OUTSIDE_THE_ROOT = {'InvariantViolation', 'UnprovenExtensionWarning'}
 

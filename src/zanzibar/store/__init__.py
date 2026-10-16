@@ -10,7 +10,7 @@ inlined into the write transaction.
 
 from .models import IndexCursor, SchemaRecord, TupleLog
 from .schema_io import (PersistedSchemaRefused, SchemaMismatch, StoreNotFound, TablesNotCreated,
-                        ensure_schema, load_schema,
+                        TablesOutdated, ensure_schema, load_schema,
                         open_graph_index, open_set_engine, save_schema)
 from .source import (StaleRead, TupleSource, UnsafeIsolationLevel, WatermarkGap,
                      assert_read_isolation, log_gap, log_rows, log_watermark)
@@ -24,6 +24,7 @@ from zanzibar.schema.errors import (AdmissionRejected, ClosureFanoutExceeded,
                                     CyclicDerivedDependency, IndexResourceLimit,
                                     PathCountExceeded, SchemaError)
 from zanzibar.schema.tuplestr import MalformedTupleString
+from zanzibar.setengine.engine import StaleLookupIds
 
 # The public surface (`TK123` item 5). The import lines above stay, so the internal
 # helpers (``advance_index``, ``ensure_cursor``, ``assert_read_isolation``, ``log_gap``,
@@ -52,6 +53,8 @@ __all__ = [
     "StoreNotFound",
     "IndexExists",
     "TablesNotCreated",
+    "TablesOutdated",
+    "StaleLookupIds",
     "SchemaError",
     "CyclicDerivedDependency",
     "AdmissionRejected",

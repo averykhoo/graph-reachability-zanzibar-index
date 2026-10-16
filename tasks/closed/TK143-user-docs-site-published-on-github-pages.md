@@ -11,9 +11,9 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-13d
-moved: 2026-10-13d
-updated: 2026-10-13d
-closed:
+moved: 2026-10-16
+updated: 2026-10-16
+closed: 2026-10-16
 ---
 
 User request 2026-10-13d (in chat), while deciding TK4: "maybe we need docs for this, add a task to write some and publish it as GitHub pages".
@@ -28,3 +28,7 @@ Needs the user's word before it ships: a new Pages workflow under .github/workfl
 - `docs/openfga-claims-audit-2026-10-13.md` (what we claim about OpenFGA).
 
 ## Log
+
+### 2026-10-16
+
+MERGED into TK151 (user decision 2026-10-16, in chat: "Merge 143 into 151"). Content list, read-first and the publish-needs-user-word constraint are carried on TK151 Log 2026-10-16.

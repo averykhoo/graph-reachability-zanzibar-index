@@ -2,7 +2,7 @@
 id: TK147
 title: object_wildcard_shapes naming an undeclared type or relation is silently accepted (TK137 C7)
 brief: a typo in owc shapes is a silent no-op (fails closed); refuse it with a REFUSED SHAPE block
-pri: LATER
+pri: NEXT
 size: S
 deps: []
 related: [TK137]
@@ -11,8 +11,8 @@ labels: []
 source: docs/tk137-dsl-openfga-refusals-2026-10-14.md
 source_hash:
 created: 2026-10-14
-moved: 2026-10-14
-updated: 2026-10-14
+moved: 2026-10-16
+updated: 2026-10-16
 closed:
 ---
 
@@ -34,3 +34,7 @@ Done when: both an undeclared type and an undeclared relation are refused with a
 - `src/zanzibar/schema/parser.py`.
 
 ## Log
+
+### 2026-10-16
+
+USER 2026-10-16 (in chat): bumped LATER -> NEXT; in scope for 0.1.0.

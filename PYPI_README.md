@@ -112,17 +112,18 @@ object's relation?) return a `LookupResult` with three fields:
   `but not banned`). `store.excluded_keys(result)` gives their keys. Subtract them from
   the marker yourself: "every user except mallory".
 
-Read a result before the next write: ids are row ids, and `result_keys` raises `KeyError`
-for one whose node a later write removed. A subject that a marker already covers may also
+Ids are row ids and are never reused. Translate a result before the next write:
+`result_keys` / `excluded_keys` raise `StaleLookupIds` (a `KeyError`) for an id whose node
+a later write removed. A subject that a marker already covers may also
 be listed in `node_ids` (the set engine leaves it out), so compare results by what they
 cover: the keys, plus every subject of a marker's shape, minus the excluded keys.
 
 A standalone `zanzibar.setengine.SetEngine` returns a `SetLookupResult` (a dataclass) with
 the same three fields, in its own id
-space: markers are `(type, predicate)` pairs, and an id is an in-memory handle that
-`engine.interner.key(id)` turns into `(type, name, predicate)`. Translate ids before they
-leave the process: `engine.result_keys(res)` for `node_ids` and `engine.excluded_keys(res)`
-for `excluded_node_ids`. Send both with the markers, and subtract the exclusions exactly as
+space: markers are `(type, predicate)` pairs and ids are in-memory handles. Translate with
+`engine.result_keys(res)` and `engine.excluded_keys(res)` before the next write and in the
+same engine instance: once any write frees an id, the engine is rebuilt, or the result is
+handed to another instance, both raise `StaleLookupIds` instead of translating. Send both with the markers, and subtract the exclusions exactly as
 above; markers without their exclusions grant too much.
 
 ## Freshness tokens and async mode
@@ -223,6 +224,8 @@ Each derives from `zanzibar.ZanzibarError` and keeps the builtin base shown, so
 | `SchemaMismatch` | `ValueError` | a store is opened with a schema other than the one it was created with |
 | `StoreNotFound` | `KeyError` | `Store(session, id)` without `schema=` names a store that does not exist |
 | `TablesNotCreated` | `RuntimeError` | `SQLModel.metadata.create_all(engine)` was not run |
+| `TablesOutdated` | `RuntimeError` | a `Store` opens a SQLite file whose `zanzibar_node` table was created by 0.0.x (ids reusable) |
+| `StaleLookupIds` | `KeyError` | `result_keys` / `excluded_keys` on a lookup result whose ids may have been reused: after a write, a rebuild, or on another instance |
 | `StaleRead` | `RuntimeError` | a token cannot be satisfied (see "Freshness tokens") |
 | `LookupNotFresh` | `RuntimeError` | a tokened lookup while the index lags (a `StaleRead`) |
 | `IndexStalled` | `RuntimeError` | an untokened lookup while the index is stalled (a `LookupNotFresh`) |

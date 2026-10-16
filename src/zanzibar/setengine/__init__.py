@@ -11,7 +11,7 @@ from .setops import SetOps, PySets, RoaringSets, DEFAULT_SETOPS, ALL_SETOPS
 from .memberset import MemberSet
 from .models import RelationTuple
 from .engine import (SetEngine, SetEngineBackend, Interner, NodeSets, SetLookupResult,
-                     UnloggedWriteRefused)
+                     StaleLookupIds, UnloggedWriteRefused)
 
 # The public surface (`TK123` item 5). The import lines above stay, so the internal names
 # (``SetEngineBackend``, ``Interner``, ``NodeSets``, ``DEFAULT_SETOPS``, ``ALL_SETOPS``)
@@ -19,5 +19,5 @@ from .engine import (SetEngine, SetEngineBackend, Interner, NodeSets, SetLookupR
 __all__ = [
     'SetEngine', 'SetLookupResult', 'MemberSet', 'RelationTuple',
     'SetOps', 'PySets', 'RoaringSets',
-    'UnloggedWriteRefused',
+    'UnloggedWriteRefused', 'StaleLookupIds',
 ]

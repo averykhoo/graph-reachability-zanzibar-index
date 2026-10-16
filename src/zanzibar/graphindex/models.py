@@ -40,12 +40,17 @@ class Node(SQLModel, table=True):
     ``wildcard`` is ``""`` for a concrete node and ``"any"`` / ``"all"`` for the nodes that
     stand for a ``*`` name. The ``node_ids`` of a ``LookupResult`` are this table's ``id``
     values; ``Store.result_keys`` reads them for you. The library maintains the rows:
-    read them, never write them.
+    read them, never write them. Ids are never reused: a ``LookupResult`` id whose node
+    was removed raises ``StaleLookupIds`` from ``Store.result_keys``.
     """
     __tablename__ = "zanzibar_node"
     __table_args__ = (
         UniqueConstraint('store_id', 'predicate', 'type', 'name', 'wildcard',
                          name='zanzibar_node_unique_constraint'),
+        # TK154: SQLite must never re-hand a deleted node's id (rowid = max+1 reuses it), so
+        # a stale LookupResult id can only go MISSING (loud) and never name another node.
+        # PostgreSQL's identity column already behaves this way.
+        {'sqlite_autoincrement': True},
     )
 
     id: int | None = Field(default=None, primary_key=True)

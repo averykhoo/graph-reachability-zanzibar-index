@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-14
-moved: 2026-10-14
-updated: 2026-10-14
+moved: 2026-10-16
+updated: 2026-10-16
 closed:
 ---
 
@@ -34,10 +34,19 @@ Behind TK123 (the public API rename), since the docs describe the renamed API.
 
 - `PYPI_README.md` (the PyPI long description; its quickstart is executed by `tests/test_tk122_release_metadata.py`).
 - `README.md`.
-- `tasks/TK143-user-docs-site-published-on-github-pages.md` (the publishing row this overlaps).
+- `tasks/closed/TK143-user-docs-site-published-on-github-pages.md` (the publishing row this overlaps).
 
 ## Log
 
 ### 2026-10-14
 
 USER DECISION 2026-10-14 (in chat): "let's save 0.1 for when we have some docs". 0.1.0 is gated on THIS row. TK123's API break ships unreleased under CHANGELOG [Unreleased] (__version__ stays 0.0.5) until the Diataxis docs exist. Then cut 0.1.0 with the API break plus the docs.
+
+### 2026-10-16
+
+USER DECISION 2026-10-16 (in chat): "Merge 143 into 151". TK143 (GitHub Pages docs site) is closed into this row. Its content list is now part of THIS row's scope; the publishing half comes with it:
+- content: the semantics notes (strict forall=>exists for wildcards, strict FOR NOW per TK4; how this library differs from OpenFGA, TK137/TK138; the wildcard extensions beyond OpenFGA and their UnprovenExtensionWarning), every refused schema shape with its INSTEAD rewrite, the operational knobs (ZANZIBAR_PARANOIA, ZANZIBAR_MAX_CLOSURE_FANOUT, async catch_up), and the public API after the TK123 rename.
+- publishing: a GitHub Pages site. It still needs the user's word before it ships: a new Pages workflow under .github/workflows/ and the publish step itself are outward-facing.
+- TK143's read-first: docs/openfga-claims-audit-2026-10-13.md (what we claim about OpenFGA).
+
+USER DECISION 2026-10-16 (in chat): "We'll include all open items in 0.1.0, no rush to release." So 0.1.0 is no longer gated on this row alone. Session reading of "all open items" (recorded so the next session can check it with the user): the release-relevant set from the 2026-10-16 scoping, i.e. TK154, TK150, TK153, TK147, TK138/TK144 (landing 2), TK155, TK156, TK157 and this row (with TK143 folded in). The literal 64 open rows include HOLD/SOMEDAY and perf rows (R6-*) and Lean housekeeping; those are NOT read as release blockers unless the user says so. Order: this row lands LAST so the docs describe the final API.

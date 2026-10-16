@@ -11,6 +11,7 @@ added on top of this storage layer.
 from __future__ import annotations
 
 import json
+import secrets
 from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import chain
@@ -74,6 +75,38 @@ class UnloggedWriteRefused(ZanzibarError, RuntimeError):
     and land the tuple and its log row in ONE transaction. This exception exists so the
     bypass fails LOUDLY at the call instead of corrupting the store quietly."""
     # Provenance (moved out of the docstring, TK123 item 14): zero-trust review ZT-P1-8a.
+
+
+class StaleLookupIds(ZanzibarError, KeyError):
+    """``result_keys`` / ``excluded_keys`` refused to translate a lookup result whose ids
+    may no longer name what they named when the lookup ran.
+
+    Set-engine ids are recycled instance-local handles and graph ids are ``Node`` row
+    ids; both are valid only for the snapshot the lookup read. A ``KeyError`` subclass
+    (the bare ``KeyError`` it replaces). ``field`` is ``'node_ids'`` or
+    ``'excluded_node_ids'``; ``ids`` are the first offending ids (empty when the whole
+    result is stale). RECOVERABLE: run the lookup again and translate the new result
+    before the next write."""
+    # Provenance: TK154 (docs/tk154-stale-lookup-ids-2026-10-16.md); defined here because
+    # the set engine cannot import ``zanzibar.store``, which raises it too.
+
+    def __init__(self, field: str, ids: list[int], reason: str):
+        self.field = field
+        self.ids = list(ids)
+        self.reason = reason
+        shown = f' {self.ids[:5]}' if self.ids else ''
+        super().__init__(f'{field}{shown} of this lookup result cannot be translated: '
+                         f'{reason}; run the lookup again and translate the new result '
+                         f'before the next write')
+
+    def __str__(self) -> str:
+        return str(self.args[0])   # KeyError.__str__ would repr() the message
+
+    def __reduce__(self):
+        # args holds only the message, so the default pickle/copy path would call
+        # __init__(message) and fail; rebuild from the three fields instead (a worker
+        # process can raise this across a process boundary).
+        return (self.__class__, (self.field, self.ids, self.reason))
 
 
 def _reject_unlogged_write(engine: 'SetEngine', op: str) -> None:
@@ -247,7 +280,9 @@ class SetLookupResult:
     so an id means nothing to another engine instance (or process) over the same
     store, and the same holds for ``excluded_node_ids``. ``SetEngine.result_keys`` and
     ``SetEngine.excluded_keys`` translate them to the stable ``(type, name, predicate)``
-    surrogate keys; ``markers`` are already portable ``(type, predicate)`` shapes. The
+    surrogate keys, and both refuse with ``StaleLookupIds`` once any id has been freed
+    (a remove, or a catch-up applying one), the engine rebuilt, or the result came from
+    another instance; ``markers`` are already portable ``(type, predicate)`` shapes. The
     portable form for any service boundary is all three -- a marker sent without its
     exclusions over-grants."""
 
@@ -263,6 +298,11 @@ class SetLookupResult:
     # Provenance: TK116 (docs/tk116-oracle-only-setengine-2026-10-04.md sec 2) and TK139
     # (docs/tk139-lookup-reverse-exclusions-2026-10-13.md).
     excluded_node_ids: set[int] = field(default_factory=set)
+    #: TK154: the id map the ids were read from -- ``(interner serial, frees)`` as of the
+    #: lookup. Opaque; ``result_keys`` / ``excluded_keys`` compare it and raise
+    #: ``StaleLookupIds`` on a mismatch. ``None`` on a hand-built result (nothing to
+    #: compare; a missing id still raises).
+    id_stamp: tuple[int, int] | None = field(default=None, compare=False, repr=False)
 
 
 def _denorm_pred(pred: str) -> str | EllipsisType:
@@ -342,6 +382,17 @@ def _ttu_reverse_map(ast) -> dict:
     return {k: tuple(sorted(v)) for k, v in m.items()}
 
 
+def _new_interner_serial() -> int:
+    """TK154: a fresh 64-bit random serial per ``Interner`` object, so two id maps (a
+    ``rebuild()``'s new interner, another engine instance, or an engine in ANOTHER process
+    that unpickled the result) never share a stamp. Not a per-process counter: that restarts
+    at 1 in every process (and a forked child continues its parent's), so a result pickled
+    in one process matched a fresh engine's stamp in another and translated to the wrong
+    keys (review PROBE ``rev154_xproc``; pinned by
+    ``tests/test_tk154_stale_lookup_ids.py::test_set_engine_result_from_another_process_is_refused``)."""
+    return secrets.randbits(64)
+
+
 class Interner:
     """Per-store, reference-counted interning of ``(type, name, predicate)`` to int32 ids.
 
@@ -376,6 +427,11 @@ class Interner:
         self.ids_of_shape: dict[tuple[str, str], object] = defaultdict(ops.new)  # concrete usersets
         self._free: list[int] = []                            # recyclable internal ids
         self._next: int = 0                                   # next fresh internal id
+        # identity of THIS id map: new per Interner, so a rebuild(), another engine
+        # instance, or an engine in another process never shares one (TK154)
+        self.serial: int = _new_interner_serial()
+        # count of ids returned to _free; an id can only be re-pointed after a free (TK154)
+        self.frees: int = 0
 
     def acquire(self, entity_type: str, name: str, pred: str) -> int:
         """Intern (creating the mapping and allocating/reusing an internal id if needed)
@@ -418,6 +474,7 @@ class Interner:
                     else self.ids_of_shape.get((entity_type, pred)))
             if mask is not None:
                 mask.discard(i)
+        self.frees += 1
         self._free.append(i)
         return i
 
@@ -1499,7 +1556,9 @@ class SetEngine:
         """The full member set of (o_type, o_name, relation) as a MemberSet.
 
         Concrete entity/userset members land in ``pos``; subject wildcards become star
-        shapes in ``stars`` (never enumerated). Never interns on read."""
+        shapes in ``stars`` (never enumerated). Never interns on read. The ids in the
+        returned ``MemberSet`` are internal interner handles with no staleness check;
+        callers wanting keys use ``lookup_reverse`` + ``result_keys`` / ``excluded_keys``."""
         # Provenance (moved out of the docstring, TK123 item 14): §6.3.
         if memo is None:
             memo = {}
@@ -1643,7 +1702,7 @@ class SetEngine:
         # Provenance (moved out of the docstring, TK123 item 14): §6.4.
         o_type, o_name = object_type, object_name  # TK123 item 7
         m = self.expand(relation, o_type, o_name)
-        result = SetLookupResult()
+        result = SetLookupResult(id_stamp=self._id_stamp())
         result.node_ids = set(m.pos)
         result.markers = set(m.stars)
         result.excluded_node_ids = set(m.neg)
@@ -1651,8 +1710,10 @@ class SetEngine:
 
     def result_keys(self, res: SetLookupResult) -> set[NodeKey]:
         """Translate ``res.node_ids`` to their stable ``(type, name, predicate)``
-        surrogate keys. Interner ids are recycled instance-local handles -- only
-        valid against THIS instance, and only until the next write.
+        surrogate keys. Interner ids are recycled instance-local handles -- valid
+        against THIS instance until an id is freed (a remove, or a catch-up applying
+        another instance's remove) or the engine is rebuilt; after that, or on another
+        instance, this raises ``StaleLookupIds``.
 
         This is the CONCRETE third of a lookup result only. A result that crosses a
         service boundary is three parts: these keys, ``res.markers`` (already
@@ -1664,7 +1725,7 @@ class SetEngine:
         ``set()``."""
         # Provenance (moved out of the docstring, TK123 item 14): TK139 review,
         # ``docs/tk139-lookup-reverse-exclusions-2026-10-13.md``.
-        return {self.interner.key(i) for i in res.node_ids}
+        return self._translate(res, res.node_ids, 'node_ids')
 
     def excluded_keys(self, res: SetLookupResult) -> set[NodeKey]:
         """Translate ``res.excluded_node_ids`` to stable ``(type, name, predicate)``
@@ -1672,7 +1733,38 @@ class SetEngine:
         The companion of ``result_keys``; a caller expanding ``res.markers`` must
         subtract these."""
         # Provenance (moved out of the docstring, TK123 item 14): TK139.
-        return {self.interner.key(i) for i in res.excluded_node_ids}
+        return self._translate(res, res.excluded_node_ids, 'excluded_node_ids')
+
+    def _id_stamp(self) -> tuple[int, int]:
+        """TK154: the stamp a lookup result carries -- which id map, and how many frees."""
+        return (self.interner.serial, self.interner.frees)
+
+    def _check_id_stamp(self, res: SetLookupResult, field: str) -> None:
+        """TK154: refuse a result read from another id map, or before an id was freed (a
+        freed id may since have been re-acquired for another entity)."""
+        stamp = res.id_stamp
+        if stamp is None:
+            return
+        serial, frees = stamp
+        if serial != self.interner.serial:
+            raise StaleLookupIds(field, [], 'the engine was rebuilt, or the result came from '
+                                 'another SetEngine instance, so its interner ids belong '
+                                 'to a different id map')
+        if frees != self.interner.frees:
+            raise StaleLookupIds(field, [], 'a write (or catch-up) since the lookup freed an '
+                                 'interner id, which may since have been reused for '
+                                 'another entity')
+
+    def _translate(self, res: SetLookupResult, ids, field: str) -> set[NodeKey]:
+        """TK154: stamp check, then a named refusal for any id with no entity."""
+        self._check_id_stamp(res, field)
+        key_of = self.interner.key_of
+        missing = sorted(i for i in ids if i not in key_of)
+        if missing:
+            raise StaleLookupIds(field, missing, f'they name no entity in this engine (store '
+                                 f'{self.store_id!r}): the result predates a write that '
+                                 f'removed them, or it came from another engine')
+        return {key_of[i] for i in ids}
 
     def _reverse_neighbors(self, oid: int) -> list[int]:
         """Candidate object nodes one reverse membership hop from a node the subject
@@ -1829,7 +1921,7 @@ class SetEngine:
         s_type, s_name = subject_type, subject_name  # TK123 item 7
         reject_ellipsis_predicate(subject_predicate, 'lookup', write=False)  # TK123 item 9
         s_pred = _norm_pred(subject_predicate)
-        result = SetLookupResult()
+        result = SetLookupResult(id_stamp=self._id_stamp())
         for (t, rel) in self.ast:                          # declared (type, relation)
             if self.check(s_pred, s_type, s_name, rel, t, '*'):
                 result.markers.add((t, rel))

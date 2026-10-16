@@ -33,6 +33,55 @@ from here.
 
 ---
 
+## 2026-10-16 — `TK154` + `TK150` closed; 0.1.0 = all open items; `TK143` merged into `TK151`
+
+rows: TK154 (closed), TK150 (closed), TK143 (closed, merged into TK151), TK151 (scope), TK153 (LATER -> NEXT -> NOW), TK147 (LATER -> NEXT), TK144 (order note), TK158 / TK159 (new, LATER)
+
+`task lint: clean (13 checks, 276 task file(s) parsed), 25 warning(s)`
+
+`read: show TK151, TK154, TK153, TK138, TK155, TK156, TK157, TK147, TK150, TK143`
+
+`asked: none`
+
+**User decisions (in chat, 2026-10-16), recorded on the rows:** merge `TK143` into `TK151`
+(closed, content list carried); bump `TK153` and `TK147` to NEXT; `TK144` to the bottom of NEXT
+(the board sorts a tier by id with no rank field, so the order lives on `TK144`'s Log and in the
+banner); **"We'll include all open items in 0.1.0, no rush to release"** (the session's reading,
+on `TK151`: the release-relevant set `TK153`, `TK147`, `TK138`/`TK144`, `TK155`-`TK157`, `TK151`
+last; HOLD/SOMEDAY, the R6 perf rows and Lean housekeeping are not read as blockers unless the
+user says so); and for `TK150` **"we'll keep the 100k ceiling"**.
+
+Both items ran as one ultracode workflow (`wf_b7f62b52-7cd`: two scouts, a fable decision agent
+for `TK154`, implementers in sequence in the shared tree, adversarial reviewers, one fix round).
+It was stopped once mid-scout to take the user's `TK150` decision, then resumed from cache.
+- **`TK154`** (map, decision, sabotage table: [`docs/tk154-stale-lookup-ids-2026-10-16.md`](../tk154-stale-lookup-ids-2026-10-16.md),
+  now FROZEN). The scouts found the hazard wider than F16: `SetEngine.rebuild()` re-assigns ids
+  with no write, results translate across engine instances, and graph `zanzibar_node` ids are
+  reused on SQLite. Fix: a `(serial, frees)` id stamp on `SetLookupResult` checked by
+  `result_keys` / `excluded_keys`, `sqlite_autoincrement` on `Node`, `Store` refuses a 0.0.x
+  SQLite node table (`TablesOutdated`, a break listed in CHANGELOG), new `StaleLookupIds`
+  (`ZanzibarError`, `KeyError`). The review's one BLOCKER (a per-process serial counter collides
+  across processes) was fixed with a random 64-bit serial. Re-checked first-hand: 14 passed; the
+  stamp-check and autoincrement sabotages each turn 4 red. Three anchor pins re-hashed (`Node`,
+  `Interner.release`, `SetEngine.lookup_reverse`); the session read the diffs: no modelled
+  algorithm changed, no Lean change. **The gate caught two things the workflow's reviewers
+  missed**, both fixed by the session: `refuse_reusable_node_ids`'s public docstring cited
+  `TK154` (`tests/test_tk123_no_internal_refs.py`); and
+  `tests/test_tk79_outbox_replica.py::test_late_gc_rows_are_load_bearing`'s membership-level
+  half needed SQLite to re-hand the GC'd node id (`precondition: id 9 was expected to be reused
+  for user:u9, got None`). That half now positively pins that the id is NOT re-handed, red
+  under the autoincrement sabotage (`id 9 was re-handed to a new node`); its closure-level
+  half is unchanged.
+- **`TK150`**: no code change. A dated correction at the top of
+  [`docs/closure-fanout-cost-2026-10-14.md`](../closure-fanout-cost-2026-10-14.md) (now FROZEN)
+  records the decision, an N=1,000 measurement (`benchmarks/results/fanout_cost_2026-10-16.jsonl`:
+  0.35-0.45 s a write, with a ~0.09 s fixed per-write cost visible at that size), a same-day
+  10,000 control within 5% of 2026-10-14, and the suite's largest admitted fan-out re-verified
+  (124 in conformance). Follow-ups filed: `TK158` (cheap refusal), `TK159` (Core bulk insert).
+  Two false/stale help()-visible texts the scout found went onto `TK153`.
+
+Still owed: nothing.
+
 ## 2026-10-15b — `TK123` closed: the public API break (items 3-26) landed under `[Unreleased]`
 
 rows: TK123 (closed), TK155 / TK156 / TK157 (new, LATER: the SPLIT items), TK154 (NEXT -> NOW), TK33 (read-first re-pathed)

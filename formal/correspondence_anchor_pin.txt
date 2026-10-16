@@ -323,7 +323,7 @@ src/zanzibar/graphindex/invariants.py::_check_residue_rows	py:function	98e5fc9fd
 src/zanzibar/graphindex/invariants.py::check_invariants	py:function	9ca078effcf90c0e
 src/zanzibar/graphindex/models.py::DeltaOutbox	py:class-shell	9fdcd3a205cd3c4e
 src/zanzibar/graphindex/models.py::Edge	py:class-shell	ed0b08014eeb78cf
-src/zanzibar/graphindex/models.py::Node	py:class-shell	4cd84f5622ab9845
+src/zanzibar/graphindex/models.py::Node	py:class-shell	29e2498d1d27f327
 src/zanzibar/graphindex/models.py::Residue	py:class-shell	9a14108ea48fb557
 src/zanzibar/graphindex/models.py::ResidueRef	py:class-shell	dc2ad859ac35c0ad
 src/zanzibar/graphindex/outbox.py::drain_deltas	py:function	698465c012a62486
@@ -452,7 +452,7 @@ src/zanzibar/setengine/engine.py::Interner	py:class-shell	e550fbeb8e350711
 src/zanzibar/setengine/engine.py::Interner.acquire	py:function	1fcd7b7547a9d26b
 src/zanzibar/setengine/engine.py::Interner.get	py:function	5c6efdf263892cd9
 src/zanzibar/setengine/engine.py::Interner.key	py:function	e0017d4f0d68202d
-src/zanzibar/setengine/engine.py::Interner.release	py:function	3a0901554f791f61
+src/zanzibar/setengine/engine.py::Interner.release	py:function	e0d72ae72759675c
 src/zanzibar/setengine/engine.py::NodeSets	py:class-shell	5e5dfdf804facb41
 src/zanzibar/setengine/engine.py::SetEngine._apply_add	py:function	27af25aabad39d19
 src/zanzibar/setengine/engine.py::SetEngine._apply_remove	py:function	fba35a1b2fdfc239
@@ -479,7 +479,7 @@ src/zanzibar/setengine/engine.py::SetEngine.expand.direct_expand	py:function	abe
 src/zanzibar/setengine/engine.py::SetEngine.expand.do	py:function	03a898e274d2c71b
 src/zanzibar/setengine/engine.py::SetEngine.expand.do_expr	py:function	6276cfba3a28c164
 src/zanzibar/setengine/engine.py::SetEngine.expand.ttu_expand	py:function	99fb80048fa7c797
-src/zanzibar/setengine/engine.py::SetEngine.lookup_reverse	py:function	41cbf7d16c4f8a6d
+src/zanzibar/setengine/engine.py::SetEngine.lookup_reverse	py:function	86f0f4c127adb6b4
 src/zanzibar/setengine/engine.py::SetEngine.rebuild	py:function	98b7876e0bb960ac
 src/zanzibar/setengine/memberset.py::MemberSet	py:class-shell	7883e05062c41163
 src/zanzibar/setengine/memberset.py::_ext	py:function	6c416ee58c063c80

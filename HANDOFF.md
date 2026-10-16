@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-15b -- **`TK123` closed**: the public API break (items 3-26) is in, under CHANGELOG `[Unreleased]` (version stays 0.0.5; `connectedstore` -> `store`, `Store`, string forms, OpenFGA JSON, `result_keys`, `ZanzibarError`, ...). **0.1.0 now waits only on the docs (`TK151`, unblocked).** NOW: `TK154` (stale lookup ids mistranslate silently). NEXT: `TK138`, `TK144` (unblocked), `TK150`. SPLIT rows `TK155`-`TK157` (LATER). ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-16 -- **`TK154` + `TK150` closed** (stale lookup ids now refused on both backends; fan-out cap stays 100k, N=1,000 measured). **0.1.0 = all open release items, no rush (user)**; under CHANGELOG `[Unreleased]`, version stays 0.0.5; `TK151` (docs, `TK143` merged in) lands LAST. NOW: `TK153`. NEXT, in user order: `TK147`, then `TK138`/`TK144` last (the board lists by id). Then `TK155`-`TK157`; `TK158`/`TK159` filed LATER. ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

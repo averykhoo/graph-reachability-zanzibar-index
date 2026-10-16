@@ -25,6 +25,8 @@ are no compatibility aliases. What breaks a 0.0.5 caller, in short:
 - `at_least` must be `None` or an `int >= 0`; `True` and negative values are refused.
 - Opening a `Store` on a database without the `zanzibar_*` tables raises
   `TablesNotCreated` (a `RuntimeError`) instead of the driver's own SQLAlchemy error.
+- A `Store` refuses a SQLite file created by 0.0.x (`TablesOutdated`): create the tables
+  in a new file (TK154).
 - Many exception and warning messages are reworded (see Changed); code that matches on
   message text may need updating. Exception classes and their builtin bases are unchanged
   except where listed here.
@@ -163,6 +165,13 @@ Each is detailed below, under Changed or Added.
 - **`TablesNotCreated`** (TK123): opening a `Store` on a database without the `zanzibar_*`
   tables says to run `SQLModel.metadata.create_all(engine)`, instead of the driver's own
   `no such table` / `relation ... does not exist` error. `.missing` lists the tables.
+- **`StaleLookupIds`** (TK154; a `ZanzibarError` and a `KeyError`): `SetEngine.result_keys` /
+  `excluded_keys` and `Store.result_keys` / `excluded_keys` raise it instead of translating
+  a result whose ids may have been reused (set engine: after any id is freed by a write or
+  catch-up, after `rebuild()`, or on another engine instance; graph: an id whose node was
+  removed). The bare `KeyError` the graph side raised is now this class. **`TablesOutdated`**
+  (a `RuntimeError`): a `Store` refuses to open a SQLite database whose `zanzibar_node` was
+  created by 0.0.x without `AUTOINCREMENT`; create the tables in a new file.
 - **`IndexExists`** (TK123): `build_index` over an index that already exists raises it
   (a `ZanzibarError` and still a `ValueError`), pointing at `rebuild_index`.
 - `SetEngine(session, store_id)` may omit the schema when a `Store` created the store: it
@@ -186,6 +195,13 @@ Each is detailed below, under Changed or Added.
   `prune_outbox` / `outbox_watermark`). The quickstart now prints its checks. The page's
   imports, the `Store` attributes it names, its exception table and its async, wildcard and
   pruning claims are pinned by tests.
+
+### Fixed
+- A `SetLookupResult` or graph `LookupResult` held across a write could translate to
+  ANOTHER entity's key with no error (0.0.5 install trial F16): set-engine ids are
+  recycled, and SQLite reused `zanzibar_node` row ids. Results are now stamped and checked
+  (set engine) and graph node ids are never reused (`sqlite_autoincrement`);
+  `engine.interner.key` is no longer documented. (TK154)
 
 ## [0.0.5] - 2026-10-14
 
