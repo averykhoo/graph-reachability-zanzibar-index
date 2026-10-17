@@ -414,8 +414,8 @@ src/zanzibar/schema/compiler.py::_node_removal_fence	py:function	7156c720c4c967f
 src/zanzibar/schema/compiler.py::_reject_doubly_bridged_shapes	py:function	f1cebb71b7ac4183
 src/zanzibar/schema/compiler.py::_reject_object_wildcard_scope	py:function	475b1cf2df6b43dc
 src/zanzibar/schema/compiler.py::_validate_ttu_tuplesets	py:function	879aecdea897ed76
-src/zanzibar/schema/compiler.py::compile_ruleset	py:function	030dcb56af601867
-src/zanzibar/schema/compiler.py::derive_schema_info	py:function	dc5639e082a4c0cc
+src/zanzibar/schema/compiler.py::compile_ruleset	py:function	26565434404cf590
+src/zanzibar/schema/compiler.py::derive_schema_info	py:function	f471bcfc92e5c67a
 src/zanzibar/schema/compiler.py::wildcard_userset_restriction_shapes	py:function	6e05d44c7ea9d53e
 src/zanzibar/schema/errors.py::AdmissionRejected	py:class-shell	33c52efa7008ca0e
 src/zanzibar/schema/errors.py::CyclicDerivedDependency	py:class-shell	aca87cb4394eebcc

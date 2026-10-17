@@ -29,6 +29,33 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-10-17 — `TK147`: an `object_wildcard_shapes` entry must name a declared relation
+
+**What the spec says.** wildcard-materialization-spec §2.1: object-wildcard shapes have no
+DSL syntax; "Accept them as a constructor argument", entries are `(object_type, relation)`,
+and a star-object tuple is valid only for a declared shape. Nothing says what an entry
+naming no declared relation does.
+**What the code does since 2026-10-17:** one check,
+`src/zanzibar/schema/compiler.py::_validate_object_wildcard_shapes`, refuses with
+`ShapeNoLongerAccepted` an entry that is not a `(type, relation)` pair of strings, that names
+an undeclared type, or that names an undeclared relation (a compiled leaf such as
+`('doc', 'view.0')` included). It runs in `derive_schema_info` (so `parse_openfga_schema`),
+in `compile_ruleset` (a hand-built `SchemaInfo`), and in `SetEngine.__init__` (the
+`ruleset=` path). A store saved by 0.0.5 with such an entry raises `PersistedSchemaRefused`
+on every open, worded as a version break ("saved by zanzibar-index 0.0.5 or earlier").
+Not checked: a `RuleSet` built by hand and handed to `SetEngine(ruleset=)`, and
+`WildcardIndex(idx, schema_info)`, which has no AST.
+
+**Why.** Through 0.0.5 an undeclared type or relation was ACCEPTED and did nothing on
+either backend (no star-object write was admissible for it), so the caller believed a
+wildcard was enabled and it was not; the TK137 S8 typo class. A leaf name was refused by
+the graph alone (`UnsupportedByGraphIndex`) while a `SetEngine` on its own accepted it and
+ran with no graph partner (the retired TK116 witness `owc-names-a-leaf`); both backends now
+refuse it, with the other entries' exception class. **Instead:** drop the entry (that
+changes no answer) or correct it to a declared `(type, relation)` pair; a 0.0.5 store needs
+a new store id. Map: [`docs/tk147-owc-shape-refusal-2026-10-17.md`](tk147-owc-shape-refusal-2026-10-17.md).
+Pinned by `tests/test_tk147_owc_shape_refusal.py`.
+
 ## 2026-10-14 — `TK138`: a userset is not a member of itself here; in OpenFGA it is, at every node
 
 **Open, pinned, not fixed.** The user's word on the row (2026-10-13d) is "verify against a

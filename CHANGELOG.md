@@ -32,6 +32,11 @@ are no compatibility aliases. What breaks a 0.0.5 caller, in short:
   `ShapeNoLongerAccepted`); the class now lives in `zanzibar.schema` (TK153).
 - A write to an undeclared relation or type is refused with a message that starts
   `... names an undeclared relation doc#vewer` (TK153).
+- An `object_wildcard_shapes` entry that names no declared relation is refused
+  (`ShapeNoLongerAccepted`); a store saved by 0.0.5 with one no longer opens
+  (`PersistedSchemaRefused`). An entry naming a compiled leaf such as `('doc', 'view.0')`
+  raised `UnsupportedByGraphIndex` and now raises `ShapeNoLongerAccepted`, which is not an
+  `UnsupportedByGraphIndex` (TK147).
 - Many exception and warning messages are reworded (see Changed); code that matches on
   message text may need updating. Exception classes and their builtin bases are unchanged
   except where listed here.
@@ -153,10 +158,28 @@ Each is detailed below, under Changed or Added.
   Windows console.
 - The `ClosureFanoutExceeded` docstring no longer says the cap cannot bite at the 100,000
   default: a grant or ban over a group of more than 100,000 members is refused (TK153).
+- **Breaking: `object_wildcard_shapes` must name declared relations** (TK147). An entry
+  naming an undeclared type (`('nosuch', 'viewer')`), an undeclared relation
+  (`('doc', 'nosuchrel')`, or a compiled leaf such as `('doc', 'view.0')`), or that is not
+  a `(type, relation)` pair of strings, raises `ShapeNoLongerAccepted` from
+  `parse_openfga_schema`, `derive_schema_info`, `compile_ruleset` (whose `SchemaInfo` may be
+  built by hand), `SetEngine`, `Store`, `save_schema` and `ensure_schema`. 0.0.5 accepted an
+  undeclared type or relation, and it did nothing: no object-wildcard write was admitted
+  for it. 0.0.5 refused a compiled leaf with `UnsupportedByGraphIndex` from
+  `parse_openfga_schema` and `Store`, while a `SetEngine` on its own accepted it; code that
+  caught `UnsupportedByGraphIndex` for it must catch `ShapeNoLongerAccepted`. A store
+  saved by 0.0.5 with such an entry raises `PersistedSchemaRefused` on every open ("saved by
+  zanzibar-index 0.0.5 or earlier"); its `.instead` says to drop the entry, which changes no
+  answer. Schemas are write-once, so create a new store id with the entry dropped and write
+  the tuples again. `ShapeNoLongerAccepted` gains `accepted_through` and `refused_since`
+  (the versions `PersistedSchemaRefused` quotes).
 
 ### Added
 - `compile_ruleset(..., declared_types=...)` (TK153): the schema text's `type` lines, used
   only to word an admission refusal; `parse_openfga_schema` passes them for you.
+- `derive_schema_info(..., declared_types=...)` (TK147): the same facts, used only to word
+  an `object_wildcard_shapes` refusal (a type with no relations that no restriction names
+  is otherwise reported as undeclared); `parse_openfga_schema` passes them for you.
 - **`zanzibar.graphindex.DeltaProcessor` is public** (TK153): the processor that maintains
   the `and` / `but not` relations, which `MissingDeltaProcessor` tells a caller who drives
   the apply step by hand to pass. A `Store` still builds its own.

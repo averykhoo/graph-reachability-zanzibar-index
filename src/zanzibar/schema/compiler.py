@@ -7,23 +7,108 @@ Part of `zanzibar.schema`.
 from dataclasses import replace
 import os
 import warnings
-from .errors import DoublyBridgedShapeError, UnsupportedByGraphIndex
+from .errors import DoublyBridgedShapeError, ShapeNoLongerAccepted, UnsupportedByGraphIndex
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _directs_only, _iter_directs, _iter_ttus, declared_relations
 from .rules import Filter, Rule, RuleSet, SchemaInfo, _restriction_pattern, _rewrite_rule, norm_pred
 from .parser import _parse_schema_ast_checked, parse_schema_ast
 from .boolean import _member_types, compile_boolean_schema, compute_taint
 
 
+def _validate_object_wildcard_shapes(
+        ast: SchemaAST,
+        object_wildcard_shapes,
+        declared_types=frozenset(),
+) -> None:
+    """Refuse an ``object_wildcard_shapes`` entry that is not a ``(type, relation)`` pair
+    naming a relation the schema declares (raises ``ShapeNoLongerAccepted``).
+
+    ``declared_types`` are the types a ``type`` line declared (relation-less ones leave no
+    trace in ``ast``); they only choose the message ("undeclared type" or "undeclared
+    relation"), never the verdict, because an object-wildcard shape needs a RELATION.
+    Called by ``derive_schema_info`` (so ``parse_openfga_schema``), by ``compile_ruleset``
+    (so a hand-built ``SchemaInfo`` too) and by ``SetEngine.__init__``; the store layer turns
+    a refusal of a PERSISTED entry into ``PersistedSchemaRefused``. Not checked: a
+    ``RuleSet`` or ``SchemaInfo`` built by hand and handed straight to ``SetEngine(ruleset=)``
+    or ``WildcardIndex`` (no AST there), which a caller only does below the public pipeline."""
+    # TK147 (2026-10-17), TK137 challenge C7. Through 0.0.5 such an entry was ACCEPTED and
+    # did nothing on either backend (first-hand probe, docs/tk147-owc-shape-refusal-2026-10-17.md
+    # sec 1): the caller believed an object wildcard was enabled and it was not.
+    relations = frozenset(ast)
+    # Every restriction type is declared (TK137 S8), so it counts even without
+    # ``declared_types``; only a relation-less type nothing restricts to needs that argument.
+    types = (frozenset(t for t, _ in ast) | frozenset(declared_types)
+             | frozenset(r.type for expr in ast.values() for d in _iter_directs(expr)
+                         for r in d.restrictions))
+    for shape in sorted(object_wildcard_shapes, key=repr):
+        if not (isinstance(shape, tuple) and len(shape) == 2
+                and all(isinstance(part, str) for part in shape)):
+            # REFUSED SHAPE (TK147): an object_wildcard_shapes entry that is not a pair of
+            # strings (``'doc:viewer'``, ``('doc',)``, ``('doc', 'viewer', 'x')``).
+            # WHY: a 2-character string unpacked silently into a (type, relation) pair and a
+            # longer one crashed deep in the compiler; neither is what the caller meant.
+            # INSTEAD: ``object_wildcard_shapes={('doc', 'viewer')}`` -- a set of
+            # ``(object_type, relation)`` tuples (no DSL text: the shape is not DSL).
+            raise ShapeNoLongerAccepted(
+                f"object_wildcard_shapes entry {shape!r} is not a (type, relation) pair of "
+                f"strings",
+                f"write each entry as a (type, relation) tuple such as ('doc', 'viewer'), "
+                f"naming a declared relation, or drop it",
+                accepted_through='0.0.5', refused_since='0.1.0')
+        t, r = shape
+        if t not in types:
+            # REFUSED SHAPE (TK147): an object_wildcard_shapes entry naming an undeclared
+            # TYPE (``('nosuch', 'viewer')``).
+            # WHY: it is a typo that did nothing -- no ``nosuch:*`` write is admissible, so
+            # the caller believed an object wildcard was enabled and it was not (it failed
+            # closed, but silently; the TK137 S8 typo class).
+            # INSTEAD: ``object_wildcard_shapes={('doc', 'viewer')}`` with a type the
+            # schema declares (``type doc``), or drop the entry -- that changes no answer.
+            raise ShapeNoLongerAccepted(
+                f"object_wildcard_shapes entry {shape!r} names the undeclared type {t!r} "
+                f"(declared types: {', '.join(sorted(types)) or 'none'})",
+                f"drop {shape!r} from object_wildcard_shapes (it enabled no object "
+                f"wildcard, so dropping it changes no answer), or correct it to a declared "
+                f"(type, relation) pair",
+                accepted_through='0.0.5', refused_since='0.1.0')
+        if (t, r) not in relations:
+            # REFUSED SHAPE (TK147): an object_wildcard_shapes entry naming an undeclared
+            # RELATION on a declared type (``('doc', 'nosuchrel')``; also a compiled leaf
+            # predicate such as ``('doc', 'view.0')``, since a declared relation name never
+            # contains ``.``).
+            # WHY: as above -- no ``doc:*#nosuchrel`` write is admissible, so the shape did
+            # nothing. A leaf name was refused by the graph only, so the set engine ran
+            # without a graph partner; now both backends refuse it.
+            # INSTEAD: ``object_wildcard_shapes={('doc', 'viewer')}`` naming a relation the
+            # type declares (``define viewer: ...``), or drop the entry.
+            declared_here = sorted(rel for (ty, rel) in relations if ty == t)
+            leaf = (" ('.' names are compiled leaf predicates, never declared relations)"
+                    if '.' in r else '')
+            raise ShapeNoLongerAccepted(
+                f"object_wildcard_shapes entry {shape!r} names the undeclared relation "
+                f"{t}#{r}{leaf} (type {t!r} declares: "
+                f"{', '.join(declared_here) or 'no relations'})",
+                f"drop {shape!r} from object_wildcard_shapes (it enabled no object "
+                f"wildcard, so dropping it changes no answer), or correct it to a relation "
+                f"type {t!r} declares",
+                accepted_through='0.0.5', refused_since='0.1.0')
+
+
 def derive_schema_info(
         ast: SchemaAST,
         object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
+        *,
+        declared_types=frozenset(),
 ) -> SchemaInfo:
     """Derive wildcard-shape metadata from the AST.
 
     Subject-wildcard shapes come from every ``T:*`` / ``T:*#P`` restriction anywhere in
-    the schema. Object-wildcard shapes have no DSL syntax and are declared by the caller.
+    the schema. Object-wildcard shapes have no DSL syntax and are declared by the caller;
+    each must be a ``(type, relation)`` pair naming a declared relation, or
+    ``ShapeNoLongerAccepted`` is raised (``declared_types``, the types the text declared,
+    only sharpens that message).
     """
     # Provenance (moved out of the docstring, TK123 item 14): spec §2.3.
+    _validate_object_wildcard_shapes(ast, object_wildcard_shapes, declared_types)
     subject_wildcard_shapes: set[tuple[str, str]] = set()
     for expr in ast.values():
         for direct in _iter_directs(expr):
@@ -287,10 +372,18 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
     ``declared_types`` (the schema text's ``type`` lines) affects only the wording of an
     admission refusal: a type with no relations leaves no trace in an AST, so without it
     a write on that type is reported as naming an undeclared type.
+
+    ``schema_info.object_wildcard_shapes`` must name declared relations, as in
+    ``derive_schema_info``, or ``ShapeNoLongerAccepted`` is raised.
     """
+    # Provenance (kept out of the docstring, TK123 item 14): the shapes check is TK147.
     # Provenance (moved out of the docstring, TK123 item 14): the decision-15 scope family;
     # enable_boolean=False is the pre-P7 behaviour.
     # Provenance (moved out of the docstring, TK123 item 14): spec §2.3; boolean spec §3.
+    # TK147 review (2026-10-17): a hand-built ``SchemaInfo`` skips ``derive_schema_info``, so
+    # the declared shapes are checked here too, BEFORE the closure below adds the shapes it
+    # derives (the closed set is this function's output, never its input).
+    _validate_object_wildcard_shapes(ast, schema_info.object_wildcard_shapes, declared_types)
     if not enable_boolean:
         _validate_ttu_tuplesets(ast, frozenset())
         rules_and_filters: list[Rule | Filter] = []
@@ -652,7 +745,8 @@ def parse_openfga_schema(
     # Provenance (moved out of the docstring, TK123 item 14): spec §2.1/§2.3; boolean spec
     # §3/§5.
     ast, declared_types = _parse_schema_ast_checked(schema)
-    schema_info = derive_schema_info(ast, object_wildcard_shapes)
+    schema_info = derive_schema_info(ast, object_wildcard_shapes,
+                                     declared_types=declared_types)
     # The text knows relation-less types the AST lost; the admission message uses them
     # (TK153 review, 2026-10-17). ``SetEngine`` passes the same facts from the same text.
     return compile_ruleset(ast, schema_info, enable_boolean=enable_boolean,

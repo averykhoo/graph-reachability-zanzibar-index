@@ -342,7 +342,9 @@ class ShapeNoLongerAccepted(SchemaError):
     a header line, ``but not`` sharing a level with another operator (S7), or a
     restriction to an undeclared type (S8). Raised by `parser.py::_validate_header_line`,
     `parser.py::_reject_unparenthesised_but_not` and
-    `parser.py::_validate_restriction_types_declared`.
+    `parser.py::_validate_restriction_types_declared`. Since 0.1.0 it is also raised for an
+    ``object_wildcard_shapes`` entry that names no declared relation (0.0.5 and earlier
+    accepted it as a no-op), by `compiler.py::_validate_object_wildcard_shapes`.
 
     It exists for ONE reader: `zanzibar.store.schema_io` re-parses a store's
     PERSISTED schema text on every open, so a store saved under 0.0.4 with one of these
@@ -357,16 +359,27 @@ class ShapeNoLongerAccepted(SchemaError):
     top level with every other exception.
 
     ``instead`` (a ``str``) is the meaning-preserving rewrite, in words a user can act on,
-    for example ``"change the line to 'schema 1.1'"``; the message ends with it too."""
+    for example ``"change the line to 'schema 1.1'"``; the message ends with it too.
+    ``accepted_through`` is the last version that accepted the shape (``'0.0.4'`` for the
+    header-line, ``but not`` and restriction shapes, ``'0.0.5'`` for an
+    ``object_wildcard_shapes`` entry) and ``refused_since`` the first that refuses it;
+    ``PersistedSchemaRefused`` quotes both."""
     # Provenance (moved out of the docstring, TK123 item 14): TK137 (2026-10-14); S7 / S8 are
     # its row items.
     # Provenance (moved out of the docstring, TK123 item 14): review challenge C10 in
     # `docs/tk137-dsl-openfga-refusals-2026-10-14.md`.
     # Provenance (moved out of the docstring, TK123 item 14): H1; H2.
 
-    def __init__(self, message: str, instead: str):
+    # TK147 (2026-10-17) added accepted_through / refused_since: an object_wildcard_shapes
+    # entry naming an undeclared type or relation was accepted through 0.0.5, so a store
+    # saved by 0.0.5 can hold one, and "saved by 0.0.4 or earlier" would be false for it.
+
+    def __init__(self, message: str, instead: str, *, accepted_through: str = '0.0.4',
+                 refused_since: str = '0.0.5'):
         super().__init__(message)
         self.instead = instead
+        self.accepted_through = accepted_through
+        self.refused_since = refused_since
 
 
 class PersistedSchemaRefused(ZanzibarError, ValueError):
@@ -374,7 +387,9 @@ class PersistedSchemaRefused(ZanzibarError, ValueError):
     cannot be opened.
 
     Every open re-parses the stored text (the compiled schema is cache), so a store saved
-    by zanzibar-index 0.0.4 or earlier with a shape 0.0.5 refuses stops opening. The
+    by zanzibar-index 0.0.4 or earlier with a shape 0.0.5 refuses (or by 0.0.5 or
+    earlier with an ``object_wildcard_shapes`` entry naming no declared relation, which
+    0.1.0 refuses) stops opening. The
     message says so, quotes the parser's refusal, and gives the rewrite that keeps the
     meaning the store was serving, so the break reads as a version break, not corruption.
     There is no lenient mode on purpose: schemas are write-once, and a store opened under
@@ -400,7 +415,8 @@ class PersistedSchemaRefused(ZanzibarError, ValueError):
         self.refusal = refusal
         self.instead = refusal.instead
         super().__init__(
-            f"store {store_id!r}: its persisted schema was saved by zanzibar-index 0.0.4 "
-            f"or earlier using a shape this version refuses: {refusal}. To rewrite: "
-            f"{refusal.instead}. Schemas are write-once, so the rewritten schema needs a NEW "
-            f"store id, with this store's tuples written again (see the 0.0.5 changelog).")
+            f"store {store_id!r}: its persisted schema was saved by zanzibar-index "
+            f"{refusal.accepted_through} or earlier using a shape this version refuses: "
+            f"{refusal}. To rewrite: {refusal.instead}. Schemas are write-once, so the "
+            f"rewritten schema needs a NEW store id, with this store's tuples written again "
+            f"(see the {refusal.refused_since} changelog).")

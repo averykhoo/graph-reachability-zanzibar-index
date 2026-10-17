@@ -46,6 +46,7 @@ from zanzibar.schema import (
 from zanzibar.schema.syntax import (declared_relations, first_schema_difference,
                                     no_restriction_message)
 from zanzibar.schema.parser import _parse_schema_ast_checked
+from zanzibar.schema.compiler import _validate_object_wildcard_shapes
 from zanzibar.schema.errors import (PersistedSchemaRefused, SchemaMismatch,
                                     ShapeNoLongerAccepted, ZanzibarError,
                                     reject_ellipsis_predicate)
@@ -186,24 +187,40 @@ def _schema_record_row(session: Session, store_id: str):
         ).first()
 
 
-def _refuse_persisted_shape(session: Session, store_id: str) -> None:
-    """Called when the schema text given to ``SetEngine`` (or read from the store, when
-    none was given) uses a shape this version refuses: raise ``PersistedSchemaRefused``
-    if ``store_id``'s PERSISTED text is refused the same way, and return otherwise (the
-    caller re-raises the parser's own refusal of a text that is only the caller's)."""
-    # TK153 F17: the old text passed again used to surface as the bare parser refusal, with
-    # nothing saying the STORE is the thing that cannot open.
-    record = _schema_record_row(session, store_id)
-    if record is None:
-        return
+def _record_shapes(record) -> frozenset:
+    """The ``object_wildcard_shapes`` of a ``_schema_record_row`` result."""
+    return frozenset(tuple(s) for s in json.loads(record[1]))
+
+
+def _refuse_record_shapes(store_id: str, record, ast, declared_types) -> None:
+    """Raise ``PersistedSchemaRefused`` if the record's PERSISTED object-wildcard shapes
+    are refused against ``ast`` (the record's own parsed text) -- TK147."""
     try:
-        parse_schema_ast(record[0])
+        _validate_object_wildcard_shapes(ast, _record_shapes(record), declared_types)
     except ShapeNoLongerAccepted as stored:
         raise PersistedSchemaRefused(store_id, stored) from stored
 
 
+def _refuse_persisted_shape(session: Session, store_id: str) -> None:
+    """Called when the schema text given to ``SetEngine`` (or read from the store, when
+    none was given) or its ``object_wildcard_shapes`` use a shape this version refuses:
+    raise ``PersistedSchemaRefused`` if ``store_id``'s PERSISTED schema (text or shapes)
+    is refused, and return otherwise (the caller re-raises its own refusal of an input
+    that is only the caller's)."""
+    # TK153 F17: the old text passed again used to surface as the bare parser refusal, with
+    # nothing saying the STORE is the thing that cannot open. TK147: the shapes too.
+    record = _schema_record_row(session, store_id)
+    if record is None:
+        return
+    try:
+        ast, declared_types = _parse_schema_ast_checked(record[0])
+    except ShapeNoLongerAccepted as stored:
+        raise PersistedSchemaRefused(store_id, stored) from stored
+    _refuse_record_shapes(store_id, record, ast, declared_types)
+
+
 def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
-                                  object_wildcard_shapes) -> None:
+                                  object_wildcard_shapes, declared_types=frozenset()) -> None:
     """Raise ``SchemaMismatch`` unless ``(schema, object_wildcard_shapes)`` is the
     store's persisted schema (TK123 A53).
 
@@ -211,9 +228,21 @@ def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
     declared object-wildcard shapes, and the texts parse to an equal ``SchemaAST`` (so
     whitespace, comments and the order of type blocks or ``define`` lines do not matter).
     Identical text short-circuits, so the store's own opens (``open_set_engine`` passes
-    the stored text) never re-parse."""
-    stored_text, stored_shapes_json = record
-    stored_shapes = frozenset(tuple(s) for s in json.loads(stored_shapes_json))
+    the stored text) never re-parse. A persisted schema this version refuses (text, or
+    since TK147 its object-wildcard shapes) raises ``PersistedSchemaRefused`` FIRST,
+    whatever was passed: one type for one cause (TK153 F17)."""
+    stored_text, _stored_shapes_json = record
+    stored_shapes = _record_shapes(record)
+    if stored_text == schema:
+        stored_ast, stored_declared = ast, declared_types
+    else:
+        try:
+            stored_ast, stored_declared = _parse_schema_ast_checked(stored_text)
+        except ShapeNoLongerAccepted as e:
+            # TK153 F17: the same type every other entry point raises for a stored text a
+            # newer version refuses (it was SchemaMismatch here, a third type for one cause).
+            raise PersistedSchemaRefused(store_id, e) from e
+    _refuse_record_shapes(store_id, record, stored_ast, stored_declared)
     if stored_shapes != frozenset(object_wildcard_shapes):
         raise SchemaMismatch(
             f'SetEngine on store {store_id!r}: its object_wildcard_shapes disagree with the '
@@ -223,12 +252,6 @@ def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
             f'use a store id no Store owns.')
     if stored_text == schema:
         return
-    try:
-        stored_ast = parse_schema_ast(stored_text)
-    except ShapeNoLongerAccepted as e:
-        # TK153 F17: the same type every other entry point raises for a stored text a
-        # newer version refuses (it was SchemaMismatch here, a third type for one cause).
-        raise PersistedSchemaRefused(store_id, e) from e
     diff = first_schema_difference(stored_ast, ast)     # TK123 item 18
     if diff is not None:
         diff = (diff.replace('only in the first schema', 'only in the persisted schema')
@@ -576,6 +599,12 @@ class SetEngine:
         self._governance_probed_txn = None
         try:
             self.ast, self._declared_types = _parse_schema_ast_checked(schema)
+            # TK147: the ``object_wildcard_shapes`` argument is checked on every open, the
+            # ``ruleset=`` path included (it skips derive_schema_info below, which validates
+            # too). A ``ruleset=`` is adopted as given: one from ``compile_ruleset`` had its
+            # declared shapes checked there, and its CLOSED set is compiler output, not input.
+            _validate_object_wildcard_shapes(self.ast, object_wildcard_shapes,
+                                             self._declared_types)
         except ShapeNoLongerAccepted:
             _refuse_persisted_shape(session, store_id)
             raise
@@ -597,7 +626,8 @@ class SetEngine:
         if ruleset is not None and ruleset.schema_info is not None:
             self.schema_info = ruleset.schema_info
         else:
-            self.schema_info = derive_schema_info(self.ast, object_wildcard_shapes)
+            self.schema_info = derive_schema_info(self.ast, object_wildcard_shapes,
+                                                  declared_types=self._declared_types)
         self.filters = schema_filters(self.ast)
         # Reproduce the graph backend's raw-write edge graph (same RuleSet) and reject
         # exactly the cycles it rejects -- including from-chain cycles. Since the P7
@@ -689,7 +719,7 @@ class SetEngine:
             record = _schema_record_row(self.session, self.store_id)
             if record is not None:
                 _assert_schema_matches_record(self.store_id, record, schema, self.ast,
-                                              object_wildcard_shapes)
+                                              object_wildcard_shapes, self._declared_types)
         self.rebuild()
 
     def _probe_log_governance(self) -> None:

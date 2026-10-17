@@ -2,7 +2,7 @@
 id: TK138
 title: A userset is not related to itself here; OpenFGA treats doc:1#viewer@doc:1#viewer as implicit
 brief: check(doc:1#viewer, viewer, doc:1) is False here; OpenFGA treats a userset as implicitly related to itself
-pri: NEXT
+pri: NOW
 size: L
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: []
 source: docs/openfga-claims-audit-2026-10-13.md
 source_hash:
 created: 2026-10-13c
-moved: 2026-10-14
-updated: 2026-10-14
+moved: 2026-10-17
+updated: 2026-10-17
 closed:
 ---
 
@@ -60,3 +60,7 @@ Size reset M -> L (Python L + Lean XL across both landings).
 TK123 IMPLICATION: settle the lookup channel inside TK123's API pass: LookupResult should carry (type, name, predicate) keys, not interned ids (an internal surrogate id is a first-user surprise regardless, and D3a needs the channel).
 Child row: TK144 at LATER, deps [TK123, TK119, TK132], parent TK138. Asked for NEXT, but task.py new REFUSED it (NEXT would hold 6, budget 5); all three deps are NEXT rows, so it cannot start before a NEXT slot frees anyway. Promote it when they close.
 Do NOT close TK138 on landing 1: the user's ADOPT stands until landing 2 ships. Next action: build landing 1.
+
+### 2026-10-17
+
+2026-10-17 (TK147 gate agent). Promoted NEXT -> NOW when TK147 closed: the lint needs exactly one NOW, and TK138 is next in the user order stated 2026-10-16 (TK147, then TK138, then TK144). TK144 stays NEXT; it waits on TK123, TK119 and TK132.

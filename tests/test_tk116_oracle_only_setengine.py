@@ -17,7 +17,8 @@ in ``src/zanzibar/schema/``):
 * the graph refuses it with THAT family's message, and no other witness's message matches
   (so the nine witnesses are nine distinct families, not one family nine times; EIGHT
   since 2026-10-08, when TK126 made the name-collision family served and its raise site
-  moved to ``UNREACHABLE``);
+  moved to ``UNREACHABLE``; SEVEN since 2026-10-17, when TK147 made both backends refuse
+  an object-wildcard shape naming a compiled leaf, so ``owc-names-a-leaf`` moved there too);
 * ``ParityEngine`` degrades to set:py + set:roaring + oracle, both ``_ruleset``s are None;
 * a SCRIPTED walk drives the family's own refused shape (star-object writes, star
   tuplesets, wildcard usersets over a derived relation, data cycles) -- every scripted add
@@ -88,16 +89,6 @@ WITNESSES: tuple[Witness, ...] = (
         'targets a derived (boolean-tainted) relation',
         (_u('viewer', 'doc', '*'), ('...', 'user', '*', 'public', 'doc', 'n2'),
          _u('blocked', 'doc', 'n2'))),
-    Witness(
-        # `_reject_owc_scope`: a declared shape naming a compiled leaf. Nothing is writable
-        # at `view.0`, so the script is the boolean relation's ordinary traffic.
-        'owc-names-a-leaf',
-        'type user\ntype doc\n  relations\n'
-        '    define editor: [user]\n    define banned: [user]\n'
-        '    define view: editor but not banned\n',
-        frozenset({('doc', 'view.0')}), UnsupportedByGraphIndex,
-        'names a compiled leaf predicate',
-        (_u('editor', 'doc', 'n1'), _u('banned', 'doc', 'n1'))),
     Witness(
         # `_reject_owc_scope`: a shape the rewrite rules carry onto a leaf (P10 W1).
         'owc-expands-onto-leaf',
@@ -190,6 +181,13 @@ UNREACHABLE: tuple[tuple[str, str], ...] = (
      'checked parse cannot reach it; the undeclared-tupleset fallback is refused at '
      'parse since ASK-1. Hand-built AST / taint regression only, pinned by '
      'tests/test_tk126_ttu_target_name_collision.py'),
+    ('_reject_object_wildcard_scope: a declared shape names a compiled leaf predicate',
+     'TK147 (2026-10-17): `compiler.py::_validate_object_wildcard_shapes` refuses every '
+     'shape naming no declared relation, a `.` leaf name included, on BOTH backends '
+     '(derive_schema_info and SetEngine.__init__), and compile_ruleset runs the same check '
+     'on its own SchemaInfo first, so not even a hand-built SchemaInfo reaches this branch '
+     '(TK147 review); it was the `owc-names-a-leaf` witness until then. The both-backends '
+     'refusal is pinned by tests/test_tk147_owc_shape_refusal.py'),
 )
 
 # The whole schema PACKAGE, globbed (TK120, 2026-10-06): it was one file until the split,
@@ -235,8 +233,8 @@ def _witness_pool(w: Witness) -> list[tuple]:
 
 
 def test_witness_families_are_distinct():
-    """Each witness's message names its OWN refusal and no other witness's: nine
-    witnesses, nine families. Without this a witness drifting onto a neighbouring
+    """Each witness's message names its OWN refusal and no other witness's: one
+    family per witness. Without this a witness drifting onto a neighbouring
     family's check would leave its own family undriven and stay green."""
     msgs = {w.family: str(_refusal(w)) for w in WITNESSES}
     for w in WITNESSES:

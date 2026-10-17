@@ -111,7 +111,10 @@ HEADER = 'REFUSED SHAPE'
 #: Re-measured 2026-10-14 after the TK137 review fix (+1 oracle: the ``condition`` raise in
 #: `oracle.py::_reject_unsupported_openfga_line` got its own block instead of
 #: ``WHY/INSTEAD: see above``): 50 / 25 / 2 / 1.
-MIN_HEADERS = {LIB: 50, 'tests/oracle.py': 25, 'src/zanzibar/setengine/engine.py': 2,
+#: Re-measured 2026-10-17 after TK147 (+3 schema package, all in
+#: `compiler.py::_validate_object_wildcard_shapes`: not a pair, undeclared type, undeclared
+#: relation; the oracle takes no object_wildcard_shapes, so no twin): 53 / 25 / 2 / 1.
+MIN_HEADERS = {LIB: 53, 'tests/oracle.py': 25, 'src/zanzibar/setengine/engine.py': 2,
                'src/zanzibar/store/_store.py': 1}
 #: In-scope raises the scope rule must keep seeing (anti-vacuity, replacing the per-file
 #: "no in-scope raise found" assert, which cannot hold per SUBMODULE). Measured 2026-10-06
@@ -120,7 +123,9 @@ MIN_HEADERS = {LIB: 50, 'tests/oracle.py': 25, 'src/zanzibar/setengine/engine.py
 #: 2026-10-08 after TK124: 27 (json_frontend 4, parser 10). Re-measured 2026-10-08 after
 #: the TK127 follow-up: 29 (json_frontend 5, parser 11). Re-measured 2026-10-13 after
 #: TK134: 33 (json_frontend 9). Re-measured 2026-10-14 after TK137: 39 (parser 17).
-MIN_IN_SCOPE_RAISES = {LIB: 39, 'tests/oracle.py': 1}
+#: Re-measured 2026-10-17 after TK147: 43 (the HEAD tree before it already had 40, one
+#: more than this floor recorded; TK147 adds 3 in `compiler.py::_validate_object_wildcard_shapes`).
+MIN_IN_SCOPE_RAISES = {LIB: 43, 'tests/oracle.py': 1}
 
 
 def _group(rel: str) -> str:

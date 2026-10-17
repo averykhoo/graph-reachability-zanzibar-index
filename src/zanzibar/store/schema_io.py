@@ -22,6 +22,8 @@ from zanzibar.setengine import SetEngine
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import RuleSet, parse_openfga_schema, parse_schema_ast, validate_store_id
 from zanzibar.schema.syntax import first_schema_difference
+from zanzibar.schema.parser import _parse_schema_ast_checked
+from zanzibar.schema.compiler import _validate_object_wildcard_shapes
 # ``SchemaMismatch`` (TK123 A53) and ``PersistedSchemaRefused`` (TK153 F17) live in
 # ``zanzibar.schema.errors`` so the set engine can raise them without importing this
 # layer; re-exported here, the same class objects.
@@ -121,9 +123,10 @@ def missing_tables(session: Session) -> list[str]:
 
 @contextlib.contextmanager
 def _persisted_schema_parse(store_id: str):
-    """Wrap a parse of ``store_id``'s PERSISTED text: a `TK137` refusal becomes
+    """Wrap a parse of ``store_id``'s PERSISTED text (and its object-wildcard shapes): a
+    `TK137` or `TK147` refusal (``ShapeNoLongerAccepted``) becomes
     ``PersistedSchemaRefused`` (C10). Any other ``ValueError`` passes through unchanged:
-    only a TK137 shape can have been saved by an older version and be refused now, so
+    only such a shape can have been saved by an older version and be refused now, so
     anything else is not a version break. A text the CALLER passed is never parsed under
     this wrapper (its refusal is the caller's to fix, not a stored-store break)."""
     try:
@@ -202,23 +205,29 @@ def ensure_schema(session: Session, store_id: str, schema_text: str,
 def _verify_same_schema(row: SchemaRecord, schema_text: str,
                         object_wildcard_shapes: frozenset[tuple[str, str]]) -> None:
     """Raise ``SchemaMismatch`` unless ``schema_text`` / ``object_wildcard_shapes`` are
-    the schema persisted in ``row`` (see ``_schema_difference``)."""
+    the schema persisted in ``row`` (see ``_schema_difference``). A persisted schema this
+    version refuses -- its text, or (TK147) its object-wildcard shapes -- raises
+    ``PersistedSchemaRefused`` FIRST, whatever was passed (one type for one cause)."""
     store_id = row.store_id
     object_wildcard_shapes = frozenset(tuple(s) for s in object_wildcard_shapes)
     stored_shapes = frozenset(tuple(s) for s in json.loads(row.object_wildcard_shapes))
+    with _persisted_schema_parse(store_id):
+        stored_ast, stored_declared = _parse_schema_ast_checked(row.schema_text)
+        _validate_object_wildcard_shapes(stored_ast, stored_shapes, stored_declared)
     if stored_shapes != object_wildcard_shapes:
         raise SchemaMismatch(
             f"explicit schema for store {store_id!r} disagrees with its persisted "
             f"schema: object_wildcard_shapes {sorted(object_wildcard_shapes)} != "
             f"{sorted(stored_shapes)}; schemas are static (write-once)")
-    diff = _schema_difference(store_id, row.schema_text, schema_text)
+    diff = _schema_difference(store_id, row.schema_text, schema_text, stored_ast=stored_ast)
     if diff is not None:
         raise SchemaMismatch(
             f"explicit schema for store {store_id!r} disagrees with its persisted "
             f"schema, first at {diff}; schemas are static (write-once)")
 
 
-def _schema_difference(store_id: str, stored_text: str, schema_text: str) -> str | None:
+def _schema_difference(store_id: str, stored_text: str, schema_text: str, *,
+                       stored_ast=None) -> str | None:
     """``None`` when the passed text parses to the stored text's schema, up to the order
     of type blocks, ``define`` lines and restriction lists; else the first differing
     ``type#relation`` (TK123 item 18). A passed text that does not parse raises the
@@ -227,9 +236,11 @@ def _schema_difference(store_id: str, stored_text: str, schema_text: str) -> str
     (identical text is parsed once, under the persisted-schema wrapper, not twice)."""
     # TK153 F17 review (2026-10-17): identical text used to return None BEFORE any parse, so
     # save_schema(id, <stored refused text>) raised the bare ShapeNoLongerAccepted from its
-    # own later parse, and ensure_schema returned (row, None) silently.
-    with _persisted_schema_parse(store_id):
-        stored_ast = parse_schema_ast(stored_text)
+    # own later parse, and ensure_schema returned (row, None) silently. ``stored_ast``: the
+    # caller already parsed the stored text under the wrapper (TK147, no second parse).
+    if stored_ast is None:
+        with _persisted_schema_parse(store_id):
+            stored_ast = parse_schema_ast(stored_text)
     if stored_text == schema_text:
         return None
     diff = first_schema_difference(stored_ast, parse_schema_ast(schema_text))
