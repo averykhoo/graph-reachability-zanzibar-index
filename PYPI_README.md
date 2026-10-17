@@ -103,7 +103,10 @@ object's relation?) return a `LookupResult` with three fields:
   `doc:d1#banned`. From `lookup_reverse`, a userset such as `group:eng#member` means that
   the userset itself is an allowed subject. It does not mean every member is allowed:
   under `but not banned`, a banned member of `group:eng` is still refused, so ask `check`
-  about a member rather than expanding the userset.
+  about a member rather than expanding the userset. To list the USERS `lookup_reverse`
+  allows, take the keys of type `user` (members of a granted group are already listed
+  one by one, and refused ones are left out), plus each `user` marker minus the excluded
+  keys; never add the members of a userset key, which would re-admit the refused ones.
 * `markers`: wildcard grants, as `(type, predicate, variant)` triples. From
   `lookup_reverse`, `("user", "...", "any")` means "every user", from a `[user:*]` tuple.
   The variant `"all"` appears only with `object_wildcard_shapes` (an extension): from
@@ -220,6 +223,8 @@ Each derives from `zanzibar.ZanzibarError` and keeps the builtin base shown, so
 | `AdmissionRejected` | `ValueError` | a write is refused: an undeclared type or relation, a user the restriction does not admit, a cycle, removing a tuple that is not stored |
 | `MalformedTupleString` | `ValueError` | a `"type:name#relation"` argument does not parse |
 | `SchemaError` | `ValueError` | the schema text is refused; the message says what to write instead |
+| `ShapeNoLongerAccepted` | `ValueError` | a `SchemaError` for a shape 0.0.4 and earlier accepted; `.instead` is the rewrite that keeps its meaning |
+| `PersistedSchemaRefused` | `ValueError` | a store's STORED schema uses such a shape, whichever call opens it (`Store`, `SetEngine`, `build_index`, ...); `.instead` is the rewrite, which needs a new store id |
 | `CyclicDerivedDependency` | `ValueError` | a relation recurses through `and` / `but not` (see below) |
 | `SchemaMismatch` | `ValueError` | a store is opened with a schema other than the one it was created with |
 | `StoreNotFound` | `KeyError` | `Store(session, id)` without `schema=` names a store that does not exist |
@@ -234,6 +239,7 @@ Each derives from `zanzibar.ZanzibarError` and keeps the builtin base shown, so
 | `UnloggedWriteRefused` | `RuntimeError` | a standalone `SetEngine` writes to a store a `Store` owns |
 | `UnloggedTuplesPresent` | `RuntimeError` | a `Store` opens over tuples a standalone `SetEngine` wrote |
 | `IndexExists` | `ValueError` | `build_index` targets an index that already exists |
+| `MissingDeltaProcessor` | `ValueError` | the apply step is driven by hand without a `zanzibar.graphindex.DeltaProcessor` on a schema with `and` / `but not` |
 | `UnsafeIsolationLevel` | `RuntimeError` | a PostgreSQL session is not at `READ COMMITTED` |
 
 `InvariantViolation` (an `AssertionError`) is deliberately **not** a `ZanzibarError`: it

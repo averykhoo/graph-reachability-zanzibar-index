@@ -106,7 +106,7 @@ def parse_openfga_json(model) -> SchemaAST:
     # compiled leaf families open through JSON metadata.
     _validate_json_declares_a_relation(ast)
     _validate_ast_references(ast)
-    _validate_ast_consistency(ast)
+    _validate_ast_consistency(ast, frozenset(seen_types))
     # TK137 S8: a restriction type no type_definitions entry declares. BEFORE the round
     # trip, so a JSON typo gets the named message, not 'its DSL rendering ...'.
     _validate_restriction_types_declared(ast, frozenset(seen_types))

@@ -7,7 +7,7 @@ Part of `zanzibar.schema`.
 from dataclasses import dataclass, field
 from types import EllipsisType
 from .errors import AdmissionRejected, SchemaError, is_valid_identifier
-from .syntax import Computed, DeclaredRelations, Restriction, no_restriction_reason
+from .syntax import Computed, DeclaredRelations, Restriction, no_restriction_message
 
 
 @dataclass(frozen=True, slots=True, order=True, unsafe_hash=True)
@@ -261,6 +261,14 @@ class RuleSet:
     # item 17); set by ``compile_ruleset``, None for hand-built rulesets. Never compared.
     declared: DeclaredRelations | None = field(default=None, compare=False, repr=False)
 
+    def __repr__(self) -> str:
+        # TK153 F6 (2026-10-17): the dataclass repr printed every compiled Filter and Rule,
+        # thousands of characters for a small schema, in every tuple that carries one.
+        # ``rules_and_filters`` is the full form.
+        plans = len(self.compiled.plans) if self.compiled is not None else 0
+        return (f'RuleSet({len(self.rules_and_filters)} rules and filters, '
+                f'{plans} boolean relations)')
+
     def _build_dispatch(self) -> None:
         """Indexed dispatch (boolean spec §1.12): key Filters/Rules by their if-pattern
         relation. Our patterns test a single triple, so only the alpha layer applies --
@@ -326,10 +334,8 @@ class RuleSet:
                 # raw tuple, i.e. no declared type restriction does. The set engine
                 # refuses the identical tuple in `_validate`; this is the graph side of
                 # ONE admission rule, so it carries the rejection type.
-                raise AdmissionRejected(
-                    f"tuple {relational_triple} matches no declared type restriction "
-                    f"for derived relation {o_type}#{rel}"
-                    + no_restriction_reason(self.declared, o_type, rel))
+                raise AdmissionRejected(no_restriction_message(
+                    self.declared, str(relational_triple), o_type, rel, derived=True))
         else:
             # Pure-union relations keep first-match admission semantics, unchanged.
             for _, flt in self._candidates(self._plain_filters, rel):
@@ -368,10 +374,8 @@ class RuleSet:
                 # says so: `zanzibar.store.apply._apply_row` promotes any ValueError
                 # from this path to `InvariantViolation`. `AdmissionRejected` subclasses
                 # ValueError, so that promotion is untouched.
-                raise AdmissionRejected(
-                    f"tuple {relational_triple} matches no declared type restriction "
-                    f"for {o_type}#{rel}"
-                    + no_restriction_reason(self.declared, o_type, rel))
+                raise AdmissionRejected(no_restriction_message(
+                    self.declared, str(relational_triple), o_type, rel))
 
         # Fast path (the dominant case: a direct restriction with no rewrite rule):
         # if no rule can fire on any seed relation the worklist can never grow, and

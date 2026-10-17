@@ -62,7 +62,7 @@ class FixpointTier(NamedTuple):
     cascade left stale. A cascade that ran with the tier OFF records None, not an empty
     pass, so a test can tell "the tier ran and found nothing" from "the tier never ran".
 
-    ⚠ Reading this is the ONLY way to observe the tier's verdict after the fact:
+    WARNING: Reading this is the ONLY way to observe the tier's verdict after the fact:
     ``reconcile`` is a REPAIRING mutator, so calling it again returns False both on
     state that was already a fixpoint and on state the tier just repaired."""
     # Provenance (moved out of the docstring, TK123 item 14): TK82, docs/tk82-cascade-
@@ -230,7 +230,14 @@ class _EvalContext:
         return out
 
 class DeltaProcessor:
-    """Maintains derived-relation state from the outbox stream."""
+    """Maintains a ``WildcardIndex``'s derived (``and`` / ``but not``) relations.
+
+    The graph index stores the leaf relations a write touches; every boolean relation is
+    derived from them, and this processor keeps it current by reading the index's outbox
+    and re-deriving what changed. Build one per index as
+    ``DeltaProcessor(widx, ruleset.compiled)`` and pass it as ``proc`` when you drive the
+    apply step yourself; a ``Store`` builds and runs its own, so most programs never touch
+    it. A pure-union schema (no ``and`` / ``but not``) needs none."""
     # Provenance (moved out of the docstring, TK123 item 14): boolean spec §5.
 
     def __init__(self, widx: WildcardIndex, compiled: CompiledBooleans):
@@ -307,7 +314,7 @@ class DeltaProcessor:
     def derived_check(self, object_type: str, rel: str, obj_name: str, s: SubjectKey) -> bool:
         """The derived membership check: edge probe + residue (point reads).
 
-        Delegates to the façade's ``_check_derived`` -- the read path and the
+        Delegates to the facade's ``_check_derived`` -- the read path and the
         processor's reconcile MUST share one implementation, or a semantics fix in
         one (e.g. the ``upos`` rule) silently diverges the other."""
         # Provenance (moved out of the docstring, TK123 item 14): boolean spec sec 6; the upos
@@ -1430,7 +1437,7 @@ class DeltaProcessor:
         an earlier staleness measurement actually observed (its instrument
         wrapped this public method), and one call site here covers all three of
         ``_run_cascade``'s normal exits, where a check placed inside would have to be
-        repeated at each and silently skipped by the next one added. ⚠ Bound: under
+        repeated at each and silently skipped by the next one added. WARNING: Bound: under
         ``advance_index`` an OUTER node-cache scope spans the apply loop, so there the
         tier still runs inside *that* one; the tier closes its own scopes, not a
         caller's."""

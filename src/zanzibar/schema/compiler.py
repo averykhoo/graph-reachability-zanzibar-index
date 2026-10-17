@@ -10,7 +10,7 @@ import warnings
 from .errors import DoublyBridgedShapeError, UnsupportedByGraphIndex
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _directs_only, _iter_directs, _iter_ttus, declared_relations
 from .rules import Filter, Rule, RuleSet, SchemaInfo, _restriction_pattern, _rewrite_rule, norm_pred
-from .parser import parse_schema_ast
+from .parser import _parse_schema_ast_checked, parse_schema_ast
 from .boolean import _member_types, compile_boolean_schema, compute_taint
 
 
@@ -271,7 +271,8 @@ def _validate_ttu_tuplesets(ast: SchemaAST, tainted: frozenset) -> None:
 
 
 def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
-                    enable_boolean: bool = True) -> RuleSet:
+                    enable_boolean: bool = True,
+                    declared_types: frozenset[str] = frozenset()) -> RuleSet:
     """Compile an AST into the graph index's Filters/Rules.
 
     Boolean (`and` / `but not`) relations compile into derived predicates: untainted relations byte-identically to the pure-union path, tainted
@@ -282,6 +283,10 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
 
     ``enable_boolean=False`` restores the historical refusal:
     the first boolean operator raises ``UnsupportedByGraphIndex``.
+
+    ``declared_types`` (the schema text's ``type`` lines) affects only the wording of an
+    admission refusal: a type with no relations leaves no trace in an AST, so without it
+    a write on that type is reported as naming an undeclared type.
     """
     # Provenance (moved out of the docstring, TK123 item 14): the decision-15 scope family;
     # enable_boolean=False is the pre-P7 behaviour.
@@ -295,7 +300,7 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
         _reject_doubly_bridged_shapes(ast, schema_info)
         schema_info = _node_removal_fence(rules_and_filters, schema_info)
         return RuleSet(rules_and_filters, schema_info=schema_info,
-                       declared=declared_relations(ast))
+                       declared=declared_relations(ast, declared_types))
 
     tainted = compute_taint(ast)
     _validate_ttu_tuplesets(ast, tainted)
@@ -319,7 +324,7 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
     _reject_doubly_bridged_shapes(ast, schema_info)
     schema_info = _node_removal_fence(rules_and_filters, schema_info)
     return RuleSet(rules_and_filters, schema_info=schema_info, compiled=compiled,
-                   declared=declared_relations(ast))
+                   declared=declared_relations(ast, declared_types))
 
 
 def _node_removal_fence(rules_and_filters: list, schema_info: SchemaInfo) -> SchemaInfo:
@@ -412,9 +417,9 @@ def wildcard_userset_restriction_shapes(ast: SchemaAST) -> frozenset[tuple[str, 
     ``T:*#p`` restriction lets a ``T:*#p ... o`` tuple be written DIRECTLY by the user,
     which makes the danger a property of the SCHEMA and so compile-rejectable. Counting
     through-shapes here would over-reject the legal reg11 / ``owc_star_ttu`` class,
-    whose coarse ``bridged_in ∩ bridged_out`` is non-empty.
+    whose coarse ``bridged_in & bridged_out`` is non-empty.
 
-    ⚠ CORRECTION (2026-08-09). This sentence used to end "-- yet their whole write
+    WARNING: CORRECTION (2026-08-09). This sentence used to end "-- yet their whole write
     space is oracle-correct and unanimous on both backends", offered as the evidence
     that the class is safe to admit. **That clause was REFUTED by measurement.** The
     graph index under-reported on exactly this class -- an object-wildcard grant
@@ -425,12 +430,12 @@ def wildcard_userset_restriction_shapes(ast: SchemaAST) -> frozenset[tuple[str, 
     latent cycle and innocent-write lockout, which a through-shape does not enable.
     Admitting the class was right; the unanimity cited for it was not true.
 
-    ⚠ CORRECTION (2026-07-26). The original justification for this narrowing
+    WARNING: CORRECTION (2026-07-26). The original justification for this narrowing
     also claimed that a through-shape *"is never a writable userset subject -- reg11's
     dangerous writes self-cycle and are rejected on both backends, so nothing
     persists"*. **That second clause is FALSE.** A through-shape ``(T, target)`` CAN be
     minted in subject position -- not by a direct write, but by the TTU REWRITE: on a
-    SELF-REFERENTIAL TTU (``viewer: … or viewer from parent``) over a star-restricted
+    SELF-REFERENTIAL TTU (``viewer: ... or viewer from parent``) over a star-restricted
     tupleset whose shape carries an object wildcard, the raw write ``T:* parent T:*``
     routes to ``T:*#viewer viewer T:*`` = ``w_any(T,viewer) -> w_all(T,viewer)``, which
     the position-split encoding hides from the graph's cycle check. That is a genuine
@@ -646,6 +651,9 @@ def parse_openfga_schema(
     # Provenance (moved out of the docstring, TK123 item 14): the P7 matrix flip.
     # Provenance (moved out of the docstring, TK123 item 14): spec §2.1/§2.3; boolean spec
     # §3/§5.
-    ast = parse_schema_ast(schema)
+    ast, declared_types = _parse_schema_ast_checked(schema)
     schema_info = derive_schema_info(ast, object_wildcard_shapes)
-    return compile_ruleset(ast, schema_info, enable_boolean=enable_boolean)
+    # The text knows relation-less types the AST lost; the admission message uses them
+    # (TK153 review, 2026-10-17). ``SetEngine`` passes the same facts from the same text.
+    return compile_ruleset(ast, schema_info, enable_boolean=enable_boolean,
+                           declared_types=declared_types)

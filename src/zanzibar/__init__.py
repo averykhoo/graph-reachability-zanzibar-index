@@ -35,6 +35,7 @@ _LAZY = {
     'DoublyBridgedShapeError': 'zanzibar.schema.errors',
     'CyclicDerivedDependency': 'zanzibar.schema.errors',
     'SchemaMismatch': 'zanzibar.schema.errors',
+    'PersistedSchemaRefused': 'zanzibar.schema.errors',
     'MalformedTupleString': 'zanzibar.schema.tuplestr',
     'UnprovenExtensionWarning': 'zanzibar.schema.compiler',
     # the backends
@@ -50,7 +51,6 @@ _LAZY = {
     'IndexStalled': 'zanzibar.store._store',
     'UnloggedTuplesPresent': 'zanzibar.store._store',
     'MissingDeltaProcessor': 'zanzibar.store.apply',
-    'PersistedSchemaRefused': 'zanzibar.store.schema_io',
     'StoreNotFound': 'zanzibar.store.schema_io',
     'IndexExists': 'zanzibar.store.build',
     'TablesNotCreated': 'zanzibar.store.schema_io',
@@ -83,7 +83,8 @@ if TYPE_CHECKING:  # pragma: no cover -- for type checkers and IDEs only
     from zanzibar.schema.compiler import UnprovenExtensionWarning, parse_openfga_schema
     from zanzibar.schema.errors import (AdmissionRejected, ClosureFanoutExceeded,
                                         CyclicDerivedDependency, DoublyBridgedShapeError,
-                                        IndexResourceLimit, PathCountExceeded, SchemaError,
+                                        IndexResourceLimit, PathCountExceeded,
+                                        PersistedSchemaRefused, SchemaError,
                                         SchemaMismatch, ShapeNoLongerAccepted,
                                         UnsupportedByGraphIndex, ZanzibarError)
     from zanzibar.schema.tuplestr import MalformedTupleString
@@ -92,6 +93,5 @@ if TYPE_CHECKING:  # pragma: no cover -- for type checkers and IDEs only
                                        UnloggedTuplesPresent)
     from zanzibar.store.apply import MissingDeltaProcessor
     from zanzibar.store.build import IndexExists
-    from zanzibar.store.schema_io import (PersistedSchemaRefused, StoreNotFound,
-                                          TablesNotCreated, TablesOutdated)
+    from zanzibar.store.schema_io import StoreNotFound, TablesNotCreated, TablesOutdated
     from zanzibar.store.source import StaleRead, UnsafeIsolationLevel, WatermarkGap

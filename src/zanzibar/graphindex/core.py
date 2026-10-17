@@ -69,13 +69,19 @@ class _ThreadFlag(threading.local):
 #: duration. This is a BLAST-RADIUS bound, not an authorization policy.
 #:
 #: The default is chosen so it cannot refuse anything this repo has ever written:
-#: instrumented over the whole suite on 2026-07-27, the largest single-write
-#: expansion is 44 rows in ``tests/`` and 124 rows in ``formal/conformance/``, so
-#: this leaves ~800x headroom and still admits e.g. granting one 90,000-member
-#: group. An operator who wants a bound that actually bites should MEASURE their own
-#: topology and lower it (``max_closure_fanout=`` or the env var below); the point of
-#: the default is to turn "unbounded" into "bounded and visible", not to guess a
-#: workload. ``0`` disables the check entirely.
+#: instrumented over the whole suite (re-measured 2026-10-17, TK153: 906 tests reach a
+#: cap comparison), the largest single-write expansion is 93 rows in ``tests/``
+#: (``test_tk111_path_count_bound.py``) apart from the deliberate 440-row control in
+#: ``test_reg17_closure_fanout_cap.py``, and 124 rows in ``formal/conformance/``
+#: (2026-10-16); 2026-07-27 it was 44 / 124. The tests/ figure regenerates with
+#: ``formal/probes/tk153_fanout_probe_plugin_2026_10_17.py``. So this leaves ~800x
+#: headroom over 124 and still admits e.g. granting one 90,000-member group (the
+#: 440-row control is a test of the cap itself, not a write the suite needs). An
+#: operator who wants a
+#: bound that actually bites should MEASURE their own topology and lower it
+#: (``max_closure_fanout=`` or the env var below); the point of the default is to
+#: turn "unbounded" into "bounded and visible", not to guess a workload. ``0``
+#: disables the check entirely.
 DEFAULT_MAX_CLOSURE_FANOUT = 100_000
 
 #: Process-wide override for ``DEFAULT_MAX_CLOSURE_FANOUT``, so an operator can retune
@@ -1204,7 +1210,7 @@ class ReachabilityIndex:
         """Add a direct edge between two already-resolved node ids.
 
         Performs the same reverse-reachability cycle pre-check as add_edge, then
-        the ref-counted +1 direct-edge update. The façade uses this so it never
+        the ref-counted +1 direct-edge update. The facade uses this so it never
         re-resolves names it already resolved. Reachability flips are recorded in
         the delta outbox; drain with zanzibar.graphindex.outbox helpers.
         """
@@ -1263,7 +1269,7 @@ class ReachabilityIndex:
         return triple is not None and triple.indirect_edge_count > 0
 
     def direct_edge_exists_by_id(self, subject_id: int, object_id: int) -> bool:
-        """Whether a *direct* edge row exists (used by the façade for idempotent bridges)."""
+        """Whether a *direct* edge row exists (used by the facade for idempotent bridges)."""
         triple = self.session.exec(
             select(Edge)
             .where(Edge.store_id == self.store_id)

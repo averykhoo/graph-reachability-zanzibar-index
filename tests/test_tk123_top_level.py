@@ -159,14 +159,14 @@ _EXPECTED_ALL = {
         'AdmissionRejected', 'IndexResourceLimit', 'ClosureFanoutExceeded',
         'PathCountExceeded', 'UnsupportedByGraphIndex', 'DoublyBridgedShapeError',
         'CyclicDerivedDependency', 'SchemaMismatch', 'UnprovenExtensionWarning',
-        'MalformedTupleString'},
+        'MalformedTupleString', 'PersistedSchemaRefused'},   # PersistedSchemaRefused: TK153 F17
     'zanzibar.setengine': {
         'SetEngine', 'SetLookupResult', 'MemberSet', 'RelationTuple', 'SetOps', 'PySets',
         'RoaringSets', 'UnloggedWriteRefused', 'StaleLookupIds'},
     'zanzibar.graphindex': {
         'ReachabilityIndex', 'WildcardIndex', 'LookupResult', 'Node', 'Edge', 'IndexStore',
         'AdmissionRejected', 'InvariantViolation', 'WriteLockUnsafe', 'outbox_watermark',
-        'prune_outbox'},
+        'prune_outbox', 'DeltaProcessor'},   # DeltaProcessor: TK153 F8, 2026-10-17
     'zanzibar.store': {
         'Store', 'TupleSource', 'build_index', 'rebuild_index', 'save_schema',
         'SchemaRecord', 'TupleLog', 'PARANOIA_ENV_VAR', 'StaleRead', 'LookupNotFresh',

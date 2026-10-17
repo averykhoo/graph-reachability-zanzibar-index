@@ -787,7 +787,13 @@ class Store:
         """List-users: everything that can reach the object's relation, as
         ``lookup_reverse("viewer", "doc:d1")`` or ``lookup_reverse("viewer", "doc",
         "d1")``. ``at_least`` behaves exactly as in ``lookup`` -- enforced, never
-        silently downgraded."""
+        silently downgraded.
+
+        To list the USERS allowed, take the keys of type ``user`` (a granted group's
+        members are already listed one by one, refused ones left out) plus each ``user``
+        marker minus ``excluded_keys``. A userset key such as ``group:eng#member`` means
+        the userset itself is allowed; never expand it to its members, which would
+        re-admit a member a ``but not`` refuses."""
         relation, o_type, o_name = lookup_reverse_args('lookup_reverse', args, kwargs)
         self._require_index_freshness(at_least, 'lookup_reverse')
         return self.widx.lookup_reverse(relation, o_type, o_name)

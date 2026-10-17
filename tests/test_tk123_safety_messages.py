@@ -279,26 +279,32 @@ def test_a_stall_names_the_failing_log_row_and_its_tuple(engine, monkeypatch):
 
 # --------------------------------------------------------------------------- item 17
 
-@pytest.mark.parametrize('tup, reason', [
+# TK153 F11 (2026-10-17): a write to an UNDECLARED relation (or type) now leads with
+# 'names an undeclared relation <type>#<rel>'; the restriction wording stays for the others.
+_UNDECLARED = 'names an undeclared relation'
+_NO_MATCH = 'matches no declared type restriction'
+
+
+@pytest.mark.parametrize('tup, reason, lead', [
     (('...', 'user', 'alice', 'viewer', 'dok', 'd1'),
-     "type 'dok' is not declared in the schema; did you mean 'doc'?"),
+     "type 'dok' is not declared in the schema; did you mean 'doc'?", _UNDECLARED + ' dok#viewer'),
     (('...', 'user', 'alice', 'viewr', 'doc', 'd1'),
-     "type 'doc' declares no relation 'viewr'; did you mean 'viewer'?"),
+     "type 'doc' declares no relation 'viewr'; did you mean 'viewer'?", _UNDECLARED + ' doc#viewr'),
     (('...', 'user', 'alice', 'can_read', 'doc', 'd1'),
      'doc#can_read has no direct type restriction (it is computed from other relations), '
-     'so tuples cannot be written to it'),
-    (('...', 'group', 'g', 'owner', 'doc', 'd1'), 'it admits only user'),
+     'so tuples cannot be written to it', _NO_MATCH),
+    (('...', 'group', 'g', 'owner', 'doc', 'd1'), 'it admits only user', _NO_MATCH),
 ])
-def test_admission_refusal_explains_itself(engine, tup, reason):
+def test_admission_refusal_explains_itself(engine, tup, reason, lead):
     with Session(engine) as s:
         se = SetEngine(s, 'free', SCHEMA)
-        with pytest.raises(AdmissionRejected, match='matches no declared type restriction') as e_set:
+        with pytest.raises(AdmissionRejected, match=lead) as e_set:
             se._validate(tup[0], *tup[1:], pairs=[])
         rs = parse_openfga_schema(SCHEMA)
         from zanzibar.schema import Entity, RelationalTriple
         triple = RelationalTriple(Entity(tup[1], tup[2]), tup[3], Entity(tup[4], tup[5]),
                                   Ellipsis)
-        with pytest.raises(AdmissionRejected, match='matches no declared type restriction') as e_graph:
+        with pytest.raises(AdmissionRejected, match=lead) as e_graph:
             list(rs.apply(triple))
     # one helper, so both backends give the same reason
     assert str(e_set.value).endswith(reason)

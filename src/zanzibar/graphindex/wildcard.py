@@ -1,5 +1,5 @@
 """
-WildcardIndex: the wildcard-aware façade over ReachabilityIndex.
+WildcardIndex: the wildcard-aware facade over ReachabilityIndex.
 
 It materialises the interior wildcard hops as real ref-counted edges (bridges) at
 write time, so that check() stays O(1): at most four point lookups on the unique
@@ -588,7 +588,7 @@ class WildcardIndex:
                   relation: str, object_type: str, object_name: str) -> None:
         """Add one (possibly rewrite-derived) triple as a ref-counted direct edge.
 
-        ⚠ MULTIGRAPH SEMANTICS, deliberately: adding the same triple twice counts to
+        WARNING: MULTIGRAPH SEMANTICS, deliberately: adding the same triple twice counts to
         2 and takes two removes to retire. That is load-bearing for rewrite fan-in
         (two different raw tuples may derive the same edge and must retire
         independently) -- it is NOT the raw-tuple API. Zanzibar raw tuples are a SET;
@@ -1014,7 +1014,7 @@ class WildcardIndex:
 
         Derived relations contribute twice: materialised derived
         edges arrive through the ordinary reachable set, and star-covered memberships
-        come from a residue scan (shape ∈ stars ∧ subject ∉ neg)."""
+        come from a residue scan (shape in stars and subject not in neg)."""
         # Provenance (moved out of the docstring, TK123 item 14): spec §6; boolean spec §6.
         s_type, s_name = subject_type, subject_name  # TK123 item 7
         s_pred = _norm_pred(subject_predicate)
@@ -1069,7 +1069,7 @@ class WildcardIndex:
         On a derived relation: concretes are the derived edges'
         subjects; the residue's stars render as the existing symbolic markers (variant
         'any': subject-side coverage) and its neg fills ``excluded_node_ids`` so
-        "everyone of shape σ except these" is representable without enumeration."""
+        "everyone of shape S except these" is representable without enumeration."""
         # Provenance (moved out of the docstring, TK123 item 14): boolean spec §6.
         o_type, o_name = object_type, object_name  # TK123 item 7
         result = LookupResult()

@@ -27,6 +27,11 @@ are no compatibility aliases. What breaks a 0.0.5 caller, in short:
   `TablesNotCreated` (a `RuntimeError`) instead of the driver's own SQLAlchemy error.
 - A `Store` refuses a SQLite file created by 0.0.x (`TablesOutdated`): create the tables
   in a new file (TK154).
+- `SetEngine` raises `PersistedSchemaRefused` for a store whose stored schema this version
+  refuses, as every other entry point does (it raised `SchemaMismatch` or
+  `ShapeNoLongerAccepted`); the class now lives in `zanzibar.schema` (TK153).
+- A write to an undeclared relation or type is refused with a message that starts
+  `... names an undeclared relation doc#vewer` (TK153).
 - Many exception and warning messages are reworded (see Changed); code that matches on
   message text may need updating. Exception classes and their builtin bases are unchanged
   except where listed here.
@@ -121,8 +126,40 @@ Each is detailed below, under Changed or Added.
   keep their invariant ids.
 - `SetOps` prints as `SetOps('roaring')` instead of a dataclass repr full of lambda
   addresses (TK123).
+- **Breaking: one exception type for a store whose STORED schema this version refuses**
+  (TK153). `SetEngine(session, id, ...)` on such a store now raises
+  `PersistedSchemaRefused`, as `Store(...)`, `open_set_engine`, `save_schema`,
+  `ensure_schema` and `build_index` already did. It used to raise `SchemaMismatch` when
+  given a rewritten schema, and `ShapeNoLongerAccepted` (the bare parser refusal) when
+  given the stored text or no schema. The class moved to `zanzibar.schema.errors` and is
+  exported from `zanzibar.schema`; `zanzibar.PersistedSchemaRefused` and
+  `zanzibar.store.PersistedSchemaRefused` are the same class. A schema text you pass for a
+  store with no stored schema still raises `ShapeNoLongerAccepted`; its `.instead` (the
+  meaning-preserving rewrite) is now documented.
+- **Clearer refusals** (TK153): a write to a relation the schema does not declare (or on
+  an undeclared type) now reads `tuple ... names an undeclared relation doc#vewer: type
+  'doc' declares no relation 'vewer'; did you mean 'viewer'?` instead of starting with
+  "matches no declared type restriction"; a restriction `[team#member]` with no
+  `type team` says the TYPE is undeclared (and a wildcard restriction keeps its `:*`,
+  `[team:*#member]`); a write on a declared type that has no relations says `type 'folder'
+  declares no relations` instead of calling the type undeclared; `MissingDeltaProcessor`
+  says where `DeltaProcessor` imports from.
+- **Short reprs** (TK153): a `RuleSet` prints as `RuleSet(12 rules and filters, 1 boolean
+  relations)`, so `save_schema`'s return value no longer prints every compiled rule, and
+  `SchemaRecord` / `IndexCursor` name their fields even after a commit expired them (they
+  printed as `SchemaRecord()`).
+- **`help()` text is ASCII** (TK153): public docstrings no longer carry characters such as
+  the section sign or circled digits, which raised `UnicodeEncodeError` when printed to a redirected
+  Windows console.
+- The `ClosureFanoutExceeded` docstring no longer says the cap cannot bite at the 100,000
+  default: a grant or ban over a group of more than 100,000 members is refused (TK153).
 
 ### Added
+- `compile_ruleset(..., declared_types=...)` (TK153): the schema text's `type` lines, used
+  only to word an admission refusal; `parse_openfga_schema` passes them for you.
+- **`zanzibar.graphindex.DeltaProcessor` is public** (TK153): the processor that maintains
+  the `and` / `but not` relations, which `MissingDeltaProcessor` tells a caller who drives
+  the apply step by hand to pass. A `Store` still builds its own.
 - **The OpenFGA tuple form** (TK123): `Store.add_tuple("user:alice", "viewer", "doc:d1")`,
   with a userset as `"group:eng#member"` and every user as `"user:*"`; the same for
   `remove_tuple`, `check(user, relation, object, *, at_least=None)`, `lookup("user:alice")`,

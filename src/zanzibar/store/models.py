@@ -19,10 +19,47 @@ index that cannot advance is never served as if it were merely behind.
 # Provenance (moved out of the docstring, TK123 item 14): spec §2.3; spec §4; spec §2.6;
 # TK111.
 
+import contextlib
 import time
 
 from sqlalchemy import Index
+from sqlalchemy import inspect as _sa_inspect
 from sqlmodel import Field, SQLModel, UniqueConstraint
+
+
+def _row_repr(row, fields: tuple[str, ...], short: frozenset[str] = frozenset()) -> str:
+    """A repr naming ``fields`` that never prints an empty ``Model()``.
+
+    SQLModel's own repr reads the instance ``__dict__``, which a ``commit()`` EXPIRES, so a
+    committed row printed as ``SchemaRecord()`` (0.0.5 install trial, F6). Reading an
+    expired attribute on a row still in its session reloads it (one SELECT, as any
+    attribute access would), under ``no_autoflush``: printing a row never flushes the
+    session's pending writes, so a ``print`` or a log line cannot fail or commit-order the
+    caller's transaction. A value that cannot be read (detached, or a session that must
+    roll back first) prints as ``?`` instead of raising from ``repr``. A field in
+    ``short`` prints as its length."""
+    # TK153 F6, 2026-10-17. no_autoflush: TK153 review fix, same day -- without it the
+    # reload flushed pending rows, and a conflicting one left the session needing rollback.
+    state = _sa_inspect(row)
+    session = state.session
+    guard = session.no_autoflush if session is not None else contextlib.nullcontext()
+    parts = []
+    unloaded = state.unloaded
+    with guard:
+        for name in fields:
+            if name in unloaded and session is None:
+                parts.append(f'{name}=?')
+                continue
+            try:
+                value = getattr(row, name)
+            except Exception:     # noqa: BLE001 -- a repr must not raise
+                parts.append(f'{name}=?')
+                continue
+            if name in short and isinstance(value, str):
+                parts.append(f'{name}=<{len(value)} chars>')
+            else:
+                parts.append(f'{name}={value!r}')
+    return f"{type(row).__name__}({', '.join(parts)})"
 
 
 class SchemaRecord(SQLModel, table=True):
@@ -37,6 +74,10 @@ class SchemaRecord(SQLModel, table=True):
     schema_text: str
     object_wildcard_shapes: str = Field(default='[]')   # JSON: [[type, relation], ...]
     created_at: float = Field(default_factory=time.time)
+
+    def __repr__(self) -> str:
+        return _row_repr(self, ('store_id', 'schema_text', 'object_wildcard_shapes'),
+                         short=frozenset({'schema_text'}))
 
 
 class TupleLog(SQLModel, table=True):
@@ -96,3 +137,7 @@ class IndexCursor(SQLModel, table=True):
     # ``Store.index_stalled``.
     stalled_after: int | None = Field(default=None)
     stall_error: str | None = Field(default=None)
+
+    def __repr__(self) -> str:
+        return _row_repr(self, ('index_store_id', 'source_store_id', 'applied_log_id',
+                                'stalled_after'))

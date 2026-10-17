@@ -142,29 +142,37 @@ class PathCountExceeded(IndexResourceLimit):
 class ClosureFanoutExceeded(IndexResourceLimit):
     """The per-write closure fan-out cap refused a write.
 
-    A subclass, and the ONE refusal family that must not be promoted to
-    ``InvariantViolation`` by ``zanzibar.store.apply._apply_row``.
+    The cap bounds how many permission-closure rows ONE write may add, and so how long
+    that write holds the store's write locks; it is a blast-radius bound, not an
+    authorization policy. It is set by the ``ZANZIBAR_MAX_CLOSURE_FANOUT`` environment
+    variable (default 100,000; ``0`` disables it) or ``ReachabilityIndex(
+    max_closure_fanout=...)``. The refusal is atomic: the write is absent from the tuple
+    log, the set engine and the graph index alike, so both backends still agree.
 
-    WHY IT NEEDS ITS OWN TYPE. Every other ``AdmissionRejected`` family is a property
-    of the tuple and the schema, so ``TupleSource`` admission decides it BEFORE the row
-    reaches the log; if one of those fires during replay the log really does contain an
-    inadmissible row, and "corruption or a validity-parity bug" is the right verdict.
-    The fan-out cap is different in kind: it is an INDEX-side resource limit over the
-    materialised closure, ``TupleSource`` has no knowledge of ``max_closure_fanout``,
-    and the same tuple is admissible or not depending on how large the closure has
-    since grown. So a cap refusal during replay is neither corruption nor a parity bug
-    -- it is a correctly-admitted row that the index now declines to materialise, and
-    the store cannot advance past it until the cap is raised.
+    It can bite at the default: granting, banning or adding a member to a group whose
+    closure would grow by more than 100,000 rows -- for example a grant to a group of more
+    than 100,000 members -- is refused. Under ``but not`` a ban is such a write too, and it
+    is capped like any other.
 
-    Found 2026-07-29 while measuring the hub-topology DoS: because
-    ``AdmissionRejected`` subclasses ``ValueError`` and ``_apply_row`` promotes every
-    ``ValueError``, a tuned-down cap surfaced through ``Store`` as
-    ``InvariantViolation('... this is corruption or a validity-parity bug ...')`` --
-    the exact opposite of what ``src/zanzibar/graphindex/core.py``'s raise site says in its own
-    comment ("not an InvariantViolation, because nothing is corrupt"). It does not bite
-    at the 100,000 default, which is why no test caught it; it bites the moment anyone
-    follows the cap's own error message and tunes it down.
+    WHY IT NEEDS ITS OWN TYPE. Every other ``AdmissionRejected`` family is a property of
+    the tuple and the schema, decided before the row reaches the log. The fan-out cap is
+    an INDEX-side resource limit over the materialised closure: the same tuple is
+    admissible or not depending on how large the closure has grown. So it is enforced on
+    synchronous writes only. A row already in the log that the index replays
+    (``Store.catch_up``, ``build_index``) is applied with a logged warning instead,
+    because refusing a committed row would stall the index.
+
+    A subclass of ``IndexResourceLimit``, which ``zanzibar.store.apply._apply_row``
+    does not promote to ``InvariantViolation``: a cap refusal is never corruption.
     """
+    # Provenance: corrected 2026-10-17 (TK153; the TK150 scout,
+    # docs/closure-fanout-cost-2026-10-14.md Correction 2026-10-16 (c)). The old text said
+    # the cap "does not bite at the 100,000 default, which is why no test caught it" (false
+    # since TK112: docs/spec-deviations.md "Corrected 2026-10-03b") and that the store
+    # "cannot advance past" an over-cap row (false since replay runs inside
+    # ReachabilityIndex.fanout_cap_suspended). Found 2026-07-29 while measuring the
+    # hub-topology DoS: a tuned-down cap surfaced through the store as
+    # InvariantViolation('... corruption or a validity-parity bug ...').
     # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-6a.
 
 
@@ -346,7 +354,10 @@ class ShapeNoLongerAccepted(SchemaError):
     A ``SchemaError`` (so a ``ValueError``) subclass, so every caller that catches the
     parser's refusals is unchanged. A consumer usually catches ``SchemaError`` (a fresh
     schema) or ``PersistedSchemaRefused`` (a stored one); the class is exported from the
-    top level with every other exception."""
+    top level with every other exception.
+
+    ``instead`` (a ``str``) is the meaning-preserving rewrite, in words a user can act on,
+    for example ``"change the line to 'schema 1.1'"``; the message ends with it too."""
     # Provenance (moved out of the docstring, TK123 item 14): TK137 (2026-10-14); S7 / S8 are
     # its row items.
     # Provenance (moved out of the docstring, TK123 item 14): review challenge C10 in
@@ -356,3 +367,40 @@ class ShapeNoLongerAccepted(SchemaError):
     def __init__(self, message: str, instead: str):
         super().__init__(message)
         self.instead = instead
+
+
+class PersistedSchemaRefused(ZanzibarError, ValueError):
+    """A store's PERSISTED schema text uses a shape this version refuses, so the store
+    cannot be opened.
+
+    Every open re-parses the stored text (the compiled schema is cache), so a store saved
+    by zanzibar-index 0.0.4 or earlier with a shape 0.0.5 refuses stops opening. The
+    message says so, quotes the parser's refusal, and gives the rewrite that keeps the
+    meaning the store was serving, so the break reads as a version break, not corruption.
+    There is no lenient mode on purpose: schemas are write-once, and a store opened under
+    a schema the parser refuses would run text no fresh store may hold. ``store_id``,
+    ``refusal`` (the parser's ``ShapeNoLongerAccepted``, also ``__cause__``) and
+    ``instead`` are attributes. A ``ValueError`` subclass, as the parser's refusal was.
+
+    It is the ONE type for this condition, whatever opens the store: ``Store(session,
+    id)`` with or without ``schema=``, ``SetEngine(session, id, ...)`` with the old text,
+    a rewritten text or none, ``open_set_engine``, ``save_schema``, ``ensure_schema``
+    and ``build_index``. A schema text YOU pass that uses such a shape, for a store with
+    no persisted schema, is ``ShapeNoLongerAccepted`` instead: nothing is stored yet, so
+    there is nothing to migrate."""
+    # Provenance: TK153 F17 (2026-10-17) made SetEngine raise this too; it used to raise
+    # SchemaMismatch (rewritten text) or ShapeNoLongerAccepted (the old text) for the same
+    # stored store. Moved here from store/schema_io.py so the set engine can raise it.
+    # Provenance (moved out of the docstring, TK123 item 14): TK137.
+    # Provenance (moved out of the docstring, TK123 item 14): `TK137` review challenge C10,
+    # 2026-10-14.
+
+    def __init__(self, store_id: str, refusal: ShapeNoLongerAccepted):
+        self.store_id = store_id
+        self.refusal = refusal
+        self.instead = refusal.instead
+        super().__init__(
+            f"store {store_id!r}: its persisted schema was saved by zanzibar-index 0.0.4 "
+            f"or earlier using a shape this version refuses: {refusal}. To rewrite: "
+            f"{refusal.instead}. Schemas are write-once, so the rewritten schema needs a NEW "
+            f"store id, with this store's tuples written again (see the 0.0.5 changelog).")

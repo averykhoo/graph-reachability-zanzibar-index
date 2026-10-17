@@ -131,8 +131,9 @@ def _require_proc_for_boolean_schema(ruleset: RuleSet, proc: DeltaProcessor | No
             'advance_index(..., proc=None) on a schema with boolean (and / but not) '
             'relations would build a graph index that disagrees with the set engine: '
             'the derived relations are only maintained by the delta processor. Pass '
-            'DeltaProcessor(widx, ruleset.compiled) as proc, or drive the index through '
-            'Store (refresh() / catch_up()), which does.')
+            'DeltaProcessor(widx, ruleset.compiled) as proc (from zanzibar.graphindex '
+            'import DeltaProcessor), or drive the index through Store (refresh() / '
+            'catch_up()), which does.')
 
 
 def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
@@ -164,8 +165,8 @@ def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
     nothing.
 
     ``rows_hint`` is the sync fast path: the just-flushed ``TupleLog``
-    rows this transaction appended, handed straight through so ⑤ (re-SELECTing rows
-    this transaction wrote) is skipped. It is USED only when it is provably equal to
+    rows this transaction appended, handed straight through so the re-SELECT of the rows
+    this transaction wrote is skipped. It is USED only when it is provably equal to
     what ``log_rows`` would return -- non-empty, its first id is exactly one past the
     (post-refresh) cursor, and its ids are strictly contiguous ascending -- so the
     contract above stays literally true: same contiguous prefix, same monotone cursor

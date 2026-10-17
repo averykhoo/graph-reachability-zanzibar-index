@@ -22,38 +22,13 @@ from zanzibar.setengine import SetEngine
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import RuleSet, parse_openfga_schema, parse_schema_ast, validate_store_id
 from zanzibar.schema.syntax import first_schema_difference
-# ``SchemaMismatch`` moved to ``zanzibar.schema.errors`` (TK123 A53) so the set engine can
-# raise it without importing this layer; re-exported here, the same class object.
-from zanzibar.schema.errors import SchemaMismatch, ShapeNoLongerAccepted, ZanzibarError  # noqa: F401
+# ``SchemaMismatch`` (TK123 A53) and ``PersistedSchemaRefused`` (TK153 F17) live in
+# ``zanzibar.schema.errors`` so the set engine can raise them without importing this
+# layer; re-exported here, the same class objects.
+from zanzibar.schema.errors import (PersistedSchemaRefused, SchemaMismatch,  # noqa: F401
+                                    ShapeNoLongerAccepted, ZanzibarError)
 
 from .models import SchemaRecord
-
-
-class PersistedSchemaRefused(ZanzibarError, ValueError):
-    """A store's PERSISTED schema text uses a shape this version refuses, so the store
-    cannot be opened.
-
-    Every open re-parses the stored text (the compiled schema is cache), so a store saved
-    by zanzibar-index 0.0.4 or earlier with a shape 0.0.5 refuses stops opening. The
-    message says so, quotes the parser's refusal, and gives the rewrite that keeps the
-    meaning the store was serving, so the break reads as a version break, not corruption.
-    There is no lenient mode on purpose: schemas are write-once, and a store opened under
-    a schema the parser refuses would run text no fresh store may hold. ``store_id``,
-    ``refusal`` (the parser's ``ShapeNoLongerAccepted``, also ``__cause__``) and
-    ``instead`` are attributes. A ``ValueError`` subclass, as the parser's refusal was."""
-    # Provenance (moved out of the docstring, TK123 item 14): TK137.
-    # Provenance (moved out of the docstring, TK123 item 14): `TK137` review challenge C10,
-    # 2026-10-14.
-
-    def __init__(self, store_id: str, refusal: ShapeNoLongerAccepted):
-        self.store_id = store_id
-        self.refusal = refusal
-        self.instead = refusal.instead
-        super().__init__(
-            f"store {store_id!r}: its persisted schema was saved by zanzibar-index 0.0.4 "
-            f"or earlier using a shape this version refuses: {refusal}. To rewrite: "
-            f"{refusal.instead}. Schemas are write-once, so the rewritten schema needs a NEW "
-            f"store id, with this store's tuples written again (see the 0.0.5 changelog).")
 
 
 class StoreNotFound(ZanzibarError, KeyError):
@@ -246,14 +221,17 @@ def _verify_same_schema(row: SchemaRecord, schema_text: str,
 def _schema_difference(store_id: str, stored_text: str, schema_text: str) -> str | None:
     """``None`` when the passed text parses to the stored text's schema, up to the order
     of type blocks, ``define`` lines and restriction lists; else the first differing
-    ``type#relation`` (TK123 item 18). Identical text short-circuits, so a stored schema
-    is never re-parsed just to be reopened verbatim. A passed text that does not parse
-    raises the parser's own error; a STORED text refused since `TK137` raises
-    ``PersistedSchemaRefused`` (C10)."""
-    if stored_text == schema_text:
-        return None
+    ``type#relation`` (TK123 item 18). A passed text that does not parse raises the
+    parser's own error; a STORED text refused since `TK137` raises
+    ``PersistedSchemaRefused`` (C10), including when the passed text IS the stored text
+    (identical text is parsed once, under the persisted-schema wrapper, not twice)."""
+    # TK153 F17 review (2026-10-17): identical text used to return None BEFORE any parse, so
+    # save_schema(id, <stored refused text>) raised the bare ShapeNoLongerAccepted from its
+    # own later parse, and ensure_schema returned (row, None) silently.
     with _persisted_schema_parse(store_id):
         stored_ast = parse_schema_ast(stored_text)
+    if stored_text == schema_text:
+        return None
     diff = first_schema_difference(stored_ast, parse_schema_ast(schema_text))
     if diff is None:
         return None
@@ -281,7 +259,7 @@ def open_graph_index(session: Session, store_id: str,
                      *, create_store_row: bool = True,
                      ruleset: RuleSet | None = None) -> tuple[WildcardIndex, RuleSet]:
     """Open the graph index on a self-describing store: load + compile the schema,
-    return the wildcard façade and its compiled RuleSet (plans included).
+    return the wildcard facade and its compiled RuleSet (plans included).
     ``ruleset`` skips re-parsing a schema the caller just compiled (bootstrap reuse)."""
     if ruleset is None:
         schema_text, shapes = load_schema(session, store_id)

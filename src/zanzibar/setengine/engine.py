@@ -44,8 +44,10 @@ from zanzibar.schema import (
     Exclusion,
 )
 from zanzibar.schema.syntax import (declared_relations, first_schema_difference,
-                                    no_restriction_reason)
-from zanzibar.schema.errors import (SchemaMismatch, ShapeNoLongerAccepted, ZanzibarError,
+                                    no_restriction_message)
+from zanzibar.schema.parser import _parse_schema_ast_checked
+from zanzibar.schema.errors import (PersistedSchemaRefused, SchemaMismatch,
+                                    ShapeNoLongerAccepted, ZanzibarError,
                                     reject_ellipsis_predicate)
 from .setops import SetOps, DEFAULT_SETOPS
 from .models import RelationTuple
@@ -184,6 +186,22 @@ def _schema_record_row(session: Session, store_id: str):
         ).first()
 
 
+def _refuse_persisted_shape(session: Session, store_id: str) -> None:
+    """Called when the schema text given to ``SetEngine`` (or read from the store, when
+    none was given) uses a shape this version refuses: raise ``PersistedSchemaRefused``
+    if ``store_id``'s PERSISTED text is refused the same way, and return otherwise (the
+    caller re-raises the parser's own refusal of a text that is only the caller's)."""
+    # TK153 F17: the old text passed again used to surface as the bare parser refusal, with
+    # nothing saying the STORE is the thing that cannot open.
+    record = _schema_record_row(session, store_id)
+    if record is None:
+        return
+    try:
+        parse_schema_ast(record[0])
+    except ShapeNoLongerAccepted as stored:
+        raise PersistedSchemaRefused(store_id, stored) from stored
+
+
 def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
                                   object_wildcard_shapes) -> None:
     """Raise ``SchemaMismatch`` unless ``(schema, object_wildcard_shapes)`` is the
@@ -208,11 +226,9 @@ def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
     try:
         stored_ast = parse_schema_ast(stored_text)
     except ShapeNoLongerAccepted as e:
-        # Provenance: TK137 (the shapes 0.0.5 stopped accepting).
-        raise SchemaMismatch(
-            f'SetEngine on store {store_id!r}: the persisted schema of this store uses a shape '
-            f'this version refuses ({e}), so it cannot equal the schema passed here, and '
-            f'the store cannot be opened (see the 0.0.5 release notes).') from e
+        # TK153 F17: the same type every other entry point raises for a stored text a
+        # newer version refuses (it was SchemaMismatch here, a third type for one cause).
+        raise PersistedSchemaRefused(store_id, e) from e
     diff = first_schema_difference(stored_ast, ast)     # TK123 item 18
     if diff is not None:
         diff = (diff.replace('only in the first schema', 'only in the persisted schema')
@@ -558,7 +574,11 @@ class SetEngine:
         # sync write path pays nothing.
         self.log_governed = False
         self._governance_probed_txn = None
-        self.ast = parse_schema_ast(schema)
+        try:
+            self.ast, self._declared_types = _parse_schema_ast_checked(schema)
+        except ShapeNoLongerAccepted:
+            _refuse_persisted_shape(session, store_id)
+            raise
         self._declared = None      # admission-message facts, built on the first refusal
         # P9: the per-Direct-node restriction key set is fully determined by the
         # (frozen, lifetime-stable) AST node -- cache it once instead of rebuilding
@@ -590,7 +610,8 @@ class SetEngine:
             self._ruleset = ruleset
         else:
             try:
-                self._ruleset = compile_ruleset(self.ast, self.schema_info)
+                self._ruleset = compile_ruleset(self.ast, self.schema_info,
+                                                declared_types=self._declared_types)
             except DoublyBridgedShapeError:
                 # Doubly-bridged shapes (F1/F2, 2026-07-17) must reject on BOTH
                 # backends identically -- the state is unconstructible everywhere,
@@ -1256,11 +1277,10 @@ class SetEngine:
         if not any(f.apply(triple) for f in self.filters):
             # TK123 item 17: the same explanation the graph's ``RuleSet.apply`` gives.
             if self._declared is None:
-                self._declared = declared_relations(self.ast)
-            raise AdmissionRejected(
-                f"tuple {s_type}:{s_name}#{s_pred} {relation} {o_type}:{o_name} matches no "
-                f"declared type restriction for {o_type}#{relation}"
-                + no_restriction_reason(self._declared, o_type, relation))
+                self._declared = declared_relations(self.ast, self._declared_types)
+            raise AdmissionRejected(no_restriction_message(
+                self._declared, f"{s_type}:{s_name}#{s_pred} {relation} {o_type}:{o_name}",
+                o_type, relation))
 
         # (3) cycle rejection (§6.2): reject usersets whose membership would loop, matching
         #     the graph backend's cycle detection. Side-effect free -- uses existing ids only.

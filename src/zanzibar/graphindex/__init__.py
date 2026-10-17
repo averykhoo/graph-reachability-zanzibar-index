@@ -1,5 +1,6 @@
 """The graph index: the materialized transitive closure (``ReachabilityIndex``) plus
-wildcard bridges and the boolean derived-relation read path (``WildcardIndex``).
+wildcard bridges and the boolean derived-relation read path (``WildcardIndex``), whose
+derived (``and`` / ``but not``) relations ``DeltaProcessor`` maintains.
 
 ``check`` is a few indexed lookups whatever the data size; writes pay to keep the closure
 current. The state lives in ``zanzibar_*`` tables (``Node``, ``Edge``, ``IndexStore``).
@@ -11,6 +12,7 @@ from .core import ReachabilityIndex, AdmissionRejected, WriteLockUnsafe
 from .invariants import InvariantViolation
 from .wildcard import WildcardIndex, LookupResult
 from .outbox import outbox_watermark, prune_outbox
+from .processor import DeltaProcessor
 
 __all__ = [
     "IndexStore",
@@ -27,6 +29,9 @@ __all__ = [
     "WriteLockUnsafe",
     "WildcardIndex",
     "LookupResult",
+    # Maintains the derived (and / but not) relations; pass one as ``proc`` when you
+    # drive the apply step yourself (``Store`` builds its own).
+    "DeltaProcessor",
     # Manual outbox retention (never auto-called).
     "outbox_watermark",
     "prune_outbox",

@@ -12,21 +12,21 @@ representation over subject wildcards:
 
 Extensional meaning over a population ``pop(shape) -> ids``:
 
-    ext(M) = pos ∪ ( (⋃ pop(shape) for shape in stars) − neg )        # pos wins over neg
+    ext(M) = pos | ( (UNION pop(shape) for shape in stars) - neg )        # pos wins over neg
 
 Every operation reduces to one provably-correct recipe: compute the target extensional
 set ``E`` and target star set ``S`` for the operation, then renormalize
 
-    starpop = ⋃ pop(shape) for shape in S
-    pos = E − starpop      # ids only representable explicitly
-    neg = starpop − E      # starred ids that must be excluded
+    starpop = UNION pop(shape) for shape in S
+    pos = E - starpop      # ids only representable explicitly
+    neg = starpop - E      # starred ids that must be excluded
 
 which restores ``ext = E`` exactly while keeping ``stars = S`` for intensional queries.
-The star bookkeeping per op mirrors the star × boolean table:
+The star bookkeeping per op mirrors the star x boolean table:
 
     union     S = stars_a | stars_b        (covered if either)
-    intersect S = stars_a & stars_b        (covered iff both)          -- '*' ∈ A∧B
-    subtract  S = stars_a - stars_b        (covered in A, not in B)    -- '*' ∈ A−B
+    intersect S = stars_a & stars_b        (covered iff both)          -- '*' in A&B
+    subtract  S = stars_a - stars_b        (covered in A, not in B)    -- '*' in A-B
 
 This module has NO engine dependencies; it is validated by a brute-force
 property suite under both ``SetOps`` implementations.
@@ -148,5 +148,5 @@ def subtract(a: MemberSet, b: MemberSet, ops: SetOps, pop: Population) -> Member
 
 
 def materialize(m: MemberSet, ops: SetOps, pop: Population) -> frozenset:
-    """Extensional set over the known population (star ⇒ whole population). Test/debug aid."""
+    """Extensional set over the known population (star => whole population). Test/debug aid."""
     return frozenset(_ext(m, ops, pop))

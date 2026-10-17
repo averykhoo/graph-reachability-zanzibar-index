@@ -27,6 +27,7 @@ from .errors import (
     IDENTIFIER_CHARSET,
     IndexResourceLimit,
     PathCountExceeded,
+    PersistedSchemaRefused,
     SchemaError,
     SchemaMismatch,
     ShapeNoLongerAccepted,
@@ -152,6 +153,7 @@ __all__ = [
     'DoublyBridgedShapeError',
     'CyclicDerivedDependency',
     'SchemaMismatch',
+    'PersistedSchemaRefused',
     'MalformedTupleString',
     'UnprovenExtensionWarning',
 ]

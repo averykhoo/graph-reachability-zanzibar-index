@@ -5,7 +5,7 @@ Part of `zanzibar.schema`.
 # Provenance (moved out of the docstring, TK123 item 14): split out of the single-file module
 # by TK120 (2026-10-06).
 from .errors import IDENTIFIER_CHARSET, SchemaError, ShapeNoLongerAccepted, is_valid_identifier
-from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _RESERVED, _directs_only, _iter_directs, _iter_ttus
+from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _RESERVED, _directs_only, _iter_directs, _iter_ttus, _render_restriction
 from .rules import parse_relation_rule
 
 
@@ -319,12 +319,20 @@ def parse_schema_ast(schema: str) -> SchemaAST:
     """
     # Provenance (moved out of the docstring, TK123 item 14): TK137.
     # Provenance (moved out of the docstring, TK123 item 14): spec §2.2; `TK137`, 2026-10-14.
+    return _parse_schema_ast_checked(schema)[0]
+
+
+def _parse_schema_ast_checked(schema: str) -> tuple[SchemaAST, frozenset[str]]:
+    """`parse_schema_ast` plus every type a ``type`` line declared. The admission
+    messages need the second value (`syntax.py::declared_relations`): a relation-less
+    ``type folder`` that no restriction names leaves no trace in the AST, and a write on it
+    must not be told the type is undeclared (TK153 review, 2026-10-17)."""
     ast, declared_types = _parse_schema_ast_declared(schema)
-    _validate_ast_consistency(ast)
+    _validate_ast_consistency(ast, declared_types)
     _validate_restriction_types_declared(ast, declared_types)
     _validate_tuplesets_direct(ast)
     _validate_stratified_negation(ast)
-    return ast
+    return ast, declared_types
 
 
 def _parse_schema_ast_unchecked(schema: str) -> SchemaAST:
@@ -543,7 +551,7 @@ def _iter_refs(expr: Expr):
         yield from _iter_refs(expr.subtract)
 
 
-def _validate_ast_consistency(ast: SchemaAST) -> None:
+def _validate_ast_consistency(ast: SchemaAST, declared_types=None) -> None:
     """A schema must be SELF-CONSISTENT: every referenced relation is declared, and no
     relation depends on itself through schema references (ASK-1, user decision
     2026-09-26). OpenFGA refuses both (`pkg/typesystem/typesystem.go::
@@ -576,7 +584,12 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
     message ``depend on themselves``; `tests/genswarm.py::REJECTION_WITNESSES` matches on
     them.
 
-    The oracle carries an independent twin (`tests/oracle.py::_validate_consistency`)."""
+    The oracle carries an independent twin (`tests/oracle.py::_validate_consistency`).
+
+    ``declared_types`` (the final set of ``type`` lines, when the caller has it) only
+    sharpens a MESSAGE: a userset restriction ``[team#member]`` whose TYPE is undeclared is
+    reported as an undeclared type, not just an undeclared relation (TK153 F9). It
+    changes no accept/refuse verdict."""
     deps: dict[tuple[str, str], set[tuple[str, str]]] = {}
     for (object_type, relation), expr in ast.items():
         where = f'{object_type}#{relation}'
@@ -590,8 +603,17 @@ def _validate_ast_consistency(ast: SchemaAST) -> None:
                 # INSTEAD: declare it (``type group`` / ``define member: [user]``), or write
                 # ``[group]`` if a group object itself was meant.
                 if r.predicate != '...' and (r.type, r.predicate) not in ast:
+                    # ``_render_restriction`` keeps the ``:*`` of ``[team:*#member]``,
+                    # which the message used to drop (TK153 review, 2026-10-17).
+                    shown = _render_restriction(r)
+                    if declared_types is not None and r.type not in declared_types:
+                        raise SchemaError(
+                            f'{where}: restriction [{shown}] names an '
+                            f'undeclared type {r.type!r}, so {r.type}#{r.predicate} is an '
+                            f'undeclared relation; declare it (type {r.type} with define '
+                            f'{r.predicate}: ...) or fix the spelling')
                     raise SchemaError(
-                        f'{where}: restriction [{r.type}#{r.predicate}] names an undeclared '
+                        f'{where}: restriction [{shown}] names an undeclared '
                         f'relation {r.type}#{r.predicate}')
         out = deps.setdefault((object_type, relation), set())
         for ref in _iter_refs(expr):

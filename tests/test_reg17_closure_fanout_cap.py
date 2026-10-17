@@ -40,9 +40,10 @@ from zanzibar.schema import AdmissionRejected, ClosureFanoutExceeded
 # Largest single-write closure expansion the existing suite produces, measured
 # 2026-07-27 by instrumenting the expansion path and running both suites to
 # completion: 44 rows over `tests/` (727 tests) and 124 over `formal/conformance/`
-# (391 tests). The default must sit far above the larger of the two or it would start
-# refusing writes that are legal today -- including inside the Lean differential,
-# where a spurious rejection is silently absorbed as "the graph rejected it"
+# (391 tests). Re-measured 2026-10-17 (TK153): tests/ max 93 apart from this module's
+# deliberate 440-row control; formal/conformance/ 124 (2026-10-16). The default must
+# sit far above the larger of the two or it would start refusing writes that are legal
+# today -- including inside the Lean differential, where a spurious rejection is silently absorbed as "the graph rejected it"
 # (ZT-P4-7) and would shrink both corners of the comparison rather than fail.
 MEASURED_SUITE_MAX_FANOUT = 124
 

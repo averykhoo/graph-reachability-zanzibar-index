@@ -173,7 +173,7 @@ class PDerivedComputed:
 @dataclass(frozen=True, slots=True)
 class PDerivedUserset:
     """A tainted userset restriction ``[T#P]`` (P derived on T). Raw tuples land on this
-    node's own storage leaf; membership is ∃ stored userset x: subject ∈ P(x)."""
+    node's own storage leaf; membership is exists stored userset x: subject in P(x)."""
     subject_type: str
     subject_predicate: str
     predicate: str          # the storage leaf ('<relation>.<index>')
@@ -183,7 +183,7 @@ class PDerivedUserset:
 @dataclass(frozen=True, slots=True)
 class PDerivedTTU:
     """``target from tupleset`` where the *target* is derived (tupleset untainted):
-    ∃ tupleset-parent p: derived check (subject, target, p). ``parent_types`` are the
+    exists tupleset-parent p: derived check (subject, target, p). ``parent_types`` are the
     tupleset's member entity types, resolved at compile so the processor never walks
     the AST."""
     # Provenance (moved out of the docstring, TK123 item 14): boolean spec §1.11.
@@ -255,7 +255,7 @@ class Plan:
     ``stars_fn(ctx) -> frozenset[shape]`` are closure-composed (no AST walk, no
     per-node dispatch, short-circuit); ``ctx`` is the processor's evaluation context
     bound to one (store, object). ``leaf_nodes`` is index-aligned with ``leaves`` --
-    the authoritative spec→tree-node pairing (never reconstruct it by name)."""
+    the authoritative spec->tree-node pairing (never reconstruct it by name)."""
     key: tuple[str, str]                # (object_type, relation)
     tree: object
     leaves: tuple[LeafSpec, ...]

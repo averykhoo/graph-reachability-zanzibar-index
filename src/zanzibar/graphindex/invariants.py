@@ -819,7 +819,7 @@ def verify_outbox_deltas(session: Session, store_id: str, after_id: int = 0) -> 
     """Delta-scoped verification: the outbox names exactly the
     pairs whose reachability allegedly flipped. For each pair's *final* action in the
     range, recompute reachability by BFS over direct edges and compare with both the
-    closure row and the claimed flip. O(affected × local neighbourhood) -- the full
+    closure row and the claimed flip. O(affected x local neighbourhood) -- the full
     closure recompute stays a test-suite job, never a per-write cost."""
     # Provenance (moved out of the docstring, TK123 item 14): boolean spec §8.3.
     rows = outbox_rows(session, store_id, after_id)

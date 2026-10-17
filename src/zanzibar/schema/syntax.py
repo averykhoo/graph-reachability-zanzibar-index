@@ -114,10 +114,15 @@ class DeclaredRelations:
     restrictions: dict[tuple[str, str], tuple[str, ...]]
 
 
-def declared_relations(ast: SchemaAST) -> DeclaredRelations:
+def declared_relations(ast: SchemaAST,
+                       declared_types: frozenset[str] = frozenset()) -> DeclaredRelations:
+    # ``declared_types``: the ``type`` lines of the source text, when the caller parsed one
+    # (`parser.py::_parse_schema_ast_checked`). Without it a relation-less ``type folder``
+    # that no restriction names was reported as "not declared in the schema" (TK153
+    # review, 2026-10-17); with it the reason is "declares no relations".
     relations: dict[str, list[str]] = {}
     restrictions: dict[tuple[str, str], tuple[str, ...]] = {}
-    types: set[str] = set()
+    types: set[str] = set(declared_types)
     for (t, rel), expr in ast.items():
         types.add(t)
         relations.setdefault(t, []).append(rel)
@@ -154,6 +159,24 @@ def no_restriction_reason(declared: 'DeclaredRelations | None', object_type: str
         return (f": {object_type}#{relation} has no direct type restriction (it is "
                 f"computed from other relations), so tuples cannot be written to it")
     return f": it admits only {', '.join(allowed)}"
+
+
+def no_restriction_message(declared: 'DeclaredRelations | None', tuple_text: str,
+                           object_type: str, relation: str, *, derived: bool = False) -> str:
+    """The whole admission refusal for a tuple no declared type restriction admits, the
+    same on both backends. A write to a relation the schema does not declare (or on an
+    undeclared type) says so first -- ``names an undeclared relation doc#vewer`` -- rather
+    than talking about type restrictions of a relation that does not exist; every other
+    case keeps ``matches no declared type restriction for ...``. The reason
+    (``no_restriction_reason``) follows either lead."""
+    # TK153 F11 (2026-10-17): the lead used to be the restriction wording for every case.
+    reason = no_restriction_reason(declared, object_type, relation)
+    if declared is not None and (object_type not in declared.types
+                                 or relation not in declared.relations.get(object_type, ())):
+        return f"tuple {tuple_text} names an undeclared relation {object_type}#{relation}{reason}"
+    kind = 'derived relation ' if derived else ''
+    return (f"tuple {tuple_text} matches no declared type restriction for "
+            f"{kind}{object_type}#{relation}{reason}")
 
 
 def _canonical_expr(expr: Expr) -> Expr:

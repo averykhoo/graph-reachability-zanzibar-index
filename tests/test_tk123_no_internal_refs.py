@@ -211,7 +211,7 @@ def test_the_scanner_sees_what_it_claims_to():
                   'zanzibar.docs', 'H100'):
         assert not LEAK.search(clean), clean
     sites = {(r, q, k) for _p, r, t in _modules() for q, k, _n in _message_sites(t)}
-    assert ('store/schema_io.py', 'PersistedSchemaRefused.__init__', 'super-init') in sites
+    assert ('schema/errors.py', 'PersistedSchemaRefused.__init__', 'super-init') in sites  # moved by TK153 F17
     assert ('store/schema_io.py', 'StoreNotFound.__str__', '__str__') in sites
     n_raise = sum(1 for _p, _r, t in _modules() for n in ast.walk(t) if isinstance(n, ast.Raise))
     assert n_raise > 200, n_raise
