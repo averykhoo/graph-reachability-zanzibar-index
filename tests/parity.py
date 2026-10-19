@@ -291,6 +291,16 @@ class ParityEngine:
             for direct in _iter_directs(expr):
                 for r in direct.restrictions:
                     subject_shapes.add((r.type, r.predicate))
+        # TK144 (challenge C2): every userset shape (T, p) also brings (T, r) for EVERY
+        # declared relation r of T. OpenFGA's implicit userset self-relation reaches a
+        # userset no restriction names -- model C's group:1#admin is a viewer of doc:1
+        # through group#member, and stays one with every `[group#admin]` removed -- so a
+        # grid built from restriction shapes alone cannot see a backend that enumerates
+        # only own-object keys. This adds candidates and relaxes no property. Types with
+        # NO userset shape get the bounded self floor below instead (`_self_floor`).
+        for (t, p) in sorted(subject_shapes):
+            if p != '...':
+                subject_shapes.update((t, r) for (ot, r) in self.ast if ot == t)
 
         subjects: list[tuple[str, str, str]] = []
         for (s_type, s_pred) in sorted(subject_shapes):
@@ -326,6 +336,7 @@ class ParityEngine:
             queries = self._rng.sample(queries, self.grid_cap)
         if last is not None:
             queries += self._write_local_floor(last, subjects, targets, set(queries))
+        queries += self._self_floor(subject_shapes, targets, set(queries))
 
         # Layer B (the GUARANTEE): per leaf family, a known subject and a '*'
         # subject × a known object name and a ghost; plus one junk dotted target
@@ -343,6 +354,42 @@ class ParityEngine:
                 # '.zz-junk' can never collide with a real leaf: indices are numeric
                 queries.append((sp, st, sn, f'{rel}.zz-junk', o_type, GHOST_NAME))
         return queries
+
+    def _self_floor(self, subject_shapes: set[tuple[str, str]],
+                    targets: list[tuple[str, str]], have: set[tuple]) -> list[tuple]:
+        """TK144 review (2026-10-17): the implicit userset self-relation applies to EVERY
+        declared ``(T, r)``, but the grid offers ``T:o#r`` as a subject only for types that
+        have a userset shape (above), so 58 of 240 generated schemas left some declared
+        ``(T, r)`` unasked and a backend that applied the rule only to types some
+        ``[T#r]`` restriction names passed their grids. This floor asks, for every such
+        ``(T, r)`` and the first known name ``o`` of ``T``, ``T:o#r`` against every target
+        relation of ``T`` at ``o`` (the self hit and its same-object propagation).
+        Rng-free, after the cap, and bounded by ``|declared|`` x ``|relations of T|``
+        per type, instead of multiplying the uncapped write-local floor (adding every
+        declared shape to ``subjects`` grew it 2-4x on ``tests/fga_schemas/``).
+
+        Sabotage (2026-10-17, ``SAB144=S20``: the set engine's self hit only on types a
+        ``[T#r]`` restriction names), ``tests/test_schema_shapes.py -k drives_clean``:
+        with no mode ``3 passed``; S20 ``3 errors`` (heterogeneous_tupleset,
+        userset_over_derived, wildcard_userset_cross), first ``check parity broken after
+        add ('active_member', 'team', 't1', 'editor', 'folder', 'f1'): q=('editor',
+        'folder', 'f1', 'editor', 'folder', 'f1') set:py=False oracle=True``; S20 with the
+        instrument control G0 (this floor removed) ``3 passed`` -- so this floor, and
+        nothing else in that module, catches it."""
+        out: list[tuple] = []
+        for (t, r) in sorted(self.ast):
+            if (t, r) in subject_shapes:
+                continue
+            names = sorted(self._names_by_type.get(t, set()))[:1]
+            for n in names:
+                for (tt, rel) in targets:
+                    if tt != t:
+                        continue
+                    q = (r, t, n, rel, t, n)
+                    if q not in have:
+                        have.add(q)
+                        out.append(q)
+        return out
 
     @staticmethod
     def _write_local_floor(last: RawTuple, subjects: list[tuple[str, str, str]],

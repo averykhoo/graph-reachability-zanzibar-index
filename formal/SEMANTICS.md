@@ -277,6 +277,20 @@ This section is the normative definition, transcribed from the oracle
 (`tests/oracle.py::Oracle`), which the plan promotes to ground truth. The Lean
 `sem` mirrors it function-for-function.
 
+> **2026-10-17 (TK144): the normative spec is now `semR`, `sem` plus one disjunct.** OpenFGA
+> treats a concrete userset subject `T:o#r` as a member of its own DECLARED node
+> `(T, o, r)`, outside the rewrite (measured against OpenFGA v1.22.0,
+> `docs/tk138-userset-self-relation-2026-10-14.md`). `Spec/SelfRelation.lean::stepR` is
+> `step` with `selfHit subject otype oname rel ||` in front of the `evalE` of a declared
+> relation (an undeclared one stays `false`), where `selfHit` requires the subject to be a
+> concrete userset (`predicate ≠ BARE`, `name ≠ STAR`; star subjects never take it, D1)
+> equal to the node. `semAuxR` / `semR` are `semAux` / `sem` with `stepR`; T0a carries over
+> unchanged (`semR_fuel_stable`, same `fuelBound`). The oracle's twin is the disjunct in
+> `tests/oracle.py::Oracle.check.sat`. Everything below describes `sem`, which remains the
+> NON-reflexive base: the semantics the derived residue realises (the reconcile evaluates
+> without the self-relation) and the one the pre-TK144 theorems are about. The two agree on
+> every bare or star subject (`semR_eq_sem_of_not_userset`).
+
 ### 5.1 Shape of the evaluation
 
 `sem` fixes the query **subject** for the whole recursion and recurses over the
@@ -862,7 +876,7 @@ rather than quoting):*
   P4 empty residues / P5 node GC, under which no `Node` row is compared at all /
   ~~P6 leaf-family split~~ — RETIRED 2026-09-05, the model's logged write now folds the
   leaf-routed closure and those 76 rows are compared directly (`compared against Lean`
-  189 → 265, measured 2026-09-05 over the 25 in-fragment corpora) /
+  189 → 265, measured 2026-09-05 over the 25 corpora then in the fragment) /
   P7 `Residue.version`, declared 2026-07-27 — a MODELLING gap, not
   a representation difference: Lean's `Residue` has no version field, so I7 is gated by
   nothing formal).

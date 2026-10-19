@@ -50,6 +50,15 @@ class MemberSet:
     pos: object                               # FrozSet: concrete member ids
     stars: frozenset                          # covered star shapes (intensional)
     neg: object                               # FrozSet: exclusions within starred shapes
+    # TK144 (TK138 D3a): the KEY channel for members with no interned id. OpenFGA's
+    # implicit userset self-relation makes ``T:o#r`` a member of ``(T, o, r)`` (and of what
+    # depends on it) whether or not any tuple ever interned that key, and ``expand``
+    # never interns on read. ``ipos``: ``(type, name, predicate)`` keys that are members;
+    # ``ineg``: keys a star shape covers that are NOT members. Disjoint from the id
+    # universe (a key here has no id). Only ``SetEngine.expand``'s top-level self-relation
+    # correction fills them; the algebra below never sees a non-empty one.
+    ipos: frozenset = frozenset()
+    ineg: frozenset = frozenset()
 
     # --- membership (all intensional in `stars`, so ghost-safe) ---
 
@@ -65,6 +74,13 @@ class MemberSet:
 
     def contains_userset(self, uid: int, shape: Shape) -> bool:
         return self._contains(uid, shape)
+
+    def contains_key(self, key: tuple[str, str, str]) -> bool:
+        """Membership of an UNINTERNED ``(type, name, predicate)`` key: in ``ipos``, or
+        star-covered by its shape and not in ``ineg``."""
+        # Provenance: TK144 (the key channel of TK138 D3a).
+        t, _n, p = key
+        return key in self.ipos or ((t, p) in self.stars and key not in self.ineg)
 
 
 def empty(ops: SetOps) -> MemberSet:

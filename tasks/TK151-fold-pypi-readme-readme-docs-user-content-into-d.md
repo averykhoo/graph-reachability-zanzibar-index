@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-14
-moved: 2026-10-16
-updated: 2026-10-16
+moved: 2026-10-19
+updated: 2026-10-19
 closed:
 ---
 
@@ -50,3 +50,7 @@ USER DECISION 2026-10-16 (in chat): "Merge 143 into 151". TK143 (GitHub Pages do
 - TK143's read-first: docs/openfga-claims-audit-2026-10-13.md (what we claim about OpenFGA).
 
 USER DECISION 2026-10-16 (in chat): "We'll include all open items in 0.1.0, no rush to release." So 0.1.0 is no longer gated on this row alone. Session reading of "all open items" (recorded so the next session can check it with the user): the release-relevant set from the 2026-10-16 scoping, i.e. TK154, TK150, TK153, TK147, TK138/TK144 (landing 2), TK155, TK156, TK157 and this row (with TK143 folded in). The literal 64 open rows include HOLD/SOMEDAY and perf rows (R6-*) and Lean housekeeping; those are NOT read as release blockers unless the user says so. Order: this row lands LAST so the docs describe the final API.
+
+### 2026-10-19
+
+TK144 (TK138 landing 2) closed 2026-10-19 and adds a release obligation to the 0.1.0 cut this row gates: it flips ALLOW to DENY on a boolean model (OpenFGA implicit userset self-relation; e.g. vx in the selfrel_boolean_flip corpus), so the release MUST be a MINOR bump (0.0.5 -> 0.1.0), never a patch. __version__ stays 0.0.5 and the change is under CHANGELOG [Unreleased]. No separate release row exists, so this is recorded here rather than filed; the 0.1.0 cut (src/zanzibar/__init__.py::__version__ + the CHANGELOG heading) happens when this row lands last.

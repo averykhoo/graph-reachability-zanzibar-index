@@ -21,14 +21,17 @@ This file used to claim, flatly, that `GRAPH_FRAGMENT` is "inside GraphAdmission
 verbatim". That was FALSE for one corpus, and the Lean tree itself proves it
 false. Corrected 2026-07-26 (ZT-P3-3). The honest statement is:
 
-**(A) THEOREM-BACKED — `_THEOREM_BACKED`, all 25 corpora as of 2026-08-08.**
+**(A) THEOREM-BACKED — `_THEOREM_BACKED`, all 27 corpora as of 2026-10-17.**
 These satisfy `GraphAdmission` + `W4Fragment`, so the honesty theorems
 `graphRun_reached` / `graphRun_check_eq_sem` (`GraphIndex/Exec.lean`) compose
 with the final T2b `graph_correct` (`FullScope.lean`): whatever this driver
 prints for such a corpus is a value `graph_correct` covers, and a
 `lean-graph != spec` disagreement would CONTRADICT a machine-checked theorem —
-instant adjudication. The per-corpus fragment argument lives in `corpus.py`
-next to each entry.
+instant adjudication. Since TK144 (2026-10-17) the driver prints the REFLEXIVE public
+read, so the theorems that cover it are `graphRun_check_eq_semR` /
+`graphModeAnswersR_eq_semR` and `graph_correctR` (`GraphIndex/SelfRead.lean`), proved
+from the ones named above under the same bundles. The per-corpus fragment argument lives
+in `corpus.py` next to each entry.
 
 **(B) DIFFERENTIAL-ONLY — `_DIFFERENTIAL_ONLY`, now EMPTY.** The category is
 kept, deliberately: it is the shape this module needs the moment a corpus is
@@ -126,7 +129,8 @@ from formal.conformance.grid import (
 
 #: Corpora that satisfy `GraphAdmission` + `W4Fragment`, so the answers compared
 #: here are covered by `graph_correct` via `graphRun_reached` /
-#: `graphRun_check_eq_sem`. Adding a corpus here asserts you checked the
+#: `graphRun_check_eq_sem` (since TK144, 2026-10-17: by `graph_correctR` via
+#: `graphRun_check_eq_semR`, the read the driver prints). Adding a corpus here asserts you checked the
 #: fragment fields against `FullScope.lean` and wrote the argument down in
 #: `corpus.py` — see the n-ary block's entries for the shape that argument takes.
 _THEOREM_BACKED: frozenset[str] = frozenset({
@@ -198,6 +202,14 @@ _THEOREM_BACKED: frozenset[str] = frozenset({
     #     subject predicate is `...`).
     "reconvergent_diamond",
     "reconvergent_derived",
+    # Added 2026-10-17 (TK144, the implicit userset self-relation). Decided, not argued:
+    # `zcli` mode "fragment" reports `"inPremise": true` (GraphAdmission AND W4Fragment,
+    # every field true) for both, first-hand PROBE recorded in
+    # docs/tk138-userset-self-relation-2026-10-14.md (corrections 2026-10-17). Since TK144
+    # the graph mode prints the REFLEXIVE public read, covered by `graph_correctR` via
+    # `SelfRead.lean::graphRun_check_eq_semR` / `::graphModeAnswersR_eq_semR`.
+    "selfrel_cross_object",
+    "selfrel_cross_object_no_admin_restriction",
 })
 
 #: Corpora KNOWN to be outside the final theorems' scope, kept in the gate as an
@@ -218,7 +230,7 @@ _THEOREM_BACKED: frozenset[str] = frozenset({
 _DIFFERENTIAL_ONLY: frozenset[str] = frozenset()
 
 #: The split this module's docstring claims, asserted so the prose cannot rot.
-_EXPECTED_SPLIT = (25, 0)
+_EXPECTED_SPLIT = (27, 0)
 
 # Anti-vacuity floor for the graph query grid (ZT-P4-4). Measured 2026-07-26
 # over `GRAPH_FRAGMENT`: the smallest grid is `wildcard_public` at 7 queries

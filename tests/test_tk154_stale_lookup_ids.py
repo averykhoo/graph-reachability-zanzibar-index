@@ -189,7 +189,9 @@ def _graph_reuse_sequence(store: Store):
     on another doc. Returns the held result."""
     store.add_tuple('user:a', 'reader', 'doc:d')
     r = store.lookup_reverse('reader', 'doc:d')
-    assert store.result_keys(r) == {('user', 'a', '...')}
+    # TK144: the target's own userset doc:d#reader is a member of itself (OpenFGA's
+    # implicit self-relation); its node goes with user:a's when the tuple is removed.
+    assert store.result_keys(r) == {('user', 'a', '...'), ('doc', 'd', 'reader')}
     store.remove_tuple('user:a', 'reader', 'doc:d')
     store.add_tuple('user:b', 'reader', 'doc:e')
     return r
@@ -208,7 +210,8 @@ def test_graph_node_ids_are_never_reused_on_sqlite(mem_engine):
         with pytest.raises(StaleLookupIds, match='run the lookup again') as ei:
             store.result_keys(r)
         assert ei.value.field == 'node_ids'
-        assert store.result_keys(store.lookup_reverse('reader', 'doc:e')) == {('user', 'b', '...')}
+        assert store.result_keys(store.lookup_reverse('reader', 'doc:e')) == {
+            ('user', 'b', '...'), ('doc', 'e', 'reader')}       # TK144: + the self userset
         # G4-G6: the excluded channel
         store.add_tuple('user:*', 'viewer', 'doc:x')
         store.add_tuple('user:m', 'banned', 'doc:x')
@@ -266,14 +269,16 @@ def test_sabotage_control_set_engine_without_the_stamp_check_translates_wrong(
 def test_sabotage_control_graph_without_autoincrement_translates_wrong(
         mem_engine, monkeypatch):
     """PERMANENT instrument control: on a 0.0.x table with the refusal bypassed, the held
-    result translates to ``{('user', 'b', '...')}`` -- SQLite reused the removed node's
-    rowid. AUTOINCREMENT is what t7 relies on."""
+    result translates to ``{('user', 'b', '...'), ('doc', 'e', 'reader')}`` -- SQLite reused
+    the removed nodes' rowids (TK144: the held result also named the target's own userset
+    ``doc:d#reader``, whose recycled rowid now names ``doc:e#reader``). AUTOINCREMENT is what
+    t7 relies on."""
     _downgrade_node_table(mem_engine)
     monkeypatch.setattr(store_mod, 'refuse_reusable_node_ids', lambda session: None)
     with Session(mem_engine) as s:
         store = Store(s, 'g', schema=S)
         r = _graph_reuse_sequence(store)
-        assert store.result_keys(r) == {('user', 'b', '...')}
+        assert store.result_keys(r) == {('user', 'b', '...'), ('doc', 'e', 'reader')}
 
 
 def test_stale_lookup_ids_and_tables_outdated_are_exported():

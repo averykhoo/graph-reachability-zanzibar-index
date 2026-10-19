@@ -763,7 +763,14 @@ class Oracle:
             depth = len(stack)
             stack[key] = depth
             outer_low, low[0] = low[0], INF
-            result = sat_expr(expr, o_type, o_name, rel)
+            # TK138/TK144: OpenFGA's implicit userset self-relation. A concrete userset
+            # subject o#r is a member of its own DECLARED node (o, r), unconditionally and
+            # OUTSIDE the rewrite (a `but not` cannot remove it, an `and` cannot block it);
+            # it propagates because every node that recurses into (o, r) sees it. Bare and
+            # star subjects are untouched (D1). Measured against OpenFGA v1.22.0:
+            # docs/tk138-userset-self-relation-2026-10-14.md sections 1 and C1.
+            result = ((subject[2] != '...' and subject[1] != '*' and subject == key)
+                      or sat_expr(expr, o_type, o_name, rel))
             my_low = low[0]
             del stack[key]
             if my_low >= depth:         # cycle (if any) closed at or below this frame

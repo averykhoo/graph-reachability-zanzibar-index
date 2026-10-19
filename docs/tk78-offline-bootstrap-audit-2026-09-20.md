@@ -296,7 +296,7 @@ other offline path*, and any defect shared by `backfill()` and `bulk_backfill` p
 
 `REASONED`: the two coverage sets cross without meeting — the widest-FEATURE gate
 (`_CORPORA` — `demorgan1`, `rc2_star_tupleset`, `owc_star_ttu` among them) never runs the live path,
-and the live gate (25 corpora) never runs those corpora. No test drives
+and the live gate (`GRAPH_FRAGMENT`) never runs those corpora. No test drives
 `tests/test_bulk_build.py::_CORPORA` through `run_cascade`.
 
 ## 5a. The declared gaps — what bulk≡incremental does NOT cover (READ 2026-09-20)

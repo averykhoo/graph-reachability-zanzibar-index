@@ -200,6 +200,19 @@ def _subject_candidates(ast, names):
                     if isinstance(leaf, Direct):
                         for r in leaf.restrictions:
                             shapes.add((r.type, node.target_rel))
+    # TK144 (challenge C2): EVERY declared (T, r) is a userset subject candidate -- the
+    # implicit userset self-relation reaches usersets no restriction names (model C's
+    # group:1#admin), and a grid without them cannot see a backend that enumerates only
+    # own-object keys. Widened 2026-10-17 (TK144 review) from "every relation of a type
+    # that already has a userset shape": the rule applies to every declared type, and
+    # 58/240 generated schemas then still lacked some declared (T, r). Adds candidates,
+    # relaxes nothing. Sabotage (2026-10-17, this module, ``SAB144=S20``: the set
+    # engine's self hit only on types a ``[T#r]`` restriction names): ``21 failed, 29
+    # passed``; with the instrument control G0 (this line reverted) ``18 failed`` -- the
+    # widening alone adds test_reg3_owc_nonwildcard_userset_lift, test_reg6_shape_chaining
+    # and test_reg7_ghost_subject_via_subject_star, e.g. ``set.lookup('viewer', 'doc',
+    # 'd1') [py] vs oracle on viewer doc:d1: set=False oracle=True``.
+    shapes.update(ast)
     subjects = []
     for (t, p) in sorted(shapes):
         for n in sorted(names.get(t, set()))[:2] + [GHOST_NAME, '*']:
@@ -249,6 +262,16 @@ def _check_graph_forward(widx, ast, oc, subject, objects, res):
         assert oc(sp, st, sn, node.predicate, node.type, node.name), (
             f'graph.lookup{subject} leaked {node.type}:{node.name}#{node.predicate} '
             f'(oracle says no access)')
+    for (t, n, p) in res.implicit_keys:                         # G2, the key channel (TK144)
+        assert not _is_leaf_pred(p) and n != '*', (
+            f'graph.lookup{subject}: implicit key {t}:{n}#{p} is a leaf family or a star')
+        assert _gnode_id(widx, p, t, n) is None, (
+            f'graph.lookup{subject}: implicit key {t}:{n}#{p} HAS a node (ids carry those)')
+        assert oc(sp, st, sn, p, t, n), (
+            f'graph.lookup{subject} leaked implicit {t}:{n}#{p} (oracle says no access)')
+    assert not res.implicit_excluded_keys, (
+        f'graph.lookup{subject}: forward results carry no exclusions, got '
+        f'{res.implicit_excluded_keys}')
     for (rel, ot, on) in objects:                               # G1 exactness
         expected = oc(sp, st, sn, rel, ot, on)
         marker = (ot, rel, 'all') in res.markers
@@ -256,7 +279,8 @@ def _check_graph_forward(widx, ast, oc, subject, objects, res):
             got = marker
         else:
             nid = _gnode_id(widx, rel, ot, on)
-            got = (nid is not None and nid in res.node_ids) or marker
+            got = ((nid is not None and nid in res.node_ids)
+                   or (ot, on, rel) in res.implicit_keys or marker)
         assert got == expected, (
             f'graph.lookup{subject} vs oracle on {rel} {ot}:{on}: '
             f'graph={got} oracle={expected}')
@@ -283,15 +307,30 @@ def _check_graph_reverse(widx, oc, subjects, obj, res):
         assert not oc(node.predicate, node.type, node.name, rel, ot, on), (
             f'graph.lookup_reverse{obj}: excluded subject {node.type}:{node.name}'
             f'#{node.predicate} is oracle-TRUE (wrong exclusion)')
+    for (t, n, p) in res.implicit_keys:                         # G4, key channel (TK144)
+        assert not _is_leaf_pred(p) and n != '*' and p != '...', (
+            f'graph.lookup_reverse{obj}: implicit key {t}:{n}#{p} is not a concrete userset')
+        assert _gnode_id(widx, p, t, n) is None, (
+            f'graph.lookup_reverse{obj}: implicit key {t}:{n}#{p} HAS a node')
+        assert oc(p, t, n, rel, ot, on), (
+            f'graph.lookup_reverse{obj} leaked implicit subject {t}:{n}#{p}')
+    for (t, n, p) in res.implicit_excluded_keys:
+        assert (t, p) in markers_any and _gnode_id(widx, p, t, n) is None, (
+            f'graph.lookup_reverse{obj}: implicit exclusion {t}:{n}#{p} is marker-'
+            f'uncovered or has a node')
+        assert not oc(p, t, n, rel, ot, on), (
+            f'graph.lookup_reverse{obj}: implicit exclusion {t}:{n}#{p} is oracle-TRUE')
     for (sp, st, sn) in subjects:                               # G3 exactness
         expected = oc(sp, st, sn, rel, ot, on)
         if sn == '*':
             got = (st, sp) in markers_any
         else:
             nid = _gnode_id(widx, sp, st, sn)
-            got = (nid is not None and nid in res.node_ids) or (
+            got = ((nid is not None and nid in res.node_ids)
+                   or (st, sn, sp) in res.implicit_keys) or (
                 (st, sp) in markers_any
-                and not (nid is not None and nid in res.excluded_node_ids))
+                and not (nid is not None and nid in res.excluded_node_ids)
+                and (st, sn, sp) not in res.implicit_excluded_keys)
         assert got == expected, (
             f'graph.lookup_reverse{obj} vs oracle on subject ({sp},{st},{sn}): '
             f'graph={got} oracle={expected}')
@@ -313,6 +352,18 @@ def _check_set_expand(se, oc, subjects, obj, m):
             f'set.expand{obj} [{se.ops.name}]: neg member {t}:{n}#{p} outside stars')
         assert not oc(p, t, n, rel, ot, on), (
             f'set.expand{obj} [{se.ops.name}]: neg member {t}:{n}#{p} is oracle-TRUE')
+    for (t, n, p) in m.ipos:                                    # S2, key channel (TK144)
+        assert se.interner.get(t, n, p) is None and n != '*' and p != '...', (
+            f'set.expand{obj} [{se.ops.name}]: ipos key {t}:{n}#{p} is interned or not a '
+            f'concrete userset')
+        assert (t, p) not in m.stars and oc(p, t, n, rel, ot, on), (
+            f'set.expand{obj} [{se.ops.name}]: ipos key {t}:{n}#{p} is star-covered or '
+            f'oracle-false')
+    for (t, n, p) in m.ineg:
+        assert se.interner.get(t, n, p) is None and (t, p) in m.stars, (
+            f'set.expand{obj} [{se.ops.name}]: ineg key {t}:{n}#{p} is interned or outside stars')
+        assert not oc(p, t, n, rel, ot, on), (
+            f'set.expand{obj} [{se.ops.name}]: ineg key {t}:{n}#{p} is oracle-TRUE')
     for (sp, st, sn) in subjects:                               # S1 exactness
         expected = oc(sp, st, sn, rel, ot, on)
         if sn == '*':
@@ -323,11 +374,13 @@ def _check_set_expand(se, oc, subjects, obj, m):
             continue
         uid = se.interner.get(st, sn, sp)
         if uid is None:
-            # uninterned subject (entity or userset): only star coverage can hold it.
-            # Exact since the X3 fix: every oracle-true userset subject is interned
-            # (stored tuples intern it; from-chain usersets are write-time interned)
-            # or star-covered, so shape-in-stars is the whole answer.
-            got = (st, sp) in m.stars
+            # uninterned subject (entity or userset): star coverage, or -- since TK144 --
+            # the KEY channel: OpenFGA's implicit userset self-relation makes an
+            # uninterned userset a member (on an empty store, ``doc:d1#viewer`` of
+            # ``doc:d1``), and ``expand`` never interns on read, so it lists such keys in
+            # ``ipos`` / excludes them in ``ineg``. Before TK144 (the X3 fix) every
+            # oracle-true userset subject was interned or star-covered.
+            got = m.contains_key((st, sn, sp))
         elif sp == '...':
             got = m.contains_entity(uid, st)
         else:
@@ -347,6 +400,15 @@ def _check_set_reverse(se, oc, subjects, obj, m, res):
     assert res.excluded_node_ids == set(m.neg), (
         f'set.lookup_reverse{obj} [{se.ops.name}]: excluded_node_ids '
         f'{res.excluded_node_ids} != expand.neg {set(m.neg)}')
+    assert res.implicit_keys == set(m.ipos) and res.implicit_excluded_keys == set(m.ineg), (
+        f'set.lookup_reverse{obj} [{se.ops.name}]: the key channel != expand.ipos/ineg')
+    for (t, n, p) in res.implicit_keys:                         # key channel (TK144)
+        assert oc(p, t, n, rel, ot, on), (
+            f'set.lookup_reverse{obj} [{se.ops.name}] leaked implicit {t}:{n}#{p}')
+    for (t, n, p) in res.implicit_excluded_keys:
+        assert (t, p) in res.markers and not oc(p, t, n, rel, ot, on), (
+            f'set.lookup_reverse{obj} [{se.ops.name}] implicit exclusion {t}:{n}#{p} is '
+            f'marker-uncovered or oracle-true')
     for nid in res.node_ids:                                    # soundness
         t, n, p = se.interner.key(nid)
         assert oc(p, t, n, rel, ot, on), (
@@ -362,9 +424,11 @@ def _check_set_reverse(se, oc, subjects, obj, m, res):
             got = (st, sp) in res.markers
         else:
             uid = se.interner.get(st, sn, sp)
-            got = (uid is not None and uid in res.node_ids) or (
+            got = ((uid is not None and uid in res.node_ids)
+                   or (st, sn, sp) in res.implicit_keys) or (
                 (st, sp) in res.markers
-                and not (uid is not None and uid in res.excluded_node_ids))
+                and not (uid is not None and uid in res.excluded_node_ids)
+                and (st, sn, sp) not in res.implicit_excluded_keys)
         assert got == expected, (
             f'set.lookup_reverse{obj} [{se.ops.name}] vs oracle on subject '
             f'({sp},{st},{sn}): set={got} oracle={expected} (node_ids, or a marker '
@@ -386,6 +450,15 @@ def _check_set_forward(se, oc, subject, objects, res):
         assert n != '*' and (t, p) in res.markers and not oc(sp, st, sn, p, t, n), (
             f'set.lookup{subject} [{se.ops.name}] excluded {t}:{n}#{p}, which is '
             f'star-only, marker-uncovered, or oracle-true')
+    for (t, n, p) in res.implicit_keys:                         # key channel (TK144)
+        assert se.interner.get(t, n, p) is None and oc(sp, st, sn, p, t, n), (
+            f'set.lookup{subject} [{se.ops.name}] implicit {t}:{n}#{p} is interned or '
+            f'oracle-false')
+    for (t, n, p) in res.implicit_excluded_keys:
+        assert (se.interner.get(t, n, p) is None and (t, p) in res.markers
+                and not oc(sp, st, sn, p, t, n)), (
+            f'set.lookup{subject} [{se.ops.name}] implicit exclusion {t}:{n}#{p} is '
+            f'interned, marker-uncovered or oracle-true')
     for (rel, ot, on) in objects:
         expected = oc(sp, st, sn, rel, ot, on)
         if on == '*':
@@ -397,8 +470,10 @@ def _check_set_forward(se, oc, subject, objects, res):
         nid = se.interner.get(ot, on, rel)
         # TK116: a marker covers every object EXCEPT its excluded ids (a `but not` under
         # an object wildcard, graph-refused schemas only).
-        covered = (nid is not None and nid in res.node_ids) or (
-            (ot, rel) in res.markers and nid not in res.excluded_node_ids)
+        covered = ((nid is not None and nid in res.node_ids)
+                   or (ot, on, rel) in res.implicit_keys) or (
+            (ot, rel) in res.markers and nid not in res.excluded_node_ids
+            and (ot, on, rel) not in res.implicit_excluded_keys)
         # Exact over ALL candidates since the X1 fix: every tuple-anchored object
         # key is write-time interned (TTU/Computed reverse deps included), and the
         # only remaining truth source for an uninterned key is star-object

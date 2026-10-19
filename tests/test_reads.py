@@ -412,7 +412,15 @@ def test_derived_lookup_reverse_markers_and_exclusions():
     # included -- covered members hold no edge), minus the excluded set
     assert ('user', '...', 'any') in res.markers
     assert res.excluded_node_ids == {alice.id}          # "everyone except alice"
-    assert res.node_ids == set()                        # no concrete derived edges
+    # no concrete derived edges: no BARE subject is listed by id. Since TK144 the ids are
+    # the doc's own usersets, members of `viewer` by OpenFGA's implicit self-relation
+    # (doc:d1#viewer itself; doc:d1#public and doc:d1#editor through the arms that reach
+    # them, `public` not being `blocked`) -- usersets, never derived edges.
+    listed = {(n.type, n.name, n.predicate)
+              for n in (widx._node_by_id(i) for i in res.node_ids)}
+    assert {k for k in listed if k[2] == '...'} == set()
+    assert listed == {('doc', 'd1', 'viewer'), ('doc', 'd1', 'public'),
+                      ('doc', 'd1', 'editor')}
 
     # a subject OUTSIDE the starred shape keeps its concrete edge
     session2, widx2, proc2, write2 = build('''

@@ -2,7 +2,7 @@
 id: TK155
 title: Store.expand: Zanzibar Expand on the composed store, returning keys
 brief: TK123 SPLIT A26: do not move SetEngine.expand's body (CORRESPONDENCE anchors it)
-pri: LATER
+pri: NOW
 size: S
 deps: []
 related: [TK123]
@@ -11,8 +11,8 @@ labels: []
 source: docs/tk123-api-review-2026-10-14.md
 source_hash:
 created: 2026-10-15b
-moved: 2026-10-15b
-updated: 2026-10-15b
+moved: 2026-10-19
+updated: 2026-10-19
 closed:
 ---
 
@@ -32,3 +32,7 @@ own freshness semantics, which is why it is not in the TK123 API break.
 - `src/zanzibar/store/_store.py::Store.check` — the `at_least` semantics to mirror
 
 ## Log
+
+### 2026-10-19
+
+Promoted LATER -> NOW (TK156, TK157 -> NEXT) at the 2026-10-19 write-back: TK138/TK144 closed, and the user order stated 2026-10-16 (banner 2026-10-16b; TK151 Log) runs TK155-TK157 next, then TK151 last. The lint needs exactly one NOW.

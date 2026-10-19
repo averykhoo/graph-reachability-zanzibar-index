@@ -89,6 +89,220 @@ until landing 2 ships, and landing 1's pin exists to make that debt visible, not
 
 ## Corrections (dated, newest first)
 
+### Corrections 2026-10-17b (TK144 review fix -- NOT committed, gate NOT run)
+
+By the TK144 review-fix agent (ultracode, session `2026-10-17`). It acts on the
+assurance and correctness reviews (`.scratch/ultracode-2026-10-17/TK144-assurance.md` and
+`TK144-correctness.md`, gitignored, so what they found is transcribed here).
+
+1. **Four graph branches were pinned by nothing in the gate** (first-hand: the
+   reviewer's full-suite runs, each 4090 passed with one branch deleted). The branches
+   are the seed-shape `w_any` probe in `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_internal`
+   (W1), its `_entity_has_witness` gate (W2), the seed -> `w_all` probe (W3), and the
+   witnessed seed-shape collection in `::WildcardIndex._self_lookup` (L1). FIXED by three tests at
+   the bottom of `tests/test_tk138_userset_self_relation.py`, over model F
+   (`[group:*#member]`) and model G (an object wildcard on `doc#viewer`). These are beyond
+   OpenFGA (ASK-2), so the pins carry the oracle's answers, REASONED and unanimous. The
+   sabotage modes are permanent in `formal/probes/tk144_sabotage_plugin_2026_10_17.py`:
+   S15 = W1, S16 = W2, S17 = W3, S18 = L1, plus S19, this agent's twin on
+   `::WildcardIndex._self_reverse_extra`'s `any`-marker expansion.
+   **Observed** (first-hand probe, that module alone): with no mode, `12 passed`. S15:
+   `1 failed`. S16: `2 failed`. S17: `1 failed`. S18: `1 failed`. S19: `1 failed`. The
+   literal reds are in the tests' docstrings. S1-S12 were re-measured on the 12-test
+   module: the counts changed, and every first-failure literal is unchanged. NOT measured:
+   whether S19 was gate-inert before the fix (UNVERIFIED).
+2. **A `WildcardIndex` built on `derive_schema_info` reads non-reflexively.** REFUTED as a
+   TK144 defect (first-hand probe `.scratch/ultracode-2026-10-17/tk144-review-fix/handbuilt_rules.py`).
+   On that path, with `can_view: viewer` and `user:alice viewer doc:1` stored, the output
+   was `alice can_view: graph(hand)= False set= True`. The hand-built path applies no
+   compiled rewrite at all, so it was never SetEngine-equivalent, and the missing
+   self-relation is consistent with that. Documented in
+   `src/zanzibar/schema/compiler.py::derive_schema_info`'s docstring and in the
+   `SchemaInfo.self_seeds` comment. Decision: no refusal, because the raw primitive is
+   used by design.
+3. **The grid widening left some declared `(T, r)` unasked** (reviewer: 58/240 generated
+   schemas, 2026-10-17). In `tests/test_lookup_oracle.py::_subject_candidates`, EVERY
+   declared `(T, r)` is now a candidate (re-measured: 0/240). In `tests/parity.py`, adding
+   every declared shape to `subjects` would multiply the uncapped write-local floor:
+   subject shapes grow 2-4x on `tests/fga_schemas/` (first-hand,
+   `.scratch/.../tk144-review-fix/gridsize.py`, e.g. `confluence.fga` 5 -> 19). So the
+   ParityEngine instead gets a bounded, rng-free `::ParityEngine._self_floor`. The
+   sabotage is S20 (the set engine's self hit only on restriction-named types), and G0 is
+   the instrument control. **Observed** (first-hand probe):
+   `tests/test_schema_shapes.py -k drives_clean` gave `3 passed` with no mode, `3 errors`
+   under S20, and `3 passed` under S20+G0. `tests/test_lookup_oracle.py` gave
+   `21 failed, 29 passed` under S20 and `18 failed` under S20+G0, so the widening alone
+   adds `test_reg3_owc_nonwildcard_userset_lift`, `test_reg6_shape_chaining` and
+   `test_reg7_ghost_subject_via_subject_star`. **Cost** (first-hand probe, measured under
+   heavy CPU contention from other sessions, so noisy): `tests/test_lookup_oracle.py`
+   took 582.51 s under G0 and 778.94 s widened (`50 passed` both). The drives_clean
+   selection took 63.89 s, against 64.45 s under G0.
+4. **CORRESPONDENCE rows behind the regenerated anchor pins** were re-read. Three dated
+   notes were added: the routed operand-read row, the P6 phantom-userset section, and the
+   section 2 `check` note. The `compile_ruleset` rows describe the taint loop, which is
+   unchanged. `anchor_check` rc=0 and `claim_rot --check` rc=0 (first-hand, 2026-10-17).
+5. **Counts.** The fix adds 3 tests, so `python -m formal.conformance.doc_counts --generate` was
+   run on purpose. It ratcheted `MIN_TESTS_ALL` from 2844 to 2847 and regenerated the
+   `formal/FINAL_REVIEW.md` block: whole suite 4093, and 842 anchors, 4 of them added by
+   the item-4 notes. Measured first-hand 2026-10-17.
+6. **The gate is still NOT covered on this tree.** The tiles and the PostgreSQL leg are
+   owed before commit. Run first-hand, 2026-10-17:
+   `tests/test_tk138_userset_self_relation.py`, `test_parity_engine.py`,
+   `test_tk117_write_local_floor.py`, `test_p6_phantom_subject.py` and
+   `test_claim_rot_gate.py` together gave `92 passed`, and `tests/test_lookup_oracle.py`
+   gave `50 passed`.
+
+### Corrections 2026-10-17 (TK144 build, landing 2 -- in progress, NOT committed)
+
+By the `TK144` builder (ultracode stage, session `2026-10-17`), against HEAD `43e1c74`. Deps
+`TK123`, `TK119`, `TK132` are CLOSED (first-hand READ, `task.py show`). Progress is appended
+below as it lands so a crash is resumable; the change set stays UNCOMMITTED until the gate is
+green (the gate is red by design from step 3 to step 6).
+
+**Build decisions (REASONED; the executive calls the row asks the builder to make).**
+1. **Oracle and set engine (steps 3-4):** the section 3.2 disjunct in `sat`, placed after the
+   undeclared early return, guarded `s_pred != '...' and s_name != '*'` (D1).
+2. **Graph, untainted (step 5):** a static seed table `SupG(T, p)` = the transitive closure of the
+   compiled COMPUTED rewrite Rules (a `Rule` whose then-pattern carries no subject predicate)
+   starting at `p` on `T`, INCLUDING compiled leaf predicates (so `nb.0: viewer` makes `nb.0` a
+   seed of `viewer`, which is what the derived read needs). It is a new `SchemaInfo` field;
+   `tests/test_compile_snapshot.py::_canonical_ruleset` serializes only two `SchemaInfo` fields
+   (C4), so no snapshot moves. Read: the four existing probes, OR the query node is a seed key of
+   the subject's own object, OR the four probes from every DECLARED seed node; a seed SHAPE's
+   `w_any` probe (seed `r1 != p`) counts only when the subject's entity is witnessed
+   (`WildcardIndex._entity_has_witness`, the graph twin of the oracle's `instances`), because the
+   oracle reaches `(T, o, r1)` through a `[T:*#r1]` grant only by instance expansion.
+3. **Graph, derived (step 6): C5, not C1.** `_check_internal`, `_check_derived`, `_EvalContext`,
+   `derived_check` and `member_check` take a `reflexive` flag. The reconcile, the invariants and
+   the I9 audit keep `reflexive=False`, so the residue and the canonical state are UNCHANGED
+   (`test_conformance_state` and the Lean reconcile model untouched). The public read passes
+   `reflexive=True`: a concrete userset subject on a derived relation is answered by the self hit
+   or by `plan.check_fn` over a reflexive `_EvalContext`, evaluated at read time. The facade
+   reaches the plan through a processor it builds lazily (a function-local import;
+   `zanzibar/graphindex/__init__.py` already imports `processor`, so there is no module cycle).
+4. **Lookups (step 7, D3a):** both result types (and `MemberSet`) gain a KEY channel for results
+   with no interned id: `implicit_keys` / `implicit_excluded_keys` (`MemberSet.ipos` / `.ineg`).
+   `result_keys` / `excluded_keys` fold them in. Ids stay the channel for interned results.
+5. **Lean (step 8) naming:** the existing `step` / `semAux` / `sem` stay as the NON-reflexive base
+   semantics (they still characterize the residue the processor maintains, and ~53k lines of graph
+   proofs are about them); the spec becomes NEW definitions `selfHit` / `stepR` / `semAuxR` /
+   `semR` (D2: the disjunct form). The headline theorems are restated over `semR` and the new
+   reads, bridged by new lemmas; every old theorem survives untouched.
+
+**PROBE 6 (first-hand, 2026-10-17): challenge C2's unprobed variant, now measured.** Model C
+with `[group#admin]` removed everywhere, plus a TTU whose target computes from the subject's
+relation (the graph read's seed-probe case). Script
+`.scratch/ultracode-2026-10-17/tk144-openfga/openfga_probe6.py` (gitignored; the output is
+transcribed literally here), run by `run_openfga6.sh` in a throwaway WSL container that the
+script removes on exit (`wsl docker ps` empty afterwards). Model (JSON form sent):
+`group: admin: [user]; member: [user] or admin`; `folder: editor: [user]; viewer: [user] or
+editor`; `doc: viewer: [user, group#member]; banned: [user]; nb: viewer but not banned;
+parent: [folder]; fview: viewer from parent`. Literal output:
+
+```
+2026/10/17 08:31:21 OpenFGA version `v1.22.0` build from `a38d5d0f65a964b6030e0b1afd2a831f62309159` on `2026-10-06T19:14:15Z`
+WRITE  group:1#member viewer doc:1 -> 200 ok
+WRITE  group:1#member viewer doc:2 -> 200 ok
+WRITE  user:alice admin group:1 -> 200 ok
+WRITE  user:bob banned doc:2 -> 200 ok
+WRITE  group:3#member viewer doc:1 -> 200 ok
+WRITE  folder:1 parent doc:1 -> 200 ok
+CHECK  group:1#admin    viewer  doc:1     -> True
+CHECK  group:1#admin    nb      doc:1     -> True
+CHECK  group:3#admin    viewer  doc:1     -> True
+CHECK  group:3#admin    nb      doc:1     -> True
+CHECK  group:1#admin    nb      doc:2     -> True
+CHECK  group:1#member   nb      doc:2     -> True
+CHECK  user:alice       nb      doc:2     -> True
+CHECK  user:bob         nb      doc:2     -> False
+CHECK  user:alice       nb      doc:1     -> True
+CHECK  group:2#admin    viewer  doc:1     -> False
+CHECK  folder:1#editor  fview   doc:1     -> True
+CHECK  folder:1#viewer  fview   doc:1     -> True
+CHECK  folder:2#editor  fview   doc:1     -> False
+LISTOBJ user=group:1#admin doc#viewer -> ['doc:1', 'doc:2']
+LISTOBJ user=group:1#admin doc#nb -> ['doc:1', 'doc:2']
+LISTOBJ user=group:3#admin doc#nb -> ['doc:1']
+LISTOBJ user=folder:1#editor doc#fview -> ['doc:1']
+LISTUSR doc:1#nb filter=group#admin -> ['group:1#admin', 'group:3#admin']
+LISTUSR doc:2#nb filter=group#admin -> ['group:1#admin']
+LISTUSR doc:1#fview filter=folder#editor -> ['folder:1#editor']
+probe rc=0
+```
+
+What it settles: the variant's answers are the ones C2 REASONED (so the userset no restriction
+names is a member all the same), and `folder:1#editor` reaches `doc:1#fview` through the TTU
+target's computed arm -- the case the graph's seed probes exist for. These rows are pinned
+literally as model E in `tests/test_tk138_userset_self_relation.py`.
+
+**End of the TK144 build stage (2026-10-17, evening; first-hand unless labelled; the change
+set is still UNCOMMITTED and the row stays open).**
+
+LANDED (all four corners, one change set):
+- Oracle: `tests/oracle.py::Oracle.check.sat`, the disjunct, guarded by D1.
+- Set engine: the `sat` disjunct in `src/zanzibar/setengine/engine.py::SetEngine.check`;
+  `::SetEngine.expand` corrected at the top level by `::SetEngine._self_relation_corrected`
+  (each candidate decided by `check`); the D3a key channel (`MemberSet.ipos` / `.ineg`,
+  `SetLookupResult.implicit_keys` / `.implicit_excluded_keys`); `lookup`'s own-object pass.
+- Graph index: `src/zanzibar/schema/compiler.py::_self_seed_table` (`SchemaInfo.self_seeds`);
+  the seed probes in `src/zanzibar/graphindex/wildcard.py::WildcardIndex._check_internal`;
+  C5 in `::WildcardIndex._check_derived` (`::WildcardIndex._derived_read_eval`, with the
+  processor's `_EvalContext(reflexive=True)`); `lookup` / `lookup_reverse` key channel. The
+  reconcile, the invariants, I9 and bulk build stay `reflexive=False`, so canonical state is
+  unchanged (`test_conformance_state.py` green, the derived-arm ledger's prior entries
+  reproduced byte-for-byte).
+- Lean: `Spec/SelfRelation.lean` (`semR`; `semR_fuel_stable` holds at the same `fuelBound`,
+  so C7 is settled), `SetEngine/SelfRelation.lean` (`setEngine_correctR`),
+  `GraphIndex/SelfBridge.lean`, `GraphIndex/SelfRead.lean` (`graph_correctR` and the T3/T6
+  and driver restatements), `GraphIndex/SelfWitness.lean` (non-vacuity). `zcli` spec mode
+  prints `semR`, graph mode `graphModeAnswersR`.
+- Tests and corpora: `tests/test_tk138_userset_self_relation.py` agrees with the literal
+  OpenFGA v1.22.0 table except the two recorded repo exceptions; the model-C corpus pair is
+  theorem-backed (decided in-premise by `zcli` mode `"fragment"`); `selfrel_boolean_flip` is
+  spec-side only (outside `directArmsBare`, by Lean's decider AND the DW-1 mirror probe).
+
+SABOTAGE: S1-S12 each red, literal output in the TK138 test module's docstring
+(`formal/probes/tk144_sabotage_plugin_2026_10_17.py`). S13/S14 found that
+`tests/test_p6_phantom_subject.py`'s recorded S1 is now INERT at its old site (the residue
+userset arm no longer serves a public read of a concrete userset subject: 183 passed across
+11 derived-read modules), while the same edges-alone reading on the C5 return is RED at the
+same literal query. Recorded in that module's docstring and in `formal/FINAL_REVIEW.md` §3.1
+item 9.
+
+PINS regenerated deliberately, each after re-reading what it covers: `claim_rot` (all 19
+changed bodies' rows re-read; 13 got dated notes in `formal/CORRESPONDENCE.md`, the rest still
+read true), `statement_pin` (additions only), the audit identity pin (additions only),
+`doc_counts` (floors ratcheted upward; nine stale corpus-count lines marked as past),
+`verify.sh`'s `HEADLINE_AUDITS` (+ the nine `semR` capstones), the two verdict tables in
+`formal/conformance/test_conformance_fragment.py` (+1 row each). One gate-tooling instrument
+moved: `tests/test_claim_rot_gate.py::test_B_python_body_edit_moves_the_pin`'s anchor matched
+twice once `WildcardIndex._check_fenced` existed, so it now carries the line above the fence.
+
+RUN: `formal/conformance/` in full (8 red before the table/ledger additions, all 8 green on
+rerun); `tests/` in full before the deliberate expectation updates (each failure attributed in
+the TK144 report); the targeted modules after the pins. NOT RUN: the gate's tiles, the
+PostgreSQL leg.
+
+REMAINS (for the row): the full gate, then the commit; the MINOR version bump at release
+(`__version__` stays 0.0.5 in this change set, by the stage's instruction); the residue
+userset arm's phantom branch (`subj is None`) is now reachable only from a facade with no
+seed table: pin it or delete it; the brute-force graph lookups' cost on large stores is not
+measured.
+
+VERIFIED LAST (2026-10-17, first-hand): `bash formal/verify.sh lean` PASSED (75 s; holes=0,
+audits=745, pinned=745, defs=306, headline theorems 26, all axiom-dependent; anchors and
+content pin, doc counts, handoff lint and task lint all green). The nine `semR` capstones'
+audit lines read `depends on axioms: [propext, Classical.choice, Quot.sound]`. The
+`HEADLINE_AUDITS` additions were sabotaged by
+`formal/probes/tk144_headline_loop_sabotage_2026_10_17.sh` (verify.sh's own loop, over that
+run's audit lines): dropping one report and faking one axiom-free report each turn it red,
+with the literal messages in verify.sh's comment. Hypothesis sweep, `tests/test_hypothesis.py`
+plus `tests/test_lookup_hypothesis.py`: `--hypothesis-seed=11` 49 passed, `--hypothesis-seed=23`
+49 passed. Wall time (UNVERIFIED baseline): `tests/` in one process took 964 s and
+`formal/conformance/` 949 s, within about 10% of the four-tile and five-tile sums in the same
+day's `.gate-runs/ledger.tsv` (869 s, 927 s), whose tree is not attributed to before or after
+this change set. Not a controlled measurement.
+
 ### Corrections 2026-10-14 (challenge)
 
 By the `challenge-TK138` workflow agent (skeptic pass), 2026-10-14. Probes live under

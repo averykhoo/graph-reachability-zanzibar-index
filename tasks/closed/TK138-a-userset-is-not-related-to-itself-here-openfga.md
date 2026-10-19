@@ -11,9 +11,9 @@ labels: []
 source: docs/openfga-claims-audit-2026-10-13.md
 source_hash:
 created: 2026-10-13c
-moved: 2026-10-17
-updated: 2026-10-17
-closed:
+moved: 2026-10-19
+updated: 2026-10-19
+closed: 2026-10-19
 ---
 
 Found by the 2026-10-13 OpenFGA claims audit; `docs/openfga-claims-audit-2026-10-13.md`
@@ -64,3 +64,7 @@ Do NOT close TK138 on landing 1: the user's ADOPT stands until landing 2 ships. 
 ### 2026-10-17
 
 2026-10-17 (TK147 gate agent). Promoted NEXT -> NOW when TK147 closed: the lint needs exactly one NOW, and TK138 is next in the user order stated 2026-10-16 (TK147, then TK138, then TK144). TK144 stays NEXT; it waits on TK123, TK119 and TK132.
+
+### 2026-10-19
+
+Both landings done. Landing 1 (the positive divergence pin, spec-deviations entry, PYPI_README line) landed earlier; landing 2 is child TK144, closed 2026-10-19 with the four-corner adoption committed on a fully green gate. The user decision 2026-10-13d (verify against OpenFGA, then ADOPT) is met: tests/test_tk138_userset_self_relation.py now agrees with the literal OpenFGA v1.22.0 table apart from the two recorded repo exceptions. Remaining follow-ups are rows: TK161, TK162; the MINOR bump is on TK151. Body: docs/tk138-userset-self-relation-2026-10-14.md.

@@ -22,6 +22,7 @@ from sqlalchemy import tuple_
 from sqlmodel import select
 
 from .core import ReachabilityIndex, _ThreadFlag
+from .invariants import InvariantViolation
 from .models import Edge, Node, ResidueRef, Residue
 from zanzibar.schema import (AdmissionRejected, SchemaInfo,
                                norm_pred as _norm_pred,
@@ -50,6 +51,11 @@ class LookupResult:
     * ``excluded_node_ids``: node ids a marker would cover but that are refused (``but not``).
       The caller subtracts them: "every user except these". ``Store.excluded_keys(result)``
       gives their keys.
+    * ``implicit_keys`` / ``implicit_excluded_keys``: the same two parts for answers that
+      have NO node, as ``(type, name, predicate)`` keys. OpenFGA's implicit userset
+      self-relation makes ``doc:1#viewer`` a viewer of ``doc:1`` on an empty store, and the
+      index never creates a node to say so. ``Store.result_keys`` / ``excluded_keys`` fold
+      them in, so read a result through those.
 
     A subject that a marker already covers may also appear in ``node_ids``; the set
     engine's ``SetLookupResult`` leaves it out. Compare results by what they cover (the
@@ -61,6 +67,9 @@ class LookupResult:
     # excluded from a derived relation's star coverage, from the residue's neg.
     # Additive and empty everywhere except derived lookup_reverse.
     excluded_node_ids: set[int] = field(default_factory=set)
+    # TK144 (TK138 D3a): answers / exclusions with no node, as (type, name, predicate).
+    implicit_keys: set[tuple[str, str, str]] = field(default_factory=set)
+    implicit_excluded_keys: set[tuple[str, str, str]] = field(default_factory=set)
 
 
 class WildcardIndex:
@@ -122,6 +131,34 @@ class WildcardIndex:
         # mutable neg/upos sets, preserving the callers that mutate them in place.
         self._residue_cache: dict[tuple[str, str, str],
                                   tuple[frozenset, tuple[int, ...], tuple[int, ...]]] | None = None
+        # TK144 (TK138 landing 2): OpenFGA's implicit userset self-relation. A concrete
+        # userset subject T:o#p is a member of its own declared node (T, o, p), outside
+        # the rewrite. Nothing is materialized for it (the self tuple is refused as a
+        # cycle and never stored): the untainted read uses the compile-time seed table
+        # (``SchemaInfo.self_seeds``: the relations and leaf predicates the self tuple
+        # would fan out to through Computed rewrites), and the derived read evaluates the
+        # plan at read time (C5). ``reflexive=False`` -- the delta processor's reconcile,
+        # the invariants and the I9 audit -- keeps the residue and the canonical state
+        # exactly as before. A hand-built SchemaInfo has no seed table and reads
+        # non-reflexively throughout.
+        # Map: docs/tk138-userset-self-relation-2026-10-14.md (corrections 2026-10-17).
+        seeds: dict[tuple[str, str], set[str]] = {}
+        for (t, p, r1) in schema_info.self_seeds:
+            seeds.setdefault((t, p), set()).add(r1)
+        self._seed_index: dict[tuple[str, str], frozenset[str]] = {
+            k: frozenset(v) for k, v in seeds.items()}
+        # The inverse: (type, seed) -> the declared relations p whose self tuple reaches
+        # the seed. A node (T, o, seed) that reaches a target makes every T:o#p a member.
+        subs: dict[tuple[str, str], set[str]] = {}
+        for (t, p, r1) in schema_info.self_seeds:
+            subs.setdefault((t, r1), set()).add(p)
+        self._sub_index: dict[tuple[str, str], frozenset[str]] = {
+            k: frozenset(v) for k, v in subs.items()}
+        self._reflexive_reads = bool(seeds)
+        # The processor the derived read evaluates plans through (C5): the first
+        # ``DeltaProcessor`` built over this facade registers itself; otherwise one is
+        # built on first need from ``SchemaInfo.compiled``.
+        self._self_read_proc = None
 
     @property
     def processor_writes(self) -> bool:
@@ -813,17 +850,50 @@ class WildcardIndex:
                                     relation, o_type, o_name)
 
     def _check_internal(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
-                        relation: str, o_type: str, o_name: str) -> bool:
+                        relation: str, o_type: str, o_name: str,
+                        reflexive: bool = True) -> bool:
+        """The probe below the leaf-name fence. ``reflexive`` (default) applies the
+        implicit userset self-relation (TK144); the delta processor's reconcile, the
+        invariants and the I9 audit pass ``False``, so the state they maintain and
+        verify is the pre-TK144 canonical form."""
         s_pred = _norm_pred(subject_predicate)
+        reflexive = reflexive and self._reflexive_reads
 
         # Derived (boolean) relations: edge probe + residue, no wildcard probes --
         # derived relations are never wildcard shapes; symbolic state lives in the
         # residue (boolean spec §6).
         if (o_type, relation) in self.schema_info.derived_families:
-            return self._check_derived(s_pred, s_type, s_name, relation, o_type, o_name)
+            return self._check_derived(s_pred, s_type, s_name, relation, o_type, o_name,
+                                       reflexive=reflexive)
 
         subj_is_star = (s_name == '*')
         obj_is_star = (o_name == '*')
+
+        # TK144 seeds (the untainted half of the self-relation). For a CONCRETE userset
+        # subject T:o#p, the self tuple would put T:o#p into every (T, o, r1), r1 in
+        # SupG(T, p) (``SchemaInfo.self_seeds``), and from there along every closure edge
+        # out of those nodes. So: the query node is a seed key of the subject's own object
+        # (the self hit), or one of the ordinary probes succeeds from a DECLARED seed node.
+        # A seed SHAPE's ``w_any`` probe counts only when the entity T:o is witnessed:
+        # the oracle reaches (T, o, r1) through a ``[T:*#r1]`` grant only by expanding the
+        # grant over tuple-mentioned instances (``tests/oracle.py`` ``instances``), and
+        # ``_entity_has_witness`` is that population's graph twin (I14). The subject's own
+        # shape keeps its unconditional probe 2 below.
+        seed_keys: list[tuple[str, str, str, str]] = []
+        w_seed_keys: list[tuple[str, str, str, str]] = []
+        if reflexive and s_pred != '...' and not subj_is_star:
+            seeds = self._seed_index.get((s_type, s_pred))
+            if seeds:
+                if (o_type, o_name) == (s_type, s_name) and relation in seeds:
+                    return True                                  # the self hit
+                for r1 in sorted(seeds):
+                    if r1 == s_pred or (s_type, r1) in self.schema_info.leaf_families:
+                        continue                                 # own node / never a subject
+                    seed_keys.append((r1, s_type, s_name, ''))
+                    if (s_type, r1) in self.schema_info.subject_wildcard_shapes:
+                        w_seed_keys.append((r1, s_type, '*', 'any'))
+                if w_seed_keys and not self._entity_has_witness(s_type, s_name):
+                    w_seed_keys = []
 
         subject_shape_declared = (s_type, s_pred) in self.schema_info.subject_wildcard_shapes
         object_shape_declared = (o_type, relation) in self.schema_info.object_wildcard_shapes
@@ -850,7 +920,8 @@ class WildcardIndex:
                      if not obj_is_star and object_shape_declared else None)
 
         ids = self.idx.resolve_node_ids(
-            [k for k in (subj_key, obj_key, w_any_key, w_all_key) if k is not None])
+            [k for k in (subj_key, obj_key, w_any_key, w_all_key) if k is not None]
+            + seed_keys + w_seed_keys)
 
         subj_id = ids.get(subj_key)
         obj_id = ids.get(obj_key)
@@ -867,6 +938,10 @@ class WildcardIndex:
         key(w_any_id, obj_id)                                            # probe 2
         key(subj_id, w_all_id)                                           # probe 3
         key(w_any_id, w_all_id)                                          # probe 4
+        for sk in seed_keys + w_seed_keys:                               # TK144 seeds
+            seed_id = ids.get(sk)
+            key(seed_id, obj_id)
+            key(seed_id, w_all_id)
 
         if not keys:
             return False
@@ -967,7 +1042,8 @@ class WildcardIndex:
         return False
 
     def _check_derived(self, s_pred: str, s_type: str, s_name: str,
-                       relation: str, o_type: str, o_name: str) -> bool:
+                       relation: str, o_type: str, o_name: str,
+                       reflexive: bool = True) -> bool:
         if o_name == '*':
             # object wildcards on derived relations are rejected at compile (decision
             # 15): no object-star state can exist, so the intensional query is False
@@ -976,6 +1052,18 @@ class WildcardIndex:
             # intensional: is the whole shape covered? (1 residue read)
             stars, _, _ = self._residue_state(relation, o_type, o_name)
             return (s_type, s_pred) in stars
+
+        if reflexive and self._reflexive_reads and s_pred != '...':
+            # TK144, challenge C5: a concrete USERSET subject on a derived relation is
+            # answered at READ time -- the self hit, or the relation's plan evaluated with
+            # a reflexive context (seed-aware leaf probes, reflexive derived operands).
+            # The residue records the non-reflexive answer the processor maintains
+            # (``reflexive=False``) and is not consulted here: the self-relation reaches
+            # subjects no reconcile enumerates (challenge C1: ``group:3#admin`` has no node
+            # anywhere), and it flips answers the residue holds (the ``vx`` row).
+            if (s_type, s_name, s_pred) == (o_type, o_name, relation):
+                return True
+            return self._derived_read_eval(s_pred, s_type, s_name, relation, o_type, o_name)
 
         subj = self._get_concrete(s_pred, s_type, s_name)
 
@@ -1001,6 +1089,48 @@ class WildcardIndex:
         if (s_type, s_pred) not in stars:
             return False
         return subj is None or subj.id not in neg
+
+    def _read_processor(self):
+        """The ``DeltaProcessor`` the derived read evaluates plans through (TK144, C5).
+
+        Read-only use: plan evaluation reads the closure, the residues and the stored
+        tuples, and never writes. The first processor built over this facade registers
+        itself here (``DeltaProcessor.__init__``); otherwise one is built from
+        ``SchemaInfo.compiled``. The import is function-local only because ``processor``
+        imports this module at module level; the package ``__init__`` has always loaded
+        both, so this is a lookup, not an import-time dependency."""
+        proc = self._self_read_proc
+        if proc is None:
+            compiled = self.schema_info.compiled
+            if compiled is None:
+                raise InvariantViolation(
+                    'a derived relation was queried with a userset subject, but this graph '
+                    'index has no compiled boolean plans to evaluate it with (its SchemaInfo '
+                    'carries derived families without SchemaInfo.compiled)')
+            from .processor import DeltaProcessor
+            proc = DeltaProcessor(self, compiled)       # registers itself on this facade
+        return proc
+
+    def _derived_read_eval(self, s_pred: str, s_type: str, s_name: str,
+                           relation: str, o_type: str, o_name: str) -> bool:
+        """Evaluate a derived relation's plan for one userset subject at read time, with
+        a REFLEXIVE ``_EvalContext`` (TK144, C5). The same plan the reconcile runs; only
+        the context's reads differ (they apply the self-relation)."""
+        proc = self._read_processor()
+        from .processor import _EvalContext
+        plan = proc.compiled.plans[(o_type, relation)]
+        ctx = _EvalContext(proc, o_type, o_name, reflexive=True)
+        return bool(plan.check_fn(ctx, (s_pred, s_type, s_name)))
+
+    def _check_fenced(self, subject_predicate: str | EllipsisType, s_type: str, s_name: str,
+                      relation: str, o_type: str, o_name: str, *, reflexive: bool) -> bool:
+        """``check`` with the reflexive flag exposed: the leaf-name fence, then
+        ``_check_internal``. The delta processor's ``member_check`` / ``member_stars``
+        read DECLARED relations through here, non-reflexively during a reconcile."""
+        if (o_type, relation) in self.schema_info.leaf_families:
+            return False
+        return self._check_internal(subject_predicate, s_type, s_name,
+                                    relation, o_type, o_name, reflexive=reflexive)
 
     def _get_concrete(self, predicate: str, entity_type: str, name: str) -> Node | None:
         try:
@@ -1035,9 +1165,79 @@ class WildcardIndex:
             if (s_type, s_pred) in self.schema_info.subject_wildcard_shapes:
                 self._collect_reachable(self._w_node(s_type, s_pred, 'any', create=False), result)
 
+        if (self._reflexive_reads and s_pred != '...' and s_name != '*'
+                and (s_type, s_pred) in self._seed_index):
+            self._self_lookup(s_pred, s_type, s_name, result)
+            return result
         if self.schema_info.derived_families:
             self._collect_residue_memberships(s_pred, s_type, s_name, result)
         return result
+
+    def _self_lookup(self, s_pred: str, s_type: str, s_name: str, result: LookupResult) -> None:
+        """``lookup`` for a concrete userset subject T:o#p of a declared relation, with
+        OpenFGA's implicit userset self-relation (TK144). Untainted answers: the closure
+        out of every declared SEED node (and of a witnessed seed shape's ``w_any``), the
+        twin of the read's seed probes. Derived answers: every derived key of an entity
+        the index holds a node for, decided by ``check`` -- the read path answers a
+        userset subject on a derived relation by evaluating the plan, so the residue's
+        stored userset memberships are not the answer (a key whose entity has no node
+        evaluates the same as without the self-relation, i.e. False). The subject's own
+        object is decided relation by relation. Keys with no node go to
+        ``implicit_keys``."""
+        seeds = self._seed_index[(s_type, s_pred)]
+        witnessed = None
+        for r1 in sorted(seeds):
+            if r1 == s_pred or (s_type, r1) in self.schema_info.leaf_families:
+                continue
+            self._collect_reachable(self._get_concrete(r1, s_type, s_name), result)
+            if (s_type, r1) in self.schema_info.subject_wildcard_shapes:
+                if witnessed is None:
+                    witnessed = self._entity_has_witness(s_type, s_name)
+                if witnessed:
+                    self._collect_reachable(
+                        self._w_node(s_type, r1, 'any', create=False), result)
+        keys: set[tuple[str, str, str]] = set()
+        for (t, rel) in sorted(self._declared_keys()):
+            if t == s_type and self.check(s_pred, s_type, s_name, rel, s_type, s_name):
+                keys.add((s_type, s_name, rel))
+        derived = self.schema_info.derived_families
+        for (t, rel) in sorted(derived):
+            for name in self._entity_names(t):
+                if (t, name) == (s_type, s_name):
+                    continue                                 # decided just above
+                if self.check(s_pred, s_type, s_name, rel, t, name):
+                    keys.add((t, name, rel))
+        self._add_keys(result, keys)
+
+    def _declared_keys(self) -> frozenset[tuple[str, str]]:
+        """Every declared ``(type, relation)`` (the seed table names each one)."""
+        return frozenset(self._seed_index)
+
+    def _entity_names(self, entity_type: str) -> list[str]:
+        """Names of the concrete entities of a type the index holds a node for."""
+        rows = self.idx.session.exec(
+            select(Node.name).where(Node.store_id == self.idx.store_id)   # type: ignore[arg-type]
+            .where(Node.type == entity_type).where(Node.wildcard == '')
+        ).all()
+        return sorted({n for n in rows if n != '*'})
+
+    def _witnessed_names(self, entity_type: str) -> list[str]:
+        """Names whose entity is witnessed (``_entity_has_witness``: a node that is not a
+        bridge-only middle) -- the graph twin of the oracle's ``instances``."""
+        return [n for n in self._entity_names(entity_type)
+                if self._entity_has_witness(entity_type, n)]
+
+    def _add_keys(self, result: LookupResult, keys) -> None:
+        """Add ``(type, name, predicate)`` answers: by node id when the node exists,
+        else to ``implicit_keys``. Read-only."""
+        want = [(p, t, n, '') for (t, n, p) in keys]
+        ids = self.idx.resolve_node_ids(want)
+        for k in want:
+            nid = ids.get(k)
+            if nid is not None:
+                result.node_ids.add(nid)
+            else:
+                result.implicit_keys.add((k[1], k[2], k[0]))
 
     def _collect_residue_memberships(self, s_pred: str, s_type: str, s_name: str,
                                      result: LookupResult) -> None:
@@ -1094,6 +1294,8 @@ class WildcardIndex:
                 result.markers.add((t, p, 'any'))
             result.excluded_node_ids |= neg
             result.node_ids |= upos            # edge-free userset memberships (P4)
+            if self._reflexive_reads:
+                self._self_reverse_derived(relation, o_type, o_name, result)
             return result
 
         if o_name == '*':
@@ -1102,7 +1304,128 @@ class WildcardIndex:
             self._collect_reverse(self._get_concrete(relation, o_type, o_name), result)
             if (o_type, relation) in self.schema_info.object_wildcard_shapes:
                 self._collect_reverse(self._w_node(o_type, relation, 'all', create=False), result)
+        if self._reflexive_reads:
+            self._add_keys(result, self._self_reverse_extra(
+                relation, o_type, o_name, result.node_ids, result.markers))
         return result
+
+    def _self_reverse_extra(self, relation: str, o_type: str, o_name: str,
+                            rev_ids, markers) -> set[tuple[str, str, str]]:
+        """The userset members OpenFGA's self-relation adds to an UNTAINTED
+        ``(o_type, o_name, relation)`` (a leaf family included, for internal use), given
+        its ordinary reverse result (TK144). Exact, no ``check`` needed: the twin of the
+        read's seed probes. ``T:o#p`` is a member iff some seed ``r1`` of ``(T, p)`` has
+        ``(T, o, r1)`` equal to the target or reaching it -- so every plain userset node
+        ``(T, o, r1)`` of the reverse result, and the target itself, contributes
+        ``T:o#p`` for every ``p`` it is a seed of; a userset ``w_any(T, r1)`` marker
+        contributes it for every WITNESSED entity ``T:o`` (seed shapes ``r1 != p`` only:
+        the marker already covers its own shape)."""
+        out: set[tuple[str, str, str]] = set()
+        targets: list[tuple[str, str, str]] = []
+        if o_name != '*':
+            targets.append((o_type, o_name, relation))
+        for n in self.idx._load_nodes(rev_ids).values():
+            if n.wildcard == '' and n.predicate != '...':
+                targets.append((n.type, n.name, n.predicate))
+        for (t, n, r1) in targets:
+            for p in self._sub_index.get((t, r1), ()):
+                out.add((t, n, p))
+        for (t, r1, variant) in sorted(markers):
+            if variant != 'any' or r1 == '...':
+                continue
+            subs = sorted(p for p in self._sub_index.get((t, r1), ()) if p != r1)
+            if not subs:
+                continue
+            for n in self._witnessed_names(t):
+                out.update((t, n, p) for p in subs)
+        return out
+
+    def _untainted_reverse_userset_keys(self, relation: str, o_type: str,
+                                        o_name: str) -> set[tuple[str, str, str]]:
+        """Every userset member (as a key) of an untainted ``(o_type, o_name, relation)``,
+        leaf families included, under the self-relation (TK144): the ordinary reverse
+        closure plus ``_self_reverse_extra``. A candidate source for the derived case."""
+        tmp = LookupResult()
+        self._collect_reverse(self._get_concrete(relation, o_type, o_name), tmp)
+        if (o_type, relation) in self.schema_info.object_wildcard_shapes:
+            self._collect_reverse(self._w_node(o_type, relation, 'all', create=False), tmp)
+        out = {(n.type, n.name, n.predicate)
+               for n in self.idx._load_nodes(tmp.node_ids).values()
+               if n.wildcard == '' and n.predicate != '...'}
+        out |= self._self_reverse_extra(relation, o_type, o_name, tmp.node_ids, tmp.markers)
+        return out
+
+    def _derived_reverse_candidates(self, relation: str, o_type: str,
+                                    o_name: str) -> set[tuple[str, str, str]]:
+        """A SUPERSET of the userset subjects whose membership in the derived
+        ``(o_type, o_name, relation)`` the self-relation can change (TK144): the target
+        itself, plus -- per plan leaf, both polarities -- every userset member of the
+        operand under the self-relation (untainted operands exactly, derived ones
+        recursively; strata bound the recursion). A userset whose own node no operand
+        reaches answers exactly as without the self-relation, i.e. as the residue says."""
+        proc = self._read_processor()
+        plan = proc.compiled.plans[(o_type, relation)]
+        tainted = proc.compiled.tainted
+        out: set[tuple[str, str, str]] = {(o_type, o_name, relation)}
+        for spec, node in zip(plan.leaves, plan.leaf_nodes):
+            if spec.kind == 'closure':
+                out |= self._untainted_reverse_userset_keys(spec.predicate, o_type, o_name)
+            elif spec.kind == 'derived-computed':
+                out |= self._derived_reverse_candidates(spec.predicate, o_type, o_name)
+            elif spec.kind == 'derived-userset':
+                t, p = node.subject_type, node.subject_predicate
+                for xn in proc.stored_userset_subjects(o_type, o_name, spec.predicate, t, p):
+                    out.add((t, xn, p))
+                    out |= self._derived_reverse_candidates(p, t, xn)
+            elif spec.kind == 'derived-ttu':
+                target = node.target_rel
+                for (pt, pn) in proc.tupleset_parents(o_type, o_name, node.tupleset_rel,
+                                                      node.parent_types):
+                    out.add((pt, pn, target))
+                    if (pt, target) in tainted:
+                        out |= self._derived_reverse_candidates(target, pt, pn)
+                    elif (pt, target) in self._seed_index:
+                        out |= self._untainted_reverse_userset_keys(target, pt, pn)
+        return out
+
+    def _self_reverse_derived(self, relation: str, o_type: str, o_name: str,
+                              result: LookupResult) -> None:
+        """Correct a derived ``lookup_reverse`` for the self-relation (TK144): every
+        candidate userset subject is decided by ``check`` (which evaluates the plan) and
+        moved between ``node_ids`` / ``implicit_keys`` (member) and the marker exclusions
+        ``excluded_node_ids`` / ``implicit_excluded_keys`` (covered but refused)."""
+        cands = self._derived_reverse_candidates(relation, o_type, o_name)
+        for n in self.idx._load_nodes(result.node_ids | result.excluded_node_ids).values():
+            if n.wildcard == '' and n.predicate != '...':
+                cands.add((n.type, n.name, n.predicate))
+        markers_any = {(t, p) for (t, p, v) in result.markers if v == 'any'}
+        want = sorted(cands)
+        ids = self.idx.resolve_node_ids([(p, t, n, '') for (t, n, p) in want])
+        for (t, n, p) in want:
+            if n == '*' or p == '...':
+                continue
+            member = self.check(p, t, n, relation, o_type, o_name)
+            covered = (t, p) in markers_any
+            nid = ids.get((p, t, n, ''))
+            if nid is not None:
+                if member:
+                    result.excluded_node_ids.discard(nid)
+                    if not covered:
+                        result.node_ids.add(nid)
+                else:
+                    result.node_ids.discard(nid)
+                    if covered:
+                        result.excluded_node_ids.add(nid)
+            else:
+                key = (t, n, p)
+                if member:
+                    result.implicit_excluded_keys.discard(key)
+                    if not covered:
+                        result.implicit_keys.add(key)
+                else:
+                    result.implicit_keys.discard(key)
+                    if covered:
+                        result.implicit_excluded_keys.add(key)
 
     def _collect_reachable(self, node: Node | None, result: LookupResult) -> None:
         if node is None:

@@ -29,6 +29,58 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-10-17b — `TK144`: a userset IS a member of itself, as in OpenFGA (TK138 landing 2)
+
+**What changed.** The rule the `## 2026-10-14 — TK138` entry describes is now applied in all
+four corners in one change set: the oracle (`tests/oracle.py::Oracle.check.sat`, one
+disjunct), the set engine (`src/zanzibar/setengine/engine.py::SetEngine.check.sat`, its
+twin), the graph index, and the Lean models. For a concrete userset subject `s = T:o#r_s`
+at a declared node `(T', o', r)`: `member(s) = (s == T':o'#r) or eval(rewrite(r), s)`, the
+self term outside the rewrite. `tests/test_tk138_userset_self_relation.py` now pins
+AGREEMENT with the literal OpenFGA v1.22.0 tables (models A-E) on every corner, with two
+named exceptions (below).
+**How the graph index does it** (decisions on the plan doc's 2026-10-17 corrections): no
+self edge is materialized (the self tuple stays refused as a cycle). The untainted read
+probes from the SEED nodes of the subject's own object, the relations the self tuple would
+fan out to through Computed rewrites (`SchemaInfo.self_seeds`, compiled); a seed SHAPE's
+`w_any` probe counts only when the entity is witnessed, the twin of the oracle's
+`instances`. A userset subject on a DERIVED relation is answered at read time by the plan
+evaluated with a reflexive context (challenge C5); the reconcile, the invariants and the
+I9 audit read non-reflexively, so the residue and the canonical state are unchanged.
+**Lookups (D3a).** ListObjects / ListUsers follow check in OpenFGA, so `lookup` /
+`lookup_reverse` / `SetEngine.expand` list implicit usersets; one with no node or interned
+id arrives through the new key channel (`implicit_keys` / `implicit_excluded_keys`,
+`MemberSet.ipos` / `.ineg`). Every `lookup_reverse(r, T:o)` now includes `T:o#r` itself.
+Unlike OpenFGA's Expand (a rewrite TREE, which never shows the self member), the set
+engine's `expand` is an evaluated member set and follows check.
+**Answers that moved:** the `vx` row flips ALLOW to DENY (a userset in its own
+subtrahend), `vy` DENY to ALLOW, and every self-shaped userset query that was False is
+True where OpenFGA says so (`CHANGELOG.md` [Unreleased], a 0.1.0 break; `__version__`
+stays 0.0.5 until that release).
+**Still different from OpenFGA, deliberately (the pin's `REPO_EXCEPTIONS`):** an undeclared
+relation answers False here and errors there (lenient reads, `A14`); and a TTU target
+undeclared on one of the tupleset's types still answers True through the `ttu_leaf`
+from-chain disjunct (sub-decision D4, challenge C3, row `D03`). Unchanged: bare and
+`user:*` subjects, userset-star subjects (D1), and the write refusal of the exact self
+tuple (both refuse it; this repo as a cycle, OpenFGA as implicit, C6).
+**Lean.** The spec is `Spec/SelfRelation.lean::semR` (the disjunct form, D2), with T0a
+(`semR_fuel_stable`; C7 settled: the same `fuelBound`), T1 (`setEngine_correctR`), T2b and
+the T3/T6 family over the reflexive reads (`GraphIndex/SelfRead.lean::graph_correctR` and
+siblings, proved from `graph_correct` through `GraphIndex/SelfBridge.lean::
+semR_untainted_userset`), and witnesses (`GraphIndex/SelfWitness.lean`). The base `sem`
+and every theorem about it stay: they describe the residue the processor maintains. `zcli`
+prints `semR` (spec mode) and `graphModeAnswersR` (graph mode). The model gaps are four,
+each harmless on every state the theorems cover, and are recorded in
+`formal/CORRESPONDENCE.md` §7.5: the `w_any` seed-shape witness gate (outside
+`W4Fragment.wsBare`), leaf seeds, derived `Direct` arms, and the residue staying
+non-reflexive. Map: `docs/tk138-userset-self-relation-2026-10-14.md`.
+**Gate artifacts moved deliberately (2026-10-17).** The derived-arm multiplicity golden
+(`formal/conformance/derived_arm_multiplicity.json`) gained entries for the two new
+`GRAPH_FRAGMENT` corpora only; every prior entry was reproduced unchanged before the write.
+The two verdict tables in `formal/conformance/test_conformance_fragment.py` gained a
+`selfrel_boolean_flip` row each (`directArmsBare`; `storeValid`), and Lean's decider and the
+DW-1 mirror probe agree on it.
+
 ## 2026-10-17 — `TK147`: an `object_wildcard_shapes` entry must name a declared relation
 
 **What the spec says.** wildcard-materialization-spec §2.1: object-wildcard shapes have no
@@ -57,6 +109,11 @@ a new store id. Map: [`docs/tk147-owc-shape-refusal-2026-10-17.md`](tk147-owc-sh
 Pinned by `tests/test_tk147_owc_shape_refusal.py`.
 
 ## 2026-10-14 — `TK138`: a userset is not a member of itself here; in OpenFGA it is, at every node
+
+> **Superseded 2026-10-17 (`TK144`, landing 2).** Adopted in all four corners; the
+> divergence this entry records is closed except for the two rows it already named as kept
+> (undeclared relations, and the C3 TTU asymmetry). See `## 2026-10-17b — TK144` at the top
+> of this file. The body below is as of 2026-10-14.
 
 **Open, pinned, not fixed.** The user's word on the row (2026-10-13d) is "verify against a
 real OpenFGA server, then ADOPT". Verification is done (`docs/tk138-userset-self-relation-2026-10-14.md`

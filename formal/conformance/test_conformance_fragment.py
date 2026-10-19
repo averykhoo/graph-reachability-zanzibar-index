@@ -2,7 +2,7 @@
 
 Until 2026-09-23d nothing in this repo could say whether a given `(schema, store)` is inside
 `W4Fragment`, the hypothesis bundle that scopes every headline theorem.
-`test_conformance_graph.py::_THEOREM_BACKED` asserted it for 25 corpora, and all but one of
+`test_conformance_graph.py::_THEOREM_BACKED` then asserted it for 25 corpora, and all but one of
 those assertions were prose arguments in `corpus.py`. That test's own failure message said
 *"zcli will NOT tell you"*. Now it does:
 `formal/lean/ZanzibarProofs/GraphIndex/FragmentDecide.lean::w4FragmentB`, proved EXACT in
@@ -128,6 +128,12 @@ _EXPECTED_FAILURES: dict[str, tuple[str, ...]] = {
     "TTU_USERSET:derived_userset": ("directArmsBare", "noUnionDirects", "term"),
     "TTU_USERSET:wildcard_userset": ("wsBare", "bareStar"),
     "SELF_REF:self_ttu_parent": ("computedOrDirect", "directArmsConcrete", "noUnionDirects"),
+    # TK144 (2026-10-17): `vx` / `vy` restrict a userset (`doc#banned`, `doc#editor`) on a
+    # derived Direct arm. REASONED in the corpus comment before any run; then Lean's verdict
+    # was seen first (this test, red), and the mirror probe run afterwards agrees:
+    # `OK  SCHEMAS:selfrel_boolean_flip mirror=OUT listed=OUT strata=1 compile=ok
+    # twoStrata=True fails=['directArmsBare']`. The two derivations share no code.
+    "SCHEMAS:selfrel_boolean_flip": ("directArmsBare",),
 }
 
 
@@ -365,6 +371,12 @@ _EXPECTED_ADMISSION_FAILURES: dict[str, tuple[str, ...]] = {
     "SCHEMAS:derived_userset_subject": ("storeValid",),
     "TTU_USERSET:derived_userset": ("storeValid",),
     "REFUSED_TUPLESET:derived_tupleset_ttu": ("ttuDirect",),
+    # TK144 (2026-10-17): the store writes userset subjects (`doc:1#banned`, `doc:1#editor`)
+    # onto the derived Direct arms of `vx` / `vy`, the same `storeValid` silent half as the
+    # two `derived_userset` rows above, and shadowed by `directArmsBare` (`_SHADOW_FIELD`).
+    # Not a pre-zcli prediction: Lean's verdict was seen first, then checked against the
+    # sizing's rule ("only MIXED silent halves can appear").
+    "SCHEMAS:selfrel_boolean_flip": ("storeValid",),
 }
 
 #: The `W4Fragment` field that also takes a MIXED field's silent half out of the premise

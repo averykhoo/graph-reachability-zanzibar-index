@@ -781,6 +781,81 @@ SCHEMAS: dict[str, tuple[str, list, tuple]] = {
          mk_tuple("...", "user", "carol", "viewer", "doc", "d2")],
         (),
     ),
+    # TK144 (TK138 landing 2, challenge C2): OpenFGA's implicit userset self-relation
+    # ACROSS objects. This is the plan doc's model C verbatim, measured against OpenFGA
+    # v1.22.0 (docs/tk138-userset-self-relation-2026-10-14.md, C1): group:1#admin and
+    # group:3#admin are viewers of doc:1 -- through group:<n>#member's computed `admin`
+    # arm and the stored `group:<n>#member viewer doc:1` -- and group:3 has no `admin`
+    # tuple anywhere, so no backend that enumerates only own-object keys gets row
+    # `group:3#admin nb doc:1` right. The grid's userset subjects cover every declared
+    # relation of `group` (`formal/conformance/grid.py`), so both rows are asked.
+    # In GraphAdmission + W4Fragment: `nb` is a boolean tree over two computed refs
+    # (ComputedOrDirect, no Direct arm, so directArmsBare/noUnionDirects hold vacuously),
+    # its operands are untainted, one stratum, no wildcard, and no tuple carries a
+    # derived subject predicate (`term`) -- hence in GRAPH_FRAGMENT below.
+    "selfrel_cross_object": (
+        """
+        type user
+        type group
+          define admin: [user]
+          define member: [user] or admin
+        type doc
+          define viewer: [user, group#member]
+          define banned: [user, group#admin]
+          define nb: viewer but not banned
+        """,
+        [mk_tuple("member", "group", "1", "viewer", "doc", "1"),
+         mk_tuple("member", "group", "1", "viewer", "doc", "2"),
+         mk_tuple("admin", "group", "1", "banned", "doc", "2"),
+         mk_tuple("...", "user", "alice", "admin", "group", "1"),
+         mk_tuple("member", "group", "3", "viewer", "doc", "1")],
+        (),
+    ),
+    # TK144 (C2): the same model with `[group#admin]` removed everywhere (so no restriction
+    # names the shape `group#admin`) -- group:1#admin is still a viewer of doc:1 by the
+    # self-relation. REASONED from C1 row 1; this variant was not probed against OpenFGA.
+    # Same W4 argument as above, hence in GRAPH_FRAGMENT.
+    "selfrel_cross_object_no_admin_restriction": (
+        """
+        type user
+        type group
+          define admin: [user]
+          define member: [user] or admin
+        type doc
+          define viewer: [user, group#member]
+          define banned: [user]
+          define nb: viewer but not banned
+        """,
+        [mk_tuple("member", "group", "1", "viewer", "doc", "1"),
+         mk_tuple("member", "group", "1", "viewer", "doc", "2"),
+         mk_tuple("...", "user", "alice", "admin", "group", "1"),
+         mk_tuple("...", "user", "bob", "banned", "doc", "2"),
+         mk_tuple("member", "group", "3", "viewer", "doc", "1")],
+        (),
+    ),
+    # TK144: the plan doc's model B (OpenFGA v1.22.0, section 1.2): the self-relation inside
+    # a subtrahend (`vx`: ALLOW here before TK144, DENY in OpenFGA and after) and as an
+    # `and` arm (`vy`). SPEC-SIDE ONLY: `vx` / `vy` restrict a userset on a derived Direct
+    # arm, which `W4Fragment.directArmsBare` excludes, so it is NOT in GRAPH_FRAGMENT.
+    "selfrel_boolean_flip": (
+        """
+        type user
+        type doc
+          define banned: [user]
+          define editor: [user]
+          define plain: [user]
+          define viewer: [user, doc#viewer]
+          define vx: [user, doc#banned] but not banned
+          define vy: [user, doc#editor] and editor
+          define nb: viewer but not banned
+          define chain: [user, doc#viewer]
+          define cv: plain
+        """,
+        [mk_tuple("banned", "doc", "1", "vx", "doc", "1"),
+         mk_tuple("editor", "doc", "1", "vy", "doc", "1"),
+         mk_tuple("viewer", "doc", "1", "chain", "doc", "2")],
+        (),
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -845,6 +920,12 @@ GRAPH_FRAGMENT: tuple[str, ...] = (
     #     multiplicity), so a spec-side-only placement would compare nothing.
     "reconvergent_diamond",
     "reconvergent_derived",
+    #   * selfrel_cross_object / selfrel_cross_object_no_admin_restriction (added
+    #     2026-10-17, TK144) -- the per-field W4 argument is in their SCHEMAS entries.
+    #     They are here because the self-relation's cross-object rows are a GRAPH
+    #     read question (seed probes + read-time plan evaluation), not only a spec one.
+    "selfrel_cross_object",
+    "selfrel_cross_object_no_admin_restriction",
 )
 
 # ---------------------------------------------------------------------------

@@ -43,6 +43,7 @@ import ZanzibarProofs.GraphIndex.CascadeStrataSettle
 import ZanzibarProofs.GraphIndex.CascadeStrataEnum
 import ZanzibarProofs.GraphIndex.CascadeStrataAssemble
 import ZanzibarProofs.GraphIndex.Correct
+import ZanzibarProofs.GraphIndex.SelfWitness
 
 /-!
 # Axiom audit (plan C4)
@@ -2329,5 +2330,24 @@ namespace Zanzibar
 #print axioms AdmissionDecideWitness.refutes_keysNonempty
 #print axioms AdmissionDecideWitness.premise_reads_both_halves
 #print axioms AdmissionDecideWitness.outside_S3_by_decide
+
+/-! ## TK144 -- OpenFGA's implicit userset self-relation (`semR` and the reflexive reads) -/
+#print axioms semR_fuel_stable
+#print axioms semR_eq_sem_of_not_userset
+#print axioms setEngine_correctR
+#print axioms semR_untainted_userset
+#print axioms graph_correctR
+#print axioms graph_correct_publicR
+#print axioms backend_equivalenceR
+#print axioms exclusion_effectiveR
+#print axioms no_ghost_grantR
+#print axioms graphRun_check_eq_semR
+#print axioms graphModeAnswersR_eq_semR
+#print axioms graphRunOps_check_eq_semR
+#print axioms SelfWitness.premise
+#print axioms SelfWitness.spec_flip
+#print axioms SelfWitness.driver_flip
+#print axioms SelfWitness.correct_applies
+#print axioms SelfWitness.vx_flip
 
 end Zanzibar

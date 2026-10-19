@@ -14,6 +14,8 @@ import ZanzibarProofs.Spec.Confine
 import ZanzibarProofs.Spec.FuelStable
 import ZanzibarProofs.Spec.WellDef
 import ZanzibarProofs.Spec.Counterexample
+-- TK144: the spec with OpenFGA's implicit userset self-relation
+import ZanzibarProofs.Spec.SelfRelation
 
 -- Set-engine model + T1
 import ZanzibarProofs.SetEngine.MemberSet
@@ -21,6 +23,7 @@ import ZanzibarProofs.SetEngine.Algebra
 import ZanzibarProofs.SetEngine.Contains
 import ZanzibarProofs.SetEngine.Eval
 import ZanzibarProofs.SetEngine.Correct
+import ZanzibarProofs.SetEngine.SelfRelation
 
 -- Graph-index model + T2/T4/T5
 import ZanzibarProofs.GraphIndex.Closure
@@ -77,6 +80,11 @@ import ZanzibarProofs.GraphIndex.RemoveConfluence
 
 -- Phase 6: the executable graph-model driver + honesty theorems (zcli graph mode)
 import ZanzibarProofs.GraphIndex.Exec
+
+-- TK144: the reflexive graph read, its headline theorems and witnesses
+import ZanzibarProofs.GraphIndex.SelfBridge
+import ZanzibarProofs.GraphIndex.SelfRead
+import ZanzibarProofs.GraphIndex.SelfWitness
 
 -- P4 (2026-10-03): the leaf-probe <-> directLeaf bridge as a general theorem
 import ZanzibarProofs.GraphIndex.LeafBridge

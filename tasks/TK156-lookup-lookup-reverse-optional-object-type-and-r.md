@@ -2,7 +2,7 @@
 id: TK156
 title: lookup / lookup_reverse: optional object-type and relation filter
 brief: TK123 SPLIT A21b: both backends, pinned by the lookup oracle
-pri: LATER
+pri: NEXT
 size: S
 deps: []
 related: [TK123]
@@ -11,8 +11,8 @@ labels: []
 source: docs/tk123-api-review-2026-10-14.md
 source_hash:
 created: 2026-10-15b
-moved: 2026-10-15b
-updated: 2026-10-15b
+moved: 2026-10-19
+updated: 2026-10-19
 closed:
 ---
 

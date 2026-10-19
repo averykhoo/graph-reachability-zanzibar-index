@@ -40,10 +40,44 @@ are no compatibility aliases. What breaks a 0.0.5 caller, in short:
 - Many exception and warning messages are reworded (see Changed); code that matches on
   message text may need updating. Exception classes and their builtin bases are unchanged
   except where listed here.
+- **Answers change for userset subjects** (TK144): a userset such as `doc:1#banned` is now
+  a member of itself, as in OpenFGA. One previously ALLOWED check is now DENIED (a userset
+  inside its own `but not`); see Changed. `lookup_reverse` results now include the
+  object's own userset.
 
 Each is detailed below, under Changed or Added.
 
 ### Changed
+- **Breaking: a userset is a member of itself, as in OpenFGA** (TK144, TK138 landing 2). A
+  concrete userset subject `T:o#r` is now a member of its own declared relation `r` on
+  `T:o`, outside the relation's definition, and of everything built on that: a computed
+  relation (`can_view: viewer` makes `doc:1#viewer` a `can_view` of `doc:1`), a `but not`
+  base, a TTU target, and other objects through a stored userset (with
+  `member: [user] or admin` and `group:1#member viewer doc:1`, `group:1#admin` is a viewer
+  of `doc:1`). Measured against OpenFGA v1.22.0; the oracle, both backends and the Lean
+  models apply it together.
+  - **ALLOW to DENY:** with `define vx: [user, doc#banned] but not banned` and the tuple
+    `doc:1#banned vx doc:1`, `check("doc:1#banned", "vx", "doc:1")` was `True` and is now
+    `False` (the userset is in its own subtrahend `banned`). Code that relied on the old
+    answer loses that access.
+  - **DENY to ALLOW:** with `define vy: [user, doc#editor] and editor` and
+    `doc:1#editor vy doc:1`, `check("doc:1#editor", "vy", "doc:1")` was `False` and is now
+    `True`; on an empty store `check("doc:1#viewer", "viewer", "doc:1")` is now `True`.
+  - **Lookups list such usersets.** `lookup` of a userset includes its own object's
+    relations it is a member of, and `lookup_reverse(r, T:o)` includes `T:o#r` itself (and
+    the usersets of `T:o` that `r` is built on). A userset with no stored tuple has no
+    node or interned id, so it arrives in the new `implicit_keys` field; read results
+    through `result_keys` / `excluded_keys`, which include it. Callers that list USERS by
+    taking keys of type `user` are unaffected.
+  - Unchanged: plain users and `user:*` answers (the rule adds only the userset itself,
+    never its members), userset-star subjects such as `doc:*#viewer`, an undeclared
+    relation (still `False`, where OpenFGA errors), and the write refusal of the exact
+    self tuple `doc:1#viewer viewer doc:1` (refused as a cycle; OpenFGA refuses it as
+    implicit). One OpenFGA difference remains, on purpose: a `from` whose parent type does
+    not declare the target relation (`parent: [folder, team]`, `x: viewer from parent`,
+    `team` with no relations) still answers `True` for `team:1#viewer` here, where OpenFGA
+    returns a validation error. The version stays 0.0.5 until the 0.1.0 release, which
+    carries this break.
 - **Breaking: the composed-system package and its class are renamed** (TK123). There are
   no compatibility aliases; the old names no longer import.
   - `zanzibar.connectedstore` is now `zanzibar.store`, and `ConnectedStore` is now `Store`:
@@ -175,6 +209,16 @@ Each is detailed below, under Changed or Added.
   (the versions `PersistedSchemaRefused` quotes).
 
 ### Added
+- **The key channel of a lookup result** (TK144): `LookupResult.implicit_keys` /
+  `implicit_excluded_keys` and `SetLookupResult.implicit_keys` / `implicit_excluded_keys`,
+  `(type, name, predicate)` keys for answers and exclusions that have no node or interned
+  id (a userset that is a member of itself before any tuple names it).
+  `Store.result_keys` / `excluded_keys` and `SetEngine.result_keys` / `excluded_keys`
+  include them. `MemberSet` gains the same channel (`ipos` / `ineg`, `contains_key`) for
+  `SetEngine.expand`.
+- `SchemaInfo.self_seeds` (TK144): the compile-time table the graph index reads the
+  self-relation through (filled by `compile_ruleset`; a hand-built `SchemaInfo` has none
+  and reads as before).
 - `compile_ruleset(..., declared_types=...)` (TK153): the schema text's `type` lines, used
   only to word an admission refusal; `parse_openfga_schema` passes them for you.
 - `derive_schema_info(..., declared_types=...)` (TK147): the same facts, used only to word

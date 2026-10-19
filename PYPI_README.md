@@ -94,7 +94,7 @@ a store's schema is write-once.
 ### Reading lookup results
 
 `lookup` (what can this subject reach?) and `lookup_reverse` (who can reach this
-object's relation?) return a `LookupResult` with three fields:
+object's relation?) return a `LookupResult` with five fields:
 
 * `node_ids`: ids of `zanzibar.graphindex.Node` rows. `store.result_keys(result)` turns
   them into `(type, name, predicate)` keys, as above, where `predicate` is the relation,
@@ -111,6 +111,11 @@ object's relation?) return a `LookupResult` with three fields:
   `lookup_reverse`, `("user", "...", "any")` means "every user", from a `[user:*]` tuple.
   The variant `"all"` appears only with `object_wildcard_shapes` (an extension): from
   `lookup`, `("doc", "reader", "all")` means "reader of every doc" (a `doc:*` tuple).
+* `implicit_keys` / `implicit_excluded_keys`: the same two parts for answers that have no
+  node yet, as `(type, name, predicate)` keys. A userset is a member of itself (as in
+  OpenFGA), so `lookup_reverse("viewer", "doc:d1")` lists `doc:d1#viewer` even before any
+  tuple names it. `store.result_keys(result)` and `store.excluded_keys(result)` include
+  them, so read results through those two.
 * `excluded_node_ids`: subjects a marker would cover but who are refused (for example by
   `but not banned`). `store.excluded_keys(result)` gives their keys. Subtract them from
   the marker yourself: "every user except mallory".
@@ -122,7 +127,7 @@ be listed in `node_ids` (the set engine leaves it out), so compare results by wh
 cover: the keys, plus every subject of a marker's shape, minus the excluded keys.
 
 A standalone `zanzibar.setengine.SetEngine` returns a `SetLookupResult` (a dataclass) with
-the same three fields, in its own id
+the same five fields, in its own id
 space: markers are `(type, predicate)` pairs and ids are in-memory handles. Translate with
 `engine.result_keys(res)` and `engine.excluded_keys(res)` before the next write and in the
 same engine instance: once any write frees an id, the engine is rebuilt, or the result is
@@ -341,11 +346,16 @@ refusals must not swallow it. `UnprovenExtensionWarning` is a warning, not an ex
   inside group `b` inside group `a`, a group inside itself, or a folder that is its own
   ancestor, is refused with `AdmissionRejected` by both backends. OpenFGA accepts such
   tuples, so check imported data for cycles first.
-* **A userset is not a member of itself.** OpenFGA counts `doc:1#banned` as a member of
-  `doc:1#banned`, and so of anything built on it; this library does not (except through a
-  `from` parent). With `define vx: [user, doc#banned] but not banned` and the tuple
-  `doc:1#banned vx doc:1`, checking `doc:1#banned` for `vx` on `doc:1` is allowed here and
-  denied by OpenFGA. Only userset subjects are affected; plain users and `user:*` are not.
+* **A userset is a member of itself, as in OpenFGA, with one exception.** `doc:1#banned` is
+  a member of `doc:1#banned`, and so of anything built on it: with
+  `define vx: [user, doc#banned] but not banned` and the tuple `doc:1#banned vx doc:1`,
+  checking `doc:1#banned` for `vx` on `doc:1` is denied (it was allowed before 0.1.0).
+  Lookups list such usersets too, so `lookup_reverse("viewer", "doc:d1")` includes
+  `doc:d1#viewer` itself. The exception: with `define parent: [folder, team]` and
+  `define x: viewer from parent` where `team` declares no `viewer`, checking
+  `team:1#viewer` for `x` on a doc whose parent is `team:1` is allowed here, while OpenFGA
+  rejects the query (`relation 'team#viewer' not found`). Plain users and `user:*` are
+  never affected.
 * **Reads are lenient; writes are strict.** A write naming an undeclared type or relation,
   or a malformed name, raises `AdmissionRejected`. A `check` with the same mistake returns
   `False` with no error, so a typo in a relation name reads as "denied". On a read,

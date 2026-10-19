@@ -106,6 +106,15 @@ def derive_schema_info(
     each must be a ``(type, relation)`` pair naming a declared relation, or
     ``ShapeNoLongerAccepted`` is raised (``declared_types``, the types the text declared,
     only sharpens that message).
+
+    The result is shape metadata ONLY: it carries no compiled rewrite Rules, no boolean
+    artifacts and no self-relation seed table (``SchemaInfo.self_seeds``). A
+    ``WildcardIndex`` built directly on it is the raw tuple graph -- a stored
+    ``user:a viewer doc:1`` does not make ``user:a`` a ``can_view`` under
+    ``can_view: viewer``, and a userset is not a member of its own relation -- so it does
+    NOT answer like the ``SetEngine``. For the schema's semantics on the graph index use
+    ``parse_openfga_schema`` / ``compile_ruleset`` (the ``RuleSet``'s ``schema_info``) or a
+    ``Store``.
     """
     # Provenance (moved out of the docstring, TK123 item 14): spec §2.3.
     _validate_object_wildcard_shapes(ast, object_wildcard_shapes, declared_types)
@@ -392,6 +401,8 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
         schema_info = _expand_object_wildcard_shapes(rules_and_filters, schema_info)
         _reject_doubly_bridged_shapes(ast, schema_info)
         schema_info = _node_removal_fence(rules_and_filters, schema_info)
+        schema_info = replace(schema_info,
+                              self_seeds=_self_seed_table(ast, rules_and_filters))
         return RuleSet(rules_and_filters, schema_info=schema_info,
                        declared=declared_relations(ast, declared_types))
 
@@ -416,8 +427,51 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
                                   declared_shapes)
     _reject_doubly_bridged_shapes(ast, schema_info)
     schema_info = _node_removal_fence(rules_and_filters, schema_info)
+    schema_info = replace(schema_info,
+                          self_seeds=_self_seed_table(ast, rules_and_filters),
+                          compiled=compiled if compiled.plans else None)
     return RuleSet(rules_and_filters, schema_info=schema_info, compiled=compiled,
                    declared=declared_relations(ast, declared_types))
+
+
+def _self_seed_table(ast: SchemaAST, rules_and_filters: list) -> frozenset[tuple[str, str, str]]:
+    """``SchemaInfo.self_seeds`` (TK144): for every DECLARED ``(T, p)``, the relations and
+    compiled leaf predicates ``r1`` on ``T`` that a write ``u p T:o`` reaches through the
+    compiled Computed rewrite Rules alone (``p`` included).
+
+    OpenFGA's implicit userset self-relation makes ``T:o#p`` a member of its own node
+    ``(T, o, p)``; materialized as the self tuple ``T:o#p p T:o``, ``RuleSet.apply`` would
+    fan it out to exactly these ``(T, o, r1)``. The graph read uses the table instead of
+    the tuple (the self tuple is refused as a cycle, and is never stored): the untainted
+    read answers ``(T, o, r1)`` directly and probes from each declared seed node. A TTU
+    Rule (then-pattern with a subject predicate) is a from-chain edge, not a same-object
+    rewrite, so it is skipped -- that propagation is a real closure edge."""
+    sup: dict[tuple[str, str], set[str]] = {}
+    for rf in rules_and_filters:
+        if not isinstance(rf, Rule) or rf.then_pattern is None:
+            continue
+        ip, tp = rf.if_pattern, rf.then_pattern
+        if tp.subject_predicate is not None:          # TTU rewrite: a from-chain edge
+            continue
+        if ip.object_type is None or ip.relation is None or tp.relation is None:
+            # Provenance: TK144. Every compiled Rule names both (see _node_removal_fence).
+            raise ValueError(f'_self_seed_table: match-any rewrite rule {rf!r}; the seed '
+                             f'table cannot name the relations it connects')
+        if (tp.object_type or ip.object_type) != ip.object_type:
+            continue                                  # not a same-object rewrite
+        sup.setdefault((ip.object_type, ip.relation), set()).add(tp.relation)
+    out: set[tuple[str, str, str]] = set()
+    for (t, p) in ast:
+        seen = {p}
+        stack = [p]
+        while stack:
+            r = stack.pop()
+            for r2 in sup.get((t, r), ()):
+                if r2 not in seen:
+                    seen.add(r2)
+                    stack.append(r2)
+        out.update((t, p, r1) for r1 in seen)
+    return frozenset(out)
 
 
 def _node_removal_fence(rules_and_filters: list, schema_info: SchemaInfo) -> SchemaInfo:

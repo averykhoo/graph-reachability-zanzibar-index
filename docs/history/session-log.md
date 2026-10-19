@@ -33,6 +33,43 @@ from here.
 
 ---
 
+## 2026-10-19 — `TK144` committed on the full gate (TK138 landing 2); `TK138` closed; `TK161`/`TK162` filed
+
+rows: TK144 (closed), TK138 (closed), TK161 / TK162 (new, LATER), TK151 (comment: MINOR bump), TK155 (LATER -> NOW), TK156 / TK157 (LATER -> NEXT)
+
+`task lint: clean (13 checks, 279 task file(s) parsed), 25 warning(s)`
+
+`read: show TK144`
+
+`asked: none`
+
+**A resumed session.** The 2026-10-17 session built the `TK144` four-corner change set (the
+implicit userset self-relation, OpenFGA v1.22.0 semantics, in the oracle, the set engine, the
+graph index and the three Lean models), ran `verify.sh lean` green on it, and then died on a
+Windows memory error before the gate tiles. It left no ledger entry, and neither did the two
+2026-10-17 commits before it (`TK153`, `TK147`); their evidence is on those rows' Logs and in
+the commit messages. This entry covers the resumption. The user asked for it to be run as
+ultracode subagents ("coordinating subagents in ultracode ... not doing it yourself").
+- **Records first, then the gate, then the commit** (`docs/README.md` §7: tree and note edits
+  stale the tiles). The orchestrator runs the ten phases (`lean`, `conf-tile:1/5`..`5/5`,
+  `tests-tile:1/4`..`4/4`) on this tree and commits by path only on `gate_status` COVERED.
+- **`TK144` closed**, and with it **`TK138`**, whose only remaining scope was landing 2. The
+  close message carries the 2026-10-17 first-hand evidence: lean PASSED; sabotage S1-S12 red;
+  the `HEADLINE_AUDITS` loop sabotage; hypothesis `--hypothesis-seed=11` and `=23`, 49 passed
+  each.
+- **PostgreSQL leg: a REASONED skip, not run.** The only store change is a read-side key
+  translation in `src/zanzibar/store/_store.py` (`result_keys` / `excluded_keys`). No locking,
+  watermark, isolation or multi-instance state changed, which is the PG trigger CLAUDE.md names.
+- **TK144's three OPEN items:** the residue userset arm's phantom branch, now reachable only
+  from a seedless facade, became `TK161` (LATER, S). The brute-force graph lookup cost on large
+  stores became `TK162` (LATER, M, perf). The MINOR version bump is on `TK151`, because no
+  release row exists and `TK151` gates the 0.1.0 cut.
+- **Re-rank** in the user's 2026-10-16 order: `TK155` -> NOW, `TK156` / `TK157` -> NEXT.
+
+**Still owed:** nothing.
+
+---
+
 ## 2026-10-16b — the owed PostgreSQL leg run: green; PG node-id non-reuse now tested; sabotage plugin tracked
 
 rows: TK154 (comment), TK160 (new, LATER)

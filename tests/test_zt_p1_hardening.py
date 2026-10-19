@@ -168,7 +168,10 @@ def test_deep_chain_check_expand_lookup_match_oracle():
         members = eng.result_keys(eng.lookup_reverse('viewer', 'doc', 'd1'))
         assert ('user', 'deep', '...') in members
         assert ('group', f'g{n - 1}', 'member') in members
-        assert len(members) == n + 1                # n userset nodes + the bare user
+        # n userset nodes + the bare user + (TK144) doc:d1#viewer itself, a member of its
+        # own node by OpenFGA's implicit userset self-relation
+        assert ('doc', 'd1', 'viewer') in members
+        assert len(members) == n + 2
 
         # and the subject's own view of the world (deep chain up the OTHER direction)
         assert eng.check('...', 'user', 'deep', 'member', 'group', 'g0') is True
@@ -225,7 +228,8 @@ def test_evaluator_is_depth_independent_not_limit_dependent():
                 control(n)              # the limit really is in force
             assert eng.check('...', 'user', 'deep', 'viewer', 'doc', 'd1') is True
             assert eng.check('...', 'user', 'ghost', 'viewer', 'doc', 'd1') is False
-            assert len(eng.lookup_reverse('viewer', 'doc', 'd1').node_ids) == n + 1
+            # n links + the bare user + doc:d1#viewer itself (TK144 self-relation)
+            assert len(eng.lookup_reverse('viewer', 'doc', 'd1').node_ids) == n + 2
         finally:
             sys.setrecursionlimit(old)
 
@@ -287,8 +291,14 @@ def test_deep_object_cycle_check_and_expand_match_oracle():
         assert [out[q] for q in queries] == [True, False, True, False]
         for q in queries:
             assert eng.check(*q) == out[q], q
-        # and the bulk surface terminates on the ring too
-        assert len(eng.expand('viewer', 'folder', 'f0').pos) == n + 1
+        # and the bulk surface terminates on the ring too. Since TK144 (OpenFGA's implicit
+        # userset self-relation) every folder:fi#own is a member of folder:fi#viewer through
+        # `own but not blocked`, hence of folder:f0#viewer through the ring: the interned
+        # folder:f{n//2}#own joins `pos` (n from-chain usersets + u1 + it), and the n - 1
+        # never-interned ones are the key channel.
+        m = eng.expand('viewer', 'folder', 'f0')
+        assert len(m.pos) == n + 2
+        assert m.ipos == {('folder', f'f{i}', 'own') for i in range(n) if i != n // 2}
 
 
 def test_deep_chain_cycle_and_memo_semantics_preserved():

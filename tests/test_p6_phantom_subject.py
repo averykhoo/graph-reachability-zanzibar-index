@@ -56,6 +56,25 @@ those lines are dead -- only that THIS module does not exercise them. Do not cit
 as coverage for them, and do not widen the schema to chase them: the scenario is pinned
 here because it is the one the `P6` step-1 probe measured, and changing it would decouple
 the pin from its evidence.
+
+**RE-RUN 2026-10-17 (TK144): S1's site is no longer on the public read.** Since TK144 the
+public read answers a concrete userset subject at a derived relation in the read-time branch
+of ``WildcardIndex._check_derived`` (the self hit, else the relation's plan evaluated by
+``WildcardIndex._derived_read_eval``). The residue's userset arm, which S1 mutates, is read
+only with ``reflexive=False`` (the reconcile, the invariants, I9), and none of those reaches a
+phantom. Literal observed verdicts (``formal/probes/tk144_sabotage_plugin_2026_10_17.py``)::
+
+    (no mode)  9 passed
+    S13  S1 transplanted: the residue userset arm requires a materialised node
+           GREEN -- INERT                                           [9 passed]
+           (also green over 11 derived-read modules: 183 passed)
+    S14  the same edges-alone reading on the read-time branch's return
+           RED: all 9, at fixture setup                             [9 errors]
+           q=('viewer','folder','zz-ghost','admin','doc','d1') graph=False oracle=True
+
+So this module now pins the phantom case on the read-time branch (S14), not on the residue
+arm. The residue arm's phantom branch (``subj is None``) is reached only by a facade whose
+``SchemaInfo`` carries no seed table, which ``compile_ruleset`` never builds.
 """
 import pytest
 

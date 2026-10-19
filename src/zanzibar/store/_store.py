@@ -815,13 +815,14 @@ class Store:
         Read a result before the next write: ids are database row ids, which are never
         reused; an id whose node a later write removed raises ``StaleLookupIds`` (a
         ``KeyError``)."""
-        return self._node_keys(res.node_ids, 'node_ids')
+        return self._node_keys(res.node_ids, 'node_ids') | set(res.implicit_keys)
 
     def excluded_keys(self, res: LookupResult) -> set[tuple[str, str, str]]:
         """Translate ``res.excluded_node_ids`` to ``(type, name, predicate)`` keys: the
         portable form of "every subject of a marker's shape EXCEPT these". The companion
         of ``result_keys``; a caller expanding ``res.markers`` must subtract these."""
-        return self._node_keys(res.excluded_node_ids, 'excluded_node_ids')
+        return (self._node_keys(res.excluded_node_ids, 'excluded_node_ids')
+                | set(res.implicit_excluded_keys))
 
     def _node_keys(self, ids, field: str) -> set[tuple[str, str, str]]:
         # One chunked IN per 900 ids (SQLite's bind-parameter limit), via the index's

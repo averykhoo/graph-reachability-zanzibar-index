@@ -139,8 +139,12 @@ WCHECK = "        if (o_type, relation) in self.schema_info.leaf_families:\n    
 
 def test_B_python_body_edit_moves_the_pin(monkeypatch, tmp_path, cache):
     """The BL-2 fence tests the wrong family set -- one token, same signature."""
+    # The anchor carries the line above the fence. Since TK144 (2026-10-17)
+    # `WildcardIndex._check_fenced` holds the same two fence lines, so WCHECK alone
+    # matches twice, and `_sub` refuses rather than sabotage an arbitrary copy.
+    anchor = "# TK123 item 7\n" + WCHECK
     _patch_file(monkeypatch, tmp_path, "src/zanzibar/graphindex/wildcard.py",
-                lambda t: _sub(t, WCHECK, WCHECK.replace("leaf_families",
+                lambda t: _sub(t, anchor, anchor.replace("leaf_families",
                                                          "derived_families")))
     bad = claim_rot.check_content_pin(DOC_TEXT, claim_rot.read_pin(), cache)
     assert len(bad) == 1 and bad[0].startswith(

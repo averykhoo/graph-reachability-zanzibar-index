@@ -65,7 +65,7 @@ What this does NOT cover, said plainly:
     `graph-state` dump has no outbox channel. `tests/test_bulk_build.py`
     compares the outbox as a multiset against `bulk=False`.
   * **Bridges / crossable middles (P2, I14).** Measured 2026-09-06: every one
-    of the 25 in-fragment corpora compiles EMPTY `bridged_in_shapes` /
+    of the 25 corpora then in the fragment compiled EMPTY `bridged_in_shapes` /
     `bridged_out_shapes` (`extractor.py` P2 paragraph, re-measured 2026-08-09),
     so `bulk_build.py`'s Phase B and its I14 crossable-middle loop are reached
     by NO corpus here — see the INERT sabotage below. Phase B (plain bridges)
@@ -186,7 +186,7 @@ def test_state_bulkbuild_vs_pythongraph(name):
     write-by-write Python state is the anchor and what is out of scope.
 
     ★ SABOTAGE EVIDENCE (2026-09-06, `docs/sabotage-procedure.md`), literal
-    observed output, all on the 25-corpus fragment (module runs are
+    observed output, all on the 25-corpus fragment (module runs were
     ``26 passed`` = 25 corpora + `test_bulk_leg_covers_graph_fragment_exactly`):
 
       * **The suggested sabotage is INERT — and inert EVERYWHERE, which is the

@@ -342,6 +342,14 @@ class SetLookupResult:
     #: ``StaleLookupIds`` on a mismatch. ``None`` on a hand-built result (nothing to
     #: compare; a missing id still raises).
     id_stamp: tuple[int, int] | None = field(default=None, compare=False, repr=False)
+    #: TK144 (TK138 D3a): results with NO interned id, as ``(type, name, predicate)`` keys.
+    #: OpenFGA's implicit userset self-relation makes ``doc:1#viewer`` a viewer of
+    #: ``doc:1`` (and of what depends on it) on an empty store, where nothing is interned;
+    #: lookups list such answers here, and ``result_keys`` folds them in.
+    implicit_keys: set[tuple[str, str, str]] = field(default_factory=set)
+    #: TK144: exclusions with no interned id -- keys a marker covers that ``check``
+    #: refuses (a ``vx``-shaped ``but not``). ``excluded_keys`` folds them in.
+    implicit_excluded_keys: set[tuple[str, str, str]] = field(default_factory=set)
 
 
 def _denorm_pred(pred: str) -> str | EllipsisType:
@@ -1469,7 +1477,13 @@ class SetEngine:
             depth = len(stack)
             stack[key] = depth
             outer_low, low[0] = low[0], _INF
-            result = yield sat_expr(expr, ot, on, rel)
+            # TK138/TK144: OpenFGA's implicit userset self-relation, kept in lockstep with
+            # tests/oracle.py sat. A concrete userset subject o#r is a member of its own
+            # declared node (o, r), outside the rewrite; star and bare subjects are not.
+            if s_pred != '...' and s_name != '*' and subject == key:
+                result = True
+            else:
+                result = yield sat_expr(expr, ot, on, rel)
             my_low = low[0]
             del stack[key]
             if my_low >= depth:
@@ -1614,6 +1628,7 @@ class SetEngine:
             memo = {}
         inst_memo: dict[str, set[str]] = {}             # N7: per-eval _instances_of_type cache
         stack: dict[tuple[str, str, str], int] = {}     # key -> stack depth
+        visited: set[tuple[str, str, str]] = set()      # TK144: every declared key evaluated
         ops, pop = self.ops, self.population
         # Lowlink memo guard, same as check()/the oracle: a frame whose subtree
         # consulted an in-progress key holds a provisional (under-approximated)
@@ -1636,6 +1651,7 @@ class SetEngine:
             if expr is None:
                 memo[key] = ms.empty(ops)
                 return memo[key]
+            visited.add(key)
             depth = len(stack)
             stack[key] = depth
             outer_low, low[0] = low[0], _INF
@@ -1730,7 +1746,61 @@ class SetEngine:
                             acc = ms.union(acc, (yield do(pt, inst, target)), ops, pop)
             return acc
 
-        return _drive(do(o_type, o_name, relation))
+        m = _drive(do(o_type, o_name, relation))
+        # Keys a caller-shared memo already held were evaluated by an earlier call, so
+        # their subtrees are not in ``visited``; the memo's keys are a superset of them.
+        return self._self_relation_corrected(m, relation, o_type, o_name,
+                                             visited | set(memo))
+
+    def _self_relation_corrected(self, m: MemberSet, relation: str, o_type: str,
+                                 o_name: str, candidates) -> MemberSet:
+        """Apply OpenFGA's implicit userset self-relation to an expanded MemberSet
+        (TK144; ``check`` already applies it pointwise).
+
+        The algebra above expands WITHOUT the self-relation, so it is exact for every
+        subject whose own node the evaluation never reaches; only a userset subject
+        ``T:o#r`` whose node ``(T, o, r)`` the walk evaluated can answer differently, and
+        the walk records every such key. Each candidate is decided by ``check`` (exact)
+        and the MemberSet corrected: an interned id goes to ``pos`` / ``neg`` exactly as
+        ``memberset._normalize`` would place it (pos never holds a star-covered id); a key
+        with no id goes to the ``ipos`` / ``ineg`` key channel. Never interns."""
+        pos, neg = set(m.pos), set(m.neg)
+        ipos, ineg = set(m.ipos), set(m.ineg)
+        changed = False
+        for (t, n, p) in sorted(candidates):
+            if n == '*' or p == '...' or (t, p) not in self.ast:
+                continue        # star (D1), bare, or undeclared: no self-relation
+            want = self.check(p, t, n, relation, o_type, o_name)
+            covered = (t, p) in m.stars
+            uid = self.interner.get(t, n, p)
+            if uid is not None:
+                have = uid in pos or (covered and uid not in neg)
+                if want == have:
+                    continue
+                changed = True
+                if want:
+                    (neg.discard if covered else pos.add)(uid)
+                else:
+                    pos.discard(uid)
+                    if covered:
+                        neg.add(uid)
+            else:
+                key = (t, n, p)
+                have = key in ipos or (covered and key not in ineg)
+                if want == have:
+                    continue
+                changed = True
+                if want:
+                    (ineg.discard if covered else ipos.add)(key)
+                else:
+                    ipos.discard(key)
+                    if covered:
+                        ineg.add(key)
+        if not changed:
+            return m
+        ops = self.ops
+        return MemberSet(ops.freeze(pos), m.stars, ops.freeze(neg),
+                         frozenset(ipos), frozenset(ineg))
 
     # ------------------------------------------------------------------ #
     # Lookups (§6.4)
@@ -1756,6 +1826,8 @@ class SetEngine:
         result.node_ids = set(m.pos)
         result.markers = set(m.stars)
         result.excluded_node_ids = set(m.neg)
+        result.implicit_keys = set(m.ipos)              # TK144: members with no id
+        result.implicit_excluded_keys = set(m.ineg)
         return result
 
     def result_keys(self, res: SetLookupResult) -> set[NodeKey]:
@@ -1775,7 +1847,7 @@ class SetEngine:
         ``set()``."""
         # Provenance (moved out of the docstring, TK123 item 14): TK139 review,
         # ``docs/tk139-lookup-reverse-exclusions-2026-10-13.md``.
-        return self._translate(res, res.node_ids, 'node_ids')
+        return self._translate(res, res.node_ids, 'node_ids') | set(res.implicit_keys)
 
     def excluded_keys(self, res: SetLookupResult) -> set[NodeKey]:
         """Translate ``res.excluded_node_ids`` to stable ``(type, name, predicate)``
@@ -1783,7 +1855,8 @@ class SetEngine:
         The companion of ``result_keys``; a caller expanding ``res.markers`` must
         subtract these."""
         # Provenance (moved out of the docstring, TK123 item 14): TK139.
-        return self._translate(res, res.excluded_node_ids, 'excluded_node_ids')
+        return (self._translate(res, res.excluded_node_ids, 'excluded_node_ids')
+                | set(res.implicit_excluded_keys))
 
     def _id_stamp(self) -> tuple[int, int]:
         """TK154: the stamp a lookup result carries -- which id map, and how many frees."""
@@ -1996,6 +2069,29 @@ class SetEngine:
         # star-sibling-only / empty seed missed the from-chain star identity for
         # uninterned userset subjects on star-able tuplesets.
         queue: list[int] = self._reverse_neighbors_key(s_type, s_name, s_pred)
+        # TK144: OpenFGA's implicit userset self-relation. A concrete userset subject
+        # T:o#p is a member of (T, o, p) itself and of every relation on T:o that reaches
+        # it, whether or not those keys were ever interned (on an empty store none is).
+        # The walk below only ever visits interned ids, so the subject's OWN object is
+        # decided here, relation by relation, by ``check`` (exact): a member is listed by
+        # id when interned and in ``implicit_keys`` otherwise, an uninterned refusal under
+        # a marker goes to ``implicit_excluded_keys``, and every confirmed key seeds the
+        # walk with its reverse neighbours (uninterned keys included -- H2/H3 fire off the
+        # interned siblings). Beyond this object every answer is tuple-anchored, hence
+        # write-time interned (X1), and the walk confirms it with the same ``check``.
+        if s_pred != '...' and s_name != '*' and (s_type, s_pred) in self.ast:
+            for (t, rel) in sorted(self.ast):
+                if t != s_type:
+                    continue
+                rid = self.interner.get(s_type, s_name, rel)
+                if self.check(s_pred, s_type, s_name, rel, s_type, s_name):
+                    if rid is not None:
+                        result.node_ids.add(rid)
+                    else:
+                        result.implicit_keys.add((s_type, s_name, rel))
+                    queue.extend(self._reverse_neighbors_key(s_type, s_name, rel, oid=rid))
+                elif rid is None and (t, rel) in result.markers:
+                    result.implicit_excluded_keys.add((s_type, s_name, rel))
         if not queue:
             return result                   # reaches nothing concrete: no seed, so no
                                             # star node can be dequeued to bridge (only

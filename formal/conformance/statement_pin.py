@@ -334,6 +334,31 @@ HEADLINE = [
     "Zanzibar.no_userset_leaf_in_fragment",
     "Zanzibar.LeafBridgeWitness.leafBridge_applies4",
     "Zanzibar.LeafBridgeWitness.leafBridge_corpus",
+    # TK144 (2026-10-17) -- OpenFGA's implicit userset self-relation. `semR` is the spec
+    # since this landing (`Spec/SelfRelation.lean`); the unsuffixed theorems above stay
+    # pinned because they still describe the base semantics the residue realises and the
+    # base read every reflexive theorem is proved from. These are the claims about the
+    # SHIPPED reads: T0a for `semR`, T1/T2b/T3/T6 over it, the driver capstones (the CLI
+    # prints `graphModeAnswersR`), the spec-level bridge, and the non-vacuity witnesses
+    # (`SelfWitness.driver_flip`: the reflexive read GRANTS where the base read denied, on
+    # an in-premise drained state; `vx_flip`: the ALLOW-to-DENY change). Appended at the
+    # end, per the note above.
+    "Zanzibar.semR_fuel_stable",
+    "Zanzibar.setEngine_correctR",
+    "Zanzibar.semR_untainted_userset",
+    "Zanzibar.graph_correctR",
+    "Zanzibar.graph_correct_publicR",
+    "Zanzibar.backend_equivalenceR",
+    "Zanzibar.exclusion_effectiveR",
+    "Zanzibar.no_ghost_grantR",
+    "Zanzibar.graphRun_check_eq_semR",
+    "Zanzibar.graphModeAnswersR_eq_semR",
+    "Zanzibar.graphRunOps_check_eq_semR",
+    "Zanzibar.SelfWitness.premise",
+    "Zanzibar.SelfWitness.spec_flip",
+    "Zanzibar.SelfWitness.driver_flip",
+    "Zanzibar.SelfWitness.correct_applies",
+    "Zanzibar.SelfWitness.vx_flip",
 ]
 
 DECL_RE = re.compile(

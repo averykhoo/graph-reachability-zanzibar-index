@@ -89,6 +89,22 @@
   },
   "reconvergent_diamond": {},
   "residue_rich": {},
+  "selfrel_cross_object": {
+    "user:alice#.../ -> doc:1#nb/": [
+      2,
+      1
+    ]
+  },
+  "selfrel_cross_object_no_admin_restriction": {
+    "user:alice#.../ -> doc:1#nb/": [
+      2,
+      1
+    ],
+    "user:alice#.../ -> doc:2#nb/": [
+      2,
+      1
+    ]
+  },
   "star_two_strata_churn": {},
   "taint_computed_root_over_boolean": {},
   "taint_union_over_boolean": {},

@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-16b -- PostgreSQL leg run green after `TK154` (PG node-id non-reuse now tested; sabotage plugin tracked in `formal/probes/`; `TK160` filed LATER). **0.1.0 = all open release items, no rush (user)**; version stays 0.0.5 under CHANGELOG `[Unreleased]`; `TK151` lands LAST. NOW: `TK153`. NEXT, in user order: `TK147`, then `TK138`/`TK144` last. Then `TK155`-`TK157`. ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-19 -- `TK144` (TK138 landing 2: OpenFGA's implicit userset self-relation in all four corners) landed and committed after the full gate this session; `TK138` closed with it. Follow-ups `TK161`, `TK162` (LATER). `TK153`, `TK147` closed 2026-10-17. **0.1.0 = all open release items, no rush (user)**; it MUST be a MINOR bump (TK144 flips ALLOW to DENY; noted on `TK151`); version stays 0.0.5 under CHANGELOG `[Unreleased]`; `TK151` lands LAST. NOW: `TK155`. NEXT: `TK156`, `TK157`. ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

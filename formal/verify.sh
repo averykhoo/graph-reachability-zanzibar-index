@@ -490,7 +490,7 @@ GATE_LOCK_HELD=1
 #   SUM; see the MIN_TESTS_ALL comment and doc_counts.py::ratchet_floors for why ALL is
 #   derived rather than ratcheted on its own. Measured 2026-10-13: 1093 == live, zero
 #   headroom, so the ratchet changes nothing here on landing.
-MIN_CONF_ALL=1178
+MIN_CONF_ALL=1246
 
 # Minimum tests `tests/` must COLLECT. Measured 2026-07-27 with
 # `pytest tests/ -q --collect-only`: 728.
@@ -698,7 +698,7 @@ MIN_CONF_ALL=1178
 #   1749 vs `pytest tests/ -q --collect-only` -> 2283, i.e. 534 tests of headroom (the
 #   2026-10-12/13 sessions' tests/ additions, not broken down per file). Do not hand-
 #   raise it any more; LOWERING stays a deliberate hand edit, followed by --generate.
-MIN_TESTS_ALL=2842
+MIN_TESTS_ALL=2847
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -782,8 +782,8 @@ HEAVY_CONF="formal/conformance/test_conformance_remove.py"
 #   max(floor, live), and sets MIN_CONF_ALL to their sum, so the identity below holds by
 #   construction. A test moving from REST into HEAVY_CONF leaves REST's floor where it
 #   was, so the gate goes red: lower REST by hand if that move was intended.
-MIN_CONF_HEAVY=135
-MIN_CONF_REST=1043
+MIN_CONF_HEAVY=150
+MIN_CONF_REST=1096
 
 # Machine-enforced tiling identity for the legacy split: the two floors must add up
 # to the whole-directory floor, so nobody can bump one and quietly leave a hole in
@@ -860,11 +860,22 @@ MIN_PINNED_DEFS=139
 #     the tell the old gate ignored. (12 lemmas elsewhere in Audit.lean legitimately
 #     report no axioms -- structural facts proved by `rfl`/`cases` -- which is why
 #     this rule is scoped to the headline set rather than applied globally.)
+# TK144 (2026-10-17): the second group is the same claims restated over `semR`, the
+# spec with OpenFGA's implicit userset self-relation (FINAL_REVIEW.md §2); the driver
+# prints `graphModeAnswersR`, so `graphModeAnswersR_eq_semR` is the live capstone.
+# SABOTAGED 2026-10-17 (formal/probes/tk144_headline_loop_sabotage_2026_10_17.sh: the loop
+# below, extracted verbatim, over a PASSED lean run's audit lines): unmodified -> passes;
+# drop graphModeAnswersR_eq_semR's report -> "FAIL: headline theorem
+# 'graphModeAnswersR_eq_semR' produced NO audit report."; report semR_fuel_stable
+# axiom-free -> "FAIL: headline theorem 'semR_fuel_stable' depends on NO axioms:".
 HEADLINE_AUDITS="setEngine_correct sem_fuel_stable stratify_none_iff_cycle
 stratify_topological pathCount_addEdge pathCount_removeEdge runCascade2_no_abort
 cascade2_drains graph_correct graph_correct_public graph_reached_inv
 backend_equivalence exclusion_effective no_ghost_grant graphRun_reached
-graphRun_check_eq_sem graphModeAnswers_eq_sem"
+graphRun_check_eq_sem graphModeAnswers_eq_sem
+semR_fuel_stable setEngine_correctR graph_correctR graph_correct_publicR
+backend_equivalenceR exclusion_effectiveR no_ghost_grantR graphRun_check_eq_semR
+graphModeAnswersR_eq_semR"
 
 BUILD_LOG="$(mktemp)"   # removed by gate_on_exit, which was installed far above:
                         # the trap has to precede the floor-consistency checks,

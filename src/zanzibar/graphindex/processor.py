@@ -130,12 +130,21 @@ def _shape(pred: str, s_type: str) -> tuple[str, str]:
 
 class _EvalContext:
     """Plan-evaluation context bound to one (store, object). Implements the leaf
-    callbacks the compiled ``check_fn`` / ``stars_fn`` closures dispatch to."""
+    callbacks the compiled ``check_fn`` / ``stars_fn`` closures dispatch to.
 
-    def __init__(self, proc: 'DeltaProcessor', object_type: str, obj_name: str):
+    ``reflexive`` (TK144) selects which semantics the reads apply. The reconcile, the
+    I9 audit and every invariant evaluate NON-reflexively (the default), so the residue
+    and the canonical state are exactly the pre-TK144 ones. The public derived read
+    (``WildcardIndex._derived_read_eval``, challenge C5) evaluates the SAME plan with
+    ``reflexive=True``: every leaf, derived operand and TTU target is then read with
+    OpenFGA's implicit userset self-relation applied."""
+
+    def __init__(self, proc: 'DeltaProcessor', object_type: str, obj_name: str,
+                 reflexive: bool = False):
         self.proc = proc
         self.object_type = object_type
         self.obj_name = obj_name
+        self.reflexive = reflexive
 
     # -- closure leaves (wildcard-aware; star-under-boolean composes per §7) --
 
@@ -149,18 +158,21 @@ class _EvalContext:
 
     def leaf_check(self, leaf_pred: str, s: SubjectKey) -> bool:
         sp, st, sn = s
-        return self.proc.widx._check_internal(sp, st, sn, leaf_pred, self.object_type, self.obj_name)
+        return self.proc.widx._check_internal(sp, st, sn, leaf_pred, self.object_type,
+                                              self.obj_name, reflexive=self.reflexive)
 
     def leaf_stars(self, leaf_pred: str) -> frozenset:
         widx = self.proc.widx
         return frozenset(
             (t, p) for (t, p) in self.proc.subject_shapes
-            if widx._check_internal(p, t, '*', leaf_pred, self.object_type, self.obj_name))
+            if widx._check_internal(p, t, '*', leaf_pred, self.object_type, self.obj_name,
+                                    reflexive=self.reflexive))
 
     # -- derived-computed leaves (same object) --
 
     def derived_check(self, rel: str, s: SubjectKey) -> bool:
-        return self.proc.derived_check(self.object_type, rel, self.obj_name, s)
+        return self.proc.derived_check(self.object_type, rel, self.obj_name, s,
+                                       reflexive=self.reflexive)
 
     def derived_stars(self, rel: str) -> frozenset:
         return self.proc.residue_stars(self.object_type, rel, self.obj_name)
@@ -176,7 +188,7 @@ class _EvalContext:
         if (st, sp) == (t, p) and sn in stored:
             return True
         for x_name in stored:
-            if self.proc.derived_check(t, p, x_name, s):
+            if self.proc.derived_check(t, p, x_name, s, reflexive=self.reflexive):
                 return True
         return False
 
@@ -214,7 +226,7 @@ class _EvalContext:
             # of the untainted path's materialized rewrite edge
             if (sp, st, sn) == (target, pt, pn):
                 return True
-            if self.proc.member_check(pt, target, pn, s):
+            if self.proc.member_check(pt, target, pn, s, reflexive=self.reflexive):
                 return True
         return False
 
@@ -286,6 +298,10 @@ class DeltaProcessor:
         # Only touched while a scope is installed -- a dict increment beside a SQL
         # round trip, and zero cost on the uncached path.
         self._stored_cache_stats = {'hits': 0, 'misses': 0, 'scopes': 0, 'keys_max': 0}
+        # TK144 (C5): the facade's derived read evaluates plans through a processor;
+        # the first one built over a facade is that processor. Reads never write.
+        if getattr(widx, '_self_read_proc', None) is None:
+            widx._self_read_proc = self
 
     # ------------------------------------------------------------------ #
     # Node / state accessors (read-only; never intern on reads)
@@ -311,31 +327,42 @@ class DeltaProcessor:
     def residue_stars(self, object_type: str, rel: str, obj_name: str) -> frozenset:
         return self._residue_state(object_type, rel, obj_name)[0]
 
-    def derived_check(self, object_type: str, rel: str, obj_name: str, s: SubjectKey) -> bool:
+    def derived_check(self, object_type: str, rel: str, obj_name: str, s: SubjectKey,
+                      reflexive: bool = False) -> bool:
         """The derived membership check: edge probe + residue (point reads).
 
         Delegates to the facade's ``_check_derived`` -- the read path and the
         processor's reconcile MUST share one implementation, or a semantics fix in
-        one (e.g. the ``upos`` rule) silently diverges the other."""
+        one (e.g. the ``upos`` rule) silently diverges the other. ``reflexive`` applies
+        the implicit userset self-relation (see ``_EvalContext``): False -- the
+        reconcile's reading, the residue's own semantics -- unless a reflexive context
+        asks."""
         # Provenance (moved out of the docstring, TK123 item 14): boolean spec sec 6; the upos
-        # rule is blind-audit P4.
+        # rule is blind-audit P4. The reflexive flag: TK144 (TK138 landing 2, C5).
         sp, st, sn = s
-        return self.widx._check_derived(sp, st, sn, rel, object_type, obj_name)
+        return self.widx._check_derived(sp, st, sn, rel, object_type, obj_name,
+                                        reflexive=reflexive)
 
-    def member_check(self, object_type: str, rel: str, obj_name: str, s: SubjectKey) -> bool:
+    def member_check(self, object_type: str, rel: str, obj_name: str, s: SubjectKey,
+                     reflexive: bool = False) -> bool:
         """Membership in (object_type, rel) -- derived (edge+residue) when tainted,
-        plain wildcard-aware closure check otherwise."""
+        plain wildcard-aware closure check otherwise (behind the public leaf-name
+        fence). ``reflexive`` as in ``derived_check``."""
         if (object_type, rel) in self.compiled.tainted:
-            return self.derived_check(object_type, rel, obj_name, s)
+            return self.derived_check(object_type, rel, obj_name, s, reflexive=reflexive)
         sp, st, sn = s
-        return self.widx.check(sp, st, sn, rel, object_type, obj_name)
+        return self.widx._check_fenced(sp, st, sn, rel, object_type, obj_name,
+                                       reflexive=reflexive)
 
     def member_stars(self, object_type: str, rel: str, obj_name: str) -> frozenset:
+        # Star subjects never take the self-relation (D1), so this reads the same
+        # either way; it stays non-reflexive, the reconcile's reading.
         if (object_type, rel) in self.compiled.tainted:
             return self.residue_stars(object_type, rel, obj_name)
         return frozenset(
             (t, p) for (t, p) in self.subject_shapes
-            if self.widx.check(p, t, '*', rel, object_type, obj_name))
+            if self.widx._check_fenced(p, t, '*', rel, object_type, obj_name,
+                                       reflexive=False))
 
     # ------------------------------------------------------------------ #
     # Enumerations (all data-bounded: stored edges / nodes / residues only)

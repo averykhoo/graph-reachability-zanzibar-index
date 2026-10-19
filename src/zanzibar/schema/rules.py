@@ -207,6 +207,22 @@ class SchemaInfo:
     # leaves the copies inconsistent. Populated by `compile_ruleset` from the compiled
     # Rules/RewriteFilters (`_node_removal_fence`); empty for hand-built SchemaInfo.
     unremovable_node_shapes: frozenset[tuple[str, str]] = frozenset()   # (type, predicate); '...' for bare
+    # TK144 (TK138 landing 2): the implicit userset self-relation's static SEED table,
+    # ``(type, relation, seed)`` triples. ``seed`` is a relation or compiled leaf predicate on
+    # ``type`` whose members include the userset ``type:o#relation`` at the SAME object ``o``
+    # through computed rewrites alone (``relation`` itself included). It is the transitive
+    # closure of the compiled Computed rewrite Rules, so it is what the closure would hold
+    # if the self tuple were materialized, without materializing it. Populated by
+    # ``compile_ruleset`` for every DECLARED relation (`_self_seed_table`); empty for a
+    # hand-built SchemaInfo (``derive_schema_info``), which then reads non-reflexively --
+    # consistent with that path applying no compiled rewrite at all (TK144 review
+    # 2026-10-17: it was never SetEngine-equivalent; see its docstring). Not serialized by the
+    # compiled-RuleSet snapshots (they read two fields only).
+    self_seeds: frozenset[tuple[str, str, str]] = frozenset()
+    # TK144 (C5): the boolean compile artifacts (``CompiledBooleans``), so the derived read
+    # path can evaluate a plan at read time for a userset subject. Not compared, hashed or
+    # printed: it is a function of the schema the other fields already describe.
+    compiled: object = field(default=None, compare=False, repr=False)
 
     @property
     def bridged_in_shapes(self) -> frozenset[tuple[str, str]]:

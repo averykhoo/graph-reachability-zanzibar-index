@@ -157,7 +157,7 @@ def test_projection_ledger_is_not_vacuous():
 
 
 # Anti-vacuity floor for the P6-retirement pin below. MEASURED 2026-09-05 with
-# `extractor.graph_fragment_ledger()` over all 25 in-fragment corpora, on the tree
+# `extractor.graph_fragment_ledger()` over all 25 corpora then in the fragment, on the tree
 # that retired P6: `{'corpora': 25, 'raw': 498, 'P1': 233, 'P2': 0,
 # 'compared': 265}`. Of the **78** leaf-TARGET `Edge` rows the selector below
 # sees (`_MIN_LEAF_ROWS`, same predicate, one test down), **76** reach the compare

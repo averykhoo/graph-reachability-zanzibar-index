@@ -27,22 +27,22 @@ number INTO it over restating it.
 
 | quantity | value |
 |---|---|
-| `formal/conformance/` collected | **1178** |
-| `tests/` collected | **2842** |
-| whole-repo suite | **4020** |
-| differential conformance tests | **1095** across **19** files |
+| `formal/conformance/` collected | **1246** |
+| `tests/` collected | **2847** |
+| whole-repo suite | **4093** |
+| differential conformance tests | **1163** across **19** files |
 | gate-tooling conformance tests | **83** across **4** files |
-| audited theorems (`#print axioms` in `Audit.lean`) | **728** |
-| audit identity pin (`audited_theorems.txt`) | **728** |
-| headline definition pin | **282** rows (**272** declarations + ambient) |
-| `CORRESPONDENCE.md` anchors | **787** (**440** Python + **347** Lean) |
-| `corpus.SCHEMAS` | **27** |
-| `corpus.GRAPH_FRAGMENT` (graph-side gates) | **25** |
-| spec-scope corpora (four dicts) | **35** = 27 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1178 (=135+1043), `MIN_TESTS_ALL`=2842, `EXPECTED_MIN_AUDITS`=460 |
+| audited theorems (`#print axioms` in `Audit.lean`) | **745** |
+| audit identity pin (`audited_theorems.txt`) | **745** |
+| headline definition pin | **306** rows (**294** declarations + ambient) |
+| `CORRESPONDENCE.md` anchors | **842** (**463** Python + **379** Lean) |
+| `corpus.SCHEMAS` | **30** |
+| `corpus.GRAPH_FRAGMENT` (graph-side gates) | **27** |
+| spec-scope corpora (four dicts) | **38** = 30 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1246 (=150+1096), `MIN_TESTS_ALL`=2847, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
-Driven fresh over all **25** `GRAPH_FRAGMENT` corpora through the real graph
+Driven fresh over all **27** `GRAPH_FRAGMENT` corpora through the real graph
 index (`extractor.projection_ledger`). Read this as the honest width of the
 state-level claim: of the raw `Edge` rows Python writes, only the `compared`
 row is checked against Lean. **Do not restate these numbers elsewhere** — three
@@ -50,30 +50,30 @@ prose copies rotted through two corpus additions before this became generated.
 
 | edge projection | rows |
 |---|---|
-| raw `Edge` rows | **498** |
-| dropped by P1 (closure-only) | **233** |
+| raw `Edge` rows | **531** |
+| dropped by P1 (closure-only) | **243** |
 | dropped by P2 (bridge) | **0** |
-| **compared against Lean** | **265** |
-| raw `Node` rows (all dropped by P5) | **282** |
-| residue rows kept | **13** |
+| **compared against Lean** | **288** |
+| raw `Node` rows (all dropped by P5) | **307** |
+| residue rows kept | **17** |
 
 Per conformance file:
 
 | file | tests | kind |
 |---|---|---|
-| `test_conformance_fragment.py` | 427 | differential |
-| `test_conformance_remove.py` | 135 | differential |
-| `test_conformance_spec.py` | 105 | differential |
-| `test_conformance_leaf_rules.py` | 74 | differential |
+| `test_conformance_fragment.py` | 453 | differential |
+| `test_conformance_remove.py` | 150 | differential |
+| `test_conformance_spec.py` | 114 | differential |
+| `test_conformance_leaf_rules.py` | 77 | differential |
 | `test_graphadmission_scope_pin.py` | 67 | differential |
-| `test_conformance_state.py` | 56 | differential |
-| `test_conformance_graph.py` | 51 | differential |
+| `test_conformance_state.py` | 60 | differential |
+| `test_conformance_graph.py` | 55 | differential |
 | `test_sorry_scan.py` | 44 | tooling |
 | `test_conformance_generated.py` | 40 | differential |
-| `test_conformance_random.py` | 27 | differential |
+| `test_conformance_random.py` | 30 | differential |
+| `test_conformance_bulk_state.py` | 28 | differential |
 | `test_w4fragment_scope_pin.py` | 27 | tooling |
-| `test_conformance_bulk_state.py` | 26 | differential |
-| `test_conformance_remove_graph.py` | 23 | differential |
+| `test_conformance_remove_graph.py` | 25 | differential |
 | `test_conformance_nary_strata.py` | 20 | differential |
 | `test_conformance_tk132_leaf_rows.py` | 11 | differential |
 | `test_conformance_enum.py` | 9 | differential |
@@ -88,7 +88,10 @@ Per conformance file:
 <!-- END GENERATED COUNTS -->
 
 Corpora composition: `GRAPH_FRAGMENT` is the subset of `SCHEMAS` driven through the
-graph-side gates (`object_wildcard` is the one exclusion). The `TTU_USERSET_SCHEMAS`,
+graph-side gates. The exclusions are the `SCHEMAS` corpora outside `W4Fragment`, each listed
+with the fields it fails in `test_conformance_fragment.py::_EXPECTED_FAILURES` (corrected
+2026-10-17: this sentence used to name `object_wildcard` as the one exclusion, which was
+already false at the time). The `TTU_USERSET_SCHEMAS`,
 `SELF_REFERENTIAL_SCHEMAS` and `MULTI_STRATUM_SCHEMAS` dicts sit OUTSIDE `SCHEMAS` —
 spec/oracle/set-engine only (full scope), so the graph-side suites stay
 `W4Fragment`-scoped. The `MULTI_STRATUM` entry (`three_strata_chain`) is the
@@ -137,6 +140,17 @@ Clause-by-clause, what is actually true today:
 | … "including state-level equality" | ✅ **At a documented representation-neutral projection, per corpus.** `test_conformance_state.py` (**19** in-fragment corpora): the Lean operational graph model's FINAL MATERIALIZED STATE (zcli mode `"graph-state"` — the same `graphRun` fold, same admission/drain gates, emitting canonical edges + residues) equals the real Python graph index's final SQL state (`Edge`/`Residue` decoded through `Node` to symbolic keys). Compared: the DIRECT edge set over `(type, name, predicate, wildcard)` node keys, and per derived key the full residue triple (`stars` shapes, `neg`/`upos` subject sets). **Five live edge projections since 2026-09-05** — this list ran P1–P6 until **P6 was RETIRED 2026-09-05**, and P7 (the `Residue.version` drop, §3 item 4) is deliberately NOT renumbered — each documented and justified in `formal/conformance/extractor.py` (P1 closure rows are a function of the direct set; P2 wildcard bridges — inert, **re-verified 2026-07-26 over the widened 19-corpus set**: `bridged_in_shapes`/`bridged_out_shapes` compile EMPTY on all 19, the only non-empty pair in `SCHEMAS` being the excluded `object_wildcard` corpus, so P2 still never fires; P3 edge multiplicity — **NARROWED 2026-07-29**: compared EXACTLY on the untainted arm (153 of 171 compared edges, `nary_union`'s non-unit fan-in included), dropped only on the derived arm where Python's presence diff caps the count at 1 while the model compounds, and there golden-pinned per corpus by `test_conformance_state.py::test_derived_arm_multiplicity_ledger` — see `CORRESPONDENCE.md` §7.2; P4 all-empty residue rows the model stores and Python deletes; P5 node sets, GC'd vs never-GC'd — **no `Node` row is compared at all**; ~~P6 leaf-family closure-leaf copies, whose evaluation OUTPUT — residues + derived edges — is compared exactly~~ — **P6 RETIRED 2026-09-05** by leg 7's flip: the Lean logged write path now folds the leaf-routed closure, so those rows are compared DIRECTLY rather than via their evaluation output. Measured 2026-09-05 over the 25 in-fragment corpora: 76 leaf-family rows moved from dropped to compared, `compared against Lean` 189 → **265**, and the `"P6"` ledger key is gone rather than pinned at 0). `test_conformance_enum_state.py` extends the state comparison to a deterministic stride-4 sample of the enumerated stores (257 of 1021). Attack-first: the state gate's first run FOUND P6 (state divergence under full check-parity); a deliberately corrupted extraction fails with the symmetric-difference message. |
 | … "exhaustive small-scope enumeration up to the documented bounds" | ✅ **At the documented (tiny) bounds.** `test_conformance_enum.py`: ALL stores of ≤ K tuples from the declared tuple space over a 2-names-per-type pool, for **six** representative fragment shapes at a per-shape K of 3 or 4 — boolean_exclusion (K=4, 163 stores), boolean_intersection (K=4, 163), two_stratum_cascade (K=3, 299), boolean_star_exclusion (K=4, 57), wildcard_group_member (K=3, 176), ttu (K=4, 163); **1021 stores total**, spec × oracle × set engine × the real graph index (`WildcardIndex` + cascade, over the proved graph query scope; in the ANSWER enumeration since 2026-07-18, §4(e) increment (a)) over the shared grid, per-shape tuple-space size / K / store count all ASSERTED so the bounds cannot silently drift. **Plus a seventh shape OUTSIDE the fragment (`TK102`, 2026-10-12c):** `derived_userset_subject` at K=3 — oracle × set engine on all 697 stores, spec + graph on 119 renaming-orbit representatives (a symmetry quotient, which leaves 116 of the 697 stores' own write orders, 44 write-sequence classes, undriven through the graph — measured 2026-10-12c, pinned, `test_conformance_enum.py::_ORBIT_ORDER_UNDRIVEN`); its graph leg is a declared Python-only differential with no Lean claim (`docs/tk102-derived-userset-enum-2026-10-12.md`). Zero disagreements. `test_conformance_enum_state.py` adds a state-level leg over a **stride-4 sample, 257 of the 1021** fragment-shape stores (sample size likewise asserted; the seventh shape is excluded, since that leg compares against the Lean graph model). Scope honesty: the bounds are deliberately tiny — this earns "exhaustive up to the documented bounds", nothing more. |
 | residual unverified surface | ✅ Acknowledged in full, and LARGER than §7's list — see §3. |
+
+> **TK144 (2026-10-17): the semantics the shipped code computes is `semR`, not `sem`.**
+> OpenFGA's implicit userset self-relation (a concrete userset `T:o#p` is a member of its
+> own declared node, outside the rewrite) is now in all four corners: the oracle, the set
+> engine, the graph index and the Lean spec (`Spec/SelfRelation.lean::semR`). Every
+> theorem above about `sem` still stands; `sem` is now the NON-reflexive base, which is
+> what the graph index's derived residue realises. The claims are restated over `semR`
+> under the same hypothesis bundles (§2, the TK144 bullet), and the model-vs-code gaps of
+> the new read paths are `CORRESPONDENCE.md` §7.5 (§3.1 item 9). `zcli`'s spec mode now
+> prints `semR` and its graph mode `graphModeAnswersR`, so wherever a conformance cell
+> above names the Lean side `sem`, the comparison it describes is now against `semR`.
 
 **The current honest claim is therefore §7's claim with one explicit
 subtraction and THREE scope qualifiers:** the graph-side theorems hold at the
@@ -195,7 +209,20 @@ All in `formal/lean/ZanzibarProofs/`, all sorry-free, all axiom-audited.
   (`graphRun_check_eq_sem`). "Every verdict it prints" is literal since 2026-08-28c:
   the driver prints `Exec.lean::graphModeAnswers`, the capstones are stated over that
   same PUBLIC read, and the definition is statement-pinned so the two cannot silently
-  drift apart (`graphModeAnswers_eq_sem`).
+  drift apart (`graphModeAnswers_eq_sem`). ⚠ **Since 2026-10-17 (TK144) the driver prints
+  `graphModeAnswersR` instead** (the next bullet).
+* **The implicit userset self-relation, restated (TK144, 2026-10-17;
+  `Spec/SelfRelation.lean`, `SetEngine/SelfRelation.lean`, `GraphIndex/SelfRead.lean`).**
+  The spec is `semR`: `sem` plus OpenFGA's rule that a concrete userset `T:o#p` is a
+  member of its own declared node. `semR_fuel_stable` (T0a); `setEngine_correctR` (T1,
+  unconditional); `graph_correctR` / `graph_correct_publicR` (T2b, the same bundles,
+  proved FROM `graph_correct` applied to each seed subject); `backend_equivalenceR` /
+  `exclusion_effectiveR` / `no_ghost_grantR` (T3/T6). The driver prints
+  `graphModeAnswersR` (the reflexive PUBLIC read), so "every verdict it prints" is now
+  `semR` (`graphModeAnswersR_eq_semR`), and `graphModeAnswers` is the non-reflexive base.
+  Non-vacuity: `GraphIndex/SelfWitness.lean` (`SelfWitness.driver_flip`: on the plan
+  doc's model C, drained, the reflexive public read answers true where the base read
+  answers false).
 * **Non-vacuity** (`FullScope.lean` `W4Witness`): the hypothesis bundles are
   machine-checked inhabited by a real compiled boolean schema — the final
   theorems are not vacuous. Honesty caveat: what is kernel-checked is
@@ -674,6 +701,15 @@ Everything §7 lists, plus the fragment carries:
    conformance harness's own encoder (`encode.py` reuses the independent
    oracle's parser precisely so one backend parser bug cannot corrupt both
    sides).
+9. **The implicit userset self-relation's read paths (TK144, 2026-10-17).** The
+   reflexive reads are modelled and proved equal to `semR` on the fragment, with four
+   deliberate model-vs-code differences, each harmless on every state the theorems cover
+   (`CORRESPONDENCE.md` §7.5): the witnessed `w_any` seed probe, leaf seeds, derived
+   `Direct` arms, and the residue staying non-reflexive. The lookup key channel
+   (`implicit_keys` / `implicit_excluded_keys`) has no Lean model, like every lookup
+   surface (item 1). The residue's userset arm no longer serves a public read of a
+   concrete userset subject, so the phantom-subject pin now guards the read-time branch
+   instead (`tests/test_p6_phantom_subject.py`, re-run 2026-10-17).
 
 **Resolved divergence (found 2026-07-12 by the new repo-side lookup gate;
 FIXED 2026-07-13, Python-side).** `tests/test_lookup_oracle.py` (the

@@ -380,7 +380,7 @@ differential comparisons break down as:
   (evaluation output compared exactly)~~ — **RETIRED 2026-09-05**: leg 7's flip re-pointed
   the Lean logged write path onto the leaf-routed closure, so the leaf rows are compared
   DIRECTLY (76 rows moved from dropped to compared, `compared against Lean` 189 → **265**,
-  measured 2026-09-05 over the 25 in-fragment corpora; the `"P6"` ledger key is deleted
+  measured 2026-09-05 over the 25 corpora then in the fragment; the `"P6"` ledger key is deleted
   rather than pinned at 0) — **P7 `Residue.version`** — declared
   2026-07-27, and unlike P1–P5 (the other five, since P6 retired) a **MODELLING GAP, not a
   representation difference**:

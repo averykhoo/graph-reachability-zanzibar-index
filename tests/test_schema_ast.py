@@ -288,7 +288,10 @@ def test_compile_pure_union_succeeds(load_fga_schema):
     # (`SchemaInfo.unremovable_node_shapes`), so the object is new. The original claim is
     # kept: every OTHER field passes through unchanged, and nothing boolean is added.
     from dataclasses import replace
-    assert replace(ruleset.schema_info, unremovable_node_shapes=frozenset()) == info
+    # TK144 (2026-10-17): every compile also fills the self-relation seed table
+    # (`SchemaInfo.self_seeds`); like the fence, it is a compile output, not a boolean fact.
+    assert replace(ruleset.schema_info, unremovable_node_shapes=frozenset(),
+                   self_seeds=frozenset()) == info
     assert not ruleset.schema_info.derived_families and not ruleset.schema_info.leaf_families
     assert ruleset.schema_info.unremovable_node_shapes      # this schema has rewrites
 

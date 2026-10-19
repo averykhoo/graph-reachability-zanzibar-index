@@ -146,6 +146,11 @@ P5Witness.leafRouted_inv_preflip_not
 P5Witness.prefix_facts
 P5Witness.w4fragment
 Schema.isStarTuplesetThrough
+SelfWitness.correct_applies
+SelfWitness.driver_flip
+SelfWitness.premise
+SelfWitness.spec_flip
+SelfWitness.vx_flip
 T0aCounter.fuel_stable_step_false
 T0aCounter.not_storeDeclared
 T0aCounter.oscillates
@@ -215,6 +220,7 @@ admitted_edge_source_char
 all_stable
 atomLeaves
 backend_equivalence
+backend_equivalenceR
 backend_equivalence_direct
 backend_equivalence_objStar
 backend_equivalence_rules
@@ -295,6 +301,7 @@ evalE_congr
 evalE_mono
 evalE_star_of_noConc
 exclusion_effective
+exclusion_effectiveR
 exclusion_effective_direct
 exclusion_effective_objStar
 exclusion_effective_rules
@@ -322,6 +329,7 @@ fragWsBareB_iff
 grantReach_of_trail
 graphAdmissionB_iff
 graphAdmissionFailures_nil_iff
+graphModeAnswersR_eq_semR
 graphModeAnswers_eq_sem
 graphRec_base_eq
 graphRec_base_eq_bs
@@ -335,19 +343,23 @@ graphRec_reduce_base_adm
 graphRec_reduce_base_adm_bs
 graphRec_star_declared
 graphRunOps_check_eq_sem
+graphRunOps_check_eq_semR
 graphRunOps_directArm_backend_equivalence
 graphRunOps_reached
 graphRunOps_store
 graphRun_check_eq_sem
+graphRun_check_eq_semR
 graphRun_reached
 graphRun_store
 graph_complete_objStar
 graph_correct
+graph_correctR
 graph_correct_bareStar
 graph_correct_direct
 graph_correct_empty
 graph_correct_objStar
 graph_correct_public
+graph_correct_publicR
 graph_correct_rules
 graph_correct_rulesBS
 graph_correct_usStar
@@ -409,6 +421,7 @@ noRuleOutputs_of_derived
 noStoreSubjectRB_iff
 noTtuTargetB_iff
 no_ghost_grant
+no_ghost_grantR
 no_ghost_grant_direct
 no_ghost_grant_objStar
 no_ghost_grant_rules
@@ -623,6 +636,9 @@ semAux_restrict
 semAux_seed
 semAux_star_to_bare
 semAux_step
+semR_eq_sem_of_not_userset
+semR_fuel_stable
+semR_untainted_userset
 sem_empty_store
 sem_fuel_stable
 sem_nil_derived_false
@@ -631,6 +647,7 @@ sem_of_rules_reach
 sem_of_usStar_probe
 sem_untaintedFilter
 setEngine_correct
+setEngine_correctR
 settledComplete_cascade2_targeted
 settledComplete_cascade_targeted
 settledComplete_jobsLR_targeted

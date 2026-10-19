@@ -3,6 +3,7 @@ import ZanzibarProofs.GraphIndex.Exec
 import ZanzibarProofs.GraphIndex.FragmentDecide
 import ZanzibarProofs.GraphIndex.AdmissionDecide
 import ZanzibarProofs.GraphIndex.LeafRules
+import ZanzibarProofs.GraphIndex.SelfRead
 import Lean.Data.Json
 
 /-!
@@ -31,11 +32,14 @@ cascade leg. Absent `"ops"` ⇒ the add-only `graphRun` over `"tuples"` (unchang
 `{"excl": [base, subtract]}`.
 
 Modes (Phase 6 — graph-state conformance):
-* `"spec"` (default) — answer each query with the executable spec `sem`.
+* `"spec"` (default) — answer each query with the executable spec `semR`
+  (`Spec/SelfRelation.lean`: OpenFGA's implicit userset self-relation, TK144). Before
+  TK144 this printed the non-reflexive `sem`, which the residue still realises.
 * `"graph"` — run the OPERATIONAL graph model (`graphRun`: per input tuple one
   admitted logged write + one two-round cascade leg — the `ReachedBy` chain's
   own constructors, `GraphIndex/Exec.lean`), then answer each query with the
-  PUBLIC graph read `GraphModel.checkPublic`, via the pinned `graphModeAnswers`
+  PUBLIC graph read `GraphModel.checkPublicR` (TK144: the reflexive read,
+  `GraphIndex/SelfRead.lean`), via the pinned `graphModeAnswersR`
   (the fenced entry — Python's `WildcardIndex.check`, not `_check_internal`;
   migrated 2026-08-28c). With an `"ops"` field, runs `graphRunOps` over
   the add/remove stream instead (a remove is the `ReachedByW3d2E.remove`
@@ -394,14 +398,15 @@ def main (args : List String) : IO UInt32 := do
         | .ok "graph" =>
           -- Phase 6: run the operational graph model; the honesty theorems
           -- (`graphRun_reached`/`graphRunOps_reached`,
-          -- `graphRun_check_eq_sem`/`graphRunOps_check_eq_sem`) cover exactly
+          -- `graphRun_check_eq_semR`/`graphRunOps_check_eq_semR`, TK144) cover exactly
           -- what is printed here. Refuse to answer outside the proved scope.
           -- With an `"ops"` field, drive the interleaved add/remove op stream
           -- (`graphRunOps`); without it, the add-only `graphRun` over `"tuples"`
           -- (byte-identical to before).
           --
-          -- ⚠ The read is `Exec.lean::graphModeAnswers`, whose body is the PUBLIC
-          -- `GraphModel.checkPublic` — NOT the unfenced `check` (2026-08-28c). This
+          -- ⚠ The read is `SelfRead.lean::graphModeAnswersR` (TK144; before it,
+          -- `Exec.lean::graphModeAnswers`), whose body is the PUBLIC reflexive
+          -- `GraphModel.checkPublicR` — NOT an unfenced read (2026-08-28c). This
           -- driver is a PUBLIC surface: it corresponds to `src/zanzibar/graphindex/wildcard.py::
           -- WildcardIndex.check`, fenced since `BL-2`, not to `::_check_internal`.
           -- "Cover exactly what is printed here" is only true if the capstone theorems
@@ -409,7 +414,7 @@ def main (args : List String) : IO UInt32 := do
           -- statement-pinned definition rather than a lambda spelled out here: see
           -- `graphModeAnswers`' docstring for the sabotage (495 passed with the read
           -- reverted) that proves the coupling is otherwise unpinned. Keep this call a
-          -- bare application of `graphModeAnswers`; inlining the read here would move it
+          -- bare application of `graphModeAnswersR`; inlining the read here would move it
           -- back outside the pin.
           match decodeOps j with
           | .error e => IO.eprintln s!"ops decode error: {e}"; pure 1
@@ -424,7 +429,7 @@ def main (args : List String) : IO UInt32 := do
               pure 2
             | some (σ, _) =>
               if drainedB S σ then
-                printAnswers (graphModeAnswers σ qs)
+                printAnswers (graphModeAnswersR σ qs)
               else do
                 IO.eprintln "graph mode: final state not drained \
                   (outside the proved read scope)"
@@ -480,7 +485,8 @@ def main (args : List String) : IO UInt32 := do
             IO.println (leafRulesJson S).compress
             pure 0
         | .ok "spec" =>
-          -- Spec mode evaluates `sem` over the static store; an `"ops"` stream
+          -- Spec mode evaluates the spec `semR` (TK144) over the static store; an
+          -- `"ops"` stream
           -- (removes especially) has no spec-level meaning and MUST be rejected
           -- rather than silently ignored (rc 5).
           match decodeOps j with
@@ -488,7 +494,7 @@ def main (args : List String) : IO UInt32 := do
             IO.eprintln "spec mode does not support an \"ops\" stream \
               (use \"graph\"/\"graph-state\")"
             pure 5
-          | _ => printAnswers (qs.map (fun q => sem S T q))
+          | _ => printAnswers (qs.map (fun q => semR S T q))
         | .ok other =>
           IO.eprintln s!"unknown mode: {other} \
             (expected \"spec\", \"graph\", \"graph-state\", \"fragment\", or \"leaf-rules\")"

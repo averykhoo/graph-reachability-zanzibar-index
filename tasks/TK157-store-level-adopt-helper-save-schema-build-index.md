@@ -2,7 +2,7 @@
 id: TK157
 title: Store-level adopt helper (save_schema + build_index in one call)
 brief: TK123 SPLIT A25b: returns the named BuildReport
-pri: LATER
+pri: NEXT
 size: S
 deps: []
 related: [TK123]
@@ -11,8 +11,8 @@ labels: []
 source: docs/tk123-api-review-2026-10-14.md
 source_hash:
 created: 2026-10-15b
-moved: 2026-10-15b
-updated: 2026-10-15b
+moved: 2026-10-19
+updated: 2026-10-19
 closed:
 ---
 

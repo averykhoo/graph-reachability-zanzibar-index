@@ -146,7 +146,10 @@ def _assert_agree(schema, tuples, ops):
 def test_p05_repro_both_backends_agree(ops):
     """The install-trial repro, verbatim: mallory is excluded on both backends."""
     (nodes, markers, excluded), allowed = _assert_agree(P05_SCHEMA, P05_TUPLES, ops)
-    assert nodes == set()
+    # TK144: the target's own userset is a member of itself (OpenFGA's implicit userset
+    # self-relation; ListUsers returns it under a doc#viewer filter). A list-users UI that
+    # takes `user` keys, as `_listed` does, is unaffected.
+    assert nodes == {('doc', 'd', 'viewer')}
     assert markers == {('user', '...')}
     assert excluded == {('user', 'mallory', '...')}       # the field TK139 filled
     assert 'mallory' not in allowed and 'never_written_ghost' in allowed  # anti-vacuity
@@ -158,8 +161,9 @@ def test_mixed_grants_both_backends_agree(ops):
     exactly the users banned on doc:d (carol, banned elsewhere, is not excluded)."""
     (nodes, markers, excluded), allowed = _assert_agree(MIXED_SCHEMA, MIXED_TUPLES, ops)
     # bob's concrete grant is star-covered, so BOTH backends carry him by the marker,
-    # not as a concrete id (observed 2026-10-13: node keys set() on each side).
-    assert nodes == set()
+    # not as a concrete id (observed 2026-10-13: node keys set() on each side). TK144: the
+    # one node key is the target's own userset, a member of itself (as in OpenFGA).
+    assert nodes == {('doc', 'd', 'viewer')}
     assert markers == {('user', '...')}
     assert excluded == {('user', 'mallory', '...'), ('user', 'eve', '...')}
     assert allowed == {'bob', 'carol', 'never_written_ghost'}
@@ -187,8 +191,10 @@ def test_excluded_keys_is_the_portable_exclusion_channel(ops):
         for t in P05_TUPLES:
             se.add_tuple(*t)
         res = se.lookup_reverse('viewer', 'doc', 'd')
-        assert se.result_keys(res) == set()                       # anti-vacuity: the
-        assert res.markers == {('user', '...')}                   # marker carries it all
+        # anti-vacuity: the marker carries every USER (the one key is the target's own
+        # userset, a member of itself since TK144 -- OpenFGA's implicit self-relation)
+        assert se.result_keys(res) == {('doc', 'd', 'viewer')}
+        assert res.markers == {('user', '...')}
         assert se.excluded_keys(res) == {('user', 'mallory', '...')}
         assert se.excluded_keys(res) == {se.interner.key(i) for i in res.excluded_node_ids}
         assert se.check('...', 'user', 'mallory', 'viewer', 'doc', 'd') is False

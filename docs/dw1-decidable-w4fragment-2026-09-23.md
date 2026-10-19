@@ -170,7 +170,7 @@ then restored the source and rebuilt. `cmp` confirmed the restored source was by
     S3  instrument: drop 3 of 4 corpus families    1 failed, 79 passed
         AssertionError: only 27 curated corpora found; floor 36.
     S4  zcli seam: emit taintedKeys minus its head build rc=0  25 failed, 73 passed
-        (all 25 corpora with a nonempty derived set; every failure a taint test)
+        (all 25 corpora that then had a nonempty derived set, 2026-09-23; every failure a taint test)
 
 S1-as-first-run carries a lesson the gate already handles, because `verify.sh lean` builds
 `zcli` and fails on its rc. The hazard is a HAND run of conformance after a Lean edit.
