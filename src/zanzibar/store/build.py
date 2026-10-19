@@ -46,11 +46,15 @@ class IndexExists(ZanzibarError, ValueError):
     existing index's state away and build it again in place, call ``rebuild_index``.
     A ``ValueError``, as this refusal always was."""
 
-    def __init__(self, index_store_id: str, detail: str):
+    def __init__(self, index_store_id: str, detail: str, hint: str | None = None):
         self.index_store_id = index_store_id
-        super().__init__(
-            f"index {index_store_id!r} already exists ({detail}); build_index is for "
-            f"fresh builds (rebuild_index replaces an existing index in place)")
+        self.detail = detail
+        # TK157: ``hint`` lets a caller other than build_index (Store.adopt) give its own
+        # advice; the default is build_index's.
+        if hint is None:
+            hint = ('build_index is for fresh builds (rebuild_index replaces an existing '
+                    'index in place)')
+        super().__init__(f"index {index_store_id!r} already exists ({detail}); {hint}")
 
 
 class _BuildFields(NamedTuple):

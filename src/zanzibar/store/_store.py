@@ -23,6 +23,7 @@ Transaction semantics: ``write`` commits on success and rolls back on rejection
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import overload
 
 from sqlalchemy import func
@@ -39,14 +40,15 @@ from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import AdmissionRejected, validate_store_id
 from zanzibar.schema.errors import SchemaError, ZanzibarError, reject_ellipsis_predicate
 from zanzibar.schema.json_frontend import _reject_duplicate_json_keys, openfga_json_to_dsl
-from zanzibar.schema.tuplestr import lookup_args, lookup_reverse_args, tuple_args
+from zanzibar.schema.tuplestr import lookup_args, lookup_reverse_args, shape_filter, tuple_args
 
 from zanzibar.setengine.models import RelationTuple
 
 from .apply import advance_index, ensure_cursor
+from .build import BuildReport, IndexExists, build_index
 from .models import IndexCursor, TupleLog
 from .schema_io import (TablesNotCreated, TablesOutdated, ensure_schema, missing_tables,
-                        open_graph_index, refuse_reusable_node_ids)
+                        open_graph_index, refuse_reusable_node_ids, save_schema)
 # StaleRead lives with the evaluator that raises it first (TupleSource.check);
 # re-exported here for backward compatibility.
 from .source import (StaleRead, TupleSource, _require_clean_session, assert_read_isolation,
@@ -122,8 +124,9 @@ class UnloggedTuplesPresent(ZanzibarError, RuntimeError):
     standalone ``SetEngine`` on the same id, before any ``Store`` claimed it --
     would be invisible to the index (``check`` False while the set engine says True), and
     removing one would raise ``InvariantViolation`` ("corruption"). The bootstrap for a
-    store that already has tuples is ``save_schema`` + ``build_index``, which materialise
-    the index from the ``RelationTuple`` snapshot instead of from the log."""
+    store that already has tuples is ``Store.adopt`` (or its steps by hand,
+    ``save_schema`` + ``build_index``), which materialises the index from the
+    ``RelationTuple`` snapshot instead of from the log."""
     # Provenance (moved out of the docstring, TK123 item 14): TK140; 0.0.4 trial BROKEN-3,
     # p09; docs/tk140-one-write-path-per-store-2026-10-13.md.
 
@@ -223,11 +226,59 @@ def _reject_unlogged_adoption(session: Session, store_id: str) -> None:
         f'Store index born here would never see them -- check would answer '
         f'False while the set engine answers True, and removing one would be reported '
         f'as corruption. To adopt an existing tuple store: '
+        f'Store.adopt(session, {store_id!r}, schema=schema) (leave schema= out if '
+        f'it already has one) does it in one call; by hand, '
         f'zanzibar.store.save_schema(session, {store_id!r}, schema) if it has '
         f'no schema yet, session.commit(), then '
         f'zanzibar.store.build_index(session, {store_id!r}) (it builds the index '
         f'from the stored tuples), then Store(session, {store_id!r}). Nothing '
         f'was written by this refused open.')
+
+
+Key = tuple[str, str, str]
+
+
+@dataclass(frozen=True)
+class ExpandResult:
+    """What ``Store.expand`` returns: every subject that has the relation on the object,
+    as portable ``(type, name, predicate)`` keys (``predicate`` is the relation, or
+    ``"..."`` for a bare subject such as ``("user", "alice", "...")``).
+
+    Three parts, read together:
+
+    * ``keys`` -- members listed one by one;
+    * ``markers`` -- ``(type, predicate)`` shapes granted through a wildcard: EVERY subject
+      of that shape is a member, including ones no tuple mentions;
+    * ``excluded_keys`` -- subjects a marker covers that are NOT members (a ``but not``
+      or an ``and`` under a wildcard grant). Always subtract them from a marker.
+
+    A subject a marker covers is usually NOT repeated in ``keys``, so ``keys`` alone is
+    not the member list. Use ``key in result`` (``covers``) for one subject. Under
+    ``define viewer: [user:*] but not banned`` with a ``user:*`` grant and ``user:mallory``
+    banned, ``keys`` is empty, ``markers`` is ``{("user", "...")}`` and ``excluded_keys``
+    is ``{("user", "mallory", "...")}``.
+
+    A userset key such as ``("group", "eng", "member")`` means the userset itself is a
+    member; its own members are already included (listed in ``keys`` or covered by a
+    marker), so never expand it again yourself, which would re-admit a member a
+    ``but not`` refuses.
+
+    ``markers`` are ``(type, predicate)`` PAIRS, e.g. ``("user", "...")`` or
+    ``("group", "member")`` for a ``[group:*#member]`` grant. ``LookupResult.markers``
+    (from ``lookup_reverse``) are ``(type, predicate, "any")`` TRIPLES for the same
+    grant, so compare across the two by the first two fields."""
+    keys: frozenset = frozenset()
+    markers: frozenset = frozenset()
+    excluded_keys: frozenset = frozenset()
+
+    def covers(self, key: Key) -> bool:
+        """Is the ``(type, name, predicate)`` subject a member? Listed in ``keys``, or
+        covered by a marker of its ``(type, predicate)`` shape and not excluded."""
+        t, _n, p = key
+        return key in self.keys or ((t, p) in self.markers and key not in self.excluded_keys)
+
+    def __contains__(self, key: object) -> bool:
+        return isinstance(key, tuple) and len(key) == 3 and self.covers(key)  # type: ignore[arg-type]
 
 
 class Store:
@@ -421,6 +472,85 @@ class Store:
         # this upgrades the same guard instead of stacking a second set of listeners.
         self.paranoia_guard = install_paranoia(
             session, store_id, self.widx.schema_info, level=self.paranoia)
+
+    @classmethod
+    def adopt(cls, session: Session, store_id: str, *,
+              schema: str | dict | None = None,
+              object_wildcard_shapes: frozenset[tuple[str, str]] = frozenset(),
+              bulk: bool = True,
+              ops: SetOps = DEFAULT_SETOPS,
+              sync: bool = True,
+              paranoia: bool | int | str | None = None,
+              ) -> tuple['Store', BuildReport]:
+        """Adopt an existing tuple store in one call; returns ``(store, report)``.
+
+        A store id whose ``RelationTuple`` rows were written without the tuple log (by a
+        standalone ``SetEngine``) cannot simply be opened as a ``Store``: the open raises
+        ``UnloggedTuplesPresent``. This runs the adoption recipe instead: save the
+        schema (when ``schema`` is given), build the graph index from the stored tuples
+        with ``build_index``, then open the ``Store``. ``report`` is the ``BuildReport``
+        ``build_index`` returned; ``store`` is the open ``Store``. ``save_schema`` and
+        ``build_index`` stay public for callers that want the steps one by one.
+
+        ``schema`` takes what ``Store(schema=...)`` takes (DSL text, or an OpenFGA JSON
+        model). Leave it out when the store already has a persisted schema; a store with
+        neither raises ``StoreNotFound``. A schema that differs from the persisted one
+        raises ``SchemaMismatch``. ``object_wildcard_shapes`` is saved with ``schema``
+        and is used only together with it: with ``schema=None`` the persisted shapes
+        apply and this argument is ignored, as in ``Store(session, id)``. ``bulk`` is
+        ``build_index``'s; ``ops``, ``sync`` and ``paranoia`` are the ``Store``
+        constructor's.
+
+        The schema and the index commit TOGETHER. Each refusal below commits nothing:
+        a bad ``paranoia`` (``ValueError``) or ``ops`` (``TypeError``), an id that
+        already has an index (``IndexExists``; open it with ``Store(session, id)``),
+        writes to the store while the index is built (a ``RuntimeError``; retry when it is
+        quiescent), an isolation level other than READ COMMITTED
+        (``UnsafeIsolationLevel``), an outdated SQLite database (``TablesOutdated``),
+        missing tables (``TablesNotCreated``), and a stored object-wildcard tuple
+        (``doc:*``) whose shape is not declared in ``object_wildcard_shapes``
+        (``ValueError`` with ``bulk=True``, ``AdmissionRejected`` with ``bulk=False``).
+        The argument, table and isolation checks run before anything is built. The
+        session must be clean (no pending ORM changes)."""
+        # Provenance: TK157 (TK123 review item A25b); decisions D1-D7 in
+        # docs/tk157-adopt-helper-2026-10-19.md.
+        validate_store_id(store_id)
+        schema = _schema_text(schema)
+        _require_clean_session(session, 'Store.adopt')
+        # TK157 review fix: the Store-open arguments are checked here, before anything is
+        # built. Store.__init__ checks them too, but only after build_index has committed,
+        # which left a half-adopted id whose retry raised IndexExists.
+        resolve_paranoia_level(paranoia, default=cls.DEFAULT_PARANOIA)
+        if not isinstance(ops, SetOps):
+            raise TypeError(f'ops must be a SetOps (PySets or RoaringSets), '
+                            f'not {type(ops).__name__}')
+        try:
+            # D3: refuse before building. build_index checks neither, so without these an
+            # index would be committed and only the Store open below would refuse.
+            assert_read_isolation(session)
+            refuse_reusable_node_ids(session)
+            if schema is not None:
+                # D2: flushed, not committed. build_index's clean-session guard ignores a
+                # flushed row, so its one commit lands schema + index together and its
+                # rollback undoes both.
+                save_schema(session, store_id, schema, object_wildcard_shapes)
+            report = build_index(session, store_id, bulk=bulk)
+        except Exception as exc:
+            session.rollback()
+            if isinstance(exc, IndexExists):
+                # build_index's own advice (build_index / rebuild_index) is wrong for an
+                # adopt caller; same type, adopt's advice.
+                raise IndexExists(exc.index_store_id, exc.detail,
+                                  hint=f'it is already adopted; open it with '
+                                       f'Store(session, {store_id!r})') from exc
+            if isinstance(exc, DBAPIError):
+                missing = missing_tables(session)
+                session.rollback()
+                if missing:
+                    raise TablesNotCreated(missing) from exc
+            raise
+        store = cls(session, store_id, ops=ops, sync=sync, paranoia=paranoia)
+        return store, report
 
     # ------------------------------------------------------------------ #
     # Writes: one transaction across both halves (sync schedule)
@@ -743,26 +873,30 @@ class Store:
                                      relation, o_type, o_name)
         if self.source.evaluator_watermark < at_least:
             self.source.catch_up_evaluator()
-            if self.source.evaluator_watermark < at_least:
-                raise StaleRead(
-                    f'token {at_least} is not visible in this session snapshot '
-                    f'(evaluator at {self.source.evaluator_watermark}); call '
-                    f'refresh() to start a fresh read transaction and retry.'
-                    + token_diagnosis(self.session, self.store_id, at_least))
+            self._require_evaluator_at(at_least)
         return self.source.check(subject_predicate, s_type, s_name,
                                  relation, o_type, o_name)
 
     @overload
-    def lookup(self, user: str, *, at_least: int | None = None) -> LookupResult: ...
+    def lookup(self, user: str, *, at_least: int | None = None,
+               object_type: str | None = None,
+               relation: str | None = None) -> LookupResult: ...
     @overload
     def lookup(self, subject_predicate: str, subject_type: str, subject_name: str, *,
-               at_least: int | None = None) -> LookupResult: ...
+               at_least: int | None = None, object_type: str | None = None,
+               relation: str | None = None) -> LookupResult: ...
 
-    def lookup(self, *args, at_least: int | None = None, **kwargs) -> LookupResult:
+    def lookup(self, *args, at_least: int | None = None, object_type: str | None = None,
+               relation: str | None = None, **kwargs) -> LookupResult:
         """List-objects: everything the subject can reach, served by the index.
 
         The subject is ``lookup("user:alice")`` (or ``"group:eng#member"``) or
         ``lookup("...", "user", "alice")``.
+
+        ``object_type`` / ``relation`` keep only the objects of that type and/or relation
+        ("the documents alice can view": ``lookup("user:alice", object_type="doc",
+        relation="viewer")``), markers and exclusions included. A name the schema does not
+        declare matches nothing, as in ``check``.
 
         ``at_least`` demands the index reflect the log through that token. It is
         ENFORCED, not fulfilled by fallback: satisfied demands are served normally,
@@ -772,22 +906,33 @@ class Store:
         exactly: an untokened, bounded-stale index read."""
         subject_predicate, s_type, s_name = lookup_args('lookup', args, kwargs)
         reject_ellipsis_predicate(subject_predicate, 'lookup', write=False)  # TK123 item 9
+        shape_filter('lookup', object_type, relation, ('object_type', 'relation'))  # TK156
         self._require_index_freshness(at_least, 'lookup')
-        return self.widx.lookup(subject_predicate, s_type, s_name)
+        res = self.widx.lookup(subject_predicate, s_type, s_name)
+        return self.widx.filter_result(res, object_type, relation)   # TK156
 
     @overload
     def lookup_reverse(self, relation: str, object: str, *,
-                       at_least: int | None = None) -> LookupResult: ...
+                       at_least: int | None = None, subject_type: str | None = None,
+                       subject_predicate: str | None = None) -> LookupResult: ...
     @overload
     def lookup_reverse(self, relation: str, object_type: str, object_name: str, *,
-                       at_least: int | None = None) -> LookupResult: ...
+                       at_least: int | None = None, subject_type: str | None = None,
+                       subject_predicate: str | None = None) -> LookupResult: ...
 
     def lookup_reverse(self, *args, at_least: int | None = None,
-                       **kwargs) -> LookupResult:
+                       subject_type: str | None = None,
+                       subject_predicate: str | None = None, **kwargs) -> LookupResult:
         """List-users: everything that can reach the object's relation, as
         ``lookup_reverse("viewer", "doc:d1")`` or ``lookup_reverse("viewer", "doc",
         "d1")``. ``at_least`` behaves exactly as in ``lookup`` -- enforced, never
         silently downgraded.
+
+        ``subject_type`` / ``subject_predicate`` keep only the subjects of that type
+        and/or predicate, markers and exclusions included: ``subject_type="user",
+        subject_predicate="..."`` keeps the users (``"..."`` is a bare subject), and
+        ``subject_predicate="member"`` keeps ``member`` usersets. A name the schema does
+        not declare matches nothing, as in ``check``.
 
         To list the USERS allowed, take the keys of type ``user`` (a granted group's
         members are already listed one by one, refused ones left out) plus each ``user``
@@ -795,8 +940,59 @@ class Store:
         the userset itself is allowed; never expand it to its members, which would
         re-admit a member a ``but not`` refuses."""
         relation, o_type, o_name = lookup_reverse_args('lookup_reverse', args, kwargs)
+        shape_filter('lookup_reverse', subject_type, subject_predicate,       # TK156
+                     ('subject_type', 'subject_predicate'))
         self._require_index_freshness(at_least, 'lookup_reverse')
-        return self.widx.lookup_reverse(relation, o_type, o_name)
+        res = self.widx.lookup_reverse(relation, o_type, o_name)
+        return self.widx.filter_result(res, subject_type, subject_predicate)   # TK156
+
+    @overload
+    def expand(self, relation: str, object: str, *,
+               at_least: int | None = None) -> ExpandResult: ...
+    @overload
+    def expand(self, relation: str, object_type: str, object_name: str, *,
+               at_least: int | None = None) -> ExpandResult: ...
+
+    def expand(self, *args, at_least: int | None = None, **kwargs) -> ExpandResult:
+        """Zanzibar Expand: every subject that has the relation on the object, as
+        ``expand("viewer", "doc:d1")`` or ``expand("viewer", "doc", "d1")``. Returns an
+        ``ExpandResult`` of ``(type, name, predicate)`` keys, wildcard markers and the
+        keys those markers exclude (see there for how to read the three together).
+
+        Served by the set engine, never the index, so a stalled index does not affect
+        it. The engine first reads every write this session can see (including other
+        instances'), so an untokened call is as fresh as this session's snapshot.
+        ``at_least`` (a token from a write) demands the answer reflect the log through
+        that write; if this session's snapshot does not contain it yet, ``StaleRead`` is
+        raised -- call ``refresh()`` and retry."""
+        relation, o_type, o_name = lookup_reverse_args('expand', args, kwargs)
+        validate_token(at_least)
+        # TK155 (docs/tk155-store-expand-2026-10-19.md D2): the set-engine rung of
+        # ``check``'s freshness ladder, taken unconditionally because Expand has no index
+        # form. Catching up untokened too is O(delta), one empty log query when idle.
+        self.source.catch_up_evaluator()
+        if at_least is not None:
+            self._require_evaluator_at(at_least)
+        engine = self.source.engine
+        # Delegation only: SetEngine.expand's body is a CORRESPONDENCE.md anchor (TK155 D3).
+        m = engine.expand(relation, o_type, o_name)
+        key = engine.interner.key
+        keys = frozenset(key(i) for i in m.pos) | frozenset(m.ipos)
+        # ``pos`` wins over ``neg`` (memberset.MemberSet); they are disjoint by
+        # construction, and the subtraction keeps the reading exact if that ever changes.
+        excluded = (frozenset(key(i) for i in m.neg) | frozenset(m.ineg)) - keys
+        return ExpandResult(keys=keys, markers=frozenset(m.stars), excluded_keys=excluded)
+
+    def _require_evaluator_at(self, at_least: int) -> None:
+        # The one StaleRead for a set-engine read (``check``'s fallback rung and
+        # ``expand``), called after ``catch_up_evaluator`` so the snapshot is all it
+        # can be: if the token is still not visible, refuse rather than serve stale.
+        if self.source.evaluator_watermark < at_least:
+            raise StaleRead(
+                f'token {at_least} is not visible in this session snapshot '
+                f'(evaluator at {self.source.evaluator_watermark}); call '
+                f'refresh() to start a fresh read transaction and retry.'
+                + token_diagnosis(self.session, self.store_id, at_least))
 
     def result_keys(self, res: LookupResult) -> set[tuple[str, str, str]]:
         """Translate ``res.node_ids`` (from this store's ``lookup`` / ``lookup_reverse``)

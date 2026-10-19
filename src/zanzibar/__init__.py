@@ -22,6 +22,7 @@ __version__ = "0.0.5"
 _LAZY = {
     'Store': 'zanzibar.store._store',
     'LookupResult': 'zanzibar.graphindex.wildcard',
+    'ExpandResult': 'zanzibar.store._store',
     'parse_openfga_schema': 'zanzibar.schema.compiler',
     # exceptions: the root, the schema layer
     'ZanzibarError': 'zanzibar.schema.errors',
@@ -89,7 +90,7 @@ if TYPE_CHECKING:  # pragma: no cover -- for type checkers and IDEs only
                                         UnsupportedByGraphIndex, ZanzibarError)
     from zanzibar.schema.tuplestr import MalformedTupleString
     from zanzibar.setengine.engine import StaleLookupIds, UnloggedWriteRefused
-    from zanzibar.store._store import (IndexStalled, LookupNotFresh, Store,
+    from zanzibar.store._store import (ExpandResult, IndexStalled, LookupNotFresh, Store,
                                        UnloggedTuplesPresent)
     from zanzibar.store.apply import MissingDeltaProcessor
     from zanzibar.store.build import IndexExists

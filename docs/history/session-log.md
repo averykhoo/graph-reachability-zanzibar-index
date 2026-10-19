@@ -33,6 +33,52 @@ from here.
 
 ---
 
+## 2026-10-19b — `TK155`/`TK156`/`TK157` closed (Store.expand, lookup filters, Store.adopt); `TK151` NOW
+
+rows: TK155 (closed), TK156 (closed), TK157 (closed), TK151 (LATER -> NOW; comment; summary + Traps rewritten)
+
+`task lint: clean (13 checks, 279 task file(s) parsed), 25 warning(s)`
+
+`read: show TK155, TK156, TK157`
+
+`asked: none`
+
+**Ultracode-coordinated.** The user asked for the three small 0.1.0 rows to be done by a
+workflow, not by the session itself ("coordinate ultracode, don't do the tasks yourself, get
+the 3 small tasks done"). The orchestrator read the board and `show` of TK155, TK156, TK157 and
+TK151 (the receipt grammar has no `board + show` token, so the line above names the assigned
+rows). Per row, one implement agent, then reviewers (equivalence probes + mutation sweeps),
+then a fix agent. Every agent wrote under `.scratch/tk155-157/<id>/`; the evidence that
+matters is transcribed into the three plan docs (now FROZEN with a dated review/fix
+correction at the top) and the close messages.
+- **`TK155`**: `Store.expand` returning the new `ExpandResult` (keys / markers /
+  excluded_keys), set-engine served with catch-up + `StaleRead`
+  (`Store._require_evaluator_at`, now shared with `Store.check`). Doc:
+  [`docs/tk155-store-expand-2026-10-19.md`](../tk155-store-expand-2026-10-19.md).
+- **`TK156`**: `object_type`/`relation` filters on `Store.lookup` and
+  `subject_type`/`subject_predicate` on `Store.lookup_reverse`, via `filter_result` on both
+  backends over `schema/tuplestr.py::shape_filter`. The review's one BLOCKING finding (task
+  id in three public docstrings, `tests/test_tk123_no_internal_refs.py` red) was fixed and
+  re-run green. Doc: [`docs/tk156-lookup-filter-2026-10-19.md`](../tk156-lookup-filter-2026-10-19.md).
+- **`TK157`**: `Store.adopt` returning `(store, BuildReport)`; every refusal, including a bad
+  `paranoia`/`ops` (a review finding, fixed), now commits nothing. Doc:
+  [`docs/tk157-adopt-helper-2026-10-19.md`](../tk157-adopt-helper-2026-10-19.md).
+- **Not touched by design:** no Lean file, no CORRESPONDENCE-anchored body
+  (`SetEngine.expand`, the content-pinned lookup bodies). PostgreSQL leg: a reasoned skip on all
+  three (no locking, watermark, isolation or multi-instance write change).
+- **Carried to `TK151`** (now NOW, the last 0.1.0 row): the marker-shape choice
+  (`ExpandResult.markers` pairs vs `LookupResult.markers` triples) must be decided before the
+  API freezes; docs to point at `Store.expand`. Declared uncovered: the `ineg` term of
+  `ExpandResult.excluded_keys`.
+- **Gate:** these records were written BEFORE the gate (§7). The orchestrator runs every
+  `verify.sh` phase and commits by path only on `gate_status` COVERED; the new tests change the
+  collected counts, so the `formal/FINAL_REVIEW.md` counts block and the floors may need a
+  deliberate regenerate/raise.
+
+**Still owed:** nothing.
+
+---
+
 ## 2026-10-19 — `TK144` committed on the full gate (TK138 landing 2); `TK138` closed; `TK161`/`TK162` filed
 
 rows: TK144 (closed), TK138 (closed), TK161 / TK162 (new, LATER), TK151 (comment: MINOR bump), TK155 (LATER -> NOW), TK156 / TK157 (LATER -> NEXT)

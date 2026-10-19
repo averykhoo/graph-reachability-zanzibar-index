@@ -168,7 +168,7 @@ _EXPECTED_ALL = {
         'AdmissionRejected', 'InvariantViolation', 'WriteLockUnsafe', 'outbox_watermark',
         'prune_outbox', 'DeltaProcessor'},   # DeltaProcessor: TK153 F8, 2026-10-17
     'zanzibar.store': {
-        'Store', 'TupleSource', 'build_index', 'rebuild_index', 'save_schema',
+        'Store', 'ExpandResult', 'TupleSource', 'build_index', 'rebuild_index', 'save_schema',
         'SchemaRecord', 'TupleLog', 'PARANOIA_ENV_VAR', 'StaleRead', 'LookupNotFresh',
         'IndexStalled', 'UnloggedTuplesPresent', 'WatermarkGap', 'UnsafeIsolationLevel',
         'MissingDeltaProcessor', 'SchemaMismatch', 'PersistedSchemaRefused', 'SchemaError',

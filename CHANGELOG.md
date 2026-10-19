@@ -209,6 +209,37 @@ Each is detailed below, under Changed or Added.
   (the versions `PersistedSchemaRefused` quotes).
 
 ### Added
+- **`Store.expand`: Zanzibar Expand on the store** (TK155). `store.expand("viewer",
+  "doc:d1")` (or `"viewer", "doc", "d1"`) returns an `ExpandResult` (exported as
+  `zanzibar.ExpandResult`) of `(type, name, predicate)` keys: `keys` (members listed one
+  by one), `markers` (`(type, predicate)` shapes granted through a wildcard) and
+  `excluded_keys` (subjects a marker covers that are not members). Test one subject with
+  `key in result`; `keys` alone is not the member list, because a member a marker covers
+  is not repeated there. Served by the set engine, so a lagging or stalled index does not
+  affect it; it first reads every write this session can see, and `at_least` raises
+  `StaleRead` when the token is not in this session's snapshot. Before this, Expand meant
+  `SetEngine.expand`, which returns instance-local bitmap ids.
+- **A type and relation filter on lookups** (TK156). `store.lookup("user:alice",
+  object_type="doc", relation="viewer")` keeps only the doc viewers alice reaches, and
+  `store.lookup_reverse("viewer", "doc:d1", subject_type="user",
+  subject_predicate="...")` keeps only the users (`"..."` is a bare subject; a relation
+  name keeps usersets). Either part may be given alone. Markers and their exclusions are
+  filtered together, so a marker keeps its exclusions. A name the schema does not declare
+  matches nothing (an empty result, as `check` answers False); a filter that is not a
+  `str` raises `TypeError`. The backends filter the same way through the new
+  `WildcardIndex.filter_result(result, entity_type=None, predicate=None)` and
+  `SetEngine.filter_result(...)`, which filter a result the lookup already computed.
+- **`Store.adopt`: adopt an existing tuple store in one call** (TK157). `store, report =
+  Store.adopt(session, "app", schema=SCHEMA)` saves the schema (leave `schema` out when the
+  store already has one), builds the index from the stored tuples with `build_index`, and
+  opens the `Store`; `report` is the `BuildReport`. It replaces the four-step recipe
+  (`save_schema`, commit, `build_index`, `Store(...)`) that `UnloggedTuplesPresent` names,
+  and the schema and index commit together: a refused adopt saves nothing. An isolation
+  level other than READ COMMITTED (`UnsafeIsolationLevel`) and a 0.0.x SQLite file
+  (`TablesOutdated`) are refused before anything is built, which a bare `build_index`
+  does not check, and so are a bad `paranoia` or `ops` argument. An id that already has
+  an index is `IndexExists`, whose message says to open it with `Store(session, id)`. `save_schema` and
+  `build_index` stay public.
 - **The key channel of a lookup result** (TK144): `LookupResult.implicit_keys` /
   `implicit_excluded_keys` and `SetLookupResult.implicit_keys` / `implicit_excluded_keys`,
   `(type, name, predicate)` keys for answers and exclusions that have no node or interned

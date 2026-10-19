@@ -26,7 +26,7 @@ import inspect
 from .errors import ZanzibarError
 
 __all__ = ['MalformedTupleString', 'parse_user', 'parse_object',
-           'tuple_args', 'lookup_args', 'lookup_reverse_args']
+           'tuple_args', 'lookup_args', 'lookup_reverse_args', 'shape_filter']
 
 
 class MalformedTupleString(ZanzibarError, ValueError):
@@ -144,3 +144,30 @@ def lookup_reverse_args(method: str, args: tuple, kwargs: dict) -> tuple:
         return values
     relation, obj = values
     return (relation, *parse_object(obj))
+
+
+def shape_filter(method: str, entity_type, predicate,
+                 names: tuple[str, str] = ('the type filter', 'the predicate filter')):
+    """A lookup filter as a predicate on ``(type, predicate)`` shapes, or ``None``
+    when neither part is given (the caller then returns the result unchanged).
+
+    ``entity_type`` / ``predicate`` are each ``None`` (no filter on that part) or a
+    ``str``. An undeclared name is not refused: like every read, it matches nothing and
+    the filtered result is empty. Anything else is a ``TypeError`` naming ``method`` and
+    the argument's name in ``names`` (the caller's own keywords)."""
+    # Provenance: TK156 (docs/tk156-lookup-filter-2026-10-19.md); ``names`` from the
+    # TK156 review, so a Store-level refusal names the keyword the caller passed.
+    for name, value in zip(names, (entity_type, predicate)):
+        if value is not None and not isinstance(value, str):
+            hint = ''
+            if value is Ellipsis and name == names[1]:
+                hint = "; write the string '...' for a bare subject"
+            raise TypeError(f'{method}(): {name} must be a str or None, '
+                            f'not {type(value).__name__}{hint}')
+    if entity_type is None and predicate is None:
+        return None
+
+    def matches(t: str, p: str) -> bool:
+        return ((entity_type is None or t == entity_type)
+                and (predicate is None or p == predicate))
+    return matches

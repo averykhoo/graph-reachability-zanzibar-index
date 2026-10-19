@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-19 -- `TK144` (TK138 landing 2: OpenFGA's implicit userset self-relation in all four corners) landed and committed after the full gate this session; `TK138` closed with it. Follow-ups `TK161`, `TK162` (LATER). `TK153`, `TK147` closed 2026-10-17. **0.1.0 = all open release items, no rush (user)**; it MUST be a MINOR bump (TK144 flips ALLOW to DENY; noted on `TK151`); version stays 0.0.5 under CHANGELOG `[Unreleased]`; `TK151` lands LAST. NOW: `TK155`. NEXT: `TK156`, `TK157`. ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-19b -- `TK155` (`Store.expand` / `ExpandResult`), `TK156` (lookup type/relation filters) and `TK157` (`Store.adopt`) closed via an ultracode workflow (implement, review, fix); records written before the gate. **0.1.0 = all open release items, no rush (user)**; MINOR bump (TK144 flips ALLOW to DENY); version stays 0.0.5 under CHANGELOG `[Unreleased]`. NOW: `TK151`, the last 0.1.0 row: decide the marker-shape question on it (expand pairs vs lookup triples) before the cut. ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

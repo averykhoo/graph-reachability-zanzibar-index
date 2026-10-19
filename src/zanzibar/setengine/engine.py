@@ -46,6 +46,7 @@ from zanzibar.schema import (
 from zanzibar.schema.syntax import (declared_relations, first_schema_difference,
                                     no_restriction_message)
 from zanzibar.schema.parser import _parse_schema_ast_checked
+from zanzibar.schema.tuplestr import shape_filter
 from zanzibar.schema.compiler import _validate_object_wildcard_shapes
 from zanzibar.schema.errors import (PersistedSchemaRefused, SchemaMismatch,
                                     ShapeNoLongerAccepted, ZanzibarError,
@@ -1829,6 +1830,38 @@ class SetEngine:
         result.implicit_keys = set(m.ipos)              # TK144: members with no id
         result.implicit_excluded_keys = set(m.ineg)
         return result
+
+    def filter_result(self, res: SetLookupResult, entity_type: str | None = None,
+                      predicate: str | None = None) -> SetLookupResult:
+        """A copy of a ``lookup`` / ``lookup_reverse`` result keeping only the entries of
+        one type and/or predicate: every id, marker, excluded id and implicit key
+        whose ``(type, predicate)`` matches every filter given. From ``lookup`` the
+        entries are objects (``predicate`` is the relation); from ``lookup_reverse`` they
+        are subjects (``predicate`` is ``"..."`` for a bare subject such as a user, or the
+        relation of a userset). Both ``None`` returns ``res`` itself. An exclusion always
+        has its marker's shape, so the filtered result still reads as "keys, plus every
+        subject of a marker's shape, minus the excluded keys". The ids are classified
+        through this instance's id map, so the same staleness rule as ``result_keys``
+        applies (``StaleLookupIds``); the copy keeps the result's ``id_stamp``."""
+        # Provenance: TK156 (docs/tk156-lookup-filter-2026-10-19.md D1/D2). A post-filter
+        # on purpose: ``lookup_reverse`` is a content-pinned anchor, and filtering a
+        # computed result changes no modelled algorithm.
+        matches = shape_filter('filter_result', entity_type, predicate)
+        if matches is None:
+            return res
+        key_of = self.interner.key_of
+
+        def keep(ids, field_name):
+            self._translate(res, ids, field_name)        # stamp + dead-id refusal
+            return {i for i in ids if matches(key_of[i][0], key_of[i][2])}
+        return SetLookupResult(
+            node_ids=keep(res.node_ids, 'node_ids'),
+            markers={m for m in res.markers if matches(m[0], m[1])},
+            excluded_node_ids=keep(res.excluded_node_ids, 'excluded_node_ids'),
+            id_stamp=res.id_stamp,
+            implicit_keys={k for k in res.implicit_keys if matches(k[0], k[2])},
+            implicit_excluded_keys={k for k in res.implicit_excluded_keys
+                                    if matches(k[0], k[2])})
 
     def result_keys(self, res: SetLookupResult) -> set[NodeKey]:
         """Translate ``res.node_ids`` to their stable ``(type, name, predicate)``

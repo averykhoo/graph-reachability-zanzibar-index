@@ -24,6 +24,7 @@ from sqlmodel import select
 from .core import ReachabilityIndex, _ThreadFlag
 from .invariants import InvariantViolation
 from .models import Edge, Node, ResidueRef, Residue
+from zanzibar.schema.tuplestr import shape_filter
 from zanzibar.schema import (AdmissionRejected, SchemaInfo,
                                norm_pred as _norm_pred,
                                validate_node_identifiers,
@@ -1137,6 +1138,44 @@ class WildcardIndex:
             return self.idx.node(predicate, entity_type, name, create_if_missing=False)
         except KeyError:
             return None
+
+    def filter_result(self, res: LookupResult, entity_type: str | None = None,
+                      predicate: str | None = None) -> LookupResult:
+        """A copy of a ``lookup`` / ``lookup_reverse`` result keeping only the entries of
+        one type and/or predicate: every node id, marker, excluded id and implicit
+        key whose ``(type, predicate)`` matches every filter given. From ``lookup`` the
+        entries are objects (``predicate`` is the relation); from ``lookup_reverse`` they
+        are subjects (``predicate`` is ``"..."`` for a bare subject such as a user, or the
+        relation of a userset). Both ``None`` returns ``res`` itself. An exclusion always
+        has its marker's shape, so the filtered result still reads as "keys, plus every
+        subject of a marker's shape, minus the excluded keys". Read it before the next
+        write: an id whose node is gone raises ``StaleLookupIds``."""
+        # Provenance: TK156 (docs/tk156-lookup-filter-2026-10-19.md D1/D2). A post-filter
+        # on purpose: ``lookup`` / ``lookup_reverse`` are content-pinned anchors, and
+        # filtering a computed result changes no modelled algorithm.
+        matches = shape_filter('filter_result', entity_type, predicate)
+        if matches is None:
+            return res
+        nodes = self.idx._load_nodes(res.node_ids | res.excluded_node_ids)
+        for field_name, ids in (('node_ids', res.node_ids),
+                                ('excluded_node_ids', res.excluded_node_ids)):
+            missing = sorted(i for i in ids if i not in nodes)
+            if missing:
+                from zanzibar.setengine.engine import StaleLookupIds
+                raise StaleLookupIds(
+                    field_name, missing,
+                    f'they name no node in store {self.idx.store_id!r}: the lookup result '
+                    f'predates a write that removed them, or it came from another store')
+
+        def keep(ids):
+            return {i for i in ids if matches(nodes[i].type, nodes[i].predicate)}
+        return LookupResult(
+            node_ids=keep(res.node_ids),
+            markers={m for m in res.markers if matches(m[0], m[1])},
+            excluded_node_ids=keep(res.excluded_node_ids),
+            implicit_keys={k for k in res.implicit_keys if matches(k[0], k[2])},
+            implicit_excluded_keys={k for k in res.implicit_excluded_keys
+                                    if matches(k[0], k[2])})
 
     def lookup(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str) -> LookupResult:
         """Everything the subject can reach. Concrete targets go in node_ids; any wildcard

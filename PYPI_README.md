@@ -302,8 +302,9 @@ refusals must not swallow it. `UnprovenExtensionWarning` is a warning, not an ex
   store's own schema (`zanzibar.store.open_set_engine(session, id)` loads it); a
   different one raises `SchemaMismatch`. A `Store` will not
   take over an id that a standalone `SetEngine` already wrote to (`UnloggedTuplesPresent`).
-  To adopt such a store, call `save_schema(session, id, schema)`, commit, then
-  `build_index(session, id)`, then open `Store(session, id)`.
+  To adopt such a store, call `store, report = Store.adopt(session, id, schema=schema)`:
+  it saves the schema, builds the index from the stored tuples and opens the `Store`
+  (`save_schema` and `build_index` remain available as separate steps).
 * **Databases.** SQLite and PostgreSQL only. On PostgreSQL the session must use
   `READ COMMITTED`; any other isolation level is refused at construction.
 * **Runtime checks.** `Store(..., paranoia="residue")` or the

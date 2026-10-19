@@ -16,7 +16,7 @@ from .source import (StaleRead, TupleSource, UnsafeIsolationLevel, WatermarkGap,
                      assert_read_isolation, log_gap, log_rows, log_watermark)
 from .apply import MissingDeltaProcessor, advance_index, ensure_cursor
 from .build import BuildReport, IndexExists, build_index, rebuild_index
-from ._store import (Store, IndexStalled, LookupNotFresh, PARANOIA_ENV_VAR,
+from ._store import (Store, ExpandResult, IndexStalled, LookupNotFresh, PARANOIA_ENV_VAR,
                     UnloggedTuplesPresent)
 # Re-exported because a ``Store`` raises them, so a caller can catch what it gets from here.
 from zanzibar.graphindex.core import WriteLockUnsafe
@@ -32,6 +32,7 @@ from zanzibar.setengine.engine import StaleLookupIds
 # ``load_schema``, ``ensure_schema``, ``IndexCursor``) still import by name.
 __all__ = [
     "Store",
+    "ExpandResult",
     "TupleSource",
     "build_index",
     "rebuild_index",
