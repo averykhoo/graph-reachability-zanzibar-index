@@ -1,8 +1,8 @@
 ---
 id: TK164
 title: public exception and type surface is inconsistent: two refusals not ValueError, ragged re-exports
-brief: decide before the 0.1.0 freeze: UnsupportedByGraphIndex not a ValueError; subpackage re-exports ragged
-pri: LATER
+brief: 0.1.0: UnsupportedByGraphIndex gains ValueError; one exception export rule; make SchemaInfo/Entity public
+pri: NEXT
 size: M
 deps: []
 related: [TK151]
@@ -25,3 +25,7 @@ Repro and first-hand output: `docs/tk151-repros-2026-10-20/README.md` section B2
 - `docs/tk151-repros-2026-10-20/README.md`
 
 ## Log
+
+### 2026-10-20b
+
+0.1.0 ITEM (user, 2026-10-20b, in chat). Plan (model): (1) UnsupportedByGraphIndex gains ValueError as a base (check tests/parity.py first, it treats a bare compile ValueError as must-surface); (2) one export rule, pinned by a test: subpackages stop re-exporting exceptions, import them from zanzibar (matches the user docs); (3) make Entity, RelationalTriple, SchemaInfo public with docstrings, and fix the CompiledBooleans annotation so typing.get_type_hints(RuleSet) resolves. Coordinate (3) with TK3 (same bare WildcardIndex surface). Update the userdocs pages listed in docs/tk151-repros-2026-10-20/README.md B2 and B10.

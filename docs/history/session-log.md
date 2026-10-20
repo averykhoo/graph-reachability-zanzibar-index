@@ -35,9 +35,9 @@ from here.
 
 ## 2026-10-20b — `TK151` user docs drafted (userdocs/, Sphinx, Pages); `TK3`/`TK158`/`TK162` to 0.1.0; 7 bug rows
 
-rows: TK151 (comments; plan doc), TK3 / TK158 / TK162 (LATER -> NEXT, 0.1.0 items, briefs + comments), TK163-TK169 (new, LATER)
+rows: TK151 (comments; plan doc), TK3 / TK158 / TK162 / TK164 / TK166 (-> NEXT, 0.1.0 items, briefs + comments), TK163 / TK165 / TK167-TK169 (new, LATER), ASK-3 (new, LATER)
 
-`task lint: clean (13 checks, 286 task file(s) parsed), 26 warning(s)`
+`task lint: clean (13 checks, 287 task file(s) parsed), 27 warning(s)`
 
 `read: show TK151, TK3`
 
@@ -72,6 +72,10 @@ committed with this session's work; this entry stands in for its missing ledger 
   `tests/test_tasktool.py::test_shipped_config_is_measured_not_an_example`: two agent-written
   sabotage notes recorded a planted fake task id literally (`tests/test_userdocs_build.py`,
   `userdocs/_ext/refused_shapes.py`), respelled with angle brackets.
+
+- **After the commit** (user, in chat): `TK164` and `TK166` join 0.1.0 (NEXT, now 5/5); `ASK-3`
+  filed for the two GitHub settings the docs deploy needs (user asked to be nagged; also a
+  one-shot reminder scheduled in-session for 2026-10-21 10:00 UTC+8).
 
 Still owed: none.
 

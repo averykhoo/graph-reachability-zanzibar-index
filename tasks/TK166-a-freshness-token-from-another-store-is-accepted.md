@@ -1,8 +1,8 @@
 ---
 id: TK166
 title: a freshness token from another store is accepted silently (and its refusal advice misleads)
-brief: tokens are global log ids: a foreign token <= cursor passes check/lookup/expand silently
-pri: LATER
+brief: 0.1.0: refuse a token issued by another store on every tokened read; lead the message with the cause
+pri: NEXT
 size: S
 deps: []
 related: [TK151]
@@ -25,3 +25,7 @@ Repro and first-hand output: `docs/tk151-repros-2026-10-20/README.md` section B4
 - `docs/tk151-repros-2026-10-20/README.md`
 
 ## Log
+
+### 2026-10-20b
+
+0.1.0 ITEM (user, 2026-10-20b, in chat). Plan (model): refuse a foreign token on every tokened read (check, lookup, lookup_reverse, expand) with one TupleLog primary-key lookup of the token owner, and lead the refusal message with the cause (no refresh/catch_up/retry advice); consider ForeignToken(StaleRead) so except StaleRead still catches it. It turns a silent accept into an error, which is why it lands before the freeze. Update the userdocs pages listed in docs/tk151-repros-2026-10-20/README.md B4 and B5.

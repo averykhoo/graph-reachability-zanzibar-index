@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-20b -- `TK151` user docs drafted in `userdocs/` (Sphinx + MyST + Furo; Pages deploy from a `v*` tag only) by two ultracode workflows; plan `docs/tk151-diataxis-plan-2026-10-20.md`. **0.1.0 = TK151 + TK3 + TK158 + TK162** (NEXT; user), cut held until the docs land, MINOR bump, version stays 0.0.5 under CHANGELOG `[Unreleased]`. Docs pass found 7 library bugs, none an equivalence break: TK163-TK169 (LATER; TK164/TK166 touch the API freeze). Before the cut: refresh `userdocs/reference/changelog.md` by hand. Commit by path, never `git add -A` / `git stash`.
+> 2026-10-20b -- `TK151` user docs drafted in `userdocs/` (Sphinx; Pages deploys from `v*` tags only); plan `docs/tk151-diataxis-plan-2026-10-20.md`. **0.1.0 = TK151 + TK3, TK158, TK162, TK164, TK166** (user), cut held until the docs land; version stays 0.0.5 under `[Unreleased]`. Docs pass filed TK163-TK169 (no equivalence break). Open `ASK-3`: nag the user about two GitHub settings. Before the cut: refresh `userdocs/reference/changelog.md`. Commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed
