@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-14
-moved: 2026-10-19b
-updated: 2026-10-19b
+moved: 2026-10-20b
+updated: 2026-10-20b
 closed:
 ---
 
@@ -64,3 +64,17 @@ TK144 (TK138 landing 2) closed 2026-10-19 and adds a release obligation to the 0
 ### 2026-10-19b
 
 2026-10-19b: TK155, TK156, TK157 closed (uncommitted at close; orchestrator gates and commits). TK151 is now the last 0.1.0 row, promoted to NOW. Carried into this row for the 0.1.0 cut: (1) API-shape choice before the freeze: `ExpandResult.markers` are (type, predicate) pairs while `LookupResult.markers` are (type, predicate, 'any') triples; documented in the ExpandResult docstring and pinned by tests/test_tk155_store_expand.py, NOT aligned. Decide (align or keep) before tagging. (2) `SetEngine.expand`'s docstring still points key-wanting callers at lookup_reverse; the user docs should point at `Store.expand` (engine.py docstring left alone because of its anchored content pin). (3) The new public surface to document: `Store.expand` / `ExpandResult`, the lookup filters (`object_type`/`relation`, `subject_type`/`subject_predicate`), and `Store.adopt` returning (store, BuildReport).
+
+### 2026-10-20
+
+USER DECISIONS 2026-10-20 (in chat): (1) the marker-shape question (ExpandResult.markers pairs vs LookupResult.markers triples) is the model's to decide, before the docs describe it. (2) The GitHub Pages workflow and publishing the docs site are APPROVED. (3) HOLD the 0.1.0 cut until the docs land: no version bump, CHANGELOG heading or v0.1.0 tag until then, and the tag still needs the user's explicit word.
+
+### 2026-10-20b
+
+Plan written: docs/tk151-diataxis-plan-2026-10-20.md (contents, phases, generator choice). DECIDED 2026-10-20b: reader is a Python dev (user); generator Sphinx + MyST + Furo + autodoc, sources in userdocs/ (model; MkDocs ecosystem in flux: Material maintenance mode, MkDocs 2.0 drops plugins); async/tokens get how-to + explanation, no tutorial (model, on the user stable-usage rule). The 2026-10-20 entry above came from a session lost when the PC died; this session owns the row. NOT the last 0.1.0 row any more: TK3, TK158, TK162 are 0.1.0 items (NEXT). Next action: phase 0 marker-shape decision, then the scaffold + Pages workflow.
+
+PHASE 0 DECIDED (model, 2026-10-20b): marker shapes stay as they are, NOT aligned. LookupResult.markers keep (type, predicate, variant) because the variant carries meaning there (any = subject-side, all = object-side under object_wildcard_shapes, see graphindex/wildcard.py::LookupResult docstring). ExpandResult only ever describes subjects, so its variant would always be any: a constant third field is noise, and dropping the variant from LookupResult would lose the all case. The docs explain both shapes and say to compare by the first two fields (as the ExpandResult docstring already does). Pinned by tests/test_tk155_store_expand.py.
+
+IN FLIGHT 2026-10-20b: ultracode workflow wf_e60a3842-f17 (tk151-userdocs) writing userdocs/ (Sphinx 8 + MyST 4 + Furo, installed into the conda env via pip). Shape: scaffold (conf.py, page skeleton, tests/test_userdocs_examples.py, tests/test_userdocs_build.py, docs extra, .github/workflows/docs.yml) -> 12 units write/adversarial-review/fix -> integrate (strict -W -n build) -> completeness critic. Per-agent reports in .scratch/tk151-docs/ (gitignored: transcribe anything that is evidence). If the session dies: resume with Workflow resumeFromRunId wf_e60a3842-f17, or inspect userdocs/ as left. Not yet done after it: PYPI_README shrink, fresh-reader trial, gate, commit.
+
+Round 1 (wf_e60a3842-f17) DONE: 43 pages + scaffold landed uncommitted; findings and 11 suspected library bugs transcribed into docs/tk151-diataxis-plan-2026-10-20.md Correction 2026-10-20b. Round 2 IN FLIGHT: wf_b32b8743-b9f (fix critic items in 5 disjoint units with review, repro each suspected bug B1-B10 under .scratch/tk151-docs2/repro-<id>/, shrink PYPI_README, fresh-reader trial, final strict build). After it: transcribe repro verdicts into the plan doc, file rows for CONFIRMED bugs, gate, commit.

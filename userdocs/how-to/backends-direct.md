@@ -1,0 +1,170 @@
+# Use the backends directly
+
+A {py:class}`zanzibar.Store` is three parts kept in step for you: a tuple log, the set
+engine ({py:class}`zanzibar.setengine.SetEngine`) and the graph index
+({py:class}`zanzibar.graphindex.WildcardIndex`). Every write goes into the log, and the store
+then applies it to both backends in the right order. Both backends are public, and you can
+build either one on its own. This page shows how to use the set engine on its own, and
+warns against writing to the graph index on its own.
+
+**Prefer the `Store`.** Driving a backend yourself means doing by hand what the `Store` does
+on every write, and for the graph index a skipped step fails silently: the index then gives
+wrong answers with no error.
+[The two backends](../explanation/two-backends.md) explains how they differ.
+
+## Decide whether you need this
+
+Use the **set engine on its own** when you want answers computed from stored tuples and you
+do not need the graph index, the tuple log or freshness tokens. Examples are a test, a
+script that evaluates a model against some tuples, or a one-off analysis. Keep in mind:
+
+- It never commits. `add_tuple` and `remove_tuple` stage rows on your session, and you
+  commit it.
+- Its state lives in memory. Opening one reads every stored tuple of the store, so opening
+  costs time and memory in proportion to the store.
+- Each instance has its own copy of that state. An engine does not see tuples that another
+  engine instance wrote after it was opened, until you call its `rebuild()`.
+- It takes the six-part tuple form only (`"..."`, `"user"`, `"alice"`, `"viewer"`, `"doc"`,
+  `"1"`). The `"user:alice"` form is a `Store` feature.
+
+Do not write to the **graph index on its own**; see
+[the last section](#do-not-drive-the-graph-index-on-its-own).
+
+## Use the set engine on its own
+
+Create the tables, open an engine on a store id with a schema, write, commit, and read:
+
+`SQLModel.metadata.create_all` creates only the tables of the modules imported so far, so
+import `zanzibar.store` first. It brings in every table the library uses, which you will
+need if you later move to a `Store` or build a graph index in the same database.
+
+```python
+from sqlmodel import SQLModel, Session, create_engine
+import zanzibar.store                            # registers every zanzibar_* table
+from zanzibar.setengine import SetEngine
+
+SCHEMA = """
+model
+  schema 1.1
+
+type user
+
+type doc
+  relations
+    define banned: [user]
+    define viewer: [user] but not banned
+    define can_view: viewer
+"""
+
+engine = create_engine("sqlite://")
+SQLModel.metadata.create_all(engine)
+
+session = Session(engine)
+se = SetEngine(session, "notes", SCHEMA)
+se.add_tuple("...", "user", "alice", "viewer", "doc", "1")
+se.add_tuple("...", "user", "bob", "viewer", "doc", "1")
+se.add_tuple("...", "user", "bob", "banned", "doc", "1")
+session.commit()                                  # the engine never commits for you
+
+print(se.check("...", "user", "alice", "can_view", "doc", "1"))  # -> True
+print(se.check("...", "user", "bob", "can_view", "doc", "1"))  # -> False
+```
+
+`lookup` and `lookup_reverse` return a {py:class}`zanzibar.setengine.SetLookupResult`,
+which holds ids that only this engine instance can translate. Turn it into
+`(type, name, predicate)` keys with `result_keys` (and `excluded_keys` for the subjects a
+wildcard grant leaves out) before you keep it or send it anywhere:
+
+```python
+viewers = se.lookup_reverse("can_view", "doc", "1")
+users = sorted(k for k in se.result_keys(viewers) if k[0] == "user")
+print(users)  # -> [('user', 'alice', '...')]
+```
+
+Translate a result straight away. After a later write that removes a tuple, after a
+`rebuild()`, or on another engine instance, `result_keys` refuses an older result with
+{py:exc}`zanzibar.StaleLookupIds` rather than risk naming the wrong entity. Run the lookup
+again and translate the new result.
+
+A second engine on the same store id, opened earlier, does not see new tuples until it
+rebuilds:
+
+```python
+other = SetEngine(Session(engine), "notes", SCHEMA)
+
+se.add_tuple("...", "user", "carol", "viewer", "doc", "1")
+session.commit()
+
+print(other.check("...", "user", "carol", "viewer", "doc", "1"))  # -> False
+other.rebuild()
+print(other.check("...", "user", "carol", "viewer", "doc", "1"))  # -> True
+```
+
+For Expand, prefer {py:meth}`zanzibar.Store.expand`, which returns `(type, name, predicate)`
+keys. `SetEngine.expand` returns a {py:class}`zanzibar.setengine.MemberSet`, whose ids are
+handles that only this engine instance can translate, with the same caveat as a
+`SetLookupResult`.
+
+### Move to a `Store` later
+
+A store id whose tuples a standalone set engine wrote has no tuple log, so a `Store`
+refuses to open it, with {py:exc}`zanzibar.UnloggedTuplesPresent`. Adopt it instead:
+{py:meth}`zanzibar.Store.adopt` saves the schema, builds the graph index from the stored
+tuples and opens the store, in one transaction.
+
+```python
+from zanzibar import Store, UnloggedTuplesPresent
+
+refused = False
+try:
+    Store(session, "notes", schema=SCHEMA)
+except UnloggedTuplesPresent:
+    refused = True
+    session.rollback()
+print(refused)  # -> True
+
+store, report = Store.adopt(session, "notes", schema=SCHEMA)
+
+print(store.check("user:carol", "can_view", "doc:1"))  # -> True
+```
+
+From then on the store id belongs to the `Store`. A `SetEngine` on it can still read, but
+its `add_tuple` and `remove_tuple` raise {py:exc}`zanzibar.UnloggedWriteRefused`, because a
+write that skips the log would leave the graph index behind for good. Write through the
+`Store`. [Bulk-load or adopt an existing store](bulk-load-adopt.md) covers adoption in more
+detail.
+
+```python
+from zanzibar import UnloggedWriteRefused
+
+refused = False
+try:
+    se.add_tuple("...", "user", "dave", "viewer", "doc", "1")
+except UnloggedWriteRefused:
+    refused = True
+    session.rollback()
+print(refused)  # -> True
+
+store.add_tuple("user:dave", "viewer", "doc:1")
+
+print(store.check("user:dave", "can_view", "doc:1"))  # -> True
+session.close()
+```
+
+## Do not drive the graph index on its own
+
+The graph index ({py:class}`zanzibar.graphindex.WildcardIndex`) is public so that you can
+study or measure it. Do not write to it directly from an application; use a `Store`.
+
+**On a schema with `and` or `but not`, a direct write must be followed by
+{py:meth}`zanzibar.graphindex.DeltaProcessor.run_cascade` in the same transaction.** The
+graph index keeps each boolean relation up to date with a
+{py:class}`zanzibar.graphindex.DeltaProcessor`, and only the cascade brings the relation in
+line with the write. The index refuses a write on the boolean relation's own name (here
+`viewer`) with a `ValueError`; a write has to be rewritten onto the relation's internal
+parts first. That rewritten write is the dangerous one: if the cascade is skipped, it
+commits without an error and the index answers wrongly from then on. On the schema above,
+`alice` never gets `can_view` on `doc:1`, although she is a viewer and is not banned. No
+runtime check catches this today, at any paranoia level. A `Store` runs the cascade for you,
+in the same transaction that applies the write to the index: the write itself with
+`sync=True`, or {py:meth}`zanzibar.Store.catch_up` with `sync=False`.

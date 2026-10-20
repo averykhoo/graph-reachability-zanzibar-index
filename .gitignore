@@ -333,3 +333,6 @@ system-prompt.txt
 # the same conclusion held for tracked ledgers only; it now holds for untracked
 # ones too.)
 .gate-runs/
+
+# Local user-docs builds (TK151): `python -m sphinx ... userdocs userdocs/_build`.
+userdocs/_build/

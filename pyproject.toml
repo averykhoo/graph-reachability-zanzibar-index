@@ -54,6 +54,9 @@ Changelog = "https://github.com/averykhoo/graph-reachability-zanzibar-index/blob
 [project.optional-dependencies]
 postgres = ["psycopg2-binary"]
 test = ["pytest", "hypothesis"]
+# The user-docs site (userdocs/, TK151). Also TEST dependencies: tests/test_userdocs_build.py
+# runs the strict Sphinx build inside the gate, so requirements.txt carries the same three.
+docs = ["sphinx>=8,<9", "myst-parser>=4,<5", "furo"]
 
 [tool.setuptools.dynamic]
 # ONE copy of the version: src/zanzibar/__init__.py::__version__.

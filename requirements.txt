@@ -2,6 +2,11 @@ pytest
 sqlmodel
 pyroaring
 hypothesis
+# The user-docs build (userdocs/, TK151) runs INSIDE the gate (tests/test_userdocs_build.py),
+# so these are test dependencies too. Same ranges as pyproject.toml's `docs` extra.
+sphinx>=8,<9
+myst-parser>=4,<5
+furo
 
 # PostgreSQL driver -- needed ONLY for the opt-in server leg of the gate
 # (tests/test_postgres_ha.py, plus the DSN re-runs of tests/test_concurrency.py and the

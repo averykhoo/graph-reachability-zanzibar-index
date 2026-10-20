@@ -1,8 +1,8 @@
 ---
 id: TK158
 title: Make a ClosureFanoutExceeded refusal cheap: count before loading, undo instead of rebuild
-brief: A refused grant of a 1M-member group costs 91 s and 3.8 GB (TK150 sec 4); make the refusal cheap
-pri: LATER
+brief: 0.1.0 BLOCKER: a refused 1M-member grant costs 91 s / 3.8 GB (TK150 sec 4); count first, undo one tuple
+pri: NEXT
 size: M
 deps: []
 related: [TK150]
@@ -11,8 +11,8 @@ labels: []
 source: docs/closure-fanout-cost-2026-10-14.md
 source_hash:
 created: 2026-10-16
-moved: 2026-10-16
-updated: 2026-10-16
+moved: 2026-10-20b
+updated: 2026-10-20b
 closed:
 ---
 
@@ -36,3 +36,7 @@ Run the PostgreSQL leg (locking path).
 - `docs/closure-fanout-cost-2026-10-14.md` sec 4 (the refusal path) and § Correction 2026-10-16
 
 ## Log
+
+### 2026-10-20b
+
+0.1.0 BLOCKER (user, 2026-10-20b, in chat). Anyone who sets ZANZIBAR_MAX_CLOSURE_FANOUT hits this: the cap correctly refuses a grant through a 1M-member group, but the refusal costs 91 s and 3.8 GB (docs/closure-fanout-cost-2026-10-14.md sec 4), because the edge add loads full ORM Edge rows before counting and Store._write then rebuilds the whole set engine. A refusal that expensive is a user-facing bug, not perf tuning, so it is not covered by the perf deprioritization. Plan unchanged from the body: count first, undo the one admitted tuple instead of rebuilding. No modelled algorithm changes, so no Lean work expected (confirm against formal/CORRESPONDENCE.md). Run the PostgreSQL leg.

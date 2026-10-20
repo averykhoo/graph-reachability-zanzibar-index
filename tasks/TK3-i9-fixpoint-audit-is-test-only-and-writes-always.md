@@ -1,8 +1,8 @@
 ---
 id: TK3
 title: nothing checks that a boolean-schema write ran run_cascade (bare WildcardIndex API)
-brief: 2026-10-13: O(1) per-transaction cascade-ran mark wanted (no tier, not head==frontier); unbuilt. I9 half is TK85.
-pri: LATER
+brief: 0.1.0 BLOCKER: build the always-on O(1) cascade-ran mark before the API freeze; keep WildcardIndex public
+pri: NEXT
 size: M
 deps: []
 related: []
@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-08-21b
-moved: 2026-10-13d
-updated: 2026-10-13d
+moved: 2026-10-20b
+updated: 2026-10-20b
 closed:
 ---
 
@@ -75,3 +75,7 @@ NEXT ACTION: census the tests/ and formal/conformance/ call sites that write to 
 ### 2026-10-13d
 
 Sprint re-rank 2026-10-13d (user-approved in chat): stays LATER, first in line after HS-5 when a NEXT slot frees. TK3 gave its slot to TK123 (user put the rename in NEXT); P21 gave its slot to TK138.
+
+### 2026-10-20b
+
+0.1.0 BLOCKER (user, 2026-10-20b, in chat). WildcardIndex is public (src/zanzibar/graphindex/__init__.py::__all__), so on a boolean schema a caller who skips DeltaProcessor.run_cascade after a write silently diverges the graph index from the set engine, and only a doc line guards the project primary rule (equivalence). 0.1.0 freezes the API, so this lands before the cut. DECISION (model, under Who decides): build the O(1) per-transaction cascade-ran mark already chosen on 2026-10-13, ALWAYS ON (no paranoia tier), refusing the commit when a boolean-schema write ran no cascade; keep WildcardIndex exported. Rejected alternative: drop WildcardIndex from the public exports. It removes the exposure only for top-level importers (the module path stays importable), takes away the low-level API before anyone has asked for that, and leaves the gap unchecked for Store internals too. Mandatory: docs/sabotage-procedure.md, sabotage (delete the run_cascade call in a test write path) and watch it go red before believing it. Next action: find the transaction boundary the mark hangs on (WildcardIndex write paths vs Session commit) and write the plan doc.

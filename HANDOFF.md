@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-19b -- `TK155` (`Store.expand` / `ExpandResult`), `TK156` (lookup type/relation filters) and `TK157` (`Store.adopt`) closed via an ultracode workflow (implement, review, fix); records written before the gate. **0.1.0 = all open release items, no rush (user)**; MINOR bump (TK144 flips ALLOW to DENY); version stays 0.0.5 under CHANGELOG `[Unreleased]`. NOW: `TK151`, the last 0.1.0 row: decide the marker-shape question on it (expand pairs vs lookup triples) before the cut. ANOTHER SESSION may work in this repo: commit by path, never `git add -A` / `git stash`.
+> 2026-10-20b -- `TK151` user docs drafted in `userdocs/` (Sphinx + MyST + Furo; Pages deploy from a `v*` tag only) by two ultracode workflows; plan `docs/tk151-diataxis-plan-2026-10-20.md`. **0.1.0 = TK151 + TK3 + TK158 + TK162** (NEXT; user), cut held until the docs land, MINOR bump, version stays 0.0.5 under CHANGELOG `[Unreleased]`. Docs pass found 7 library bugs, none an equivalence break: TK163-TK169 (LATER; TK164/TK166 touch the API freeze). Before the cut: refresh `userdocs/reference/changelog.md` by hand. Commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

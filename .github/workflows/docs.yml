@@ -1,0 +1,82 @@
+# The user-docs site (TK151, 2026-10-20): build `userdocs/` with Sphinx and publish it to
+# GitHub Pages.
+#
+#   build   the STRICT build, the same command tests/test_userdocs_build.py runs inside the
+#           gate: `-W` (every warning is an error), `-n` (a cross-reference to a symbol that
+#           does not exist is a warning), `--keep-going` (report all of them, not the first).
+#           Runs on every push, pull request and manual dispatch.
+#   deploy  uploads the HTML to GitHub Pages. Only from a `v*` release tag, or a manual
+#           dispatch on master; a master push or a pull request builds but never deploys.
+#           Why (2026-10-20b): the site documents master, and deploying every master push
+#           would publish docs for an API that PyPI does not have yet. Tag-driven, like
+#           publish.yml, so the site and the PyPI release move together.
+#
+# Executing the pages' code examples is NOT done here: that is tests/test_userdocs_examples.py,
+# inside the gate (gate.yml). This file only builds and publishes.
+name: docs
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: docs-build-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # requirements.txt carries the docs toolchain (sphinx, myst-parser, furo) because the
+      # strict build is also a gate test. autodoc imports the package from src/ (conf.py).
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Strict Sphinx build
+        run: python -m sphinx -W -n --keep-going -b html userdocs _site
+
+      - name: Upload Pages artifact
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # One deployment at a time; a newer push queues behind a running deploy, never cancels it.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

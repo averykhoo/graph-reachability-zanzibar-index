@@ -33,6 +33,48 @@ from here.
 
 ---
 
+## 2026-10-20b — `TK151` user docs drafted (userdocs/, Sphinx, Pages); `TK3`/`TK158`/`TK162` to 0.1.0; 7 bug rows
+
+rows: TK151 (comments; plan doc), TK3 / TK158 / TK162 (LATER -> NEXT, 0.1.0 items, briefs + comments), TK163-TK169 (new, LATER)
+
+`task lint: clean (13 checks, 286 task file(s) parsed), 26 warning(s)`
+
+`read: show TK151, TK3`
+
+`asked: none`
+
+**The previous session (2026-10-20) was lost when the PC died**; its only trace is the
+uncommitted 2026-10-20 Log entry on TK151 (user decisions: marker shape is the model's call,
+Pages workflow + publish approved, hold the 0.1.0 cut until the docs land). That entry is
+committed with this session's work; this entry stands in for its missing ledger line.
+- **0.1.0 scope** (user, in chat): `TK3`, `TK158`, `TK162` are 0.1.0 items, reasons on each
+  row. TK3 decided by the model: build the always-on cascade-ran mark, keep `WildcardIndex`
+  public.
+- **TK151 plan** [`docs/tk151-diataxis-plan-2026-10-20.md`](../tk151-diataxis-plan-2026-10-20.md):
+  reader = Python dev (user); Sphinx 8 + MyST + Furo + autodoc in `userdocs/` (model; MkDocs
+  ecosystem in flux); async = how-to + explanation only; marker shapes stay unaligned (model).
+- **Docs written by two ultracode workflows** (user asked): `wf_e60a3842-f17` (scaffold, 12
+  units write / adversarial review / fix, integrate, critic; 39 agents) and `wf_b32b8743-b9f`
+  (critic fixes in 5 disjoint units, 9 bug repros, PYPI_README shrink 386 -> ~175 lines,
+  fresh-reader trial, final pass; 27 agents). New gate tests: `tests/test_userdocs_examples.py`
+  (runs every python block; `print(X)  # -> V` asserted), `tests/test_userdocs_build.py`
+  (strict `-W -n` build + internal-id scan of the built HTML),
+  `tests/test_userdocs_refused_shapes.py`; sabotage output in their docstrings (agent-run).
+  `.github/workflows/docs.yml` deploys ONLY from a `v*` tag or a manual dispatch on master
+  (session decision: the site documents master, PyPI is still 0.0.5).
+- **First-hand**: re-ran all 9 repros (each behaved as reported) and the docs/README test set
+  (`101 passed`, 2026-10-20b) after fixing one regression the final agent introduced
+  (`tests/test_tk123_pypi_page.py` import floor). Repros and verdicts are tracked in
+  [`docs/tk151-repros-2026-10-20/`](../tk151-repros-2026-10-20/README.md); rows TK163-TK169.
+  None is an equivalence break.
+- **Gate catches, 2026-10-20b**: `lean` red on the FINAL_REVIEW counts pin (+42 tests,
+  regenerated with `doc_counts --generate`, `MIN_TESTS_ALL` 2890 -> 2932); `tests-tile:2/4` red on
+  `tests/test_tasktool.py::test_shipped_config_is_measured_not_an_example`: two agent-written
+  sabotage notes recorded a planted fake task id literally (`tests/test_userdocs_build.py`,
+  `userdocs/_ext/refused_shapes.py`), respelled with angle brackets.
+
+Still owed: none.
+
 ## 2026-10-19b — `TK155`/`TK156`/`TK157` closed (Store.expand, lookup filters, Store.adopt); `TK151` NOW
 
 rows: TK155 (closed), TK156 (closed), TK157 (closed), TK151 (LATER -> NOW; comment; summary + Traps rewritten)
