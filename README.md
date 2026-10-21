@@ -5,6 +5,10 @@ so here we go again on another ~~yak-shaving exercise~~ exploratory side project
 
 This is all an effort to find a way to index zanzibar-like permissions for efficient lookup
 
+**Using the library?** The user documentation (tutorials, how-to guides, reference) is at
+<https://averykhoo.github.io/graph-reachability-zanzibar-index/>. This README is the design
+notebook behind it.
+
 ## What is this
 
 It should be some code that lets you index a directed acyclic graph and look up in constant-ish time:

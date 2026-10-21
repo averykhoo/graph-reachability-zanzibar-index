@@ -48,7 +48,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/averykhoo/graph-reachability-zanzibar-index"
 Source = "https://github.com/averykhoo/graph-reachability-zanzibar-index"
-Documentation = "https://github.com/averykhoo/graph-reachability-zanzibar-index/blob/master/docs/architecture/overview.md"
+Documentation = "https://averykhoo.github.io/graph-reachability-zanzibar-index/"
 Changelog = "https://github.com/averykhoo/graph-reachability-zanzibar-index/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
