@@ -162,30 +162,23 @@ and [Consistency: the tuple log, tokens and stalls](consistency.md).
 
 ## A refused write is not free
 
-The fan-out cap limits how many rows each link of a write may **touch**, not how much work it
-takes to decide that the write is too large. Refusing a write costs:
+The fan-out cap limits how many rows each link of a write may **touch**. Deciding that a
+write is too large is cheap: the graph index counts the rows that reach the subject and the
+rows the object reaches with two indexed counts, and refuses before it reads them. The set
+engine had already admitted the tuple, so the refusal takes that one tuple back out again,
+instead of rebuilding the set engine from the stored tuples. Both happen while the write
+lock is held.
 
-- the set engine's own admission of the tuple, which also grows with the number of members
-  that reach the subject and of objects the object reaches,
-- reading every row that reaches the subject and every row the object reaches, before
-  counting them, and
-- rebuilding the whole set engine from the stored tuples afterwards, because the set engine
-  had already accepted the tuple before the graph index refused it.
-
-All three happen while the write lock is held. When the fan-out comes from the product of two
-moderate sets, the refusal is quick: a 1,000-member group linked to a 1,000-document folder
-was refused in 0.18 s. When it comes from one very large set, it is not:
-
-| refused write (2026-10-14) | time to refuse | peak writer memory |
+| refused write, SQLite (measured 2026-10-22) | time to refuse | peak writer memory |
 | --- | --- | --- |
-| grant to a group of 100,001 members | 8.4 s | 352 MB |
-| grant to a group of 1,000,000 members | 91 s | 3.8 GB |
+| grant to a group of 1,000,000 members, store already written to | 0.15 s to 0.20 s | no growth |
+| the same grant as the first write after opening the store | 15.8 s | 411 MB |
+| grant to a group of 100,001 members, PostgreSQL, store already written to | 0.04 s | not measured |
 
-Of the 91 s, about 40 s was the set-engine rebuild, which grows with the size of the whole
-store, not of the refused write, and about 20 s was the set engine's admission. So if your data has very large groups, keep grants to them
-rare and expect a refused one to be slow. This section describes the library as it was
-measured on 2026-10-14; a release that changes how a refusal is made says so in the
-[changelog](../reference/changelog.md).
+The first write after a store opens is slow whether it is refused or admitted: the set
+engine builds the graph it uses to check for cycles (15.6 s of the 15.8 s above), and that
+grows with the size of the whole store. Before 0.1.0 the same refusal took 91 s and 3.8 GB,
+because it read every row before counting and then rebuilt the set engine.
 
 ## Lookups for a userset: a cost that has not been measured
 

@@ -36,7 +36,7 @@ from zanzibar.graphindex.outbox import outbox_watermark
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.graphindex.wildcard import WildcardIndex
 from tests.oracle import Oracle, parse_schema_ast, t as otuple
-from tests.wildcard_helpers import make_wildcard_index
+from tests.wildcard_helpers import make_wildcard_index, snapshot
 from zanzibar.schema import (AdmissionRejected, Entity, RelationalTriple,
                                parse_openfga_schema)
 
@@ -122,6 +122,18 @@ class _G:
             self.proc.run_cascade(wm)
         self.session.commit()
 
+    def remove_node(self, node):
+        """``remove_node`` plus, on a boolean schema, the same-transaction cascade TK3
+        requires before the commit -- ASSERTING it changed nothing (rows identical before
+        and after). A change would be a pre-existing ``remove_node`` staleness bug on a
+        boolean schema, so it is pinned here, not absorbed."""
+        wm = outbox_watermark(self.session, 'v')
+        self.widx.remove_node(_sp(node[0]), node[1], node[2])
+        if self.proc is not None:
+            before = snapshot(self.widx)
+            self.proc.run_cascade(wm)
+            assert snapshot(self.widx) == before,                 'the cascade after an admitted remove_node changed state'
+
     def nodes(self):
         return sorted({(n.predicate, n.type, n.name) for n in
                        self.session.exec(select(Node).where(Node.store_id == 'v')).all()
@@ -177,7 +189,7 @@ def test_remove_node_is_exact_or_refused(case, node):
     shape = (node[1], node[0])
 
     try:
-        g.widx.remove_node(_sp(node[0]), node[1], node[2])
+        g.remove_node(node)
         g.session.commit()
     except ValueError as e:                     # AdmissionRejected, or I5's ValueError
         g.session.rollback()
@@ -218,7 +230,7 @@ def test_non_vacuity_user_nodes_are_still_removable(case):
         g = _G(schema)
         for raw in setup:
             g.write(raw)
-        g.widx.remove_node(_sp(node[0]), node[1], node[2])
+        g.remove_node(node)
         g.session.commit()
         g.session.close()
 

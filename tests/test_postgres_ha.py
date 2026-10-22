@@ -782,7 +782,11 @@ def _tk154_reuse_sequence(store: Store):
     another doc. Mirrors ``tests/test_tk154_stale_lookup_ids.py::_graph_reuse_sequence``."""
     store.add_tuple('user:a', 'reader', 'doc:d')
     r = store.lookup_reverse('reader', 'doc:d')
-    assert store.result_keys(r) == {('user', 'a', '...')}
+    # TK144: the target's own userset doc:d#reader is a member of itself (OpenFGA's
+    # implicit self-relation), as in the SQLite twin. This PostgreSQL-only copy was left
+    # at the pre-TK144 answer because TK144 skipped the PostgreSQL leg; red from a839145
+    # until 2026-10-22.
+    assert store.result_keys(r) == {('user', 'a', '...'), ('doc', 'd', 'reader')}
     store.remove_tuple('user:a', 'reader', 'doc:d')
     return r
 
@@ -806,7 +810,8 @@ def test_tk154_graph_node_ids_are_never_reused_on_postgresql(tmp_path):
         assert not set(r.node_ids) & set(s.exec(text('select id from zanzibar_node')).scalars())
         with pytest.raises(StaleLookupIds, match='run the lookup again'):
             store.result_keys(r)
-        assert store.result_keys(store.lookup_reverse('reader', 'doc:e')) == {('user', 'b', '...')}
+        assert store.result_keys(store.lookup_reverse('reader', 'doc:e')) == {
+            ('user', 'b', '...'), ('doc', 'e', 'reader')}       # TK144: + the self userset
 
 
 def test_tk154_sabotage_control_restarted_sequence_translates_wrong(tmp_path):
@@ -824,4 +829,4 @@ def test_tk154_sabotage_control_restarted_sequence_translates_wrong(tmp_path):
         s.exec(text(f'ALTER SEQUENCE {seq} RESTART WITH {min(r.node_ids)}'))
         store.add_tuple('user:b', 'reader', 'doc:e')
         keys = store.result_keys(r)                      # no raise: the id was reused
-        assert keys and keys != {('user', 'a', '...')}
+        assert keys and keys != {('user', 'a', '...'), ('doc', 'd', 'reader')}

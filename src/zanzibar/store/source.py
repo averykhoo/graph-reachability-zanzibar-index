@@ -365,6 +365,12 @@ class TupleSource:
         # FOR SHARE lock does not satisfy a later ``_lock_source``, which needs
         # FOR UPDATE.
         self._locked_txn = None
+        # TK158: what the most recent ``add`` / ``remove`` did to the in-memory engine,
+        # recorded after the engine mutation and before the log append, so
+        # ``undo_last_admission`` can reverse exactly that one tuple instead of
+        # rebuilding the evaluator. ``None`` = nothing to undo (a duplicate add, or
+        # already undone / consumed).
+        self._last_admission: tuple | None = None
 
     @property
     def engine(self) -> SetEngine:
@@ -573,11 +579,15 @@ class TupleSource:
         # log-governed, so the public method now refuses (ZT-P1-8a). WE are the
         # sanctioned writer -- the ``_append`` two lines down is the log row that
         # earns the bypass, in this same transaction.
+        self._last_admission = None
+        prior_watermark = self.evaluator_watermark
         if not self._engine._add_tuple_direct(s_pred, s_type, s_name,
                                               relation, o_type, o_name):
             # duplicate: idempotent no-op, no log row; the current watermark
             # trivially satisfies the token contract
             return log_watermark(self.session, self.store_id)
+        self._last_admission = ('ADD', s_pred, s_type, s_name, relation, o_type, o_name,
+                                prior_watermark)
         token = self._append('ADD', s_pred, s_type, s_name, relation, o_type, o_name)
         self._advance_watermark(token)
         return token
@@ -600,8 +610,12 @@ class TupleSource:
         self.catch_up_evaluator()
         s_pred = subject_predicate
         # ``_remove_tuple_direct``: see the note in ``add`` (ZT-P1-8a).
+        self._last_admission = None
+        prior_watermark = self.evaluator_watermark
         self._engine._remove_tuple_direct(s_pred, s_type, s_name,
                                           relation, o_type, o_name)
+        self._last_admission = ('REMOVE', s_pred, s_type, s_name, relation, o_type, o_name,
+                                prior_watermark)
         token = self._append('REMOVE', s_pred, s_type, s_name, relation, o_type, o_name)
         self._advance_watermark(token)
         return token
@@ -731,6 +745,32 @@ class TupleSource:
             .where(TupleLog.store_id == self.store_id)
             .where(TupleLog.id > self.evaluator_watermark)
         ).one()
+
+    def undo_last_admission(self) -> None:
+        """Reverse, in memory only, the one tuple the most recent ``add`` / ``remove``
+        admitted, and restore the evaluator watermark it had just before -- the cheap
+        alternative to ``refresh_evaluator`` after the caller has ROLLED BACK that
+        write. The caller must already have rolled the transaction back.
+
+        Sound because the record pins exactly what changed: one ``_apply_add`` /
+        ``_apply_remove`` of one tuple since a watermark that ``catch_up_evaluator``
+        reached under ``_lock_source``, so every row at or below it is committed and
+        applied, and rows other writers commit after the rollback sit above it and
+        are tailed by the next catch-up. The inverse goes through
+        ``SetEngine.apply_logged`` -- the in-memory replay a replica uses, which keeps
+        a built flow graph built and raises ``RuntimeError`` on a presence mismatch,
+        so a wrong undo is loud. With nothing recorded this falls back to
+        ``refresh_evaluator``. Consumes the record either way."""
+        # Provenance: TK158 (docs/tk158-cheap-fanout-refusal-2026-10-22.md, D2).
+        rec, self._last_admission = self._last_admission, None
+        if rec is None:
+            self.refresh_evaluator()
+            return
+        op, s_pred, s_type, s_name, relation, o_type, o_name, prior_watermark = rec
+        inverse = 'REMOVE' if op == 'ADD' else 'ADD'
+        self.engine.apply_logged(inverse, s_pred, s_type, s_name,
+                                 relation, o_type, o_name)
+        self.evaluator_watermark = prior_watermark
 
     def refresh_evaluator(self) -> None:
         """Rebuild the in-memory evaluator from the current RelationTuple snapshot and

@@ -396,12 +396,19 @@ def test_middle_sync_record_excludes_the_wildcard_entity(load_fga_schema):
                                   object_wildcard_shapes=CROSSABLE_WC)
     assert_crossable(ruleset.schema_info, 'wildcard-entity instrument control')
     session, widx = make_wildcard_index(ruleset.schema_info)
+    # The schema is boolean, so each commit needs its same-transaction cascade (TK3); it
+    # runs OUTSIDE the recorder, which observes the user write alone.
+    proc = DeltaProcessor(widx, ruleset.compiled)
     grant = ('...', 'user', 'u1', 'viewer', 'folder', '*')
+    wm = outbox_watermark(session, 'test')
     _apply(widx, ruleset, grant, 'add')
+    proc.run_cascade(wm)
     session.commit()
+    wm = outbox_watermark(session, 'test')
     with record_middle_syncs(widx) as rec:
         _apply(widx, ruleset, grant, 'remove')
-        session.commit()
+    proc.run_cascade(wm)
+    session.commit()
     session.close()
 
     assert ('folder', '*') in rec.raw, (

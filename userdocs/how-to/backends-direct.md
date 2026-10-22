@@ -162,9 +162,14 @@ graph index keeps each boolean relation up to date with a
 {py:class}`zanzibar.graphindex.DeltaProcessor`, and only the cascade brings the relation in
 line with the write. The index refuses a write on the boolean relation's own name (here
 `viewer`) with a `ValueError`; a write has to be rewritten onto the relation's internal
-parts first. That rewritten write is the dangerous one: if the cascade is skipped, it
-commits without an error and the index answers wrongly from then on. On the schema above,
-`alice` never gets `can_view` on `doc:1`, although she is a viewer and is not banned. No
-runtime check catches this today, at any paranoia level. A `Store` runs the cascade for you,
+parts first. That rewritten write is the dangerous one: if the cascade were skipped, the index would
+answer wrongly from then on. On the schema above, `alice` would never get `can_view` on
+`doc:1`, although she is a viewer and is not banned. So the commit refuses it: committing a
+transaction that wrote to the index on a boolean schema and ran no cascade after that write
+raises {py:exc}`zanzibar.CascadeNotRun`, and the transaction stays open, for you to roll it
+back or run the cascade and commit again. The check proves that a cascade was called, not
+that it was called with the right watermark: pass the `outbox_watermark` read before the
+first write. A refused write (for example {py:exc}`zanzibar.ClosureFanoutExceeded`) still
+leaves the transaction owing a cascade or a rollback. A `Store` runs the cascade for you,
 in the same transaction that applies the write to the index: the write itself with
 `sync=True`, or {py:meth}`zanzibar.Store.catch_up` with `sync=False`.

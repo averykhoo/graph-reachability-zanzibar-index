@@ -44,6 +44,7 @@ Exception
 │   ├── WatermarkGap                 [RuntimeError]
 │   ├── UnsafeIsolationLevel         [RuntimeError]
 │   ├── WriteLockUnsafe              [RuntimeError]
+│   ├── CascadeNotRun                [RuntimeError]
 │   ├── UnloggedWriteRefused         [RuntimeError]
 │   ├── UnloggedTuplesPresent        [RuntimeError]
 │   ├── TablesNotCreated             [RuntimeError]
@@ -100,6 +101,7 @@ print(issubclass(zanzibar.UnprovenExtensionWarning, UserWarning))  # -> True
 | {py:exc}`~zanzibar.WatermarkGap` | advancing the index would skip committed log rows (a concurrent commit not yet visible). Retryable: `refresh()` and retry. |
 | {py:exc}`~zanzibar.UnsafeIsolationLevel` | a PostgreSQL session is not at `READ COMMITTED`. Raised when the store opens. |
 | {py:exc}`~zanzibar.WriteLockUnsafe` | a SQLite connection is in autocommit mode, so the per-store write lock would not hold. Raised when the store opens. |
+| {py:exc}`~zanzibar.CascadeNotRun` | a commit after a direct graph-index write on a schema with `and` / `but not`, when no `run_cascade` ran after the write. The transaction stays open: roll back, or run the cascade and commit again. A `Store` never raises it. See [Use the backends directly](../how-to/backends-direct.md). |
 | {py:exc}`~zanzibar.UnloggedWriteRefused` | a standalone set engine writes to a store id that a {py:class}`~zanzibar.Store` owns. |
 | {py:exc}`~zanzibar.UnloggedTuplesPresent` | a {py:class}`~zanzibar.Store` opens over tuples a standalone set engine wrote. Use {py:meth}`Store.adopt <zanzibar.Store.adopt>`. |
 | {py:exc}`~zanzibar.TablesNotCreated` | a {py:class}`~zanzibar.Store` opens on a database without the `zanzibar_*` tables. See [Database tables](tables.md). |
@@ -478,6 +480,17 @@ print(missing_id)  # -> 'no-such-store'
    The per-store write lock cannot be taken on this session's connection (a SQLite
    connection in autocommit mode), so a write's checks would not be atomic against other
    writers. Raised when the store opens. The message names the fix.
+
+.. py:exception:: zanzibar.CascadeNotRun
+
+   Bases: :py:exc:`zanzibar.ZanzibarError`, :py:exc:`RuntimeError`
+
+   A commit was refused because a direct write to the graph index, on a schema with
+   ``and`` / ``but not`` relations, ran no ``DeltaProcessor.run_cascade`` in the same
+   transaction after it, so committing would leave the derived relations stale. Raised
+   by the commit; the transaction is still open. ``store_ids`` names the stores that
+   owe a cascade. The check shows a cascade was called, not that its watermark was
+   right. A :py:class:`~zanzibar.Store` runs the cascade itself and never raises it.
 
 .. py:exception:: zanzibar.UnloggedTuplesPresent
 

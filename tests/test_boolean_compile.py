@@ -475,8 +475,12 @@ def test_facade_derived_family_exclusivity():
     session.commit()
     assert drain_deltas(session, 'test', wm), 'processor-flagged derived write must land'
 
-    # leaf-family writes stay open to the (rewritten) raw path
+    # leaf-family writes stay open to the (rewritten) raw path; on a boolean schema the
+    # commit then needs the same-transaction cascade (TK3 refuses it otherwise)
+    from zanzibar.graphindex.processor import DeltaProcessor
+    wm = outbox_watermark(session, 'test')
     widx.add_tuple('...', 'user', 'alice', 'viewer.0', 'doc', 'd1')
+    DeltaProcessor(widx, rs.compiled).run_cascade(wm)
     session.commit()
     session.close()
 

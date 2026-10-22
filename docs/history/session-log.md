@@ -33,6 +33,47 @@ from here.
 
 ---
 
+## 2026-10-22 — `TK158` + `TK3` closed via ultracode; PG twin of a TK154 test fixed; `TK170` filed
+
+rows: TK158 (closed), TK3 (closed), TK170 (new, LATER), TK151 (comment: docs follow-ups)
+
+`task lint: clean (13 checks, 288 task file(s) parsed), 27 warning(s)`
+
+`read: board + note`
+
+`asked: none`
+
+- **User asked for one ultracode run covering TK158 and TK3.** Workflow `wf_2c9dfdfc-f9c`, 10
+  agents, two lanes in the shared tree. Each lane ran plan, then build with sabotage, then two
+  adversarial reviewers (correctness, assurance), then a fix stage. Plans and censuses are in
+  [`docs/tk158-cheap-fanout-refusal-2026-10-22.md`](../tk158-cheap-fanout-refusal-2026-10-22.md)
+  and [`docs/tk3-cascade-ran-mark-2026-10-22.md`](../tk3-cascade-ran-mark-2026-10-22.md).
+  The orchestrator read the product diff first-hand: `TupleSource.undo_last_admission`
+  (in-memory `apply_logged`, an absent remove is refused before it is recorded) and
+  `graphindex/cascade_mark.py`.
+- **TK158:** a 1M-member refusal (SQLite) took 78.9 s / 3.8 GB cold before. It now takes
+  0.15-0.20 s on a warm store and 15.8 s on a cold one; 15.6 s of the cold time is the
+  first-write flow-graph build, out of scope (D4). Reviewers found 6 issues, all fixed.
+- **TK3:** reviewers found 2 holes, both reproduced and fixed. A cascade inside a
+  rolled-back savepoint left the mark cleared, and so did a leaf write under a
+  `processor_writes` window. Both had committed a stale ALLOW.
+- **Found by the run and confirmed first-hand:** `TK170`. Under paranoia `full`, a savepoint
+  release fires `ParanoiaGuard.after_commit`, which loses the savepoint's writes. The
+  `n13.py` output is copied into the row.
+- **Incident:** `scripts/pg_local.sh destroy` with an overridden `ZANZIBAR_PG_DATA` ran
+  `rm -rf` on its parent. That deleted the session scratchpad. The script is fixed and
+  pinned (`tests/test_pg_local_destroy.py`).
+- **PostgreSQL leg (orchestrator, 2026-10-22).** `tests/test_postgres_ha.py::test_tk154_*`
+  (2 tests) were red on HEAD, and a fresh cluster did not change that. Bisected to `a839145`
+  (TK144): TK144 updated the SQLite twin to the implicit self-userset answer but skipped the
+  PostgreSQL leg, so the PostgreSQL-only copy kept the old answer. Expectations updated to
+  match the twin. Result: `test_postgres_ha.py` 19 passed; the tk158/tk3/HA/multi-instance/
+  concurrency/source modules 106 passed + 3 SQLite-only skips.
+- Floors: `doc_counts --generate` ratcheted `MIN_TESTS_ALL` 2932 -> 2995. That is 40 TK3
+  tests, 20 TK158 tests and 3 pg_local tests.
+
+Still owed: nothing.
+
 ## 2026-10-20b — `TK151` user docs drafted (userdocs/, Sphinx, Pages); `TK3`/`TK158`/`TK162` to 0.1.0; 7 bug rows
 
 rows: TK151 (comments; plan doc), TK3 / TK158 / TK162 / TK164 / TK166 (-> NEXT, 0.1.0 items, briefs + comments), TK163 / TK165 / TK167-TK169 (new, LATER), ASK-3 (new, LATER)

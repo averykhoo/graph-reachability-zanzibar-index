@@ -285,6 +285,19 @@ class _Harness:
         self.proc.run_cascade(wm)
         self.session.commit()
 
+    def remove_node_cascaded(self, *node):
+        """An ADMITTED ``remove_node`` followed by the same-transaction cascade TK3 now
+        requires before the commit, ASSERTING the cascade changed nothing: rows, residues
+        and the residue reverse index identical before and after it. A change here would
+        be a pre-existing ``remove_node`` staleness bug on a boolean schema (an
+        equivalence finding for the TK3 row), so it is pinned rather than absorbed."""
+        wm = outbox_watermark(self.session, self.store_id)
+        self.widx.remove_node(*node)
+        before = (snapshot(self.widx), self.residue_state(), self.ref_index())
+        self.proc.run_cascade(wm)
+        after = (snapshot(self.widx), self.residue_state(), self.ref_index())
+        assert after == before, 'the cascade after an admitted remove_node changed state'
+
     def seed(self):
         for raw in self.setup:
             self.apply(raw, 'add')
@@ -475,7 +488,7 @@ def test_an_unreferenced_node_is_still_removable_and_commits_clean():
         assert g.widx._residue_records_node(victim.id) is False, \
             'the control node became recorded -- this test would prove nothing'
 
-        g.widx.remove_node(*UNREFERENCED)
+        g.remove_node_cascaded(*UNREFERENCED)
         g.session.commit()
 
         live = g.committed_check()
@@ -544,7 +557,7 @@ def test_the_sanctioned_path_removes_the_recording_then_the_node():
         still_there = g.session.get(Node, victim_id)
         assert still_there is not None, \
             'the reconcile GC already collected the node; this arm needs it alive'
-        g.widx.remove_node(*UPOS_VICTIM)
+        g.remove_node_cascaded(*UPOS_VICTIM)
         g.session.commit()
 
         live = g.committed_check()

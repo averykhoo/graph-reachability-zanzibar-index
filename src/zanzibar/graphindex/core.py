@@ -4,7 +4,7 @@ import threading
 import time
 from contextlib import contextmanager
 from types import EllipsisType
-from sqlalchemy import insert, tuple_, update
+from sqlalchemy import func, insert, tuple_, update
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 
@@ -797,6 +797,50 @@ class ReachabilityIndex:
         finally:
             self._outbox_buffer = []
 
+    def _closure_region_counts(self, subject_id: int, object_id: int) -> tuple[int, int]:
+        """TK158: ``(|A|, |D|)`` for adding ``subject -> object`` as two indexed
+        ``count(*)`` queries, without loading a row. A = the ``Edge`` rows whose object
+        is ``subject_id`` (``ix_zanzibar_edge_store_object``), D = the rows whose
+        subject is ``object_id`` (the unique key's index). Equal to the ``len`` of the
+        MultiSets ``_add_direct_edge_unsafe_impl`` loads (asserted there)."""
+        n_anc = self.session.exec(
+            select(func.count()).select_from(Edge)
+            .where(Edge.store_id == self.store_id).where(Edge.object_id == subject_id)
+        ).one()
+        n_desc = self.session.exec(
+            select(func.count()).select_from(Edge)
+            .where(Edge.store_id == self.store_id).where(Edge.subject_id == object_id)
+        ).one()
+        return int(n_anc), int(n_desc)
+
+    def _reverse_edge_present(self, subject_id: int, object_id: int) -> bool:
+        """TK158: does the reverse row ``object -> subject`` exist? It is the one row
+        both in-impl cycle probes read (``reachable_before_subject[object_id]`` and
+        ``reachable_after_object[subject_id]``), as a one-row point lookup."""
+        return self.session.exec(
+            select(Edge.subject_id)
+            .where(Edge.store_id == self.store_id)
+            .where(Edge.subject_id == object_id)
+            .where(Edge.object_id == subject_id)
+            .where(Edge.indirect_edge_count > 0)  # type: ignore[arg-type]
+        ).first() is not None
+
+    def _raise_closure_fanout(self, fanout: int, n_anc: int, n_desc: int) -> None:
+        # ClosureFanoutExceeded (an AdmissionRejected subclass), like the cycle
+        # refusals: a correct refusal of THIS write, classifiable by every harness
+        # that already handles rejection -- not an InvariantViolation, because
+        # nothing is corrupt. The SUBCLASS matters: `zanzibar.store.apply` promotes
+        # every other ValueError to InvariantViolation("corruption") on the replay
+        # path, and must not do that here -- admission cannot predict this cap, so
+        # a refusal during replay is a resource limit, not a parity bug.
+        raise ClosureFanoutExceeded(
+            f'closure fan-out cap exceeded: this write would add {fanout} '
+            f'permission-closure rows ({n_anc} ancestors x {n_desc} descendants + '
+            f'fringes), over the limit of {self.max_closure_fanout} for store '
+            f'{self.store_id!r}. Raise the limit with the {MAX_CLOSURE_FANOUT_ENV} '
+            f'environment variable (0 disables it), or split the grant -- this '
+            f'write would hold the store write lock for its whole expansion')
+
     def _add_direct_edge_unsafe_impl(self, subject_id: int, object_id: int, count: int) -> None:
         if not (count in {-1, 1}):
             raise InvariantViolation('direct-edge delta must be exactly -1 or +1')
@@ -833,6 +877,32 @@ class ReachabilityIndex:
             # REMOVED deltas, and _emit denormalizes endpoint identities from live
             # node rows (I10) -- GC-ing a neighbour here would strip them.
 
+        # TK158 (2026-10-22): COUNT the closure region before LOADING it. On a capped
+        # addition the two indexed counts below decide the refusal, so a refused write
+        # never materialises |A| + |D| ORM rows (26.86 s at |A| = 1M on SQLite, where
+        # the count took 0.180 s: docs/tk158-cheap-fanout-refusal-2026-10-22.md
+        # sec 1d). count(*) is EXACTLY len() of the MultiSets loaded below: the unique
+        # constraint on (store, subject, object) makes each row one distinct key, and
+        # I1 (no zero-count row) means MultiSet never drops one -- asserted at runtime
+        # after the loads of every admitted capped write.
+        # NOT taken while the cap is suspended (replay: `Store.catch_up`, the non-bulk
+        # `build_index`): there the cap can only warn, the loaded lengths below serve
+        # the warning, and the two queries would be pure overhead on every replayed
+        # add (TK158 FIX 2026-10-22: 9.4% of a 1700-row catch_up).
+        region_counts: tuple[int, int] | None = None
+        if count > 0 and self.max_closure_fanout and not self._fanout_cap_suspended.on:
+            region_counts = self._closure_region_counts(subject_id, object_id)
+            c_anc, c_desc = region_counts
+            c_fanout = c_anc * c_desc + c_anc + c_desc
+            if c_fanout > self.max_closure_fanout:
+                # Error PRECEDENCE is kept: the cycle guard below fires before the cap
+                # on the old load-then-count path, so check the one row it reads (the
+                # reverse edge object -> subject; both of its probes read that same
+                # row) before refusing on size.
+                if self._reverse_edge_present(subject_id, object_id):
+                    raise InvariantViolation("Cycle detected in backward path")
+                self._raise_closure_fanout(c_fanout, c_anc, c_desc)
+
         # Build local reachability map based on current DB state
         reachable_before_subject = MultiSet()
         reachable_after_object = MultiSet()
@@ -862,6 +932,12 @@ class ReachabilityIndex:
 
         # BLAST-RADIUS BOUND (ZT-P1-6a): refuse an addition whose closure region is
         # larger than this index's cap, BEFORE materialising any of it.
+        #
+        # TK158 (2026-10-22): on the sync path the refusal now happens BEFORE the loads
+        # above, from `_closure_region_counts` (two indexed count(*) queries); this
+        # block re-derives the same numbers from the loaded region, asserts they agree,
+        # and serves the suspended (replay) branch. Everything said below about the
+        # arithmetic and about WHERE the refusal sits holds for both sites.
         #
         # Counted, not built: the three loops below emit exactly |A|x|D| + |D| + |A|
         # distinct pairs (subject is never an ancestor, object never a descendant, no
@@ -897,6 +973,12 @@ class ReachabilityIndex:
         # nobody up, so bounding it would only add a way to fail an import.
         n_anc = len(reachable_before_subject)
         n_desc = len(reachable_after_object)
+        if region_counts is not None and region_counts != (n_anc, n_desc):
+            # TK158: the refusal above trusted the counts; they must equal the loads.
+            raise InvariantViolation(
+                f'closure region count mismatch: count(*) gave {region_counts}, the '
+                f'loaded region has ({n_anc}, {n_desc}): a zero-count closure row or a '
+                f'duplicate edge key is stored')
         fanout = n_anc * n_desc + n_anc + n_desc
         if (count > 0 and self.max_closure_fanout and fanout > self.max_closure_fanout
                 and self._fanout_cap_suspended.on):
@@ -906,20 +988,10 @@ class ReachabilityIndex:
                 'descendants + fringes) over the limit of %d for store %r',
                 fanout, n_anc, n_desc, self.max_closure_fanout, self.store_id)
         elif count > 0 and self.max_closure_fanout and fanout > self.max_closure_fanout:
-            # ClosureFanoutExceeded (an AdmissionRejected subclass), like the cycle
-            # refusals: a correct refusal of THIS write, classifiable by every harness
-            # that already handles rejection -- not an InvariantViolation, because
-            # nothing is corrupt. The SUBCLASS matters: `zanzibar.store.apply` promotes
-            # every other ValueError to InvariantViolation("corruption") on the replay
-            # path, and must not do that here -- admission cannot predict this cap, so
-            # a refusal during replay is a resource limit, not a parity bug.
-            raise ClosureFanoutExceeded(
-                f'closure fan-out cap exceeded: this write would add {fanout} '
-                f'permission-closure rows ({n_anc} ancestors x {n_desc} descendants + '
-                f'fringes), over the limit of {self.max_closure_fanout} for store '
-                f'{self.store_id!r}. Raise the limit with the {MAX_CLOSURE_FANOUT_ENV} '
-                f'environment variable (0 disables it), or split the grant -- this '
-                f'write would hold the store write lock for its whole expansion')
+            # Why ClosureFanoutExceeded and not InvariantViolation: see
+            # `_raise_closure_fanout`. TK158: unreachable while the counts above agree with the loads (the
+            # count block refuses first); kept so the refusal never depends on it.
+            self._raise_closure_fanout(fanout, n_anc, n_desc)
 
         # Expand transitive paths. The three loops enumerate DISTINCT concrete
         # pairs (subject is never an ancestor, object never a descendant, no

@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-14
-moved: 2026-10-20b
-updated: 2026-10-20b
+moved: 2026-10-22
+updated: 2026-10-22
 closed:
 ---
 
@@ -78,3 +78,7 @@ PHASE 0 DECIDED (model, 2026-10-20b): marker shapes stay as they are, NOT aligne
 IN FLIGHT 2026-10-20b: ultracode workflow wf_e60a3842-f17 (tk151-userdocs) writing userdocs/ (Sphinx 8 + MyST 4 + Furo, installed into the conda env via pip). Shape: scaffold (conf.py, page skeleton, tests/test_userdocs_examples.py, tests/test_userdocs_build.py, docs extra, .github/workflows/docs.yml) -> 12 units write/adversarial-review/fix -> integrate (strict -W -n build) -> completeness critic. Per-agent reports in .scratch/tk151-docs/ (gitignored: transcribe anything that is evidence). If the session dies: resume with Workflow resumeFromRunId wf_e60a3842-f17, or inspect userdocs/ as left. Not yet done after it: PYPI_README shrink, fresh-reader trial, gate, commit.
 
 Round 1 (wf_e60a3842-f17) DONE: 43 pages + scaffold landed uncommitted; findings and 11 suspected library bugs transcribed into docs/tk151-diataxis-plan-2026-10-20.md Correction 2026-10-20b. Round 2 IN FLIGHT: wf_b32b8743-b9f (fix critic items in 5 disjoint units with review, repro each suspected bug B1-B10 under .scratch/tk151-docs2/repro-<id>/, shrink PYPI_README, fresh-reader trial, final strict build). After it: transcribe repro verdicts into the plan doc, file rows for CONFIRMED bugs, gate, commit.
+
+### 2026-10-22
+
+Docs follow-ups for TK158 + TK3 landed 2026-10-22: explanation/limits.md "A refused write is not free" rewritten with the 2026-10-22 numbers; how-to/backends-direct.md no longer says no runtime check catches a skipped cascade (CascadeNotRun, its bound, refused writes still owe); reference/exceptions.md gains CascadeNotRun (tree, table, directive). CHANGELOG [Unreleased] Fixed has both. Still before the cut: userdocs/reference/changelog.md refresh; TK162/TK164/TK166 docs edits as they land.

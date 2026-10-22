@@ -9,6 +9,7 @@ Most programs reach it through ``zanzibar.store.Store``, whose ``lookup`` /
 """
 from .models import PermissionDelta, IndexStore, Node, Edge  # noqa: F401  (PermissionDelta: internal)
 from .core import ReachabilityIndex, AdmissionRejected, WriteLockUnsafe
+from .cascade_mark import CascadeNotRun
 from .invariants import InvariantViolation
 from .wildcard import WildcardIndex, LookupResult
 from .outbox import outbox_watermark, prune_outbox
@@ -27,6 +28,9 @@ __all__ = [
     # Raised on a write when the session cannot take the row write lock (SQLite in
     # AUTOCOMMIT); a ZanzibarError, unlike InvariantViolation.
     "WriteLockUnsafe",
+    # Raised at COMMIT when a write on a boolean (and / but not) schema ran no
+    # DeltaProcessor.run_cascade in the transaction; a ZanzibarError (RuntimeError).
+    "CascadeNotRun",
     "WildcardIndex",
     "LookupResult",
     # Maintains the derived (and / but not) relations; pass one as ``proc`` when you

@@ -236,12 +236,16 @@ def instrument(cs, session: Session, ph: Phases):
     undo.append(ph.wrap(cs.source, 'add', 'admit_s'))
     undo.append(ph.wrap(cs.source, 'remove', 'admit_s'))
     undo.append(ph.wrap(cs.source, 'refresh_evaluator', 'refresh_evaluator_s'))
+    if hasattr(cs.source, 'undo_last_admission'):            # TK158
+        undo.append(ph.wrap(cs.source, 'undo_last_admission', 'undo_s'))
     undo.append(ph.wrap(session, 'commit', 'commit_s'))
     undo.append(ph.wrap(session, 'exec', 'sql_exec_s'))
     undo.append(ph.wrap(_store_mod, 'advance_index', 'apply_s'))
     # index layer (class attributes)
     undo.append(ph.wrap(ReachabilityIndex, '_add_direct_edge_unsafe_impl', 'expand_s'))
     undo.append(ph.wrap(ReachabilityIndex, '_add_indirect_edges_batch_unsafe', 'batch_s'))
+    if hasattr(ReachabilityIndex, '_closure_region_counts'):  # TK158
+        undo.append(ph.wrap(ReachabilityIndex, '_closure_region_counts', 'region_count_s'))
     undo.append(ph.wrap(ReachabilityIndex, '_flush_outbox', 'outbox_insert_s'))
     # ORM flush (the INSERT/DELETE of the closure rows) via session events
     st = {}
@@ -358,6 +362,7 @@ def check_us(cs, probe, reps: int = 300) -> tuple[float, bool]:
 
 def run_point(args) -> dict:
     rec: dict = dict(shape=args.shape, n=args.n, mode=args.mode, paranoia=args.paranoia,
+                     warm=bool(getattr(args, 'warm', False)),
                      rep=args.rep, date=time.strftime('%Y-%m-%d %H:%M:%S'),
                      python=platform.python_version(), host=platform.node())
     rec['load_before'] = machine_load()
@@ -434,6 +439,15 @@ def run_point(args) -> dict:
         if ans0:
             raise AssertionError(f'probe {probe} already allowed before the write')
 
+        if args.warm:
+            # TK158: build the set engine's lazy write-time flow graph FIRST, as on a
+            # store that has already written once, so the measured write is not the
+            # O(store) first-write warm-up (docs/tk158-cheap-fanout-refusal-2026-10-22.md
+            # sec 1c). Timed separately.
+            t0 = time.perf_counter()
+            cs.source.engine._ensure_flow_graph()
+            rec['warmup_flow_graph_s'] = round(time.perf_counter() - t0, 3)
+
         # ---- the measured write ------------------------------------------------
         gc.collect()
         ph = Phases()
@@ -467,6 +481,29 @@ def run_point(args) -> dict:
             raise AssertionError('admitted write did not grant the probe')
         if refused is not None and ans1:
             raise AssertionError('refused write granted the probe')
+
+        if refused is not None and args.warm:
+            # TK158: a SECOND identical refusal -- what every refusal after the first
+            # costs on a warm store (a pre-TK158 refusal re-armed the flow graph).
+            gc.collect()
+            ph = Phases()
+            undo = instrument(cs, session, ph)
+            with PeakSampler() as ps:
+                ws0 = rss_mb('current')
+                t0 = time.perf_counter()
+                refused2 = None
+                try:
+                    cs.add_tuple(*write)
+                except ClosureFanoutExceeded as e:
+                    refused2 = str(e)[:200]
+                rec['write2_s'] = round(time.perf_counter() - t0, 3)
+            undo()
+            rec['write2_phases'] = {k: round(v, 3) for k, v in sorted(ph.t.items())}
+            rec['write2_peak_delta_mb'] = round(ps.peak - (ws0 or 0), 1)
+            if refused2 is None:
+                raise AssertionError('second identical write was admitted')
+            rec['edge_rows_added_2'] = count(session, Edge) - edges0
+            rec['outbox_rows_added_2'] = count(session, DeltaOutbox) - out0
 
         if refused is None:
             gc.collect()
@@ -605,6 +642,9 @@ def main():
     p.add_argument('--mode', choices=('admit', 'refuse'), default='admit')
     p.add_argument('--paranoia', default='off')
     p.add_argument('--rep', type=int, default=0)
+    p.add_argument('--warm', action='store_true',
+                   help='build the flow graph before the measured write, and time a '
+                        'second identical refusal too (TK158)')
     p.add_argument('--dsn', default=os.environ.get('ZANZIBAR_TEST_DSN'))
     p.add_argument('--workdir')
     p.add_argument('--keep-db', action='store_true')

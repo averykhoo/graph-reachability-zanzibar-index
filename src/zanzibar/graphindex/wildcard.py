@@ -21,6 +21,7 @@ from types import EllipsisType
 from sqlalchemy import tuple_
 from sqlmodel import select
 
+from .cascade_mark import note_write as _note_cascade_owed
 from .core import ReachabilityIndex, _ThreadFlag
 from .invariants import InvariantViolation
 from .models import Edge, Node, ResidueRef, Residue
@@ -577,6 +578,9 @@ class WildcardIndex:
         # Serialize against live writers: the existence probes below are
         # check-then-act on ref-counted bridge edges (blind-audit C2).
         self.idx._lock_store()
+        # TK3: a backfill writes bridges and middles, which emit outbox rows the
+        # derived relations must see. Before the first write, fail-closed.
+        _note_cascade_owed(self, 'WildcardIndex.backfill')
         for shape in self.schema_info.bridged_in_shapes:
             entity_type, predicate = shape
             concretes = self._concrete_nodes_of_shape(entity_type, predicate)
@@ -658,6 +662,10 @@ class WildcardIndex:
         # ids, and the bridge existence probes below are check-then-act -- two
         # unserialized writers would double-count a ref-counted bridge edge.
         self.idx._lock_store()
+        # TK3: after the pure pre-checks, before the first mutation (_resolve interns
+        # nodes): from here on a boolean-schema transaction owes a cascade.
+        _note_cascade_owed(self, 'add_tuple',
+                           derived_write=self._derived_write_ctx(relation, o_type))
         subject = self._resolve(subject_predicate, s_type, s_name, 'subject', create=True)
         obj = self._resolve(relation, o_type, o_name, 'object', create=True)
 
@@ -718,6 +726,8 @@ class WildcardIndex:
             # parity): a remove of a never-seen endpoint is an admission rejection.
             raise AdmissionRejected('Non-existent edge cannot be removed') from e
 
+        _note_cascade_owed(self, 'remove_tuple',   # TK3: before the first mutation
+                           derived_write=self._derived_write_ctx(relation, o_type))
         self.idx.remove_edge_by_id(subject.id, obj.id)
 
         # GC bridges for concrete endpoints whose only remaining edges are their bridges.
@@ -802,6 +812,13 @@ class WildcardIndex:
                 f'remove_node cannot reach (remove its tuples through the write path '
                 f'instead -- RuleSet.apply + remove_tuple, then run_cascade)')
 
+        # TK3: every refusal above changed nothing; from here the removal retires edges
+        # (and emits outbox rows), so a boolean-schema transaction owes a cascade. Armed
+        # on purpose for every admitted remove_node: the fences above prove some shapes
+        # stale, not the rest exact (decision: docs/tk3-cascade-ran-mark-2026-10-22.md
+        # sec 4.2).
+        _note_cascade_owed(self, 'remove_node',
+                           derived_write=self._derived_write_ctx(pred, entity_type))
         neighbour_entities: set[tuple[str, str]] = set()
         if node.wildcard == '':
             node_id = node.id

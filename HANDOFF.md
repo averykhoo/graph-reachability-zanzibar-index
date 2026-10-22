@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-20b -- `TK151` user docs drafted in `userdocs/` (Sphinx; Pages deploys from `v*` tags only); plan `docs/tk151-diataxis-plan-2026-10-20.md`. **0.1.0 = TK151 + TK3, TK158, TK162, TK164, TK166** (user), cut held until the docs land; version stays 0.0.5 under `[Unreleased]`. Docs pass filed TK163-TK169 (no equivalence break). Open `ASK-3`: nag the user about two GitHub settings. Before the cut: refresh `userdocs/reference/changelog.md`. Commit by path, never `git add -A` / `git stash`.
+> 2026-10-22 -- `TK158` (cheap fan-out refusal: 91 s -> ~0.2 s) and `TK3` (always-on `CascadeNotRun` commit check) CLOSED via ultracode `wf_2c9dfdfc-f9c`; plans `docs/tk158-*-2026-10-22.md`, `docs/tk3-*-2026-10-22.md`. **0.1.0 left: TK162, TK164, TK166, then TK151 lands last** (user); cut held until the docs land, version stays 0.0.5 under `[Unreleased]`. New `TK170` (LATER): paranoia `full` loses savepoint writes. Before the cut: refresh `userdocs/reference/changelog.md`. Commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

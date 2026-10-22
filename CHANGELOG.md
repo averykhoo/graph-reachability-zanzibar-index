@@ -332,6 +332,19 @@ Each is detailed below, under Changed or Added.
   pruning claims are pinned by tests.
 
 ### Fixed
+- A write refused by `ZANZIBAR_MAX_CLOSURE_FANOUT` is cheap to refuse (TK158). The graph
+  index counts the region with two indexed counts and refuses before loading it, and a
+  `Store` takes the one admitted tuple back out of the set engine instead of rebuilding it
+  (also for `PathCountExceeded`). A refused grant to a 1,000,000-member group took 91 s and
+  3.8 GB; on a store already written to it now takes about 0.2 s (SQLite, 2026-10-22). The
+  refusal is still atomic across the log, the set engine and the index.
+- A direct `WildcardIndex` write on a schema with `and` / `but not` that is committed
+  without `DeltaProcessor.run_cascade` is refused at the commit with the new
+  `CascadeNotRun` (exported from `zanzibar` and `zanzibar.graphindex`), instead of
+  committing derived relations that disagree with the set engine (TK3). The check is
+  always on, costs no SQL, and re-arms when a savepoint that held the cascade is rolled
+  back. It shows that a cascade was called, not that its watermark was right. A `Store`
+  is not affected.
 - A `SetLookupResult` or graph `LookupResult` held across a write could translate to
   ANOTHER entity's key with no error (0.0.5 install trial F16): set-engine ids are
   recycled, and SQLite reused `zanzibar_node` row ids. Results are now stamped and checked

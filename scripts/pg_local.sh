@@ -123,9 +123,20 @@ stop)
     ;;
 
 destroy)
+    # Delete the CLUSTER directory and this script's own log beside it -- never the
+    # parent wholesale. With the documented ZANZIBAR_PG_DATA override the parent is
+    # the caller's directory: `rm -rf "$(dirname "$DATA")"` once erased a whole session
+    # scratchpad that way (2026-10-22). The parent goes only if that leaves it empty.
+    # Refuse a directory that is not a cluster, so a mistyped override deletes nothing.
+    if [[ -e "$DATA" && ! -f "$DATA/PG_VERSION" ]]; then
+        echo "pg_local: refusing to destroy $DATA: not a PostgreSQL cluster (no PG_VERSION)" >&2
+        exit 1
+    fi
     running && pgctl -m immediate -w stop >/dev/null || true
-    rm -rf "$(dirname "$DATA")"
-    echo "pg_local: destroyed $(dirname "$DATA")"
+    rm -rf "$DATA"
+    rm -f "$LOG"
+    rmdir "$(dirname "$DATA")" 2>/dev/null || true
+    echo "pg_local: destroyed $DATA"
     ;;
 
 *)

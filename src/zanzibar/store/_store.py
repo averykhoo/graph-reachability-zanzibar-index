@@ -37,7 +37,7 @@ from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.graphindex.wildcard import LookupResult
 from zanzibar.setengine.engine import StaleLookupIds
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
-from zanzibar.schema import AdmissionRejected, validate_store_id
+from zanzibar.schema import AdmissionRejected, IndexResourceLimit, validate_store_id
 from zanzibar.schema.errors import SchemaError, ZanzibarError, reject_ellipsis_predicate
 from zanzibar.schema.json_frontend import _reject_duplicate_json_keys, openfga_json_to_dsl
 from zanzibar.schema.tuplestr import lookup_args, lookup_reverse_args, shape_filter, tuple_args
@@ -647,6 +647,22 @@ class Store:
                 self.source.pop_pending_rows()
             self.session.commit()
             return token
+        except IndexResourceLimit:
+            # TK158: the index refused the write on size (ClosureFanoutExceeded /
+            # PathCountExceeded, re-raised unchanged by ``apply._apply_row``). That is
+            # an expected refusal, not a bug signal, and the evaluator holds exactly
+            # one admitted tuple the rollback does not reach: undo THAT, O(1) in the
+            # store, instead of the O(store) rebuild below. The rebuild stays the
+            # fallback if the undo itself fails. Atomicity is unchanged: the log row
+            # and every index change go with the rollback, the set engine with the
+            # undo (tests/test_tk158_cheap_refusal.py).
+            self.source.pop_pending_rows()  # discard: nothing must span the rollback
+            self.session.rollback()
+            try:
+                self.source.undo_last_admission()
+            except Exception:
+                self.source.refresh_evaluator()
+            raise
         except Exception:
             self.source.pop_pending_rows()  # discard: nothing must span the rollback
             self.session.rollback()

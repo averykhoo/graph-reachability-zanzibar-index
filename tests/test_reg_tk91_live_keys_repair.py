@@ -146,6 +146,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from zanzibar.store import TupleSource, build_index, save_schema
+from zanzibar.graphindex.cascade_mark import _cascade_check_waived
 from zanzibar.graphindex.invariants import InvariantViolation, snapshot_rows
 from zanzibar.graphindex.models import Node, Residue
 from zanzibar.graphindex.outbox import outbox_watermark
@@ -252,7 +253,11 @@ def _stale_store(rs):
     session, widx, proc = _live_arm(rs, _OPS)
     assert widx.check('...', 'user', 'u1', 'viewer', 'doc', 'd1'), \
         'fixture never granted the permission it is about to revoke'
-    _route(rs, widx, _VICTIM, 'remove')
+    # The one commit in the suite that is MEANT to persist uncascaded state, so it is
+    # waived by name (TK3; the waiver census pins this file).
+    with _cascade_check_waived(widx, reason='TK91: retracts a leaf uncascaded on purpose '
+                                            'to build a grant that outlived it'):
+        _route(rs, widx, _VICTIM, 'remove')
     session.commit()
     return session, widx, proc
 

@@ -166,7 +166,8 @@ _EXPECTED_ALL = {
     'zanzibar.graphindex': {
         'ReachabilityIndex', 'WildcardIndex', 'LookupResult', 'Node', 'Edge', 'IndexStore',
         'AdmissionRejected', 'InvariantViolation', 'WriteLockUnsafe', 'outbox_watermark',
-        'prune_outbox', 'DeltaProcessor'},   # DeltaProcessor: TK153 F8, 2026-10-17
+        'prune_outbox', 'DeltaProcessor',   # DeltaProcessor: TK153 F8, 2026-10-17
+        'CascadeNotRun'},   # TK3, 2026-10-22
     'zanzibar.store': {
         'Store', 'ExpandResult', 'TupleSource', 'build_index', 'rebuild_index', 'save_schema',
         'SchemaRecord', 'TupleLog', 'PARANOIA_ENV_VAR', 'StaleRead', 'LookupNotFresh',
@@ -227,6 +228,7 @@ _BUILTIN_BASE = {
     'IndexStalled': RuntimeError, 'UnloggedTuplesPresent': RuntimeError,
     'StoreNotFound': KeyError, 'TablesNotCreated': RuntimeError, 'IndexExists': ValueError,
     'StaleLookupIds': KeyError, 'TablesOutdated': RuntimeError,   # TK154
+    'CascadeNotRun': RuntimeError,   # TK3
 }
 _OUTSIDE_THE_ROOT = {'InvariantViolation', 'UnprovenExtensionWarning'}
 

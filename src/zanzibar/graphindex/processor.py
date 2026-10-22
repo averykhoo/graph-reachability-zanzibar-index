@@ -30,6 +30,7 @@ from sqlmodel import select
 
 from zanzibar.schema import (CompiledBooleans, DerivedFamily, LeafFamily)
 
+from .cascade_mark import clear as _clear_cascade_owed
 from .invariants import (InvariantViolation, PARANOIA_FIXPOINT,
                          paranoia_at_least, paranoia_level)
 from .models import Edge, Node, ResidueRef, Residue
@@ -1478,6 +1479,9 @@ class DeltaProcessor:
         with self.idx._node_cache_scope(), self._stored_cache_scope():
             self._run_cascade(txn_start_watermark)
         self._check_cascade_fixpoint()
+        # TK3: the debt is paid only on a NORMAL return -- a cascade (or fixpoint tier)
+        # that raised leaves the store's cascade-owed mark armed, so the commit refuses.
+        _clear_cascade_owed(self.session, self.store_id)
 
     def _run_cascade(self, txn_start_watermark: int) -> None:
         self.session.flush()
@@ -1704,6 +1708,7 @@ class DeltaProcessor:
                         self.reconcile(object_type, rel, obj_name)
                     self.session.flush()
         self._bumped = []
+        _clear_cascade_owed(self.session, self.store_id)   # TK3: on a normal return only
 
     # ------------------------------------------------------------------ #
     # I9 fixpoint audit (§8.2)

@@ -108,10 +108,13 @@ def test_derived_flag_set_only_by_processor_writes():
     rs = parse_openfga_schema(schema, enable_boolean=True)
     session, widx = make_wildcard_index(rs.schema_info)
 
-    # ordinary (leaf) write: no derived flag anywhere
+    # ordinary (leaf) write: no derived flag anywhere. Flushed and rolled back, not
+    # committed: an uncascaded leaf write on a boolean schema may not commit (TK3), and
+    # running the cascade here would mint the derived edge the next step writes by hand.
     widx.add_tuple('...', 'user', 'alice', 'viewer.0', 'doc', 'd1')
-    session.commit()
+    session.flush()
     assert all(not e.derived for e in session.exec(select(Edge)).all())
+    session.rollback()
 
     # processor write into the derived-public family: direct edge flagged
     widx.processor_writes = True

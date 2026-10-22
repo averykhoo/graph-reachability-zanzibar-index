@@ -43,6 +43,7 @@ _LAZY = {
     'UnloggedWriteRefused': 'zanzibar.setengine.engine',
     'StaleLookupIds': 'zanzibar.setengine.engine',
     'WriteLockUnsafe': 'zanzibar.graphindex.core',
+    'CascadeNotRun': 'zanzibar.graphindex.cascade_mark',
     'InvariantViolation': 'zanzibar.graphindex.invariants',
     # the store
     'StaleRead': 'zanzibar.store.source',
@@ -78,6 +79,7 @@ def __dir__():
 
 
 if TYPE_CHECKING:  # pragma: no cover -- for type checkers and IDEs only
+    from zanzibar.graphindex.cascade_mark import CascadeNotRun
     from zanzibar.graphindex.core import WriteLockUnsafe
     from zanzibar.graphindex.invariants import InvariantViolation
     from zanzibar.graphindex.wildcard import LookupResult
