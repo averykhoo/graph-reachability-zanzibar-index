@@ -11,9 +11,9 @@ labels: []
 source: hand
 source_hash:
 created: 2026-10-20b
-moved: 2026-10-20b
-updated: 2026-10-20b
-closed:
+moved: 2026-10-21a
+updated: 2026-10-21a
+closed: 2026-10-21a
 ---
 
 Only the repo owner can do this: two GitHub settings the docs site needs before its first deploy (`.github/workflows/docs.yml`, TK151). User asked on 2026-10-20b to be reminded ("nag me to change the GitHub settings tomorrow or whenever").
@@ -24,3 +24,7 @@ Only the repo owner can do this: two GitHub settings the docs site needs before 
 Close this row once the user confirms both are done. A manual `workflow_dispatch` of the docs workflow on master is a safe first deploy check (it builds and deploys the current docs; the page banner says they describe unreleased code).
 
 ## Log
+
+### 2026-10-21a
+
+Both settings confirmed via API 2026-10-21 (Pages build_type=workflow; github-pages env policies: master branch + v* tag). First deploy: workflow_dispatch docs run 39523943275 on master @ 7a6abf7, build+deploy success; gate run 39523926056 green. Site returns 200: / , tutorials/first-check.html, how-to/postgresql.html (curl, first-hand).

@@ -246,10 +246,26 @@ This library is probably the wrong choice if:
   [schema language](../reference/schema-language.md) reference.
 - **You need an authorization service** that applications in other languages call over the
   network. This is an in-process Python library over your own database.
-- **Your data has very large groups granted on many objects, and writes are frequent.** The
-  graph index pays for every grant at write time, as described above. A store dominated by
-  such writes spends its time holding the write lock. The set engine alone avoids that cost
-  but computes every answer when asked (see [The two backends](two-backends.md)).
+- **Writes dominate your load: do not use the graph index.** The graph index makes reads
+  cheap by doing their work at write time, which is the wrong trade when writes outnumber
+  reads. The exception is a simple schema with no `and` / `but not`, where each write adds
+  only a few index rows. Otherwise the write cost adds up: in the benchmark above a write
+  cost about 0.1 s plus about 0.3 ms per added index row, one write at a time per store, and
+  a schema with `and` / `but not` also updates those relations on every write. Granting
+  large groups is where the rows multiply: a store kept up with at most about one write
+  every 3 s when each added 10,000 rows, and one every 30 s at 100,000.
+  - **Use the set engine on its own instead.** It has no per-row cost: a write stores one
+    tuple, so its write rate is your database's insert rate. It pays elsewhere. Every read
+    computes its answer, and that cost has not been measured for large groups. Every
+    process holds all the tuples in memory and replays them when it opens. There is no
+    tuple log and there are no tokens, so one process does not see another's writes until
+    it calls `rebuild()`. See [Use the backends directly](../how-to/backends-direct.md).
+  - **Async mode (`sync=False`) is not a way around it.** It takes the index work out of
+    the write, but the index still applies every row later, at the same cost per row. It
+    absorbs bursts. Under a rate that stays above what `catch_up()` can apply, the index
+    falls further behind for good: untokened reads see an ever older index, and lookups
+    with a token raise {py:exc}`zanzibar.LookupNotFresh`. See
+    [Use async mode](../how-to/async-tokens.md).
 - **You need high write throughput on a single store.** Writes to one store are serialised.
 - **You need a database other than SQLite or PostgreSQL**, or an isolation level other than
   `READ COMMITTED`.
