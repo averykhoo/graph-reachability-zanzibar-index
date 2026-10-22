@@ -16,8 +16,10 @@ from .engine import (SetEngine, SetEngineBackend, Interner, NodeSets, SetLookupR
 # The public surface (`TK123` item 5). The import lines above stay, so the internal names
 # (``SetEngineBackend``, ``Interner``, ``NodeSets``, ``DEFAULT_SETOPS``, ``ALL_SETOPS``)
 # still import by name; they are just not part of the API.
+# Exceptions and warnings are NOT listed here (`TK164`): their one public home is the
+# top-level package (``from zanzibar import StaleRead``). The import lines stay, so an
+# old ``from zanzibar.setengine import <Exception>`` still resolves, but it is not API.
 __all__ = [
     'SetEngine', 'SetLookupResult', 'MemberSet', 'RelationTuple',
     'SetOps', 'PySets', 'RoaringSets',
-    'UnloggedWriteRefused', 'StaleLookupIds',
 ]

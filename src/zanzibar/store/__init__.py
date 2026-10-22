@@ -12,13 +12,14 @@ from .models import IndexCursor, SchemaRecord, TupleLog
 from .schema_io import (PersistedSchemaRefused, SchemaMismatch, StoreNotFound, TablesNotCreated,
                         TablesOutdated, ensure_schema, load_schema,
                         open_graph_index, open_set_engine, save_schema)
-from .source import (StaleRead, TupleSource, UnsafeIsolationLevel, WatermarkGap,
+from .source import (ForeignToken, StaleRead, TupleSource, UnsafeIsolationLevel, WatermarkGap,
                      assert_read_isolation, log_gap, log_rows, log_watermark)
 from .apply import MissingDeltaProcessor, advance_index, ensure_cursor
 from .build import BuildReport, IndexExists, build_index, rebuild_index
 from ._store import (Store, ExpandResult, IndexStalled, LookupNotFresh, PARANOIA_ENV_VAR,
                     UnloggedTuplesPresent)
-# Re-exported because a ``Store`` raises them, so a caller can catch what it gets from here.
+# Imported here before `TK164` so a caller could catch what a ``Store`` raises from this
+# package; kept so those imports still resolve. The documented home is ``zanzibar``.
 from zanzibar.graphindex.core import WriteLockUnsafe
 from zanzibar.schema.errors import (AdmissionRejected, ClosureFanoutExceeded,
                                     CyclicDerivedDependency, IndexResourceLimit,
@@ -28,8 +29,12 @@ from zanzibar.setengine.engine import StaleLookupIds
 
 # The public surface (`TK123` item 5). The import lines above stay, so the internal
 # helpers (``advance_index``, ``ensure_cursor``, ``assert_read_isolation``, ``log_gap``,
-# ``log_rows``, ``log_watermark``, ``open_set_engine``, ``open_graph_index``,
-# ``load_schema``, ``ensure_schema``, ``IndexCursor``) still import by name.
+# ``log_rows``, ``log_watermark``, ``open_graph_index``, ``load_schema``,
+# ``ensure_schema``, ``IndexCursor``) still import by name. ``open_set_engine`` is public
+# since `TK164`: the set engine's ``SchemaMismatch`` message names it as the remedy.
+# Exceptions and warnings are NOT listed here (`TK164`): their one public home is the
+# top-level package (``from zanzibar import StaleRead``). The import lines stay, so an
+# old ``from zanzibar.store import <Exception>`` still resolves, but it is not API.
 __all__ = [
     "Store",
     "ExpandResult",
@@ -41,27 +46,5 @@ __all__ = [
     "SchemaRecord",
     "TupleLog",
     "PARANOIA_ENV_VAR",
-    # exceptions a Store raises
-    "StaleRead",
-    "LookupNotFresh",
-    "IndexStalled",
-    "UnloggedTuplesPresent",
-    "WatermarkGap",
-    "UnsafeIsolationLevel",
-    "MissingDeltaProcessor",
-    "SchemaMismatch",
-    "PersistedSchemaRefused",
-    "StoreNotFound",
-    "IndexExists",
-    "TablesNotCreated",
-    "TablesOutdated",
-    "StaleLookupIds",
-    "SchemaError",
-    "CyclicDerivedDependency",
-    "AdmissionRejected",
-    "IndexResourceLimit",
-    "ClosureFanoutExceeded",
-    "PathCountExceeded",
-    "WriteLockUnsafe",
-    "MalformedTupleString",
+    "open_set_engine",
 ]

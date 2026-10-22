@@ -12,6 +12,10 @@ SABOTAGES (2026-10-15, ``.scratch/tk123/sab918.py``: one anchor replaced, count 
     S11 token_diagnosis store check -> `if False:`
         rc=1 | 1 failed, 36 deselected | AssertionError: Regex pattern did not match.
              Expected regex: "Token 3 was returned by a write to store 'b', not 'a'"
+        (2026-10-23, TK166: SUPERSEDED. ``refuse_foreign_token`` now runs before any
+        freshness test, so this sabotage alone no longer goes red here; the guard and
+        its sabotage live in ``tests/test_tk166_foreign_token.py``, which also pins
+        ``token_diagnosis``'s foreign branch directly.)
     S12 Store.__init__'s except-arm session.rollback() deleted
         rc=1 | 1 failed, 36 deselected | sqlite3.OperationalError: database is locked
     S13 advance_index's _attach_failing_row call -> pass

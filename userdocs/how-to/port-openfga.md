@@ -54,7 +54,7 @@ OpenFGA model, a {py:exc}`zanzibar.SchemaError` or
 {py:exc}`zanzibar.CyclicDerivedDependency`, both also `ValueError`) whose message names
 the relation at fault. [Rewrite a refused schema
 shape](rewrite-refused-shape.md) works through each fix. Check your model against this
-list:
+list (a *tupleset* is the relation after `from`, such as `parent` in `viewer from parent`):
 
 | in your OpenFGA model | here | what to do |
 | --- | --- | --- |

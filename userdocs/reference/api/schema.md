@@ -72,11 +72,13 @@ documented here under its top-level name.
    :py:class:`~zanzibar.store.TupleSource` to skip compiling the same schema again.
 
    .. py:attribute:: schema_info
+      :type: SchemaInfo
 
       The wildcard and derived-relation facts the graph index needs. Pass it to
       :py:class:`~zanzibar.graphindex.WildcardIndex`.
 
    .. py:attribute:: compiled
+      :type: CompiledBooleans | None
 
       The compiled ``and`` / ``but not`` relations, or ``None``. Pass it to
       :py:class:`~zanzibar.graphindex.DeltaProcessor`. A schema needs a delta processor
@@ -90,9 +92,55 @@ documented here under its top-level name.
 
       Route one raw tuple through the schema: yield every edge the graph index must
       store for it. A tuple the schema does not admit raises
-      :py:exc:`~zanzibar.AdmissionRejected`. It takes a ``RelationalTriple``, which is
-      importable from ``zanzibar.schema`` but is not public; see
-      :doc:`../../how-to/backends-direct`.
+      :py:exc:`~zanzibar.AdmissionRejected`. It takes a :py:class:`RelationalTriple`;
+      see :doc:`../../how-to/backends-direct`.
+```
+
+The types that appear in `RuleSet`'s fields and `apply` are public since 0.1.0, so a
+type checker can name them. Take `SchemaInfo` and `CompiledBooleans` from a compiled
+`RuleSet` rather than building them; build a `RelationalTriple` from two `Entity` values
+when you drive the graph index yourself.
+
+```{eval-rst}
+.. py:class:: Entity(type, name)
+
+   One object or subject: a type and a name, printed ``type:name``. A frozen dataclass,
+   hashable and ordered. ``name`` may be ``'*'``, the wildcard sentinel.
+
+   .. py:attribute:: type
+      :type: str
+
+   .. py:attribute:: name
+      :type: str
+
+   .. py:property:: wildcard
+      :type: bool
+
+      ``True`` when ``name`` is ``'*'``.
+
+.. py:class:: RelationalTriple(subject, relation, object, subject_predicate=Ellipsis)
+
+   One relation tuple as :py:meth:`RuleSet.apply` takes it: ``subject`` (an
+   :py:class:`Entity`) has ``relation`` on ``object`` (an :py:class:`Entity`).
+   ``subject_predicate`` is ``...`` (``Ellipsis``, the default) for a bare subject such as
+   ``user:alice``, or a relation name for a userset subject such as
+   ``group:eng#member``. It prints as ``object#relation@subject#predicate``. A frozen
+   dataclass.
+
+.. py:class:: SchemaInfo
+
+   The wildcard and derived-relation facts a compiled schema carries, as
+   :py:attr:`RuleSet.schema_info`. You do not build one:
+   :py:func:`zanzibar.parse_openfga_schema` and :py:func:`compile_ruleset` put it on the
+   rule set, and :py:class:`~zanzibar.graphindex.WildcardIndex` takes it. Treat it as
+   read-only; its fields describe the schema and are not a configuration surface.
+
+.. py:class:: CompiledBooleans
+
+   The compiled form of a schema's ``and`` / ``but not`` relations, as
+   :py:attr:`RuleSet.compiled` (``None`` when the schema has none), and the second
+   argument of :py:class:`~zanzibar.graphindex.DeltaProcessor`. An opaque value: pass it
+   through. Its fields are compiler internals and may change in any release.
 ```
 
 ## The schema AST
@@ -233,15 +281,7 @@ The identifier rules are described on the
    store ids. ``label`` names the argument in the error message.
 ```
 
-## Exceptions re-exported here
+## Exceptions
 
-These are the same classes as the top-level names and are documented on the
-[Exceptions](../exceptions.md) page:
-{py:exc}`~zanzibar.ZanzibarError`, {py:exc}`~zanzibar.SchemaError`,
-{py:exc}`~zanzibar.ShapeNoLongerAccepted`, {py:exc}`~zanzibar.AdmissionRejected`,
-{py:exc}`~zanzibar.IndexResourceLimit`, {py:exc}`~zanzibar.ClosureFanoutExceeded`,
-{py:exc}`~zanzibar.PathCountExceeded`, {py:exc}`~zanzibar.UnsupportedByGraphIndex`,
-{py:exc}`~zanzibar.DoublyBridgedShapeError`, {py:exc}`~zanzibar.CyclicDerivedDependency`,
-{py:exc}`~zanzibar.SchemaMismatch`, {py:exc}`~zanzibar.PersistedSchemaRefused`,
-{py:exc}`~zanzibar.MalformedTupleString` and the warning
-{py:exc}`~zanzibar.UnprovenExtensionWarning`.
+`zanzibar.schema` exports no exceptions or warnings. Import them from `zanzibar`; they are
+documented on the [Exceptions](../exceptions.md) page.

@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-14
-moved: 2026-10-22
-updated: 2026-10-22
+moved: 2026-10-23b
+updated: 2026-10-23b
 closed:
 ---
 
@@ -82,3 +82,11 @@ Round 1 (wf_e60a3842-f17) DONE: 43 pages + scaffold landed uncommitted; findings
 ### 2026-10-22
 
 Docs follow-ups for TK158 + TK3 landed 2026-10-22: explanation/limits.md "A refused write is not free" rewritten with the 2026-10-22 numbers; how-to/backends-direct.md no longer says no runtime check catches a skipped cascade (CascadeNotRun, its bound, refused writes still owe); reference/exceptions.md gains CascadeNotRun (tree, table, directive). CHANGELOG [Unreleased] Fixed has both. Still before the cut: userdocs/reference/changelog.md refresh; TK162/TK164/TK166 docs edits as they land.
+
+### 2026-10-23b
+
+IN FLIGHT 2026-10-23b: ultracode wf_7da61747-5e0 (tk166-tk164-tk151): TK166 then TK164 (implement + adversarial review, plans docs/tk166-foreign-token-2026-10-23.md, docs/tk164-public-surface-2026-10-23.md), a TK151 remaining-work audit written at the top of docs/tk151-diataxis-plan-2026-10-20.md, then disjoint page units + integration (changelog refresh, 164/166 page updates). Per-agent reports in .scratch/wf-0p1/. TK162 deliberately untouched (another session live). If this session dies: resume the workflow by run id, or inspect the tree as left (uncommitted).
+
+Round 1 of 2026-10-23b (wf_7da61747-5e0) DONE uncommitted: TK166 + TK164 code (orchestrator re-ran both sabotages first-hand: TK166 ownership check -> 34 failed/4 passed; TK164 ValueError base removed -> 5 failed), audit + round result at the top of docs/tk151-diataxis-plan-2026-10-20.md. Fable editorial review DONE: docs/tk151-fable-review-2026-10-23.md, verdict ship after small fixes. Round 2 IN FLIGHT: wf_50abfcec-e4a applies MUST 1-3 (MUST 2 as a guard test tests/test_userdocs_prerelease_prose.py; the prose itself goes at the cut) + SHOULD 4-7 + NICE 9-10. Then: FINAL_REVIEW counts regen, full gate, commit.
+
+Round 2 (wf_50abfcec-e4a) DONE: fable recs 1-6, 9, 10 applied, 7 partial (message wording -> TK169), 8 not done (-> TK163); per-rec table in docs/tk151-diataxis-plan-2026-10-20.md Correction 2026-10-23c. New guard tests/test_userdocs_prerelease_prose.py (integrator sabotage: dropped a known hit -> red). TRAP for after the cut: the guard flags any userdocs line matching /unreleased/i once __version__ leaves 0.0.x, so the next [Unreleased] CHANGELOG section mirrored into reference/changelog.md will turn it red: word that heading differently or narrow the guard then. Left before the cut: delete the six pre-release hits the guard lists; TK162 limits.md figures; optional viewer_base dedup (5 homes).

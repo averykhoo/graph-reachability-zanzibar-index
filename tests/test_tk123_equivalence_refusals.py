@@ -160,7 +160,10 @@ def test_a16_advance_index_without_proc_is_refused_on_a_boolean_schema():
 
 def test_a16_missing_proc_is_a_value_error_exported_from_connectedstore():
     assert issubclass(cs.MissingDeltaProcessor, ValueError)
-    assert 'MissingDeltaProcessor' in cs.__all__
+    # TK164 (2026-10-23): exceptions are exported from ``zanzibar`` only.
+    import zanzibar
+    assert 'MissingDeltaProcessor' in zanzibar.__all__
+    assert zanzibar.MissingDeltaProcessor is cs.MissingDeltaProcessor
 
 
 def test_a16_control_with_the_delta_processor_agrees_with_the_set_engine():

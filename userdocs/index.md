@@ -4,14 +4,26 @@ Relationship-based permissions for Python applications, in the style of Google's
 stored in SQLite or PostgreSQL.
 
 You describe your permission model in a schema, written in a subset of the
-[OpenFGA](https://openfga.dev) modelling language, plus a few
-[extensions](reference/schema-language.md#extensions-beyond-openfga): users, groups, folders, documents, and
+[OpenFGA](https://openfga.dev) modelling language: users, groups, folders, documents, and
 how a relationship on one implies a relationship on another. Your application then
 records relationships ("alice is a member of eng", "eng can view the projects folder") and
 asks questions about them ("can alice view this document?", "who can view it?").
 
 The package is called `zanzibar-index` on PyPI and is imported as `zanzibar`. It is not
 affiliated with Google or OpenFGA.
+
+It is a library, not a service: its tables live in your own SQLite or PostgreSQL database,
+next to your application's, and you call it in-process, so there is no server to run and no
+network API ([what it is, and is not](explanation/zanzibar-intro.md#what-this-library-is-and-is-not)).
+Inside, two backends give the same answers with opposite cost models: the set engine stores
+only the raw tuples and computes each answer when you ask, while the graph index stores every
+implied relationship ahead of time, so a check is a few indexed lookups whatever the data
+and the work moves to writes ([the two backends](explanation/two-backends.md)). An
+application does not pick one: it uses a `Store`, which keeps both in step, and the choice
+it actually makes is whether writes update the index at once (sync, the default) or later
+([async mode](how-to/async-tokens.md)). The exception is a load where writes dominate:
+there the set engine on its own is the better trade
+([when not to use this library](explanation/limits.md#when-not-to-use-this-library)).
 
 ```{warning}
 This is alpha research software: a personal research project, with no support promised.
@@ -29,19 +41,8 @@ pip install zanzibar-index
 It needs Python 3.13 or later. For PostgreSQL, install `"zanzibar-index[postgres]"`
 instead, which adds the database driver.
 
-:::{note}
-These pages follow the source code on the main branch. While it has changes that are not
-on PyPI yet, a banner at the top of every page says so, and the examples may not run on the
-release that `pip install zanzibar-index` gives you. In that case install from source
-instead:
-
-```text
-pip install git+https://github.com/averykhoo/graph-reachability-zanzibar-index
-```
-
-In particular, version 0.1 renames the main class: on 0.0.x releases there is no
-`zanzibar.Store`. See [Upgrade from 0.0.x to 0.1](how-to/upgrade-0.1.md).
-:::
+Coming from a 0.0.x release? Version 0.1 renames the main class and changes some answers;
+see [Upgrade from 0.0.x to 0.1](how-to/upgrade-0.1.md).
 
 ## A first look
 
@@ -79,11 +80,6 @@ print(store.check("user:bob", "viewer", "doc:roadmap"))  # -> False
 Alice can view the roadmap because she is a member of `eng`, and every member of `eng` can
 view it. Bob is in no group, so he cannot.
 
-## License
-
-Apache-2.0. The license text is the `LICENSE` file in the
-[source repository](https://github.com/averykhoo/graph-reachability-zanzibar-index).
-
 ## Where to go next
 
 This documentation has four parts. Each answers a different kind of question.
@@ -103,6 +99,11 @@ This documentation has four parts. Each answers a different kind of question.
 [Explanation](explanation/index.md)
 : Background and design: what Zanzibar-style permissions are, how the library answers a
   question, and how far its answers can be trusted.
+
+## License
+
+Apache-2.0. The license text is the `LICENSE` file in the
+[source repository](https://github.com/averykhoo/graph-reachability-zanzibar-index).
 
 ```{toctree}
 :maxdepth: 2

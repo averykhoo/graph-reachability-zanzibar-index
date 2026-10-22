@@ -35,9 +35,10 @@ class ZanzibarError(Exception):
     """The root of every exception this package raises on purpose.
 
     ``except zanzibar.ZanzibarError`` catches every refusal, limit and freshness error the
-    library defines. Each subclass ALSO keeps the builtin base it always had
-    (``ValueError``, ``RuntimeError``, ``KeyError`` ...), listed after this one, so code
-    that catches the builtin keeps working.
+    library defines. Each subclass ALSO has a builtin base (``ValueError``,
+    ``RuntimeError``, ``KeyError`` ...), listed after this one, so code that catches the
+    builtin keeps working. Every refusal of a schema (parse or compile) is a
+    ``ValueError``; ``UnsupportedByGraphIndex`` gained that base in 0.1.0.
 
     Deliberately NOT a subclass of this: ``zanzibar.graphindex.InvariantViolation``. It is
     an ``AssertionError`` that means the stored index is CORRUPT, not that a call was
@@ -49,9 +50,11 @@ class ZanzibarError(Exception):
 class SchemaError(ZanzibarError, ValueError):
     """A schema text (DSL or OpenFGA JSON) was refused by the parser.
 
-    Raised for syntax errors, dangling or cyclic relation references, and every refused
-    schema shape; the message says what is wrong and, for a refused shape, what to write
-    instead. A ``ValueError`` subclass, so ``except ValueError`` still catches it.
+    Raised for syntax errors, dangling or cyclic relation references, and every schema
+    shape the PARSER refuses; the message says what is wrong and, for a refused shape, what
+    to write instead. A ``ValueError`` subclass, so ``except ValueError`` still catches it.
+    Shapes refused later, when the schema is compiled for the graph index, raise
+    ``UnsupportedByGraphIndex`` (also a ``ValueError``) instead.
     """
 
 
@@ -281,7 +284,7 @@ def validate_node_identifiers(predicate, entity_type, entity_name) -> None:
 # silently mis-ingested.
 
 
-class UnsupportedByGraphIndex(ZanzibarError):
+class UnsupportedByGraphIndex(ZanzibarError, ValueError):
     """A schema construct the graph index cannot represent.
 
     Raised by ``compile_ruleset`` naming the offending relation: a wildcard shape outside
@@ -289,6 +292,10 @@ class UnsupportedByGraphIndex(ZanzibarError):
     is compiled with ``enable_boolean=False``. The graph index supports boolean operators
     by default. The set engine handles every shape this refuses except
     ``DoublyBridgedShapeError``.
+
+    A ``ValueError`` subclass since 0.1.0, like every other schema refusal, so
+    ``except ValueError`` around ``parse_openfga_schema`` / ``Store(...)`` /
+    ``compile_ruleset`` catches it. It is NOT a ``SchemaError``: the schema text parsed.
     """
 
 

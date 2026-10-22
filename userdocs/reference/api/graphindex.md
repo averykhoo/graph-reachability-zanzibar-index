@@ -51,10 +51,9 @@ In the method signatures below, `subject_predicate` is `"..."` (or `Ellipsis`) f
 subject such as a user, or the relation of a userset subject (`"member"` for
 `group:eng#member`).
 
-Some of these signatures take or return types that are not public: the `schema_info`
-object, and the triple that {py:meth}`zanzibar.schema.RuleSet.apply` takes. Take them from a
-compiled `RuleSet` (`ruleset.schema_info`) rather than building them yourself; they are
-internal, undocumented, and may change in any release.
+`WildcardIndex` takes a {py:class}`zanzibar.schema.SchemaInfo` and `DeltaProcessor` a
+{py:class}`zanzibar.schema.CompiledBooleans`. Take both from a compiled `RuleSet`
+(`ruleset.schema_info`, `ruleset.compiled`) rather than building them yourself.
 
 ```{eval-rst}
 .. py:class:: WildcardIndex(idx, schema_info)
@@ -158,7 +157,9 @@ internal, undocumented, and may change in any release.
       Bring every ``and`` / ``but not`` relation up to date with the edge writes made in
       this transaction. ``txn_start_watermark`` is :py:func:`outbox_watermark` read
       before those writes. Call it in the same transaction, after the writes and before
-      the commit.
+      the commit. If the transaction wrote to the index and neither ``run_cascade`` nor
+      ``backfill`` ran after that write, the commit raises :py:exc:`zanzibar.CascadeNotRun`; that check
+      shows a cascade was called, not that it was called with the right watermark.
 
    .. py:method:: backfill(chunk_size=200) -> None
 
@@ -211,11 +212,11 @@ The tables these row classes map are listed on the [Database tables](../tables.m
    ``direct_edge_count``, ``indirect_edge_count``, ``derived``.
 ```
 
-## Exceptions re-exported here
+## Exceptions
 
-These are the same classes as the top-level names and are documented on the
-[Exceptions](../exceptions.md) page: {py:exc}`~zanzibar.AdmissionRejected`,
-{py:exc}`~zanzibar.InvariantViolation` and {py:exc}`~zanzibar.WriteLockUnsafe`. The graph
-index also raises {py:exc}`~zanzibar.ClosureFanoutExceeded`,
-{py:exc}`~zanzibar.PathCountExceeded` and {py:exc}`~zanzibar.StaleLookupIds`, which this
-subpackage does not re-export; import them from `zanzibar`.
+`zanzibar.graphindex` exports no exceptions. Import them from `zanzibar`; they are
+documented on the [Exceptions](../exceptions.md) page. The graph index raises, among
+others, {py:exc}`~zanzibar.AdmissionRejected`, {py:exc}`~zanzibar.ClosureFanoutExceeded`,
+{py:exc}`~zanzibar.PathCountExceeded`, {py:exc}`~zanzibar.StaleLookupIds`,
+{py:exc}`~zanzibar.WriteLockUnsafe`, {py:exc}`~zanzibar.CascadeNotRun` and
+{py:exc}`~zanzibar.InvariantViolation`.

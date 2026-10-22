@@ -454,7 +454,7 @@ src/zanzibar/schema/errors.py::AdmissionRejected	py:class-shell	33c52efa7008ca0e
 src/zanzibar/schema/errors.py::CyclicDerivedDependency	py:class-shell	aca87cb4394eebcc
 src/zanzibar/schema/errors.py::DoublyBridgedShapeError	py:class-shell	05f085ca3abbcb30
 src/zanzibar/schema/errors.py::IndexResourceLimit	py:class-shell	2fed1c648301fb09
-src/zanzibar/schema/errors.py::UnsupportedByGraphIndex	py:class-shell	cd5177e8886711b9
+src/zanzibar/schema/errors.py::UnsupportedByGraphIndex	py:class-shell	a18cb4d4dea121f7
 src/zanzibar/schema/errors.py::is_valid_identifier	py:function	d5b05d5a22e3f9ec
 src/zanzibar/schema/parser.py::_validate_ast_consistency	py:function	6101f71687081c78
 src/zanzibar/schema/parser.py::_validate_ast_references	py:function	17a4908e2247f014

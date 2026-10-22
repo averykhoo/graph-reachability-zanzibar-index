@@ -52,7 +52,7 @@ from .schema_io import (TablesNotCreated, TablesOutdated, ensure_schema, missing
 # StaleRead lives with the evaluator that raises it first (TupleSource.check);
 # re-exported here for backward compatibility.
 from .source import (StaleRead, TupleSource, _require_clean_session, assert_read_isolation,
-                     token_diagnosis, validate_token)
+                     refuse_foreign_token, token_diagnosis, validate_token)
 
 
 class LookupNotFresh(StaleRead):
@@ -816,6 +816,7 @@ class Store:
         without paying for anything. Where ``check`` then falls back to the set engine,
         this raises: see ``LookupNotFresh`` for why there is no third rung here."""
         validate_token(at_least)                                            # TK123 item 11
+        refuse_foreign_token(self.session, self.store_id, at_least)          # TK166
         if self._fresh_enough(at_least):
             return
         self.session.refresh(self.cursor)
@@ -858,11 +859,14 @@ class Store:
         ``check("...", "user", "alice", "viewer", "doc", "d1")``.
 
         ``at_least`` (a token from a write) demands an answer that reflects the log
-        through that write; a lagging index then falls back to the set engine."""
+        through that write; a lagging index then falls back to the set engine. A token
+        another store's write returned raises ``ForeignToken`` on every tokened read
+        (``check``, ``lookup``, ``lookup_reverse``, ``expand``)."""
         (subject_predicate, s_type, s_name,
          relation, o_type, o_name) = tuple_args('check', args, kwargs)
         reject_ellipsis_predicate(subject_predicate, 'check', write=False)  # TK123 item 9
         validate_token(at_least)                                            # TK123 item 11
+        refuse_foreign_token(self.session, self.store_id, at_least)          # TK166
         if self._fresh_enough(at_least):
             return self.widx.check(subject_predicate, s_type, s_name,
                                    relation, o_type, o_name)
@@ -983,6 +987,7 @@ class Store:
         raised -- call ``refresh()`` and retry."""
         relation, o_type, o_name = lookup_reverse_args('expand', args, kwargs)
         validate_token(at_least)
+        refuse_foreign_token(self.session, self.store_id, at_least)          # TK166
         # TK155 (docs/tk155-store-expand-2026-10-19.md D2): the set-engine rung of
         # ``check``'s freshness ladder, taken unconditionally because Expand has no index
         # form. Catching up untokened too is O(delta), one empty log query when idle.

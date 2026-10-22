@@ -11,8 +11,8 @@ labels: [docs]
 source: docs/tk151-diataxis-plan-2026-10-20.md
 source_hash:
 created: 2026-10-20b
-moved: 2026-10-20b
-updated: 2026-10-20b
+moved: 2026-10-23b
+updated: 2026-10-23b
 closed:
 ---
 
@@ -23,3 +23,7 @@ TODO: one paragraph -- what this item is and why it matters.
 ## Read first
 
 ## Log
+
+### 2026-10-23b
+
+From the TK151 fable review 2026-10-23 (docs/tk151-fable-review-2026-10-23.md rec 7): the StaleRead message in src/zanzibar/store/source.py says evaluator; userdocs how-to/errors.md carries a one-line gloss for it. Say set engine in the message, then drop the gloss.

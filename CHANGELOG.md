@@ -29,7 +29,7 @@ are no compatibility aliases. What breaks a 0.0.5 caller, in short:
   in a new file (TK154).
 - `SetEngine` raises `PersistedSchemaRefused` for a store whose stored schema this version
   refuses, as every other entry point does (it raised `SchemaMismatch` or
-  `ShapeNoLongerAccepted`); the class now lives in `zanzibar.schema` (TK153).
+  `ShapeNoLongerAccepted`); import it from `zanzibar` (TK153, TK164).
 - A write to an undeclared relation or type is refused with a message that starts
   `... names an undeclared relation doc#vewer` (TK153).
 - An `object_wildcard_shapes` entry that names no declared relation is refused
@@ -44,10 +44,51 @@ are no compatibility aliases. What breaks a 0.0.5 caller, in short:
   a member of itself, as in OpenFGA. One previously ALLOWED check is now DENIED (a userset
   inside its own `but not`); see Changed. `lookup_reverse` results now include the
   object's own userset.
+- **A freshness token from another store is refused** (TK166): every tokened read raises
+  the new `ForeignToken` (a `StaleRead`) where a token at or below the store's cursor was
+  accepted without error.
+- **Exceptions are exported from `zanzibar` only** (TK164): no subpackage `__all__` lists
+  an exception or warning any more. Write `from zanzibar import StaleRead`, not
+  `from zanzibar.store import StaleRead`.
+- `UnsupportedByGraphIndex` and `DoublyBridgedShapeError` are now `ValueError`s (TK164), so
+  an `except ValueError` that let them through now catches them.
 
 Each is detailed below, under Changed or Added.
 
 ### Changed
+- **Breaking: exceptions have one public home, the top-level package** (TK164). Each
+  subpackage used to list its own subset of the exceptions in `__all__`, with no rule
+  (`zanzibar.graphindex` listed `AdmissionRejected` but not the `ClosureFanoutExceeded` it
+  raises; `zanzibar.setengine` listed `StaleLookupIds` but not `SchemaError`). Now no
+  subpackage `__all__` (`zanzibar.schema`, `zanzibar.store`, `zanzibar.graphindex`,
+  `zanzibar.setengine`) lists any exception or warning, and every one is exported from
+  `zanzibar`, as before. Import them from there: `from zanzibar import StaleRead,
+  SchemaError`. This breaks `from zanzibar.<subpackage> import *` code that relied on an
+  exception arriving that way, and any import of an exception from a subpackage is no
+  longer part of the API. Such imports still resolve in 0.1.0 (they name the same class),
+  but they are undocumented and may be removed without notice.
+- **Behaviour change: `UnsupportedByGraphIndex` (and its subclass
+  `DoublyBridgedShapeError`) is a `ValueError`** (TK164). They were the only two
+  `ZanzibarError` subclasses with no builtin base, so `except ValueError` around
+  `parse_openfga_schema`, `Store(...)` or `compile_ruleset` let a refused schema through.
+  Every schema refusal is now a `ValueError`. Additive for `except UnsupportedByGraphIndex`
+  and `except ZanzibarError`; only code that relied on `except ValueError` NOT catching them
+  sees a change. They are still not `SchemaError`s: the schema text parsed, and compiling
+  it for the graph index refused it.
+- **Behaviour change: a freshness token issued by another store is refused on every
+  tokened read** (TK166). A token is a log id, numbered across every store in the
+  database, and the freshness tests only compared ids, so an `at_least=` token returned by
+  another store's write was ACCEPTED silently by `check`, `lookup`, `lookup_reverse`,
+  `expand` and `TupleSource.check` whenever it was at or below this store's cursor (on an
+  async store such a read could still allow a revoked grant), and REFUSED with
+  `refresh()` / `catch_up()`-and-retry advice that cannot help when it was above it. Each
+  tokened read now looks up the token's log row once by primary key and raises
+  `ForeignToken` when another store wrote it, above or below the cursor. The message leads
+  with the cause (`Token 3 was returned by a write to store 'b', not 'a': tokens are
+  per-store, ...`) and gives no retry advice. `ForeignToken` subclasses `StaleRead`, so
+  `except StaleRead` still catches it; it is not a `LookupNotFresh`, also on `lookup` /
+  `lookup_reverse`, because it is not retryable. A token that names no visible log row
+  keeps its previous behaviour.
 - **Breaking: a userset is a member of itself, as in OpenFGA** (TK144, TK138 landing 2). A
   concrete userset subject `T:o#r` is now a member of its own declared relation `r` on
   `T:o`, outside the relation's definition, and of everything built on that: a computed
@@ -170,11 +211,10 @@ Each is detailed below, under Changed or Added.
   `PersistedSchemaRefused`, as `Store(...)`, `open_set_engine`, `save_schema`,
   `ensure_schema` and `build_index` already did. It used to raise `SchemaMismatch` when
   given a rewritten schema, and `ShapeNoLongerAccepted` (the bare parser refusal) when
-  given the stored text or no schema. The class moved to `zanzibar.schema.errors` and is
-  exported from `zanzibar.schema`; `zanzibar.PersistedSchemaRefused` and
-  `zanzibar.store.PersistedSchemaRefused` are the same class. A schema text you pass for a
-  store with no stored schema still raises `ShapeNoLongerAccepted`; its `.instead` (the
-  meaning-preserving rewrite) is now documented.
+  given the stored text or no schema. The class moved to `zanzibar.schema.errors`; import
+  it from `zanzibar` (TK164: no subpackage `__all__` lists an exception). A schema text
+  you pass for a store with no stored schema still raises `ShapeNoLongerAccepted`; its
+  `.instead` (the meaning-preserving rewrite) is now documented.
 - **Clearer refusals** (TK153): a write to a relation the schema does not declare (or on
   an undeclared type) now reads `tuple ... names an undeclared relation doc#vewer: type
   'doc' declares no relation 'vewer'; did you mean 'viewer'?` instead of starting with
@@ -209,6 +249,15 @@ Each is detailed below, under Changed or Added.
   (the versions `PersistedSchemaRefused` quotes).
 
 ### Added
+- **The types in public signatures are public** (TK164). `zanzibar.schema` now exports
+  `SchemaInfo` (on `RuleSet.schema_info`, taken by `WildcardIndex`), `Entity` and
+  `RelationalTriple` (what `RuleSet.apply` takes), and `CompiledBooleans` (on
+  `RuleSet.compiled`, taken by `DeltaProcessor`; an opaque value to pass through, whose
+  fields are not API), each with a docstring. `typing.get_type_hints(RuleSet)` now resolves;
+  it raised `NameError: name 'CompiledBooleans' is not defined`.
+- **`zanzibar.store.open_set_engine` is public** (TK164): it opens the set engine on a
+  store with the schema persisted in the database. The `SchemaMismatch` that
+  `SetEngine(session, store_id, schema)` raises already named it as the fix.
 - **`Store.expand`: Zanzibar Expand on the store** (TK155). `store.expand("viewer",
   "doc:d1")` (or `"viewer", "doc", "d1"`) returns an `ExpandResult` (exported as
   `zanzibar.ExpandResult`) of `(type, name, predicate)` keys: `keys` (members listed one
@@ -289,10 +338,10 @@ Each is detailed below, under Changed or Added.
   `except ValueError` / `except RuntimeError` handlers are unchanged. `InvariantViolation`
   (store corruption) is deliberately NOT a `ZanzibarError`, so `except ZanzibarError` never
   swallows it.
-- `zanzibar.store` re-exports the exceptions a `Store` raises (`AdmissionRejected`,
-  `ClosureFanoutExceeded`, `PathCountExceeded`, `IndexResourceLimit`, `SchemaError`,
-  `CyclicDerivedDependency`, `WriteLockUnsafe`); `zanzibar.graphindex` exports
-  `WriteLockUnsafe`, `prune_outbox` and `outbox_watermark`.
+- `zanzibar.graphindex` exports `prune_outbox` and `outbox_watermark`. (An earlier
+  draft of this release also re-exported exceptions from `zanzibar.store` and
+  `zanzibar.graphindex`; TK164 replaced that: exceptions are exported from `zanzibar`
+  only.)
 - **`StoreNotFound`** (TK123): opening a store id that was never created raises it
   instead of a bare `KeyError`. It is a `ZanzibarError` and still a `KeyError`; its message
   says how to create the store (`Store(session, id, schema=...)`) and is not quoted twice.
@@ -340,7 +389,7 @@ Each is detailed below, under Changed or Added.
   refusal is still atomic across the log, the set engine and the index.
 - A direct `WildcardIndex` write on a schema with `and` / `but not` that is committed
   without `DeltaProcessor.run_cascade` is refused at the commit with the new
-  `CascadeNotRun` (exported from `zanzibar` and `zanzibar.graphindex`), instead of
+  `CascadeNotRun` (exported from `zanzibar`), instead of
   committing derived relations that disagree with the set engine (TK3). The check is
   always on, costs no SQL, and re-arms when a savepoint that held the cascade is rolled
   back. It shows that a cascade was called, not that its watermark was right. A `Store`

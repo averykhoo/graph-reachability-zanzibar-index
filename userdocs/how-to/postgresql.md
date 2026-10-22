@@ -92,6 +92,11 @@ threads. So:
 - **Give each thread its own `Session` and its own `Store`.** The engine can be shared.
 - **Give each `Store` a session of its own**, not one your application also uses for its
   own rows. A `Store` refuses a session that has unsaved changes of yours.
+- **Do not count on rolling back a grant.** A write is committed when `add_tuple` or
+  `remove_tuple` returns, so it stays committed even if your own code later rolls back
+  its own transaction. If a grant must be undone when your own work fails, remove it
+  explicitly. See
+  [Who owns the transaction](../explanation/two-backends.md#who-owns-the-transaction).
 - **Keep a `Store` open** for as long as the thread lives, rather than opening one per
   request. Opening a store loads every tuple of the store into memory, which takes time
   in proportion to the size of the store.
@@ -166,11 +171,6 @@ reached yet). {py:meth}`zanzibar.Store.refresh` starts a fresh transaction and r
 copy from the database. Call it when an error tells you to
 ({py:exc}`zanzibar.StaleRead`, {py:exc}`zanzibar.WatermarkGap`), not on every request:
 like opening a store, it reads every tuple.
-
-If you write through the lower-level `zanzibar.store.TupleSource` instead of a `Store`,
-its `catch_up_evaluator()` method applies the log rows other instances have written since
-its last read to its in-memory copy, and `refresh_evaluator()` reloads it from scratch.
-A `Store` does both for you.
 
 ## Async instances
 

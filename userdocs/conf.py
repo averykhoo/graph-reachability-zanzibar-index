@@ -103,15 +103,11 @@ nitpick_ignore = [
     ("py:class", "pydantic.config.ConfigDict"),
     ("py:class", "ConfigDict"),
     # Internal zanzibar types that appear in PUBLIC signatures (``RuleSet``'s fields,
-    # ``compile_ruleset``, ``WildcardIndex`` / ``DeltaProcessor`` constructors,
     # ``BuildReport``) but are in no ``__all__``, so they are deliberately not
-    # documented. They render as plain text. Remove an entry if its type becomes public.
-    ("py:class", "zanzibar.schema.rules.SchemaInfo"),
-    ("py:class", "SchemaInfo"),
+    # documented. (``SchemaInfo`` and ``CompiledBooleans`` became public in 0.1.0, TK164.) They render as plain text. Remove an entry if its type becomes public.
     ("py:class", "zanzibar.schema.rules.Rule"),
     ("py:class", "zanzibar.schema.rules.Filter"),
     ("py:class", "zanzibar.schema.syntax.DeclaredRelations"),
-    ("py:class", "CompiledBooleans"),
     ("py:class", "zanzibar.store.models.IndexCursor"),
 ]
 

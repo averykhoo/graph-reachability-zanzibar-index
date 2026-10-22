@@ -2272,9 +2272,10 @@ def test_bool_star_bridge_in_fragment_stratum_is_exhaustively_four_way():
                     parse_openfga_schema(cfg.schema, object_wildcard_shapes=cfg.owc)
                     joined += 1
                 except (UnsupportedByGraphIndex, ValueError) as e:
-                    # NOTE UnsupportedByGraphIndex is NOT a ValueError (it derives from
-                    # Exception); catching only ValueError here would let the sabotage
-                    # escape as a raw traceback instead of the diagnostic below.
+                    # UnsupportedByGraphIndex is a ValueError since TK164 (2026-10-23); it
+                    # was not before, which is why it is still named here explicitly:
+                    # catching only ValueError then let the sabotage escape as a raw
+                    # traceback instead of the diagnostic below.
                     refused.append(f'{type(e).__name__}: {e}')
     total = joined + len(refused)
     assert total == 144, f'the in-fragment config space changed size: {total} != 144'

@@ -12,6 +12,13 @@ from .syntax import Computed, DeclaredRelations, Restriction, no_restriction_mes
 
 @dataclass(frozen=True, slots=True, order=True, unsafe_hash=True)
 class Entity:
+    """One object or subject: a type and a name, printed ``type:name``.
+
+    ``name`` may be ``'*'``, the wildcard sentinel (``wildcard`` is then True). Frozen,
+    hashable and ordered, so it can key a dict or sit in a set. Public since 0.1.0
+    because ``RelationalTriple`` (the argument of ``RuleSet.apply``) is built
+    from two of them.
+    """
     type: str
     name: str
 
@@ -25,6 +32,14 @@ class Entity:
 
 @dataclass(frozen=True, slots=True, order=True, unsafe_hash=True)
 class RelationalTriple:
+    """One relation tuple as ``RuleSet.apply`` takes it: ``subject`` has ``relation`` on
+    ``object``.
+
+    ``subject_predicate`` is ``...`` (``Ellipsis``, the default) for a bare subject such as
+    ``user:alice``, or a relation name for a userset subject such as ``group:eng#member``.
+    It prints in the Zanzibar paper's form, ``object#relation@subject#predicate``. Public
+    since 0.1.0.
+    """
     subject: Entity
     relation: str
     object: Entity
@@ -189,6 +204,11 @@ class Rule:
 class SchemaInfo:
     """Wildcard-shape metadata derived from a schema.
 
+    You do not build one: ``compile_ruleset`` / ``parse_openfga_schema`` put it on
+    ``RuleSet.schema_info``, and ``WildcardIndex(idx, ruleset.schema_info)`` takes it. Treat
+    it as read-only; its fields describe the schema and are not a configuration surface.
+    Public since 0.1.0 because it appears in those signatures.
+
     A *shape* is ``(entity_type, predicate)`` where predicate is ``'...'`` for a bare
     entity or a relation name for a userset. This is intentionally dumb: we never do
     static reachability analysis to elide bridges beyond the bare-shape rule below --
@@ -272,7 +292,7 @@ class RuleSet:
     schema_info: SchemaInfo | None = None
     # Boolean-compile artifacts (boolean spec §3.4); None for pure-union schemas
     # compiled without enable_boolean and for hand-built rulesets.
-    compiled: 'CompiledBooleans | None' = None
+    compiled: 'CompiledBooleans | None' = None   # bound at the bottom of this module
     # What the schema declares, for the admission refusal's explanation only (TK123
     # item 17); set by ``compile_ruleset``, None for hand-built rulesets. Never compared.
     declared: DeclaredRelations | None = field(default=None, compare=False, repr=False)
@@ -529,3 +549,10 @@ def _rewrite_rule(expr: 'Computed | TTU', object_type: str, target_relation: str
         RelationalTriplePattern(subject_predicate=expr.target_rel, relation=target_relation,
                                 object_type=object_type, match_wildcards=True),
     )
+
+
+# Bound LAST, for ``RuleSet.compiled``'s string annotation (`TK164`): with it,
+# ``typing.get_type_hints(RuleSet)`` resolves instead of raising ``NameError``. It cannot sit at
+# the top, because ``boolean`` imports from this module; the package ``__init__`` always imports
+# this module before ``boolean``, so by the time this line runs ``boolean`` can finish importing.
+from .boolean import CompiledBooleans  # noqa: E402,F401  (circular by design; see above)

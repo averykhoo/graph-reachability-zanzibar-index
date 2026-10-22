@@ -38,8 +38,8 @@ are documented here under their top-level names.
      environment variable, which wins over :py:attr:`DEFAULT_PARANOIA`. A failed check
      raises :py:exc:`~zanzibar.InvariantViolation` before the write's commit, so the
      write is not committed; the message names the store id, the commit phase and the
-     violated invariant. The levels and their costs are on the
-     :doc:`../configuration` page.
+     violated invariant. The levels and their costs are in the
+     :ref:`table of levels <paranoia-levels>` on the :doc:`../configuration` page.
 
    .. py:attribute:: DEFAULT_PARANOIA
       :type: str
@@ -225,6 +225,19 @@ does not maintain a graph index.
 ```
 
 ```{eval-rst}
+.. py:function:: open_set_engine(session, store_id, *, ops=DEFAULT_SETOPS, ruleset=None)
+
+   Open a standalone :py:class:`~zanzibar.setengine.SetEngine` on a store that a
+   :py:class:`~zanzibar.Store` created, using the schema saved in the database, so you
+   cannot pass a different one by mistake. This is the remedy the
+   :py:exc:`~zanzibar.SchemaMismatch` from ``SetEngine(session, store_id, schema)`` names.
+   Raises :py:exc:`~zanzibar.StoreNotFound` when no schema is saved under ``store_id``,
+   and :py:exc:`~zanzibar.PersistedSchemaRefused` when this release refuses the saved
+   schema. ``ruleset`` skips recompiling a schema you already compiled; it must be that
+   schema's. Public since 0.1.0.
+```
+
+```{eval-rst}
 .. py:class:: SchemaRecord
 
    A row of the ``zanzibar_schema_record`` table: one per store, holding its schema as
@@ -258,20 +271,10 @@ does not maintain a graph index.
    described on the :doc:`../configuration` page.
 ```
 
-## Exceptions re-exported here
+## Exceptions
 
-`zanzibar.store` re-exports these exceptions. They are the same classes as the top-level
-names and are documented on the [Exceptions](../exceptions.md) page:
-{py:exc}`~zanzibar.StaleRead`, {py:exc}`~zanzibar.LookupNotFresh`,
-{py:exc}`~zanzibar.IndexStalled`, {py:exc}`~zanzibar.UnloggedTuplesPresent`,
-{py:exc}`~zanzibar.WatermarkGap`, {py:exc}`~zanzibar.UnsafeIsolationLevel`,
-{py:exc}`~zanzibar.MissingDeltaProcessor`, {py:exc}`~zanzibar.SchemaMismatch`,
-{py:exc}`~zanzibar.PersistedSchemaRefused`, {py:exc}`~zanzibar.StoreNotFound`,
-{py:exc}`~zanzibar.IndexExists`, {py:exc}`~zanzibar.TablesNotCreated`,
-{py:exc}`~zanzibar.TablesOutdated`, {py:exc}`~zanzibar.StaleLookupIds`,
-{py:exc}`~zanzibar.SchemaError`, {py:exc}`~zanzibar.CyclicDerivedDependency`,
-{py:exc}`~zanzibar.AdmissionRejected`, {py:exc}`~zanzibar.IndexResourceLimit`,
-{py:exc}`~zanzibar.ClosureFanoutExceeded`, {py:exc}`~zanzibar.PathCountExceeded`,
-{py:exc}`~zanzibar.WriteLockUnsafe` and {py:exc}`~zanzibar.MalformedTupleString`.
-`InvariantViolation` and `UnloggedWriteRefused` are not re-exported here; import them from
-`zanzibar`.
+`zanzibar.store` exports no exceptions. Import them from `zanzibar`; they are documented
+on the [Exceptions](../exceptions.md) page. A tokened read on a `Store` (`check`,
+`lookup`, `lookup_reverse`, `expand` with `at_least=`) can raise
+{py:exc}`~zanzibar.StaleRead`, {py:exc}`~zanzibar.LookupNotFresh` or
+{py:exc}`~zanzibar.ForeignToken`.

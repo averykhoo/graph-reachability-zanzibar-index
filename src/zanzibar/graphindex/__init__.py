@@ -15,22 +15,14 @@ from .wildcard import WildcardIndex, LookupResult
 from .outbox import outbox_watermark, prune_outbox
 from .processor import DeltaProcessor
 
+# Exceptions and warnings are NOT listed here (`TK164`): their one public home is the
+# top-level package (``from zanzibar import StaleRead``). The import lines stay, so an
+# old ``from zanzibar.graphindex import <Exception>`` still resolves, but it is not API.
 __all__ = [
     "IndexStore",
     "Node",
     "Edge",
     "ReachabilityIndex",
-    # The two disjoint failure classes a caller must distinguish:
-    # AdmissionRejected (ValueError)  -- a CORRECT refusal of an inadmissible write
-    # InvariantViolation (AssertionError) -- store corruption, never an op rejection
-    "AdmissionRejected",
-    "InvariantViolation",
-    # Raised on a write when the session cannot take the row write lock (SQLite in
-    # AUTOCOMMIT); a ZanzibarError, unlike InvariantViolation.
-    "WriteLockUnsafe",
-    # Raised at COMMIT when a write on a boolean (and / but not) schema ran no
-    # DeltaProcessor.run_cascade in the transaction; a ZanzibarError (RuntimeError).
-    "CascadeNotRun",
     "WildcardIndex",
     "LookupResult",
     # Maintains the derived (and / but not) relations; pass one as ``proc`` when you

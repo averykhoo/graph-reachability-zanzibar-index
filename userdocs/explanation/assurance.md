@@ -104,19 +104,13 @@ also check itself **in your deployment, on your data**, as you write. Its stored
 a set of invariants: path counts are consistent, the stored relationship graph has no
 cycles, wildcard bookkeeping matches the declared shapes, and the extra state that the
 boolean operators keep refers only to live rows. A `Store` can verify these as part of
-every commit:
-
-- `"off"` (the default) checks nothing.
-- `"residue"` checks the boolean operators' extra state, without scanning the whole index.
-  It also checks that the wildcard bookkeeping the write touched is complete; that part
-  costs nothing on schemas without wildcard userset grants such as `[group:*#member]`.
-  It is the recommended production setting, because it detects a known class of
-  corruption that would otherwise grant access. Its measured cost ranged from a few percent to
-  roughly 25% of the synchronous write path, depending on the schema and the store's size
-  (2026-07 and 2026-10).
-- `"full"` checks every invariant over the whole store, before each commit and again
-  after it. It is meant for testing; it more than doubled the cost of writes (2026-07).
-- `"fixpoint"` adds a further check of the boolean maintenance step, for diagnosis only.
+every commit, at one of four levels (`"off"`, the default; `"residue"`; `"full"`;
+`"fixpoint"`). What each level runs and costs is in the
+{ref}`table of levels <paranoia-levels>`. Two of them matter here. `"residue"` checks the
+boolean operators' extra state without scanning the whole index, and it is the recommended
+production setting because it detects a known class of corruption that would otherwise
+grant access. `"full"` checks every invariant over the whole store, before each commit and
+again after it, and is meant for testing.
 
 At every level, the checks made before the commit abort the write: a violation raises
 {py:exc}`zanzibar.InvariantViolation` and nothing is written. At `"full"` and `"fixpoint"`

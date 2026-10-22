@@ -61,7 +61,29 @@ from .schema_io import StoreNotFound, open_set_engine
 class StaleRead(ZanzibarError, RuntimeError):
     """A read carrying an ``at_least`` token could not be satisfied: the index lags
     the token AND the write is not visible in this session's read snapshot. Start a
-    fresh snapshot (``refresh()``) and retry."""
+    fresh snapshot (``refresh()``) and retry. The subclass ``ForeignToken`` is the
+    exception: a token from another store, which no retry can satisfy."""
+
+
+class ForeignToken(StaleRead):
+    """A read was passed an ``at_least`` token that ANOTHER store's write returned.
+
+    A token is a ``TupleLog`` id, and ids count up across every store in the database,
+    so a token says nothing about this store's log. Every tokened read (``check``,
+    ``lookup``, ``lookup_reverse``, ``expand``, ``TupleSource.check``) looks up the
+    token's log row once by primary key and refuses it here when the row belongs to
+    a different store, whether the token is above or below this store's cursor.
+
+    NOT retryable: refreshing or catching up cannot change which store wrote the row.
+    Pass the token returned by one of THIS store's writes. It subclasses ``StaleRead``
+    so an existing ``except StaleRead`` still catches it; it is deliberately not a
+    ``LookupNotFresh`` (that one means "the index lags; catch up and retry"). The
+    attributes ``token``, ``issued_by`` and ``store_id`` carry the three facts."""
+    # Provenance: TK166 (docs/tk166-foreign-token-2026-10-23.md); found by the TK151
+    # docs pass, docs/tk151-repros-2026-10-20/README.md B4 + B5.
+    token: int
+    issued_by: str
+    store_id: str
 
 
 class WatermarkGap(ZanzibarError, RuntimeError):
@@ -251,18 +273,41 @@ def validate_token(at_least) -> None:
         raise ValueError(f'at_least must be >= 0, got {at_least}')
 
 
+def refuse_foreign_token(session: Session, store_id: str, at_least: int | None) -> None:
+    """Raise ``ForeignToken`` when the ``at_least`` token's log row belongs to another
+    store. One primary-key lookup, run on EVERY tokened read before any freshness test:
+    the freshness tests only compare ids, so without it a foreign token at or
+    below this store's cursor was accepted silently. A token that names no visible row
+    keeps the freshness path's behaviour (``token_diagnosis`` explains it there)."""
+    if at_least is None:
+        return
+    owner = session.exec(select(TupleLog.store_id).where(TupleLog.id == at_least)).first()
+    if owner is None or owner == store_id:
+        return
+    # The message LEADS with the cause and gives no refresh/catch_up/retry advice: none
+    # of those can help (B5 in docs/tk151-repros-2026-10-20/README.md).
+    err = ForeignToken(
+        f'Token {at_least} was returned by a write to store {owner!r}, not '
+        f'{store_id!r}: tokens are per-store, so pass this store a token returned by '
+        f'one of its own writes.')
+    err.token, err.issued_by, err.store_id = at_least, owner, store_id
+    raise err
+
+
 def token_diagnosis(session: Session, store_id: str, token: int) -> str:
     """Why a freshness token cannot be satisfied, when the log says more than "not
-    yet": the token belongs to ANOTHER store, or it is past the newest log id this
-    session can see. Empty string otherwise. Called on the refusal path only.
+    yet": the token is past the newest log id this session can see. Empty string
+    otherwise. A token that belongs to ANOTHER store raises ``ForeignToken`` instead.
+    Called on the refusal path only.
 
     It never says "never issued": a session pinned on an older snapshot (a SQLite WAL
     reader, say) legitimately cannot see a token another session just got."""
     from sqlalchemy import func
-    owner = session.exec(select(TupleLog.store_id).where(TupleLog.id == token)).first()
-    if owner is not None and owner != store_id:
-        return (f' Token {token} was returned by a write to store {owner!r}, not '
-                f'{store_id!r}: a token is only meaningful for the store that issued it.')
+    # TK166 review: every tokened read already ran refuse_foreign_token, but under
+    # PostgreSQL READ COMMITTED each statement takes a fresh snapshot, so a foreign row
+    # invisible then may be visible now. Raise ForeignToken (cause first, no retry
+    # advice) instead of appending the cause to a retry message.
+    refuse_foreign_token(session, store_id, token)
     head = session.exec(select(func.max(TupleLog.id))).one() or 0
     if token > head:
         return (f' Token {token} is past the newest log id this session can see '
@@ -690,6 +735,7 @@ class TupleSource:
         session's snapshot -- rollback/refresh and retry)."""
         q = tuple_args('check', args, kwargs)
         validate_token(at_least)
+        refuse_foreign_token(self.session, self.store_id, at_least)          # TK166
         if at_least is not None and self.evaluator_watermark < at_least:
             self.catch_up_evaluator()
             if self.evaluator_watermark < at_least:

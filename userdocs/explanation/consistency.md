@@ -102,11 +102,10 @@ A few properties follow from tokens being log ids:
 
 - **They only grow.** A later write to a store gets a larger token.
 - **They belong to one store.** Log ids are numbered across every store in the database,
-  so a token from store A says nothing about store B. Passed to B, it is either silently
-  meaningless (when it is at or below what B has already applied) or refused with
-  {py:exc}`zanzibar.StaleRead` or {py:exc}`zanzibar.LookupNotFresh` (when it is above B's
-  newest write). Refreshing and retrying does not help in the second case. Pass a store
-  only the tokens its own writes returned.
+  so a token from store A says nothing about store B; each tokened read looks the token's
+  log row up and refuses another store's token, above or below what B has applied, with
+  {py:exc}`zanzibar.ForeignToken` (what to do about it is in
+  {ref}`A token from another store <foreign-token-handling>`).
 - **Adding a tuple that is already there writes nothing.** It returns the newest token in
   the store's log, {py:meth}`zanzibar.Store.watermark`, which may be another write's
   token. That is still a correct demand: the tuple was already present at that point.
@@ -172,11 +171,8 @@ token was committed by another instance after that transaction began, this sessi
 see the log row, so the set engine cannot catch up to it either. Rather than serve an
 answer that ignores the write it was asked to include, the read raises
 {py:exc}`zanzibar.StaleRead`. Call {py:meth}`zanzibar.Store.refresh`, which starts a new
-transaction, and retry. The message also says, at its end, when the token was returned by a write to
-a different store; then refreshing does not help, because the token says nothing about
-this store, even though the message opens with the advice to refresh and retry. Such a
-token is refused only when it is newer than this store's writes; an older one is accepted
-silently (see the next section).
+transaction, and retry. (Another store's token is not a freshness problem; it raises
+`ForeignToken`, as above.)
 
 This is also why a `Store` on PostgreSQL refuses any isolation level other than
 `READ COMMITTED` ({py:exc}`zanzibar.UnsafeIsolationLevel`), stricter levels included. Under
@@ -196,8 +192,8 @@ return different things:
   reuses after a tuple is removed. A result that sometimes held one kind and sometimes the
   other, depending on how far behind the worker happened to be, would mean different
   things on different calls.
-- **Different marker shapes.** The index reports wildcard grants as
-  `(type, predicate, variant)` triples; the set engine as `(type, predicate)` pairs.
+- **Different marker shapes.** The index reports wildcard grants as triples, the set
+  engine as pairs (see {ref}`Result markers <api-result-markers>`).
 
 Serving the stale index list instead is worse. A revoked user staying listed in an
 access-review screen is exactly the failure the token was meant to rule out. So a lookup

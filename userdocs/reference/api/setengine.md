@@ -183,11 +183,10 @@ this package directly only to run the set engine on its own.
    Python's built-in ``set`` and ``frozenset``.
 ```
 
-## Exceptions re-exported here
+## Exceptions
 
-These are the same classes as the top-level names and are documented on the
-[Exceptions](../exceptions.md) page: {py:exc}`~zanzibar.UnloggedWriteRefused` and
-{py:exc}`~zanzibar.StaleLookupIds`. The set engine also raises
-{py:exc}`~zanzibar.AdmissionRejected`, {py:exc}`~zanzibar.SchemaMismatch` and
-{py:exc}`~zanzibar.PersistedSchemaRefused`, which this subpackage does not re-export;
-import them from `zanzibar`.
+`zanzibar.setengine` exports no exceptions. Import them from `zanzibar`; they are
+documented on the [Exceptions](../exceptions.md) page. The set engine raises, among
+others, {py:exc}`~zanzibar.AdmissionRejected`, {py:exc}`~zanzibar.SchemaMismatch`,
+{py:exc}`~zanzibar.PersistedSchemaRefused`, {py:exc}`~zanzibar.UnloggedWriteRefused` and
+{py:exc}`~zanzibar.StaleLookupIds`.

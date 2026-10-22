@@ -190,39 +190,11 @@ Read the three parts together: "the listed keys, plus every subject of a marker'
 minus the excluded keys". Here that is "every user except mallory". A marker read without
 its exclusions grants too much, so always subtract `excluded_keys`.
 
-`LookupResult.markers` are `(type, predicate, variant)` triples. The variant says which side
-the wildcard is on:
-
-- `"any"`: a subject-side wildcard. From `lookup_reverse`, `("user", "...", "any")` means
-  every user (a `user:*` tuple). An extension schema with `[group:*#member]` gives
-  `("group", "member", "any")`, every `member` userset of every group.
-- `"all"`: an object-side wildcard, which exists only when the store is opened with
-  `object_wildcard_shapes` (an extension beyond OpenFGA; see
-  [Wildcard extensions](../explanation/wildcard-extensions.md)). From `lookup`,
-  `("doc", "reader", "all")` means reader of every document.
-
-Only those two readings carry meaning. An `"all"` marker in a `lookup_reverse` result, or an
-`"any"` marker in a `lookup` result, is a by-product of how wildcards are stored and claims
-nothing on its own.
-
-A subject that a marker already covers may also appear as a key, so do not compare two
-results by equality of their key sets. Compare them by what they cover. This helper answers
-"is this subject covered?" for a `LookupResult` from `lookup_reverse`. A `LookupResult` has
-no `covers()` method or `in` test of its own, unlike `ExpandResult` below, because it holds
-internal ids that only the store can translate; use a helper like this one, or `expand`
-when you want a result that answers `in` directly:
-
-```python
-def covers(store, result, key):
-    """Is the (type, name, predicate) subject in this lookup_reverse result?"""
-    t, _name, p = key
-    starred = (t, p, "any") in result.markers
-    return key in store.result_keys(result) or (
-        starred and key not in store.excluded_keys(result))
-
-print(covers(store, public, ("user", "zed", "...")))  # -> True
-print(covers(store, public, ("user", "mallory", "...")))  # -> False
-```
+A marker is a `(type, predicate, variant)` triple; in a `lookup_reverse` result, the
+variant that carries meaning is `"any"`, a subject-side wildcard such as `user:*`.
+{ref}`Result markers <api-result-markers>` lists every variant and what it claims, and has
+a helper that tests whether one subject is covered (a `LookupResult` has no `in` test of
+its own; `expand`, below, gives a result that does).
 
 From `lookup`, a `user:*` grant needs none of this: the objects it opens are listed as keys
 for every user. zed has no tuple at all, yet:
@@ -232,37 +204,10 @@ zed = store.lookup("user:zed", object_type="doc", relation="viewer")
 print(sorted(store.result_keys(zed)))  # -> [('doc', 'd2', 'viewer')]
 ```
 
-### An object-side `"all"` marker
-
-This needs a store opened with `object_wildcard_shapes`, which emits an
-`UnprovenExtensionWarning`. It uses its own database so it does not touch the store above:
-
-```python
-import warnings
-import zanzibar
-
-warnings.filterwarnings("ignore", category=zanzibar.UnprovenExtensionWarning)
-
-CATALOG = """
-model
-  schema 1.1
-type user
-type doc
-  relations
-    define reader: [user]
-"""
-catalog_engine = create_engine("sqlite://")
-SQLModel.metadata.create_all(catalog_engine)
-catalog_session = Session(catalog_engine)
-catalog = Store(catalog_session, "catalog", schema=CATALOG,
-                object_wildcard_shapes=frozenset({("doc", "reader")}))
-catalog.add_tuple("user:alice", "reader", "doc:*")   # alice reads every doc
-
-reach = catalog.lookup("user:alice")
-print(reach.markers)  # -> {('doc', 'reader', 'all')}
-print(catalog.check("user:alice", "reader", "doc:not-yet-created"))  # -> True
-catalog_session.close()
-```
+A store opened with `object_wildcard_shapes` (an extension beyond OpenFGA) can also return
+an object-side `"all"` marker from `lookup`, meaning "this relation on every object of the
+type"; see
+[How wildcards show up in lookups](../explanation/wildcard-extensions.md#how-wildcards-show-up-in-lookups).
 
 ## Expand a relation on one object
 
@@ -303,15 +248,9 @@ print(("user", "mallory", "...") in exp2)  # -> False
 print(exp2.covers(("user", "alice", "...")))  # -> True
 ```
 
-Note the marker shapes differ between the two result types. `ExpandResult.markers` are
-`(type, predicate)` pairs; `LookupResult.markers` are `(type, predicate, variant)` triples.
-The same `user:*` grant is `("user", "...")` in one and `("user", "...", "any")` in the
-other. To compare them, compare the first two fields:
-
-```python
-lookup_shapes = {(t, p) for t, p, _variant in public.markers}
-print(lookup_shapes == set(exp2.markers))  # -> True
-```
+`ExpandResult.markers` are `(type, predicate)` pairs, without the variant of a
+`LookupResult` marker; {ref}`Result markers <api-result-markers>` shows how to compare the
+two shapes.
 
 ### `lookup_reverse` or `expand`?
 
@@ -375,21 +314,12 @@ read a result through them rather than through `node_ids`.
 
 ## Freshness
 
-With the default `sync=True`, a write is visible to the next `lookup` on the same instance.
-In async mode (`sync=False`), the index can lag the tuple log:
-
-- `lookup` / `lookup_reverse` read the index. Given `at_least=token`, they raise
-  {py:exc}`zanzibar.LookupNotFresh` while the index is behind the token, rather than return
-  an out-of-date list; they never fall back to the set engine. Untokened, they read the
-  index as it is, and on a stalled index they raise {py:exc}`zanzibar.IndexStalled`.
-- `expand` is served by the set engine, so a lagging or stalled index does not affect it.
-  Given `at_least=token`, it raises {py:exc}`zanzibar.StaleRead` if this session cannot see
-  that write yet; call `store.refresh()` and retry.
-
-The three exceptions are one family: `IndexStalled` is a subclass of `LookupNotFresh`, which
-is a subclass of `StaleRead`. So `except LookupNotFresh` also catches `IndexStalled`, and
-`except StaleRead` catches all three. If you handle them differently, put
-`except IndexStalled` first.
-
-See [Use async mode and freshness tokens](async-tokens.md) and
-[Recover a stalled index](stall-recovery.md) for the full recipes.
+With the default `sync=True`, a write is visible to the next lookup on the same instance.
+On an async store (`sync=False`), `lookup` and `lookup_reverse` read the index and never
+fall back: behind a token they raise {py:exc}`zanzibar.LookupNotFresh`, and on a stalled
+index {py:exc}`zanzibar.IndexStalled`, a subclass of `LookupNotFresh` (so put
+`except IndexStalled` first if you handle the two differently); `expand` is served by the
+set engine instead.
+[What can be stale, and in which direction](../explanation/consistency.md#what-can-be-stale-and-in-which-direction)
+has the full table, [Use async mode and freshness tokens](async-tokens.md) the recipes, and
+[Handle errors](errors.md) what to do with each exception.

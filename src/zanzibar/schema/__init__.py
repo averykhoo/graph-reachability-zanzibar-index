@@ -118,6 +118,9 @@ from .boolean import _member_types, _plan_leaves  # noqa: F401
 # The public surface (`TK123` item 5). Every import line above stays, so
 # ``from zanzibar.schema import X`` keeps working for the internal names the test and
 # conformance suites use; ``__all__`` lists only what a user is meant to touch.
+# Exceptions and warnings are NOT listed here (`TK164`): their one public home is the
+# top-level package (``from zanzibar import StaleRead``). The import lines stay, so an
+# old ``from zanzibar.schema import <Exception>`` still resolves, but it is not API.
 __all__ = [
     # parse / convert / compile
     'parse_openfga_schema',
@@ -127,6 +130,11 @@ __all__ = [
     'unparse_schema_ast',
     'compile_ruleset',
     'RuleSet',
+    # the types in RuleSet's and compile_ruleset's signatures (`TK164`)
+    'SchemaInfo',
+    'Entity',
+    'RelationalTriple',
+    'CompiledBooleans',
     # the AST that parse_schema_ast returns
     'SchemaAST',
     'Expr',
@@ -141,19 +149,4 @@ __all__ = [
     'IDENTIFIER_CHARSET',
     'is_valid_identifier',
     'validate_store_id',
-    # exceptions and the warning
-    'ZanzibarError',
-    'SchemaError',
-    'ShapeNoLongerAccepted',
-    'AdmissionRejected',
-    'IndexResourceLimit',
-    'ClosureFanoutExceeded',
-    'PathCountExceeded',
-    'UnsupportedByGraphIndex',
-    'DoublyBridgedShapeError',
-    'CyclicDerivedDependency',
-    'SchemaMismatch',
-    'PersistedSchemaRefused',
-    'MalformedTupleString',
-    'UnprovenExtensionWarning',
 ]

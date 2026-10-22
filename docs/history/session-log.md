@@ -33,6 +33,54 @@ from here.
 
 ---
 
+## 2026-10-23b — `TK166` + `TK164` closed via ultracode; TK151 audited, fable-reviewed, review applied
+
+rows: TK166 (closed), TK164 (closed), TK151 (comments: in flight, rounds 1-2), TK163 + TK169 (comments: fable recs 8, 7)
+
+`task lint: clean (13 checks, 288 task file(s) parsed), 27 warning(s)`
+
+`read: board + note`
+
+`asked: none`
+
+- **User asked for one ultracode run on TK166, TK164 and a chunk of TK151, with TK162 left
+  alone (another session live), plus fable's opinion on the docs.** Round 1, `wf_7da61747-5e0`
+  (12 agents): TK166 then TK164 in sequence (both touch the exception module), each implement
+  with sabotage then adversarial review; a TK151 remaining-work audit alongside; three doc units;
+  an integrator. Plans: [`docs/tk166-foreign-token-2026-10-23.md`](../tk166-foreign-token-2026-10-23.md),
+  [`docs/tk164-public-surface-2026-10-23.md`](../tk164-public-surface-2026-10-23.md); audit and round
+  results at the top of [`docs/tk151-diataxis-plan-2026-10-20.md`](../tk151-diataxis-plan-2026-10-20.md).
+- **Sabotage re-run first-hand by the orchestrator:** TK166 ownership check in
+  `store/source.py::refuse_foreign_token` replaced by `if True:` -> `34 failed, 4 passed`;
+  TK164 `ValueError` base removed from `schema/errors.py::UnsupportedByGraphIndex` -> `5 failed,
+  20 passed`. Both files restored and hash-checked.
+- **Fable review** (claude-fable-5 subagent, read-only): "ship after small fixes"; transcribed to
+  [`docs/tk151-fable-review-2026-10-23.md`](../tk151-fable-review-2026-10-23.md). Round 2,
+  `wf_50abfcec-e4a` (9 agents, four disjoint page units + review + integrator), applied recs 1-6,
+  9, 10; 7 partial (the `StaleRead` message wording is a code change, noted on TK169); 8 not done
+  (it documents TK163's bug; noted there). Per-rec table: plan doc Correction 2026-10-23c.
+- **New guard** `tests/test_userdocs_prerelease_prose.py`: once `__version__` leaves 0.0.x, any
+  userdocs line matching `unreleased|not yet released|...` is red. Trap recorded on TK151: the
+  next `[Unreleased]` section mirrored into the changelog page will trip it.
+- `benchmarks/fanout_cost_bench.py` now imports `ClosureFanoutExceeded` from `zanzibar` (the old
+  subpackage import still resolves; not API since TK164).
+- Floors: `doc_counts --generate` ratcheted `MIN_TESTS_ALL` 2995 -> 3062.
+- **Gate found two things the agents' targeted runs did not.** (1) `test_tk123_no_internal_refs`
+  red: 10 new public docstrings cited `TK164`/`TK166`; ids stripped. (2) A pre-existing
+  FAIL-OPEN in `scripts/gate_status.py::CODE_SCOPE_MD_KEEP`: tests read `userdocs/*.md`
+  through a glob since TK151 landed (2026-10-20b), yet userdocs edits did not stale a tile.
+  Surfaced when `test_tk123_pypi_page.py` started naming `userdocs/reference/exceptions.md`
+  literally (`test_gate_status.py::test_every_md_a_test_module_names_from_the_repo_root_is_in_the_code_scope`:
+  `1 failed, 764 passed` in tests-tile 4/4); `userdocs/` added to the keep list, the module
+  then `27 passed`.
+- `formal/correspondence_anchor_pin.txt` regenerated: the `UnsupportedByGraphIndex` row
+  (CORRESPONDENCE.md ~L339, "raising `UnsupportedByGraphIndex`") re-read and still true after
+  the base-class change.
+
+Still owed: nothing.
+
+---
+
 ## 2026-10-22 — `TK158` + `TK3` closed via ultracode; PG twin of a TK154 test fixed; `TK170` filed
 
 rows: TK158 (closed), TK3 (closed), TK170 (new, LATER), TK151 (comment: docs follow-ups)

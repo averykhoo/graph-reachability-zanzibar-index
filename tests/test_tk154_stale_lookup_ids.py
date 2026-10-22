@@ -287,9 +287,12 @@ def test_stale_lookup_ids_and_tables_outdated_are_exported():
     import zanzibar.store as store_pkg
     assert top_stale is StaleLookupIds and top_outdated is TablesOutdated
     assert {'StaleLookupIds', 'TablesOutdated'} <= set(zanzibar.__all__)
-    assert 'StaleLookupIds' in se_pkg.__all__
-    assert {'StaleLookupIds', 'TablesOutdated'} <= set(store_pkg.__all__)
+    # TK164 (2026-10-23): exceptions are exported from ``zanzibar`` only; the old
+    # subpackage imports still resolve to the same class.
+    assert 'StaleLookupIds' not in se_pkg.__all__
+    assert not {'StaleLookupIds', 'TablesOutdated'} & set(store_pkg.__all__)
     assert store_pkg.StaleLookupIds is StaleLookupIds
+    assert se_pkg.StaleLookupIds is StaleLookupIds
 
 
 _XPROC_CHILD = '''

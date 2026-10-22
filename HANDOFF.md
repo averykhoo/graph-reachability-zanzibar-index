@@ -13,7 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
-> 2026-10-22 -- `TK158` (cheap fan-out refusal: 91 s -> ~0.2 s) and `TK3` (always-on `CascadeNotRun` commit check) CLOSED via ultracode `wf_2c9dfdfc-f9c`; plans `docs/tk158-*-2026-10-22.md`, `docs/tk3-*-2026-10-22.md`. **0.1.0 left: TK162, TK164, TK166, then TK151 lands last** (user); cut held until the docs land, version stays 0.0.5 under `[Unreleased]`. New `TK170` (LATER): paranoia `full` loses savepoint writes. Before the cut: refresh `userdocs/reference/changelog.md`. Commit by path, never `git add -A` / `git stash`.
+> 2026-10-23b -- `TK166` (foreign token -> `ForeignToken`) and `TK164` (exceptions only from `zanzibar`; refusals are `ValueError`s; schema types public) CLOSED via ultracode; TK151 docs updated, fable-reviewed (`docs/tk151-fable-review-2026-10-23.md`, "ship after small fixes") and the review applied. **0.1.0 left: TK162 (another session), then TK151 lands last** (user); cut held, version stays 0.0.5 under `[Unreleased]`. At the cut, delete the pre-release prose `tests/test_userdocs_prerelease_prose.py` lists. Commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

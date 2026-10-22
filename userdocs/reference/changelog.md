@@ -18,12 +18,24 @@ Breaking:
   the set engine's result type is `SetLookupResult`.
 - Keyword names are `subject_type`, `subject_name`, `object_type` and `object_name`.
 - `build_index` and `rebuild_index` take `index_store_id` by keyword only.
+- The Python `Ellipsis` is refused as a subject predicate; a bare subject is the string
+  `"..."`.
+- Each subpackage's `__all__` lists only its public names, and **exceptions are exported
+  from `zanzibar` only**: write `from zanzibar import StaleRead`, not
+  `from zanzibar.store import StaleRead`.
 - The parsers raise {py:exc}`zanzibar.SchemaError` (still a `ValueError`).
   `ShapeRefusedSinceTK137` is renamed {py:exc}`zanzibar.ShapeNoLongerAccepted`.
+- {py:exc}`zanzibar.UnsupportedByGraphIndex` and {py:exc}`zanzibar.DoublyBridgedShapeError`
+  are now `ValueError`s, so an `except ValueError` that let them through now catches them.
 - `at_least` must be `None` or an `int` of 0 or more.
+- A freshness token from another store is refused on every tokened read with the new
+  {py:exc}`zanzibar.ForeignToken` (a `StaleRead`); before, one at or below the store's own
+  writes was accepted without error.
 - A `Store` refuses a `Session` with unsaved changes of yours, a database without the
   `zanzibar_*` tables ({py:exc}`zanzibar.TablesNotCreated`) and a SQLite file created by
   0.0.x ({py:exc}`zanzibar.TablesOutdated`).
+- A `SetEngine` raises {py:exc}`zanzibar.PersistedSchemaRefused` for a store whose saved
+  schema this version refuses, as every other entry point does.
 - An `object_wildcard_shapes` entry must name a declared relation.
 - **Some answers change.** A userset such as `doc:1#banned` is now a member of itself, as in
   OpenFGA, so one previously allowed check on a `but not` relation is now denied, and
@@ -32,17 +44,35 @@ Breaking:
 
 Added:
 
-- {py:meth}`zanzibar.Store.expand` (Zanzibar Expand), {py:meth}`zanzibar.Store.adopt`, and
-  `object_type` / `relation` filters on `lookup` and `lookup_reverse`.
+- {py:meth}`zanzibar.Store.expand` (Zanzibar Expand) and {py:meth}`zanzibar.Store.adopt`.
+- Filters on lookups: `object_type` / `relation` on `lookup`, and `subject_type` /
+  `subject_predicate` on `lookup_reverse`.
 - The OpenFGA tuple form, `add_tuple("user:alice", "viewer", "doc:d1")`, and OpenFGA JSON
   models as `schema=`.
-- {py:meth}`zanzibar.Store.result_keys` and {py:meth}`zanzibar.Store.excluded_keys`.
+- {py:meth}`zanzibar.Store.result_keys` and {py:meth}`zanzibar.Store.excluded_keys`, and
+  `LookupResult.implicit_keys` / `implicit_excluded_keys` for answers that have no node
+  id (a userset that is a member of itself before any tuple names it).
 - {py:exc}`zanzibar.ZanzibarError`, the base of every exception the library raises on
-  purpose, plus new specific exceptions such as {py:exc}`zanzibar.StoreNotFound` and
-  {py:exc}`zanzibar.StaleLookupIds`.
+  purpose, plus new specific exceptions such as {py:exc}`zanzibar.StoreNotFound`,
+  {py:exc}`zanzibar.StaleLookupIds` and {py:exc}`zanzibar.ForeignToken`.
+- Public types and helpers: {py:class}`zanzibar.graphindex.DeltaProcessor`,
+  {py:func}`zanzibar.store.open_set_engine`, and the schema types that appear in public
+  signatures ({py:class}`zanzibar.schema.SchemaInfo`,
+  {py:class}`zanzibar.schema.CompiledBooleans`, {py:class}`zanzibar.schema.Entity`,
+  {py:class}`zanzibar.schema.RelationalTriple`).
 
-Fixed: a lookup result held across a write could translate to the wrong subjects; it is now
-refused with `StaleLookupIds`.
+Fixed:
+
+- A lookup result held across a write could translate to the wrong subjects; it is now
+  refused with `StaleLookupIds`.
+- A write refused by the fan-out cap is cheap to refuse: the graph index counts the rows
+  it would touch and refuses before loading them, and a `Store` no longer rebuilds its set
+  engine after the refusal. See
+  [A refused write is not free](../explanation/limits.md#a-refused-write-is-not-free).
+- A direct graph-index write on a schema with `and` / `but not` that is committed without
+  running the delta processor's cascade is refused at the commit with the new
+  {py:exc}`zanzibar.CascadeNotRun`, instead of committing derived relations that disagree
+  with the set engine. A `Store` is not affected.
 
 ## 0.0.5 (2026-10-14)
 

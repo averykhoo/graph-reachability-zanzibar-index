@@ -10,7 +10,9 @@ sharing the schema layer `zanzibar.schema`, and composed with a tuple log in
 
 The names most programs need are importable from here: ``Store``, ``LookupResult``,
 ``parse_openfga_schema``, and every exception the package raises (rooted at
-``ZanzibarError``, except ``InvariantViolation``, which reports corruption). They load
+``ZanzibarError``, except ``InvariantViolation``, which reports corruption). This is the
+exceptions' ONE public home: no subpackage lists an exception in its ``__all__``.
+They load
 LAZILY: ``import zanzibar`` imports nothing else, and ``zanzibar.Store`` pulls in the
 database stack only when first touched, so a schema-only user never pays for it.
 """
@@ -47,6 +49,7 @@ _LAZY = {
     'InvariantViolation': 'zanzibar.graphindex.invariants',
     # the store
     'StaleRead': 'zanzibar.store.source',
+    'ForeignToken': 'zanzibar.store.source',
     'WatermarkGap': 'zanzibar.store.source',
     'UnsafeIsolationLevel': 'zanzibar.store.source',
     'LookupNotFresh': 'zanzibar.store._store',
@@ -97,4 +100,5 @@ if TYPE_CHECKING:  # pragma: no cover -- for type checkers and IDEs only
     from zanzibar.store.apply import MissingDeltaProcessor
     from zanzibar.store.build import IndexExists
     from zanzibar.store.schema_io import StoreNotFound, TablesNotCreated, TablesOutdated
-    from zanzibar.store.source import StaleRead, UnsafeIsolationLevel, WatermarkGap
+    from zanzibar.store.source import (ForeignToken, StaleRead, UnsafeIsolationLevel,
+                                       WatermarkGap)

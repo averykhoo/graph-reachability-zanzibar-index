@@ -343,8 +343,8 @@ type doc
 
     # -- 3. bad input --------------------------------------------------------
     section('bad input')
-    from zanzibar.store import SchemaMismatch  # noqa: F401 -- public name exists
-    from zanzibar.schema import AdmissionRejected  # noqa: F401
+    # The exceptions' one public home is the top level (TK164).
+    from zanzibar import AdmissionRejected, SchemaMismatch  # noqa: F401 -- public names exist
     eng = engine_at('bad.db')
     with Session(eng) as s:
         # TK124: an empty schema is refused and does NOT brick the store id

@@ -7,16 +7,21 @@ then applies it to both backends in the right order. Both backends are public, a
 build either one on its own. This page shows how to use the set engine on its own, and
 warns against writing to the graph index on its own.
 
-**Prefer the `Store`.** Driving a backend yourself means doing by hand what the `Store` does
-on every write, and for the graph index a skipped step fails silently: the index then gives
-wrong answers with no error.
+**In an application, prefer the `Store`**, with one exception. Open a set engine without a
+`Store` for tooling, experiments, and write-heavy loads where the graph index is the wrong
+trade (see [When not to use this library](../explanation/limits.md#when-not-to-use-this-library)).
+Never write to the graph index without a `Store`: driving it yourself means doing by hand
+what the `Store` does on every write, and a skipped step fails silently, so the index then
+gives wrong answers with no error.
 [The two backends](../explanation/two-backends.md) explains how they differ.
 
 ## Decide whether you need this
 
 Use the **set engine on its own** when you want answers computed from stored tuples and you
 do not need the graph index, the tuple log or freshness tokens. Examples are a test, a
-script that evaluates a model against some tuples, or a one-off analysis. Keep in mind:
+script that evaluates a model against some tuples, a one-off analysis, or a load where
+writes far outnumber reads, so the graph index's write-time cost does not pay off. Keep in
+mind:
 
 - It never commits. `add_tuple` and `remove_tuple` stage rows on your session, and you
   commit it.
@@ -173,3 +178,23 @@ first write. A refused write (for example {py:exc}`zanzibar.ClosureFanoutExceede
 leaves the transaction owing a cascade or a rollback. A `Store` runs the cascade for you,
 in the same transaction that applies the write to the index: the write itself with
 `sync=True`, or {py:meth}`zanzibar.Store.catch_up` with `sync=False`.
+
+## Errors only the backends raise
+
+You meet these only when you drive the backends or the offline index tools yourself: a
+`Store`'s reads and writes never raise them (`Store.adopt`, which runs the index build,
+can raise the last one). All three are {py:exc}`zanzibar.ZanzibarError`s; their
+attributes are in the [exceptions reference](../reference/exceptions.md).
+
+- {py:exc}`zanzibar.CascadeNotRun`: you wrote to a bare graph index on a schema with
+  `and` / `but not` and committed without running the delta processor's `run_cascade`
+  after your last write. The commit is refused and the transaction stays open: roll back,
+  or run the cascade and commit again (see the section above).
+- {py:exc}`zanzibar.MissingDeltaProcessor`: you drove the index's apply step yourself,
+  on a schema with `and` / `but not`, without the delta processor that maintains those
+  relations.
+- {py:exc}`zanzibar.IndexExists`: {py:func}`zanzibar.store.build_index` was pointed at an
+  index that already exists. Use a new index store id, or
+  {py:func}`zanzibar.store.rebuild_index` to rebuild one in place.
+  {py:meth}`zanzibar.Store.adopt` raises it too, for a store id that already has an index:
+  open that one with `Store(session, store_id)` instead.

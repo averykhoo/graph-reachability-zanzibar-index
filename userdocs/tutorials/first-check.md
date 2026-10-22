@@ -67,6 +67,15 @@ tutorial, delete `first-check.db` before you run the file again. If you forget, 
 the store raises {py:exc}`zanzibar.SchemaMismatch`, whose message says the schema
 "disagrees with its persisted schema".
 
+```{note}
+The store commits its own work on the session you give it. In this tutorial that is all
+you need to know. In your own app, it means a grant is saved as soon as the call returns,
+and **it stays saved even if your own code later rolls back**: if a grant must be undone
+when your own work fails, remove it yourself. Give the store a session of its own for the
+same reason. [Who owns the transaction](../explanation/two-backends.md#who-owns-the-transaction)
+explains why.
+```
+
 ## Record who can do what
 
 Each fact you record is a *relationship tuple*: a user, a relation and an object. Make

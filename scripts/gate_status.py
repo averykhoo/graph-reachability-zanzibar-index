@@ -225,8 +225,15 @@ def phase_scope(phase: str) -> str:
 #   * `CLAUDE.md` -- tests/test_tk131_claude_md_cap.py read it live for one day; that read
 #     was REMOVED instead (its assertion moved to `handoff_lint.py::MAX_BYTES_SLACK`, in
 #     `lean`), so CLAUDE.md stays excluded and a CLAUDE.md edit still costs no tile re-run.
+#
+# `userdocs/` joined 2026-10-23b. tests/test_userdocs_examples.py EXECUTES every python
+# block on every userdocs page, and test_userdocs_build.py / _refused_shapes.py /
+# _prerelease_prose.py read the pages too, all through a GLOB (`USERDOCS.rglob`), which
+# the literal-path survey test cannot see; so a userdocs-only edit could redden a tests
+# tile at a COVERED status since TK151 landed (2026-10-20b). Found only when
+# test_tk123_pypi_page.py started naming `userdocs/reference/exceptions.md` literally.
 CODE_SCOPE_MD_KEEP = (b"tasks/", b"HANDOFF.md", b"PYPI_README.md", b"CHANGELOG.md",
-                      b"formal/CORRESPONDENCE.md")
+                      b"formal/CORRESPONDENCE.md", b"userdocs/")
 
 
 def _in_scope(rel: bytes, scope: str) -> bool:

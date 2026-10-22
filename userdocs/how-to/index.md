@@ -21,8 +21,9 @@ signatures and every option, see [the reference](../reference/index.md).
   objects a user can reach.
 - [Use async mode and freshness tokens](async-tokens.md): write without waiting for the
   index, and read your own writes.
-- [Use the backends directly](backends-direct.md): open a set engine without a `Store`,
-  for tooling and experiments. An application should use a `Store` instead.
+- [Use the backends directly](backends-direct.md): open a set engine without a `Store`:
+  for tooling, experiments, and write-heavy loads where the graph index is the wrong trade
+  (see [Limits](../explanation/limits.md#when-not-to-use-this-library)).
 
 **Run in production**
 

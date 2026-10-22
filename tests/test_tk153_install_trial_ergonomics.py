@@ -123,7 +123,7 @@ def test_every_entry_point_raises_persisted_schema_refused(engine, name, entry):
 def test_the_class_is_one_object_everywhere():
     assert zanzibar.PersistedSchemaRefused is zschema.PersistedSchemaRefused
     assert zstore.PersistedSchemaRefused is zschema.PersistedSchemaRefused
-    assert 'PersistedSchemaRefused' in zschema.__all__
+    assert 'PersistedSchemaRefused' in zanzibar.__all__   # TK164: the one public home
     assert issubclass(PersistedSchemaRefused, (zanzibar.ZanzibarError, ValueError))
 
 

@@ -2,10 +2,12 @@
 
 One write to the graph index can add many index rows at once (granting a group access to a
 document adds about one row per member), and it holds the store's write lock while it does.
-The **closure fan-out cap** refuses, with {py:exc}`zanzibar.ClosureFanoutExceeded`, a
-synchronous write that would touch more index rows than a limit. How the rows are counted,
+The **write fan-out cap** refuses, with {py:exc}`zanzibar.ClosureFanoutExceeded`, a
+synchronous write that would touch more index rows than a limit. (The exception and the
+environment variable call it the *closure* fan-out cap: the index rows are the
+permission closure, every who-reaches-what pair the index stores.) How the rows are counted,
 and what a large write costs, is explained in
-[Limits and costs](../explanation/limits.md#the-closure-fan-out-cap).
+[Limits and costs](../explanation/limits.md#the-write-fan-out-cap).
 
 This page shows how to set the limit, what it applies to, and how to handle a refusal.
 
@@ -101,8 +103,10 @@ capped like any grant.
 
 The cap does **not** apply to:
 
-- **Removing a tuple.** A removal is never refused by the cap, so you can always shrink a
-  large group or revoke a large grant.
+- **Removing a tuple.** A removal is never refused by the cap for its own size, so you can
+  shrink a large group or revoke a large grant. (On a synchronous instance, an over-limit
+  row still waiting from an async writer can block a removal too; see
+  [A pending row can block every synchronous write](#sync-writers-blocked-by-backlog).)
 - **The async apply step.** On a store opened with `sync=False`, a write only goes into the
   tuple log, and {py:meth}`zanzibar.Store.catch_up` applies it later. The tuple is already
   committed by then, so `catch_up` applies an over-limit write anyway and logs a warning on
@@ -121,12 +125,28 @@ async_store.add_tuple("group:big#member", "viewer", "doc:2")
 print(async_store.lag())  # -> 1
 ```
 
-Until `catch_up` has applied that row, it is a trap for the synchronous instance. A
-`sync=True` instance applies the pending backlog as part of each of its own writes, and
-that step is capped. So while an over-limit row is pending, every write through a
-synchronous instance on the same store id is refused with `ClosureFanoutExceeded`, even an
-unrelated small grant, and the message counts the backlog row rather than the tuple you
-wrote:
+Until `catch_up` has applied that row, it blocks the synchronous instance, as the next
+section explains.
+
+(sync-writers-blocked-by-backlog)=
+## A pending row can block every synchronous write
+
+A `sync=True` instance applies the pending backlog (rows other instances wrote with
+`sync=False` and no `catch_up()` has applied yet) as part of each of its own writes,
+before its own row, and that step is capped like any synchronous write. So while a row
+that the index refuses is pending, **every** write through a `sync=True` instance on the
+same store id fails, even an unrelated small grant, and removals included. The exception
+describes the pending row, not the tuple you wrote, and its `failing_log_row` attribute is
+`(log id, row)` for that pending row. Two refusals behave this way:
+
+- {py:exc}`zanzibar.ClosureFanoutExceeded`, for a pending row over the write fan-out cap.
+  `catch_up()` applies such a row anyway (with a warning), which unblocks the writers.
+- {py:exc}`zanzibar.PathCountExceeded`, for a pending row past the path-count limit.
+  `catch_up()` cannot apply that row either: the index stalls, and the row has to be
+  removed at the source. See [Recover a stalled index](stall-recovery.md).
+
+Continuing the example, a small grant through the synchronous instance is refused because
+of the pending grant to `group:big`:
 
 ```python
 store.refresh()
@@ -136,8 +156,10 @@ try:
 except ClosureFanoutExceeded as error:
     refused = True
     message = str(error)
+    pending_row = error.failing_log_row
 print(refused)  # -> True
 print("this write would add 10" in message)  # -> True
+print(pending_row[1])  # -> 'ADD group:big#member viewer doc:2'
 ```
 
 Run `catch_up()` first; once the row is applied, the synchronous instance writes again:
@@ -171,15 +193,21 @@ Retrying the same write does not help, because the index has not changed. Your o
 - **Do it asynchronously.** Write through a `sync=False` store, where the cap does not
   refuse, and let `catch_up` apply the write. The lock is then held by the apply step
   instead of by the writer. Until `catch_up` has applied it, synchronous writers on the
-  same store id are refused (see [What the cap applies to](#what-the-cap-applies-to)). See
+  same store id are refused (see
+  [A pending row can block every synchronous write](#sync-writers-blocked-by-backlog)). See
   [Use async mode and freshness tokens](async-tokens.md).
 
-## Expect a refusal of a very large write to be slow
+## Expect the first write after opening to be slow
 
-A refused grant to a very large group can still take a long time and a lot of memory, and
-it holds the write lock while it runs. If your data has groups of hundreds of thousands of
-members, split such groups rather than relying on the cap to refuse grants to them quickly.
-Why, with measured figures, is in
+Once a store has taken one write since it was opened, the cap refuses a grant to a very
+large group quickly: it counts the rows the write would touch and refuses before reading
+them. The first write after a store is opened is the exception, and so is the first write
+after each {py:meth}`zanzibar.Store.refresh`, which rebuilds the set engine. That write is
+slow on a large store whether it is refused or admitted, because the set engine first
+builds the graph it uses to check for cycles, and it holds the write lock while it does.
+That build grows with the size of the whole store, so allow for the delay after every
+restart, and do not call `refresh()` on a writing store more often than you need to.
+Measured figures are in
 [A refused write is not free](../explanation/limits.md#a-refused-write-is-not-free).
 
 ## Related

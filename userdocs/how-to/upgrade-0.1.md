@@ -75,6 +75,22 @@ Each subpackage's `__all__` now lists only its public names. Helpers that were r
 `zanzibar.setengine`) still import by name, but `from zanzibar.store import *` no longer
 brings them in, and they are not part of the documented API.
 
+**Import exceptions from `zanzibar`.** In 0.0.x each subpackage re-exported its own
+selection of exception classes. In 0.1 no subpackage lists an exception or the warning in
+its `__all__`; `zanzibar` is their one public home. An old line such as
+`from zanzibar.store import StaleRead` or `from zanzibar.schema import AdmissionRejected`
+still imports the same class today, but it is no longer API and may stop working in a
+later release, and `from zanzibar.schema import *` no longer brings exceptions in. Change
+those imports to `from zanzibar import StaleRead, AdmissionRejected`.
+
+```python
+from zanzibar import AdmissionRejected, StaleRead
+import zanzibar.store
+
+print("StaleRead" in zanzibar.store.__all__)  # -> False
+print(zanzibar.store.StaleRead is StaleRead)  # -> True
+```
+
 ## 2. Fix keyword arguments and other call signatures
 
 **Keyword names.** The six tuple parameters are now spelled out in full on `add_tuple`,
@@ -161,15 +177,27 @@ print(store.check("user:bob", "viewer", "doc:1"))  # -> True
 ## 4. Update exception handling
 
 Exception classes keep their builtin bases, so `except ValueError`, `except KeyError` and
-`except RuntimeError` handlers keep catching what they caught before. The one handler that
-can stop matching is `except UnsupportedByGraphIndex` around `object_wildcard_shapes`; see
-the last bullet but one. What changed:
+`except RuntimeError` handlers keep catching what they caught before. Two classes gained
+one: an `except ValueError` now also catches the graph-index schema refusals (see below).
+The one handler that can stop matching is `except UnsupportedByGraphIndex` around
+`object_wildcard_shapes`; see the bullet on `ShapeNoLongerAccepted`. What changed:
 
 - Every exception the library raises on purpose is now a {py:exc}`zanzibar.ZanzibarError`,
   so one `except ZanzibarError` catches them all. {py:exc}`zanzibar.InvariantViolation`
   (store corruption) is deliberately not one.
 - The schema parsers raise {py:exc}`zanzibar.SchemaError` (still a `ValueError`). Code that
   tests `type(e) is ValueError` must change; `except ValueError` still works.
+- {py:exc}`zanzibar.UnsupportedByGraphIndex` and its subclass
+  {py:exc}`zanzibar.DoublyBridgedShapeError` are now `ValueError`s. In 0.0.x they had no
+  builtin base, so an `except ValueError` around `parse_openfga_schema` or `Store(...)` let
+  them through; now it catches them. Neither is a `SchemaError`.
+- A freshness token from **another store** now raises {py:exc}`zanzibar.ForeignToken` (a
+  `StaleRead`) on every tokened read. In 0.0.x such a token was accepted without error
+  when it was at or below the store's own writes, and refused with retry advice that
+  could not help when it was above them. If your code shares one token variable between
+  stores, keep a token per store. A handler that retries on `StaleRead` should re-raise
+  `ForeignToken` first; see
+  [Use async mode and freshness tokens](async-tokens.md#handle-staleread).
 - Opening a store id that was never created raises {py:exc}`zanzibar.StoreNotFound` (still a
   `KeyError`).
 - Opening a `Store` on a database without the `zanzibar_*` tables raises
@@ -342,46 +370,30 @@ These break less code, but look for them:
   needs updating; one keyed on the category keeps working.
 - `SetEngine(session, store_id)` may leave out the schema when a `Store` created the store;
   it reads the saved schema.
+- Code that writes to a bare {py:class}`zanzibar.graphindex.WildcardIndex` on a schema with
+  `and` or `but not`, and commits without calling
+  {py:meth}`zanzibar.graphindex.DeltaProcessor.run_cascade` after its last write, now gets
+  {py:exc}`zanzibar.CascadeNotRun` at the commit. On 0.0.x that commit went through and the
+  index gave wrong answers from then on. The transaction is still open when the error is
+  raised. Call `run_cascade` in the same transaction, passing the `outbox_watermark` read
+  before the first write, or use a `Store`, which does this for you. See
+  [Do not drive the graph index on its own](backends-direct.md#do-not-drive-the-graph-index-on-its-own).
+- A write refused with {py:exc}`zanzibar.ClosureFanoutExceeded` is now refused before the
+  graph index reads the rows it would have touched, so the refusal is much cheaper. The
+  first write after a store opens is still slow, refused or not; see
+  [A refused write is not free](../explanation/limits.md#a-refused-write-is-not-free).
 
 The [changelog](../reference/changelog.md) has the rest.
 
 ## 8. Optional: use what 0.1 adds
 
-None of these is needed to upgrade, but each one replaces something you may have written by
-hand on 0.0.x.
-
-**Filters on lookups.** `lookup` takes `object_type=` and `relation=`, and `lookup_reverse`
-takes `subject_type=` and `subject_predicate=`. You no longer need to filter the result
-yourself:
-
-```python
-users_only = store.lookup_reverse("viewer", "doc:1",
-                                  subject_type="user", subject_predicate="...")
-print(sorted(store.result_keys(users_only)))  # -> [('user', 'bob', '...')]
-```
-
-**`Store.expand`.** Zanzibar's Expand on the store: every subject that has a relation on an
-object, as `(type, name, predicate)` keys. In 0.0.x the only Expand was
-`SetEngine.expand`, which returns ids that mean nothing outside that engine instance.
-Test one subject with `in`:
-
-```python
-members = store.expand("viewer", "doc:1")
-print(("user", "bob", "...") in members)  # -> True
-```
-
-**`Store.adopt`.** In 0.0.x, opening a `Store` on tuples written without the tuple log took
-four steps (`save_schema`, commit, `build_index`, `Store(...)`). `Store.adopt(session, id,
-schema=...)` does it in one call and returns `(store, report)`. See
-[Bulk-load or adopt an existing store](bulk-load-adopt.md).
-
-**Reading results.** `store.result_keys(result)` and `store.excluded_keys(result)` turn a
-`lookup` / `lookup_reverse` result into `(type, name, predicate)` keys, with no SQL on the
-`zanzibar_node` table. [Find who can access what](query-access.md) shows how to read a
-result, including its wildcard markers.
-
-**JSON models.** `Store(schema=...)` also accepts an OpenFGA JSON model, as a `dict` or a
-JSON string.
+None of the additions in 0.1 is needed to upgrade, but several replace code you may have
+written by hand on 0.0.x: filters on `lookup` and `lookup_reverse`, `Store.expand`,
+`Store.adopt`, `Store.result_keys`, OpenFGA JSON models, and `open_set_engine`. The
+"Added" list in the [changelog](../reference/changelog.md) has each one;
+[Find who can access what](query-access.md) shows the lookup filters and
+`result_keys`, and [Bulk-load or adopt an existing store](bulk-load-adopt.md) shows
+`Store.adopt`.
 
 ```python
 session.close()

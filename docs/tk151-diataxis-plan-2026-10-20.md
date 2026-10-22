@@ -2,6 +2,225 @@
 
 ACTIVE-PLAN (`docs/README.md` §3). Owner row: `TK151`. Corrections go at the top, dated.
 
+## Correction 2026-10-23c — fable round applied
+
+Integrator: workflow unit `r2-integrate` (run `wf-0p1`), after four writer+reviewer units
+(`landing`, `dedup-reads`, `errors-ops`, `edges-jargon`) applied the recommendations of
+[`tk151-fable-review-2026-10-23.md`](tk151-fable-review-2026-10-23.md) § "Verdict and
+ranked recommendations". Labels: **READ** (first-hand read of the page or source),
+**RAN** (command run by the integrator), **REPORTED** (a unit's report, not re-checked
+here). Nothing committed; the orchestrator runs the gate.
+
+| # | Recommendation | Status | Notes |
+| --- | --- | --- | --- |
+| 1 | MUST landing first screen | APPLIED | REPORTED+READ: `userdocs/index.md` gains the in-process / two-backends / "use a `Store`, choose sync vs async" paragraph above Install, with the write-heavy exception linked to `limits.md#when-not-to-use-this-library`; extensions link and master-vs-PyPI note gone (the banner in `userdocs/conf.py::_announcement` carries it); License moved to the end. |
+| 2 | MUST pre-release prose pinned | APPLIED (guard), prose kept on purpose | RAN: `tests/test_userdocs_prerelease_prose.py` fails at any non-0.0.x `__version__` while `unreleased` / `not yet released` / `reports … 0.0.5` / `is at version 0.0` survives. `how-to/errors.md` added to `KNOWN_CURRENT` by the integrator; sabotage (errors.md's `0.0.5` neutralised) gave `missing pre-release hits: ['how-to/errors.md']`, restored → 3 passed. The prose itself is deleted at the 0.1.0 cut, not now. |
+| 3 | MUST one message on Store vs set engine | APPLIED | READ: `how-to/index.md` gloss, `how-to/backends-direct.md` "Prefer the Store" / "Decide whether you need this", `explanation/limits.md` "When not to use" and `index.md` all say: a `Store` for an application, the set engine on its own for tooling, experiments and write-dominated loads. |
+| 4 | SHOULD one home per caveat | APPLIED | RAN (grep 2026-10-23), homes carrying the full caveat, review → now: stale-revoke 6 → 2 (`consistency.md` owns, `async-tokens.md` keeps the recipe); `ForeignToken` handling 6 → 1 (`errors.md` label `foreign-token-handling`; `exceptions.md` keeps the class entry; upgrade/changelog keep their migration lines); sync-writer-blocked-by-backlog 5 → 1 (`fanout-cap.md` label `sync-writers-blocked-by-backlog`; errors, limits, stall-recovery now a sentence + link — limits and stall-recovery done by the integrator); paranoia table 4 → 1 (`configuration.md` label `paranoia-levels`); marker shapes 4 → 1 (`reference/api/index.md` label `api-result-markers`); first-write-slow 4 → 2 (`fanout-cap.md` how-to section + `limits.md` measurements; upgrade links, changelog copy gone). |
+| 5 | SHOULD cut errors.md to buckets | APPLIED | REPORTED: four buckets with 2-3 exceptions each linking `reference/exceptions.md`; `CascadeNotRun` / `MissingDeltaProcessor` / `IndexExists` moved to `backends-direct.md` "Errors only the backends raise" (with the correction that `Store.adopt` re-raises `IndexExists`, `src/zanzibar/store/_store.py::Store.adopt`). |
+| 6 | SHOULD promote "a committed grant stays committed" | APPLIED | REPORTED: `{note}` in `tutorials/first-check.md` "Create a store"; bullet in `how-to/postgresql.md` "One session per thread"; both link `two-backends.md#who-owns-the-transaction`. |
+| 7 | SHOULD jargon pass | PARTIAL | Done: tupleset defined at first use in `rewrite-refused-shape.md` and `port-openfga.md`; "closure fan-out cap" → "write fan-out cap" in user prose and headings (integrator: `limits.md` heading, `stall-recovery.md`, `async-tokens.md`; the exception message asserted in `fanout-cap.md` keeps its literal text); prune-outbox Note cut. NOT done: the `StaleRead` message in `src/zanzibar/store/source.py` still says "evaluator", so `errors.md` keeps a one-line gloss instead of the apology — a source change, out of a docs round. |
+| 8 | NICE runtime-checks after-commit failure | NOT DONE | READ: `how-to/runtime-checks.md` "When a check fails" still documents the `InvalidRequestError` / unusable-Store behaviour at length. Not assigned this round; the right fix is in the code, before 0.1.0, or a one-sentence "known limitation" with a row. |
+| 9 | NICE query-access back half | APPLIED | REPORTED: object-side "all" marker → `wildcard-extensions.md`; `covers()` helper → `reference/api/index.md` "Testing whether a subject is covered"; page 17.6 KB → 14.5 KB. |
+| 10 | NICE upgrade step 8 → changelog link | APPLIED | REPORTED: one paragraph naming the additions plus links to the changelog, `query-access.md` and `bulk-load-adopt.md`. |
+
+**Tests (RAN, 2026-10-23):** `tests/test_userdocs_examples.py`, `test_userdocs_build.py`
+(strict `-W -n`), `test_userdocs_refused_shapes.py`, `test_userdocs_prerelease_prose.py`,
+`test_tk122_release_metadata.py`, `test_tk123_pypi_page.py`: rc=0, all passed.
+
+**Size (RAN, 2026-10-23):** the review's 437 KB reproduces as
+`du -sb --exclude=_inventories --exclude=_ext userdocs` (pages plus `conf.py`); after this
+round it is 436,297 bytes. The net is about flat, not the 60-80 KB the review predicted:
+every cut fact had to keep a home, so the cuts in how-tos (errors.md, query-access.md,
+upgrade step 8, prune-outbox) reappear in reference (`exceptions.md`, `api/index.md`,
+`backends-direct.md`'s errors section, `fanout-cap.md`'s backlog section). The win is
+one home per caveat, not bytes. The exact pre-round byte count was not saved (UNVERIFIED).
+
+**Remains for TK151 before the cut (REASONED):**
+- Recommendation 8 (runtime-checks after-commit failure) and the `StaleRead` "evaluator"
+  wording (recommendation 7): both are code changes, to decide before 0.1.0.
+- The `viewer_base` rewrite still has 5 homes (patterns, rewrite-refused-shape,
+  boolean-operators, semantics-vs-openfga, schema-language); the review did not rank it, so
+  it was not touched.
+- At the cut: delete or date every hit of `tests/test_userdocs_prerelease_prose.py`
+  (`limits.md`, `errors.md`, `upgrade-0.1.md`, `changelog.md`, `environments.md`,
+  `tables.md`); the test goes red until they are gone.
+- The full gate (`formal/verify.sh` phases) on this tree, then the commit.
+
+## Correction 2026-10-23b — round result
+
+Integrator: workflow unit `docs-integrate` (run `wf-0p1`), after the TK164 / TK166 code
+stages and the three docs units (`fanout-refusal-cost`, `cascade-not-run-followthrough`,
+`pypi-readme-shrink`). Labels as in the audit below: **READ** / **RAN** / **REASONED**.
+Nothing committed; the orchestrator runs the gate.
+
+**LANDED this round (uncommitted):**
+- TK166 in the docs (READ, edited): `reference/exceptions.md` (tree: `ForeignToken` under
+  `StaleRead`; table row; `py:exception:: zanzibar.ForeignToken` with `token` / `issued_by`
+  / `store_id`; the foreign-token caveats on `StaleRead` / `LookupNotFresh` removed),
+  `how-to/errors.md` (`ForeignToken` bullet plus an executed example; old workaround text
+  removed), `how-to/async-tokens.md` (the `{warning}` replaced; the retry helper re-raises
+  `ForeignToken`; the example catches `ForeignToken`), `explanation/consistency.md` (both
+  passages), `how-to/query-access.md` ("all four"), `reference/api/store.md`,
+  `how-to/upgrade-0.1.md` section 4.
+- TK164 in the docs (READ, edited): `reference/exceptions.md` (every subclass has a builtin
+  base; exceptions' one home is `zanzibar`; `UnsupportedByGraphIndex [ValueError]`;
+  `SchemaError` / `UnsupportedByGraphIndex` entries), `how-to/errors.md`,
+  `how-to/rewrite-refused-shape.md` ("every refusal is also a `ValueError`"),
+  `how-to/upgrade-0.1.md` (section 1: import exceptions from `zanzibar`, with an executed
+  check; section 4: the `ValueError` gain; section 8: `open_set_engine` and the four schema
+  types), `reference/api/index.md`, the four API pages' "Exceptions re-exported here"
+  sections replaced by a one-rule "Exceptions" section, `reference/api/schema.md`
+  (`py:class` entries for `Entity`, `RelationalTriple`, `SchemaInfo`, `CompiledBooleans`;
+  `RuleSet.schema_info` / `.compiled` typed), `reference/api/graphindex.md` (the "types
+  that are not public" caveat removed), `reference/api/store.md` (`open_set_engine` entry),
+  `userdocs/conf.py` (`nitpick_ignore` no longer lists `SchemaInfo` / `CompiledBooleans`;
+  the build resolves them, RAN). `how-to/backends-direct.md` needed no change (READ: it names
+  no newly public type).
+- Audit reserved-page items (a) and (b): `reference/changelog.md` 0.1.0 section refreshed
+  from `CHANGELOG.md` `[Unreleased]` (Ellipsis refusal, exceptions' one home, `ValueError`
+  gain, `ForeignToken`, `SetEngine` `PersistedSchemaRefused`, lookup_reverse filters,
+  `implicit_keys`, `DeltaProcessor` / `open_set_engine` / schema types, the fan-out and
+  cascade fixes; heading still "0.1.0 (unreleased)"); `how-to/errors.md` has a
+  `CascadeNotRun` bullet.
+- `CHANGELOG.md` `[Unreleased]` (READ, edited): two claims contradicted TK164 and were
+  fixed: the Added bullet "`zanzibar.store` re-exports the exceptions a `Store` raises ...;
+  `zanzibar.graphindex` exports `WriteLockUnsafe`" and the Fixed bullet "`CascadeNotRun`
+  (exported from `zanzibar` and `zanzibar.graphindex`)". RAN: neither name is in
+  `zanzibar.graphindex.__all__`, and `zanzibar.store.__all__` lists no exception.
+- From the docs units (their reports, not re-read here except where the tests cover them):
+  `how-to/fanout-cap.md` first-write section (audit TK158 item), `how-to/upgrade-0.1.md`
+  section 7 `CascadeNotRun` (TK3 item), `reference/api/graphindex.md` `run_cascade`, and
+  phase 6: `PYPI_README.md` is now pitch / install / executed quickstart / links / license
+  (READ: 98 lines, headings `Install`, `Quickstart`, `Documentation`, `License`), with
+  `tests/test_tk123_pypi_page.py` now reading the hierarchy from `reference/exceptions.md`.
+- Tests (RAN, 2026-10-23): `tests/test_userdocs_examples.py tests/test_userdocs_build.py
+  tests/test_userdocs_refused_shapes.py tests/test_tk122_release_metadata.py
+  tests/test_tk166_foreign_token.py tests/test_tk164_public_surface.py
+  tests/test_tk123_pypi_page.py`: rc=0, `117 passed in 61.07s`. The build test is
+  `sphinx -W -n --keep-going -E`.
+
+**STILL OPEN for TK151 (excluding the cut and TK162):**
+- The `fable` review of the whole site (user, 2026-10-23). Not started; file it as a TK151
+  subtask (REASONED: what is left of TK151 is otherwise small).
+- A second fresh-reader pass (phase 7) over the pages changed since round 2 is optional;
+  REASONED: the executed examples cover the changed code, but no reader has followed the
+  rewritten async-tokens / errors / upgrade pages end to end.
+- Outside TK151 but owed before the cut: `benchmarks/fanout_cost_bench.py` ~L72 still
+  imports `ClosureFanoutExceeded` from `zanzibar.schema` (TK164 residual; `benchmarks/` is
+  the TK162 session's), and `formal/FINAL_REVIEW.md`'s counts block must be regenerated
+  for the new TK164 / TK166 tests (gate stage).
+- Estimate (REASONED): about 95% of TK151 excluding the cut and TK162; the fable review
+  is the one substantive item left.
+
+**BLOCKED ON TK162 (READ in the audit below, unchanged):** `explanation/limits.md`
+"Lookups for a userset: a cost that has not been measured" (~L183-205) and the set-engine
+read cost (~L252); whether `how-to/query-access.md` needs a performance warning.
+
+**For the cut (unchanged, READ in the audit below):** `explanation/limits.md` ~L267,
+`reference/environments.md` ~L23, `reference/tables.md` ~L93, the `userdocs/conf.py`
+announcement (~L57), the changelog heading "0.1.0 (unreleased)".
+
+## Correction 2026-10-23 — remaining-work audit
+
+Auditor: workflow unit `tk151-audit` (read-only on `userdocs/` and `src/`), tree at `27f6af5`
+plus whatever other live sessions had uncommitted. Labels: **READ** = read first-hand by the
+auditor in the cited file; **REASONED** = inferred from READ facts; **UNVERIFIED** = not
+checked. Line numbers are as of 2026-10-23. Scope excludes TK164/TK166 doc edits, TK162
+(perf) and the 0.1.0 version cut itself.
+
+Round 2 (`wf_b32b8743-b9f`, committed in `707259e`) was never written up here. Its record is
+`docs/tk151-repros-2026-10-20/README.md` (B1-B10 repro verdicts; B1->TK163, B2/B10->TK164,
+B3->TK165, B4/B5->TK166, B6->TK167, B7/B8->TK168, each READ from the row files; B11->TK169
+by its title, REASONED, since the row does not cite B11; B9 is TK3, closed) and the
+session-log entry that mentions the fresh-reader trial (`docs/history/session-log.md`).
+
+**Critic items 1-7 (2026-10-20b list above):**
+1. FIXED (READ): `userdocs/_ext/refused_shapes.py` now renders REFUSED SHAPE blocks from
+   `schema/parser.py`, `json_frontend.py`, `compiler.py`, `boolean.py`, `setengine/engine.py`,
+   `store/_store.py`, `graphindex/wildcard.py` (the per-file tables in that module).
+2. FIXED (READ): `how-to/errors.md` L107-113 and the executed example at L147-170 say a
+   `but not` recursion through the kept side raises `CyclicDerivedDependency`, which is not a
+   `SchemaError`; `reference/exceptions.md` L85 agrees. Matches
+   `src/zanzibar/schema/errors.py::CyclicDerivedDependency` (`ZanzibarError, ValueError`).
+3. FIXED (READ): `how-to/runtime-checks.md` holds no cost figures; it links
+   `explanation/limits.md#runtime-checks-add-to-the-write-cost` (dated table L71-76).
+4. FIXED (READ): `how-to/backends-direct.md` keeps the SetEngine half and cuts the graph
+   half to a warning that describes `CascadeNotRun` and its bound; the wording matches
+   `src/zanzibar/graphindex/cascade_mark.py::CascadeNotRun` and the module docstring.
+5. FIXED (READ): `reference/api/store.md` L44-77 documents `DEFAULT_PARANOIA`, `store_id`,
+   `session`, `sync`, `paranoia` and names the internal attributes.
+6. MOSTLY FIXED (READ): every listed fact has a home (`index.md`: alpha / no performance
+   target / Apache-2.0; `reference/api/index.md`: underscore names are internal;
+   `explanation/two-backends.md` L104: a committed grant stays committed; `how-to/prune-outbox.md`
+   L83: the paranoia warning). `open_set_engine` is no longer named on any page.
+   **STILL OPEN:** phase 6 is half done. `PYPI_README.md` still carries "Async mode in brief",
+   the outbox-pruning recipe and a 21-row exception table that already lags the code (no
+   `CascadeNotRun`, `UnsupportedByGraphIndex`, `DoublyBridgedShapeError`) and that TK164/TK166
+   will change again. `tests/test_tk123_pypi_page.py::test_every_import_on_the_page_resolves`
+   requires at least 5 imports on the page, and `test_every_store_attribute_the_page_names_exists`
+   requires `catch_up`, `lag`, `refresh`, `watermark`, `index_stalled` and `stall_error` to be
+   named. So shrinking the page means editing that test, which is a deliberate floor change.
+7. MOSTLY FIXED (READ): `how-to/stall-recovery.md` has no "What a stall is" section;
+   `how-to/index.md` is regrouped into four even groups; `how-to/runtime-checks.md` keeps only
+   a short "use it for" table, which is fine. REASONED: `how-to/fanout-cap.md` "What the cap
+   applies to" (L95-156) is task-framed, with an executed example, so it is acceptable;
+   `explanation/semantics-vs-openfga.md` ends in a summary table (L413), which is acceptable
+   for an explanation page.
+
+**Stale or missing after TK158 / TK3 (READ):**
+- `how-to/fanout-cap.md` L177-183 ("Expect a refusal of a very large write to be slow ...
+  take a long time and a lot of memory ... split such groups rather than relying on the cap
+  to refuse grants to them quickly") contradicts `explanation/limits.md` L163-181 (TK158,
+  measured 2026-10-22: 0.15-0.20 s and no memory growth on an already-written store; only
+  the first write after opening is slow, 15.8 s, because of the cycle-check graph build).
+- `how-to/upgrade-0.1.md` §7 (L331-346) does not say that 0.0.x code driving a bare
+  `WildcardIndex` on an `and` / `but not` schema now gets `CascadeNotRun` at commit (TK3;
+  CHANGELOG `[Unreleased]` Fixed).
+- `reference/api/graphindex.md` L156-161 (`run_cascade`) does not say that the commit is
+  refused with `CascadeNotRun` if it is skipped.
+- Reserved page `how-to/errors.md`: no `CascadeNotRun` entry (the exceptions reference has one).
+
+**Spot checks that held (READ):** paranoia levels, the boolean words, precedence and the
+`bad paranoia level` message (`src/zanzibar/graphindex/invariants.py::normalize_paranoia_level`,
+`::resolve_paranoia_level`) match `reference/configuration.md` and `how-to/runtime-checks.md`;
+the default is off (`src/zanzibar/store/_store.py::Store.DEFAULT_PARANOIA`). The fan-out
+default of 100,000 and the env name (`src/zanzibar/graphindex/core.py::DEFAULT_MAX_CLOSURE_FANOUT`,
+`::MAX_CLOSURE_FANOUT_ENV`) and the "this write would add N" message match `how-to/fanout-cap.md`.
+The B1 post-commit behaviour described in `runtime-checks.md` / `configuration.md` is the one
+`docs/tk151-repros-2026-10-20/README.md` § B1 reproduced (TK163 still open).
+
+**Contents (target): every entry has a page (READ):** 2 tutorials; 15 how-tos (the 14 targets
+plus `prune-outbox`); the full reference list; 9 explanation pages. Tutorials and explanation
+pages spot-read for Diataxis drift: none found beyond item 7.
+
+**Changelog (READ):** `userdocs/reference/changelog.md` "0.1.0 (unreleased)" lacks TK158 (cheap
+fan-out refusal) and TK3 (`CascadeNotRun`) from CHANGELOG `[Unreleased]` Fixed, and in Added:
+public `DeltaProcessor` (TK153), `LookupResult.implicit_keys` (TK144), the
+`subject_type` / `subject_predicate` lookup filters (TK156), and the `Ellipsis` subject-predicate
+refusal. It needs a refresh after TK164/TK166 land and before the cut (reserved for that stage).
+
+**Blocked on TK162 (READ):** `explanation/limits.md` L183-205 "Lookups for a userset: a cost
+that has not been measured" and L252 (set-engine read cost). Whether `how-to/query-access.md`
+needs a performance note is TK162's decision.
+
+**For the cut, not now (READ):** text that says 0.1.0 is unreleased, which the version cut
+must flip: `explanation/limits.md` L267 ("at version 0.0.x"), `reference/environments.md` L23,
+`reference/tables.md` L93, the `userdocs/conf.py` announcement (L57), the changelog heading.
+
+**Not yet done (REASONED):** a `fable` review of the docs as a whole (user, 2026-10-23), the
+phase 6 PYPI_README shrink, and a write-up of round 2 here. Baseline:
+`tests/test_userdocs_build.py tests/test_userdocs_examples.py` rc=0, `38 passed in 405.91s`
+(READ, 2026-10-23; slow because other sessions were running at the same time).
+
+**Remaining fixable work, split into units with no page in common (REASONED):**
+(a) `how-to/fanout-cap.md`: bring L177-183 in line with limits.md.
+(b) `how-to/upgrade-0.1.md` and `reference/api/graphindex.md`: add the TK3 `CascadeNotRun` follow-through.
+(c) `PYPI_README.md` and `tests/test_tk123_pypi_page.py`: finish phase 6. This must be
+ordered after the TK164/TK166 edits to `PYPI_README.md`.
+Reserved pages (`reference/changelog.md`, `how-to/errors.md`) go to the TK164/TK166
+integration stage. A `fable` review of the whole site should be a separate subtask.
+
 ## Correction 2026-10-20b — first draft landed (workflow `wf_e60a3842-f17`)
 
 LANDED (uncommitted at time of writing): 43 pages under `userdocs/`, `userdocs/conf.py`

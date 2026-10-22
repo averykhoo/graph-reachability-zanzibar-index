@@ -23,11 +23,14 @@ Selects the runtime invariant checks that run inside each of the store's commits
 explicit `paranoia=` argument to {py:class}`~zanzibar.Store` always wins over the
 variable, so a deployment cannot override a choice made in code.
 
+(paranoia-levels)=
+The levels:
+
 | level | what runs | cost |
 | --- | --- | --- |
 | `off` | nothing | none |
 | `residue` | before each commit: a check of the index's stored wildcard and exclusion state, and, on a schema with object wildcards, a check of the wildcard paths through the objects the write touched. The recommended production setting. | a few percent to roughly +25% on synchronous per-write commits, depending on the schema and the store's size (measured 2026-07 and 2026-10); reads are unaffected |
-| `full` | before each commit: every state invariant plus a verifier of the write's effect. After each commit: the state invariants again. | grows with the store's size; for tests and pre-release runs, not production load |
+| `full` | before each commit: every state invariant plus a verifier of the write's effect. After each commit: the state invariants again. | grows with the store's size (it more than doubled the cost of writes, measured 2026-07); for tests and pre-release runs, not production load |
 | `fixpoint` | everything in `full`, plus a check that each `and` / `but not` update reached a fixed point | roughly doubles the cost of those updates; for diagnosis only. Only the explicit word `fixpoint` selects it. |
 
 A failed check raises {py:exc}`zanzibar.InvariantViolation`. When the check that fails is

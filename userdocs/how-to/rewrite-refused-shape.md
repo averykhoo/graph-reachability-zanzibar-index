@@ -10,8 +10,7 @@ rewrites you are most likely to need. The complete list of refused shapes is in
 A schema is checked when you pass it to {py:class}`zanzibar.Store` (or to
 {py:func}`zanzibar.parse_openfga_schema`, which runs the same checks without a
 database). Catch {py:exc}`zanzibar.ZanzibarError` to handle every refusal at once.
-Most refusals are also a `ValueError`; {py:exc}`zanzibar.DoublyBridgedShapeError`, raised
-only when you pass `object_wildcard_shapes`, is not. The individual types are listed in
+Every refusal is also a `ValueError`. The individual types are listed in
 [the exceptions reference](../reference/exceptions.md). A
 {py:exc}`zanzibar.ShapeNoLongerAccepted` is a shape an earlier version accepted (its
 `accepted_through` attribute names that version), and its `instead` attribute is the
@@ -53,7 +52,8 @@ print(str(err))  # -> 'doc#viewer: references undeclared relation doc#editor'
 
 ## A `from` tupleset must be a list of types
 
-The relation after `from` (the tupleset, `parent` in `viewer from parent`) may contain
+In `viewer from parent`, `parent` is the *tupleset*: the relation after `from`, whose
+stored tuples link an object to the objects it inherits from. A tupleset may contain
 only type restrictions: `[folder]`, `[folder, doc]`. Any other arm, such as
 `or editor`, `and ...`, `but not ...` or a nested `from`, would be silently ignored,
 because `from` follows only stored tuples. OpenFGA has the same rule. The message contains `a tupleset must be direct`.

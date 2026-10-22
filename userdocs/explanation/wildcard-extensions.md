@@ -159,7 +159,8 @@ print(s.lookup("user:alice").markers)                # -> {('folder', 'viewer', 
 the variant. Compare a marker from one with a marker from the other by their first two
 fields. A marker always comes with a (possibly empty) set of subjects it covers but who
 are refused (by a `but not`, for example), which you must subtract; see
-[Find who can access what](../how-to/query-access.md).
+[Read wildcard grants](../how-to/query-access.md#read-wildcard-grants), and
+{ref}`Result markers <api-result-markers>` for every variant and a coverage helper.
 
 ## Why they emit a warning
 

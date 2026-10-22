@@ -69,7 +69,7 @@ from zanzibar.setengine.models import RelationTuple  # noqa: E402
 
 from zanzibar.store import Store as _StoreClass  # noqa: E402
 try:
-    from zanzibar.schema import ClosureFanoutExceeded  # noqa: E402
+    from zanzibar import ClosureFanoutExceeded  # noqa: E402
 except ImportError:  # pragma: no cover
     from zanzibar import ClosureFanoutExceeded  # type: ignore  # noqa: E402
 import zanzibar.store._store as _store_mod  # noqa: E402

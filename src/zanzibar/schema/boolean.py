@@ -268,7 +268,14 @@ class Plan:
 
 @dataclass
 class CompiledBooleans:
-    """The AOT compile output for a boolean-enabled schema."""
+    """The compiled form of a schema's ``and`` / ``but not`` relations.
+
+    An OPAQUE value: ``compile_ruleset`` puts it on ``RuleSet.compiled`` (None when the
+    schema has no boolean relation), and ``DeltaProcessor(widx, ruleset.compiled)`` takes it.
+    Pass it through; its fields are compiler internals and may change in any release.
+    Public since 0.1.0 only so the signatures that carry it name a documented
+    type.
+    """
     # Provenance (moved out of the docstring, TK123 item 14): boolean spec §3.4.
     tainted: frozenset[tuple[str, str]]
     namespace: dict[tuple[str, str], LeafFamily | DerivedFamily]   # (type, predicate) ->

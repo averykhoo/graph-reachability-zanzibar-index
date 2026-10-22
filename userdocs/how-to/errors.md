@@ -2,15 +2,16 @@
 
 Almost every exception the library raises on purpose derives from
 {py:exc}`zanzibar.ZanzibarError`, and every one of them can be imported from the top level
-(`from zanzibar import ...`). Most also keep a builtin base class (`ValueError`, `KeyError`
-or `RuntimeError`), so existing `except ValueError:` code keeps working; the exceptions are
-{py:exc}`zanzibar.UnsupportedByGraphIndex` and its subclass
-{py:exc}`zanzibar.DoublyBridgedShapeError`, which derive from `ZanzibarError` only. A few
-deliberate errors are not `ZanzibarError`s at all; they are listed at the end, under
+(`from zanzibar import ...`), which is their one public home. Every one also keeps a
+builtin base class (`ValueError`, `KeyError` or `RuntimeError`), so existing
+`except ValueError:` code keeps working. A few
+deliberate errors are not `ZanzibarError`s at all; they are listed under
 [What `except ZanzibarError` does not catch](#what-except-zanzibarerror-does-not-catch).
 
-This page groups the exceptions by what you should do about them. For each class's base
-classes and attributes, see the [exceptions reference](../reference/exceptions.md).
+This page groups the exceptions into four kinds by what you should do about them, and
+names the ones you are most likely to meet. The
+[exceptions reference](../reference/exceptions.md) lists every class, with when it is
+raised, its base classes and its attributes.
 
 ## Catch everything the library refuses
 
@@ -54,7 +55,8 @@ print(store.check("user:alice", "viewer", "doc:1"))  # -> True
 Some exceptions derive from others, so when you catch several, put the more specific one
 first. For example, {py:exc}`zanzibar.ClosureFanoutExceeded` is also an
 {py:exc}`zanzibar.AdmissionRejected`, and {py:exc}`zanzibar.IndexStalled` is also a
-{py:exc}`zanzibar.LookupNotFresh` and a {py:exc}`zanzibar.StaleRead`.
+{py:exc}`zanzibar.LookupNotFresh` and a {py:exc}`zanzibar.StaleRead`. The
+[hierarchy](../reference/exceptions.md#hierarchy) shows them all.
 
 ## Bad input: fix the request, do not retry
 
@@ -62,16 +64,11 @@ These mean the request itself is wrong. Retrying it gives the same answer. In a 
 service, they usually become a 400-style response, or a bug in the code that built the
 request.
 
-- {py:exc}`zanzibar.AdmissionRejected`: a write was refused. The tuple
-  names a type or relation the schema does not declare, uses a kind of user the relation
-  does not allow, contains characters outside `A-Za-z0-9_./@+=-` or is longer than 256
-  characters, would create a cycle (a group inside itself, a folder that is its own
-  ancestor), or removes a tuple that is not stored.
-- {py:exc}`zanzibar.MalformedTupleString`: a `"type:name"` or
-  `"type:name#relation"` argument does not have that shape. One gap in the current
-  version: the part after `#` is not checked for allowed characters when the string is
-  parsed. `"group:g#b:c"` is therefore not malformed: a read with it answers `False`, and a
-  write with it raises `AdmissionRejected` for the characters, not `MalformedTupleString`.
+- {py:exc}`zanzibar.AdmissionRejected`: a write was refused, for example because the tuple
+  names a relation the schema does not declare, would create a cycle, or removes a tuple
+  that is not stored.
+- {py:exc}`zanzibar.MalformedTupleString`: a `"type:name"` or `"type:name#relation"`
+  argument does not have that shape.
 
 ```python
 from zanzibar import AdmissionRejected, MalformedTupleString
@@ -94,6 +91,19 @@ returns `False` instead of raising. So a typo in a relation name reads as "denie
 print(store.check("user:alice", "veiwer", "doc:1"))  # -> False
 ```
 
+### Resource limits: change the write, or the limit
+
+{py:exc}`zanzibar.ClosureFanoutExceeded` and {py:exc}`zanzibar.PathCountExceeded` are
+`AdmissionRejected`s for a valid write that is too large for the graph index. On a
+synchronous store the write is refused completely: it is in neither backend. Retrying the
+same write does not help; split it, or raise the limit. See
+[Cap write fan-out](fanout-cap.md).
+
+While such a row, written by a `sync=False` instance, waits in the log, every write
+through a `sync=True` instance of the same store fails with the same exception, about
+that row rather than yours; see
+[A pending row can block every synchronous write](fanout-cap.md#a-pending-row-can-block-every-synchronous-write).
+
 ## Schema problems: fix the schema
 
 These are raised when a schema is parsed or a store is opened. They are setup errors, not
@@ -102,34 +112,14 @@ something to handle per request.
 - {py:exc}`zanzibar.SchemaError`: the schema text is refused. The message
   says what is wrong and, for a shape the library does not accept, what to write instead.
   See [Rewrite a refused schema shape](rewrite-refused-shape.md).
-- {py:exc}`zanzibar.ShapeNoLongerAccepted`: a `SchemaError` for a shape that an older
-  release accepted. Its `instead` attribute holds the rewrite.
 - {py:exc}`zanzibar.CyclicDerivedDependency`: a relation that uses `and` or `but not`
-  depends on itself through a `from` step or a `[type#relation]` restriction, for example
-  `define viewer: ([user] or viewer from parent) but not blocked`.
-  {py:func}`zanzibar.parse_openfga_schema` and {py:class}`zanzibar.Store` both raise it.
-  It is a `ValueError` but **not** a `SchemaError`, so `except SchemaError` does not catch
-  it: catch both, or `ZanzibarError`. The message suggests a rewrite. A standalone
-  {py:class}`zanzibar.setengine.SetEngine` accepts such a schema.
-- Two other kinds of recursion are a {py:exc}`zanzibar.SchemaError`: a relation that
-  refers to itself through relation names alone (`define viewer: [user] and viewer`),
-  and recursion through the part a `but not` subtracts (`define viewer: [user] but not
-  banned` together with `define banned: viewer from parent`).
-- {py:exc}`zanzibar.UnsupportedByGraphIndex`: a
-  [wildcard feature](../explanation/wildcard-extensions.md) (a `[T:*#p]` restriction, a
-  star tupleset or an `object_wildcard_shapes` entry) reaches a relation that uses `and`
-  or `but not`, for example `[group:*#member]` where `member` is `[user] but not banned`.
-  {py:func}`zanzibar.parse_openfga_schema` and {py:class}`zanzibar.Store` both raise it; a
-  standalone {py:class}`zanzibar.setengine.SetEngine` accepts such a schema. Its subclass
-  {py:exc}`zanzibar.DoublyBridgedShapeError` is a shape declared both as a `[T:*#p]`
-  restriction and as an object-wildcard shape, which a standalone set engine refuses too.
-  Neither is a `ValueError`, so an `except ValueError` around schema loading does not catch them.
+  depends on itself. It is a `ValueError` but **not** a `SchemaError`, so
+  `except SchemaError` does not catch it. The same is true of
+  {py:exc}`zanzibar.UnsupportedByGraphIndex`, raised when a wildcard feature reaches a
+  relation that uses `and` or `but not`.
 - {py:exc}`zanzibar.SchemaMismatch`: you opened an existing store with a
   different schema from the one it was created with. Schemas cannot be changed; see
   [Change a schema](change-schema.md).
-- {py:exc}`zanzibar.PersistedSchemaRefused`: the schema stored with an
-  existing store uses a shape this version no longer accepts. Its `instead` attribute holds
-  the rewrite, which needs a new store. See [Upgrade from 0.0.x to 0.1](upgrade-0.1.md).
 
 ```python
 from zanzibar import SchemaError, SchemaMismatch, parse_openfga_schema
@@ -174,6 +164,9 @@ print(isinstance(refusal, ZanzibarError))  # -> True
 
 To fix the schema, see
 [Recursion through `and` or `but not`](rewrite-refused-shape.md#recursion-through-and-or-but-not).
+The rest of this kind ({py:exc}`zanzibar.ShapeNoLongerAccepted`,
+{py:exc}`zanzibar.PersistedSchemaRefused`, {py:exc}`zanzibar.DoublyBridgedShapeError`) are
+in the [schema errors reference](../reference/exceptions.md#schema-errors).
 
 ## Setup and configuration: fix the deployment
 
@@ -191,21 +184,14 @@ configuration; retrying does not help.
 - {py:exc}`zanzibar.StoreNotFound`: `Store(session, store_id)` without a
   schema names a store that does not exist in this database. Create it once by passing
   `schema=`, or check that the session points at the right database.
-- {py:exc}`zanzibar.UnsafeIsolationLevel`: a PostgreSQL connection is not at
-  `READ COMMITTED`. See [Run on PostgreSQL](postgresql.md).
-- {py:exc}`zanzibar.WriteLockUnsafe`: the store cannot take its write lock on this
-  connection, for example a SQLite engine configured for autocommit. The message names the
-  fix.
-- {py:exc}`zanzibar.UnloggedTuplesPresent` and {py:exc}`zanzibar.UnloggedWriteRefused`: a
-  store has been written both through a `Store` and through a standalone set engine. Use
-  {py:meth}`zanzibar.Store.adopt` to bring an existing store under a `Store`; see
-  [Bulk-load or adopt an existing store](bulk-load-adopt.md).
-- {py:exc}`zanzibar.IndexExists`: {py:func}`zanzibar.store.build_index`
-  was pointed at an index that already exists. Use
-  {py:func}`zanzibar.store.rebuild_index` to rebuild one in place.
-- {py:exc}`zanzibar.MissingDeltaProcessor`: you drove the index's apply
-  step yourself without the component that maintains `and` / `but not` relations. A
-  `Store` never raises this.
+
+The others of this kind are {py:exc}`zanzibar.UnsafeIsolationLevel` (see
+[Run on PostgreSQL](postgresql.md)), {py:exc}`zanzibar.WriteLockUnsafe`, and
+{py:exc}`zanzibar.UnloggedTuplesPresent` / {py:exc}`zanzibar.UnloggedWriteRefused` (see
+[Bulk-load or adopt an existing store](bulk-load-adopt.md)); the
+[reference](../reference/exceptions.md#opening-a-store) describes each. A few more come
+only from driving the backends or the offline index tools yourself; they are listed in
+[Use the backends directly](backends-direct.md#errors-only-the-backends-raise).
 
 ```python
 from zanzibar import StoreNotFound, TablesNotCreated
@@ -222,23 +208,6 @@ except TablesNotCreated as error:
     print("zanzibar_relation_tuple" in error.missing)  # -> True
 ```
 
-## Resource limits: change the write, or the limit
-
-Both derive from {py:exc}`zanzibar.IndexResourceLimit`, which is an `AdmissionRejected`.
-The write was valid, but the graph index will not store it. On a synchronous store the
-write is refused completely: it is in neither backend.
-
-- {py:exc}`zanzibar.ClosureFanoutExceeded`: one write would touch more index entries than
-  the configured limit. See [Cap write fan-out](fanout-cap.md).
-- {py:exc}`zanzibar.PathCountExceeded`: a write would make the number of distinct paths
-  between two index entries larger than the index can store (about 2.1 billion). This is
-  not configurable. It takes data with many layers of overlapping groups to reach it. On an
-  async store it stops the index; see [Recover a stalled index](stall-recovery.md). While
-  such a row is waiting in the log, **every** write through a `sync=True` instance of that
-  store fails with `PathCountExceeded`, removals included, because a sync write first
-  applies the waiting rows. The message then describes the waiting row, not the tuple you
-  wrote; the exception's `failing_log_row` attribute names it.
-
 ## Freshness: refresh and retry
 
 These mean a read could not be answered as fresh as you asked. Nothing is wrong with the
@@ -247,27 +216,18 @@ See [Use async mode and freshness tokens](async-tokens.md).
 
 - {py:exc}`zanzibar.StaleRead`: a `check` or `expand` with `at_least=token` names a write
   this session cannot see yet. Call {py:meth}`zanzibar.Store.refresh` and retry once. If
-  the message says the token was returned by a write to another store, or the retry fails
-  the same way, the token is wrong, and retrying further will not help, even though the
-  message opens with "call refresh() ... and retry". (The library cannot tell a token
-  that was never issued from one committed after this session's snapshot began, so its
-  message offers both.) The "evaluator" the message mentions is the store's in-memory set
-  engine. A token from another store is refused only when it is newer than this store's
-  writes; an older one is accepted without error and guarantees nothing (see the warning
-  in [Use async mode and freshness tokens](async-tokens.md#handle-staleread)).
+  the retry fails the same way, the token is wrong, and retrying further will not help.
+  The message's "evaluator" is the store's in-memory set engine.
 - {py:exc}`zanzibar.LookupNotFresh`: a `lookup` or `lookup_reverse` with
   `at_least=` while the index is behind that write. Run `catch_up()`, or wait for your
   worker to, and retry. For a single decision, `check(..., at_least=token)` answers anyway.
 - {py:exc}`zanzibar.IndexStalled`: a `lookup` or `lookup_reverse`
   without a token while the index is stalled. See
   [Recover a stalled index](stall-recovery.md).
-- {py:exc}`zanzibar.WatermarkGap`: the store's view of the database missed a write that
-  another connection committed out of order. Nothing was committed. Call `refresh()` and
-  retry.
-- {py:exc}`zanzibar.StaleLookupIds`: `result_keys` or `excluded_keys` was
-  given a lookup result from before a later write or refresh. Run the lookup again, and
-  translate its result before the next write. See
-  [Find who can access what](query-access.md).
+
+{py:exc}`zanzibar.WatermarkGap` (refresh and retry) and {py:exc}`zanzibar.StaleLookupIds`
+(run the lookup again; see [Find who can access what](query-access.md)) belong here too;
+see the [freshness reference](../reference/exceptions.md#freshness-and-the-index).
 
 ```python
 from zanzibar import StaleRead
@@ -278,6 +238,28 @@ try:
 except StaleRead as error:
     print("was not issued yet" in str(error))  # -> True
 print(store.check("user:bob", "viewer", "doc:1", at_least=token))  # -> True
+```
+
+(foreign-token-handling)=
+### A token from another store
+
+{py:exc}`zanzibar.ForeignToken`, a `StaleRead`, means the token was returned by a write to
+a *different* store. Every tokened read refuses it (`check`, `lookup`, `lookup_reverse`,
+`expand`), whatever its value, and the message starts with that cause and names both
+stores. **Do not retry**: nothing about this store can make the token valid. Pass a token
+from one of this store's own writes. If a handler of yours retries on `StaleRead`, catch
+`ForeignToken` before it. A lookup with a token from another store raises `ForeignToken`,
+not `LookupNotFresh`.
+
+```python
+from zanzibar import ForeignToken
+
+other = Store(Session(engine), "other-app", schema=SCHEMA)
+foreign = other.add_tuple("user:carol", "viewer", "doc:9")
+try:
+    store.check("user:bob", "viewer", "doc:1", at_least=foreign)
+except ForeignToken as error:
+    print((error.issued_by, error.store_id))  # -> ('other-app', 'my-app')
 ```
 
 ## What `except ZanzibarError` does not catch

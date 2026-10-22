@@ -39,12 +39,10 @@ export ZANZIBAR_PARANOIA=residue
 
 ## Choose a level
 
-| level | what it checks | use it for |
-| --- | --- | --- |
-| `"off"` (default) | nothing | |
-| `"residue"` | the bookkeeping the index keeps for `and` and `but not` relations, and the wildcard paths that the write touched | production |
-| `"full"` | every structural rule of the index, plus a recomputation of what the write changed; runs again after the commit | tests, and before a release |
-| `"fixpoint"` | everything `"full"` checks, plus a re-check of the `and` / `but not` updates each write made | diagnosing a suspected bug |
+There are four levels: `"off"` (the default, which checks nothing), `"residue"` for
+production, `"full"` for tests and before a release, and `"fixpoint"` for diagnosing a
+suspected bug. The {ref}`table of levels <paranoia-levels>` in the configuration reference says
+exactly what each one runs and what it costs.
 
 Every level above `"off"` makes writes slower, `"full"` and `"fixpoint"` by more as the
 store grows. The measured costs are in
@@ -53,12 +51,15 @@ on your own schema and data before choosing.
 
 - **`"residue"`** looks for the corruption that matters most for security: a record behind
   an `and` or `but not` relation that refers to an index row that no longer exists. That
-  kind of fault can grant access that should be denied. It does not look for
-  every kind of corruption: some faults are found only by `"full"`.
-- **`"full"`** reads the whole index on every commit. Use it in tests and before a release,
-  not under production write load.
-- **`"fixpoint"`** is for diagnosing a suspected bug in how `and` / `but not` relations are
-  updated. Nothing turns it on unless you name it.
+  kind of fault can grant access that should be denied. It also checks the wildcard paths
+  that the write touched. It does not look for every kind of corruption: some faults are
+  found only by `"full"`.
+- **`"full"`** reads the whole index on every commit, recomputes what the write changed,
+  and checks again after the commit. Use it in tests and before a release, not under
+  production write load.
+- **`"fixpoint"`** adds a re-check of the `and` / `but not` updates each write made. It is
+  for diagnosing a suspected bug in how those relations are updated. Nothing turns it on
+  unless you name it.
 
 The checks run when a store commits a write. A read (`check`, `lookup`, `lookup_reverse`,
 `expand`) is never checked and never slowed down.

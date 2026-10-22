@@ -110,7 +110,7 @@ in-memory bitmaps, built by replaying every stored tuple when it opens and again
 
 ## Two caps on a single write
 
-### The closure fan-out cap
+### The write fan-out cap
 
 To stop one write from holding the write lock indefinitely, a synchronous write is
 refused with {py:exc}`zanzibar.ClosureFanoutExceeded` when any single link it adds to the
@@ -134,13 +134,14 @@ the table above, a write just under it still holds the lock for about half a min
 needs up to about 0.85 GB in the writer. If your application cannot tolerate that, lower
 the limit.
 
-The cap applies only to **adding** a tuple on a synchronous store. Removals are never
-capped, so a large grant can always be revoked. An asynchronous store's catch-up, and
+The cap applies only to **adding** a tuple on a synchronous store; a removal is never
+refused for its own size. An asynchronous store's catch-up, and
 {py:func}`zanzibar.store.build_index` with `bulk=False`, apply an over-limit link anyway and
 log a warning, because those tuples are already committed. Until `catch_up()` has applied
-such a row, though, a synchronous instance on the same store id applies the backlog as part
-of its own writes, under the cap, so every write through it is refused with
-`ClosureFanoutExceeded` naming the backlog row. The default bulk
+such a row, it blocks every write through a synchronous instance on the same store id,
+removals included; see
+[A pending row can block every synchronous write](../how-to/fanout-cap.md#a-pending-row-can-block-every-synchronous-write).
+The default bulk
 {py:func}`zanzibar.store.build_index`, and so {py:meth}`zanzibar.Store.adopt` by default,
 does not check the fan-out cap at all; it still enforces the path-count cap below. How to set the limit and handle a refusal is in
 [Cap write fan-out](../how-to/fanout-cap.md).
@@ -247,12 +248,14 @@ This library is probably the wrong choice if:
   a schema with `and` / `but not` also updates those relations on every write. Granting
   large groups is where the rows multiply: a store kept up with at most about one write
   every 3 s when each added 10,000 rows, and one every 30 s at 100,000.
-  - **Use the set engine on its own instead.** It has no per-row cost: a write stores one
+  - **Use the set engine on its own instead**, as
+    [Use the backends directly](../how-to/backends-direct.md#use-the-set-engine-on-its-own)
+    shows. It has no per-row cost: a write stores one
     tuple, so its write rate is your database's insert rate. It pays elsewhere. Every read
     computes its answer, and that cost has not been measured for large groups. Every
     process holds all the tuples in memory and replays them when it opens. There is no
     tuple log and there are no tokens, so one process does not see another's writes until
-    it calls `rebuild()`. See [Use the backends directly](../how-to/backends-direct.md).
+    it calls `rebuild()`.
   - **Async mode (`sync=False`) is not a way around it.** It takes the index work out of
     the write, but the index still applies every row later, at the same cost per row. It
     absorbs bursts. Under a rate that stays above what `catch_up()` can apply, the index

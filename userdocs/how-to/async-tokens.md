@@ -105,7 +105,7 @@ Points to keep in mind:
 - **Any instance may run `catch_up()`.** Every `catch_up()` takes a per-store lock before
   it reads how far the index has got, so two workers on one store take turns and never
   apply a row twice; running more than one gains nothing.
-- **The closure fan-out cap does not apply inside `catch_up()`.** A row that a sync
+- **The write fan-out cap does not apply inside `catch_up()`.** A row that a sync
   write would have refused with {py:exc}`zanzibar.ClosureFanoutExceeded` is already
   committed, so `catch_up()` applies it and logs a warning. See
   [Cap write fan-out](fanout-cap.md).
@@ -187,11 +187,13 @@ example below the token is this session's own watermark, so the retry branch doe
 run; the next example is the one that raises `StaleRead`):
 
 ```python
-from zanzibar import StaleRead
+from zanzibar import ForeignToken, StaleRead
 
 def check_at_least(store, user, relation, obj, token):
     try:
         return store.check(user, relation, obj, at_least=token)
+    except ForeignToken:
+        raise                       # another store's token: no retry can fix it
     except StaleRead:
         store.refresh()
         return store.check(user, relation, obj, at_least=token)
@@ -203,26 +205,10 @@ If the retry raises again, the token is not one this store can satisfy. The mess
 says why when it can tell, for example that the token is past the newest log id and has
 not been issued yet.
 
-```{warning}
-A token is meaningful only for the store that issued it, and a token from **another
-store** is not rejected reliably. It raises `StaleRead` (and the message names the other
-store) only when it is newer than anything this store has applied. Otherwise `check`,
-`lookup`, `lookup_reverse` and `expand` accept it without any error, and it guarantees
-nothing: on an async store such a read is no fresher than an untokened one, so it can
-still allow a revoked grant. Keep each token with the store it came from.
-```
-
-Here the foreign token is newer than anything `my-app` has seen, so it is refused:
-
-```python
-other = Store(Session(engine), "other-app", schema=SCHEMA)
-foreign_token = other.add_tuple("user:carol", "viewer", "doc:d9")
-
-try:
-    store.check("user:alice", "viewer", "doc:d1", at_least=foreign_token)
-except StaleRead as exc:
-    print("not 'my-app'" in str(exc))  # -> True
-```
+The helper re-raises {py:exc}`zanzibar.ForeignToken`, a `StaleRead` that means the token
+came from a write to another store, before its `except StaleRead`, because no refresh can
+fix it; keep each token with the store it came from (see
+{ref}`A token from another store <foreign-token-handling>`).
 
 `refresh()` also rebuilds the instance's in-memory set engine from the stored tuples, so
 it costs time in proportion to the store. Call it when a read needs it, not before every
@@ -231,9 +217,9 @@ them.
 
 ## Avoid the stale-revoke trap
 
-An untokened read on an async store is stale in **both** directions. A new grant reads
-as denied, and **a revoked grant still reads as allowed** until `catch_up()` applies the
-removal:
+An untokened read on an async store is stale in **both** directions, and **a revoked
+grant still reads as allowed** until `catch_up()` applies the removal (why:
+[What can be stale, and in which direction](../explanation/consistency.md#what-can-be-stale-and-in-which-direction)):
 
 ```python
 revoke_token = store.remove_tuple("user:bob", "viewer", "doc:d1")

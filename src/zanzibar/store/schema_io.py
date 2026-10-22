@@ -258,8 +258,14 @@ def _same_schema(store_id: str, stored_text: str, schema_text: str) -> bool:
 def open_set_engine(session: Session, store_id: str, *,
                     ops: SetOps = DEFAULT_SETOPS,
                     ruleset: RuleSet | None = None) -> SetEngine:
-    """Open the set engine on a self-describing store (schema loaded from the DB).
-    ``ruleset`` skips recompiling a schema the caller already compiled."""
+    """Open the set engine on a store a ``Store`` created, with the schema persisted in
+    the database (so you cannot pass a different one by mistake).
+
+    This is the remedy the ``SchemaMismatch`` from ``SetEngine(session, store_id, schema)``
+    names. Raises ``StoreNotFound`` when no schema is saved under ``store_id``, and
+    ``PersistedSchemaRefused`` when this version refuses the saved schema. ``ruleset``
+    skips recompiling a schema the caller already compiled (it must be that schema's).
+    Public since 0.1.0."""
     schema_text, shapes = load_schema(session, store_id)
     with _persisted_schema_parse(store_id):
         return SetEngine(session, store_id, schema_text,

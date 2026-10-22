@@ -155,28 +155,40 @@ _EXPECTED_ALL = {
         'parse_schema_ast', 'unparse_schema_ast', 'compile_ruleset', 'RuleSet',
         'SchemaAST', 'Expr', 'Direct', 'Restriction', 'Computed', 'TTU', 'Union',
         'Intersection', 'Exclusion', 'IDENTIFIER_CHARSET', 'is_valid_identifier',
-        'validate_store_id', 'ZanzibarError', 'SchemaError', 'ShapeNoLongerAccepted',
-        'AdmissionRejected', 'IndexResourceLimit', 'ClosureFanoutExceeded',
-        'PathCountExceeded', 'UnsupportedByGraphIndex', 'DoublyBridgedShapeError',
-        'CyclicDerivedDependency', 'SchemaMismatch', 'UnprovenExtensionWarning',
-        'MalformedTupleString', 'PersistedSchemaRefused'},   # PersistedSchemaRefused: TK153 F17
+        'validate_store_id',
+        'SchemaInfo', 'Entity', 'RelationalTriple', 'CompiledBooleans'},   # TK164, 2026-10-23
     'zanzibar.setengine': {
         'SetEngine', 'SetLookupResult', 'MemberSet', 'RelationTuple', 'SetOps', 'PySets',
-        'RoaringSets', 'UnloggedWriteRefused', 'StaleLookupIds'},
+        'RoaringSets'},
     'zanzibar.graphindex': {
         'ReachabilityIndex', 'WildcardIndex', 'LookupResult', 'Node', 'Edge', 'IndexStore',
-        'AdmissionRejected', 'InvariantViolation', 'WriteLockUnsafe', 'outbox_watermark',
-        'prune_outbox', 'DeltaProcessor',   # DeltaProcessor: TK153 F8, 2026-10-17
-        'CascadeNotRun'},   # TK3, 2026-10-22
+        'outbox_watermark', 'prune_outbox',
+        'DeltaProcessor'},   # DeltaProcessor: TK153 F8, 2026-10-17
     'zanzibar.store': {
         'Store', 'ExpandResult', 'TupleSource', 'build_index', 'rebuild_index', 'save_schema',
-        'SchemaRecord', 'TupleLog', 'PARANOIA_ENV_VAR', 'StaleRead', 'LookupNotFresh',
-        'IndexStalled', 'UnloggedTuplesPresent', 'WatermarkGap', 'UnsafeIsolationLevel',
-        'MissingDeltaProcessor', 'SchemaMismatch', 'PersistedSchemaRefused', 'SchemaError',
-        'StoreNotFound', 'TablesNotCreated', 'TablesOutdated', 'StaleLookupIds', 'IndexExists',
-        'BuildReport',
-        'CyclicDerivedDependency', 'AdmissionRejected', 'IndexResourceLimit',
-        'ClosureFanoutExceeded', 'PathCountExceeded', 'WriteLockUnsafe', 'MalformedTupleString'},
+        'SchemaRecord', 'TupleLog', 'PARANOIA_ENV_VAR', 'BuildReport',
+        'open_set_engine'},   # TK164, 2026-10-23: SetEngine's SchemaMismatch names it
+}
+# TK164 (2026-10-23): no subpackage lists an exception or warning in ``__all__`` any more
+# (``tests/test_tk164_public_surface.py`` pins the rule); these were dropped and must
+# still resolve by name, so an old ``from zanzibar.store import StaleRead`` keeps working.
+_DROPPED_EXCEPTIONS = {
+    'zanzibar.schema': {
+        'ZanzibarError', 'SchemaError', 'ShapeNoLongerAccepted', 'AdmissionRejected',
+        'IndexResourceLimit', 'ClosureFanoutExceeded', 'PathCountExceeded',
+        'UnsupportedByGraphIndex', 'DoublyBridgedShapeError', 'CyclicDerivedDependency',
+        'SchemaMismatch', 'UnprovenExtensionWarning', 'MalformedTupleString',
+        'PersistedSchemaRefused'},
+    'zanzibar.setengine': {'UnloggedWriteRefused', 'StaleLookupIds'},
+    'zanzibar.graphindex': {'AdmissionRejected', 'InvariantViolation', 'WriteLockUnsafe',
+                            'CascadeNotRun'},
+    'zanzibar.store': {
+        'StaleRead', 'LookupNotFresh', 'ForeignToken', 'IndexStalled', 'UnloggedTuplesPresent',
+        'WatermarkGap', 'UnsafeIsolationLevel', 'MissingDeltaProcessor', 'SchemaMismatch',
+        'PersistedSchemaRefused', 'SchemaError', 'StoreNotFound', 'TablesNotCreated',
+        'TablesOutdated', 'StaleLookupIds', 'IndexExists', 'CyclicDerivedDependency',
+        'AdmissionRejected', 'IndexResourceLimit', 'ClosureFanoutExceeded',
+        'PathCountExceeded', 'WriteLockUnsafe', 'MalformedTupleString'},
 }
 
 # Internals the review found in __all__ (A11, A13, A15). They still import by name.
@@ -188,7 +200,7 @@ _DROPPED = {
                            'ALL_SETOPS'},
     'zanzibar.graphindex': {'PermissionDelta'},
     'zanzibar.store': {'advance_index', 'ensure_cursor', 'assert_read_isolation', 'log_gap',
-                       'log_rows', 'log_watermark', 'open_set_engine', 'open_graph_index',
+                       'log_rows', 'log_watermark', 'open_graph_index',
                        'load_schema', 'ensure_schema', 'IndexCursor'},
 }
 
@@ -200,9 +212,11 @@ def test_subpackage_all_is_the_real_surface(modname):
     assert set(mod.__all__) == _EXPECTED_ALL[modname]
     for name in mod.__all__:
         assert hasattr(mod, name), name
-    for name in _DROPPED[modname]:
+    for name in _DROPPED[modname] | _DROPPED_EXCEPTIONS[modname]:
         assert name not in mod.__all__, name
         assert hasattr(mod, name), f'{name} must still import by name'
+        if name in _DROPPED_EXCEPTIONS[modname]:
+            assert getattr(mod, name) is getattr(zanzibar, name), name
 
 
 def test_setops_repr_is_short():
@@ -221,7 +235,7 @@ _BUILTIN_BASE = {
     'CyclicDerivedDependency': ValueError, 'SchemaMismatch': ValueError,
     'MissingDeltaProcessor': ValueError, 'PersistedSchemaRefused': ValueError,
     'MalformedTupleString': ValueError,
-    'UnsupportedByGraphIndex': Exception, 'DoublyBridgedShapeError': Exception,
+    'UnsupportedByGraphIndex': ValueError, 'DoublyBridgedShapeError': ValueError,   # TK164
     'WriteLockUnsafe': RuntimeError, 'UnloggedWriteRefused': RuntimeError,
     'StaleRead': RuntimeError, 'WatermarkGap': RuntimeError,
     'UnsafeIsolationLevel': RuntimeError, 'LookupNotFresh': RuntimeError,
@@ -229,6 +243,7 @@ _BUILTIN_BASE = {
     'StoreNotFound': KeyError, 'TablesNotCreated': RuntimeError, 'IndexExists': ValueError,
     'StaleLookupIds': KeyError, 'TablesOutdated': RuntimeError,   # TK154
     'CascadeNotRun': RuntimeError,   # TK3
+    'ForeignToken': RuntimeError,    # TK166 (a StaleRead)
 }
 _OUTSIDE_THE_ROOT = {'InvariantViolation', 'UnprovenExtensionWarning'}
 

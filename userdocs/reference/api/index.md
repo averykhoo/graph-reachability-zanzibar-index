@@ -17,9 +17,8 @@ Most programs need only the names importable from `zanzibar` itself. They load l
 `import zanzibar` imports none of the library's modules. The database stack (SQLModel and
 SQLAlchemy) is imported the first time you touch a name that needs it: `Store`,
 `ExpandResult`, `LookupResult`, and the exceptions defined by the store and the two
-backends. `parse_openfga_schema` and the exceptions and warning that
-[zanzibar.schema](schema.md) re-exports (listed at the foot of its page, from
-`ZanzibarError` to `UnprovenExtensionWarning`) never import it.
+backends. `parse_openfga_schema` and the exceptions and warning defined in
+`zanzibar.schema` (from `ZanzibarError` to `UnprovenExtensionWarning`) never import it.
 
 | Name | Kind | Documented at |
 |---|---|---|
@@ -30,9 +29,9 @@ backends. `parse_openfga_schema` and the exceptions and warning that
 | `__version__` | string | {py:data}`zanzibar.__version__`, below |
 | every exception, and `UnprovenExtensionWarning` | exception classes | the [Exceptions](../exceptions.md) page |
 
-The same classes are also importable from their subpackage (`from zanzibar.store import
-Store` and `from zanzibar import Store` give the same object). Each is documented once,
-under its top-level name.
+`Store`, `ExpandResult`, `LookupResult` and `parse_openfga_schema` are also importable
+from their subpackage (`from zanzibar.store import Store` and `from zanzibar import Store`
+give the same object). Each is documented once, under its top-level name.
 
 ```python
 import sys
@@ -63,13 +62,12 @@ print("sqlmodel" in sys.modules)  # -> True
 | [zanzibar.setengine](setengine.md) | The set engine: stores raw tuples and computes answers on each read. |
 | [zanzibar.graphindex](graphindex.md) | The graph index: a precomputed closure, so a check is a few indexed lookups. |
 
-Each subpackage re-exports some of the exceptions its code raises; the foot of each page
-lists which. Not every exception a subpackage raises is re-exported there (for example,
-`zanzibar.setengine` raises {py:exc}`~zanzibar.AdmissionRejected` but does not export it).
-Every exception is importable from `zanzibar`, which is the one place to import from when
-you catch one. The re-exports are the same classes as the top-level names, and they are
-documented on the [Exceptions](../exceptions.md) page.
+Exceptions have one public home: `zanzibar`. No subpackage lists an exception or the
+warning in its `__all__`. An older import such as `from zanzibar.store import StaleRead`
+still gives the same class, but it is not part of the API. The exceptions are documented
+on the [Exceptions](../exceptions.md) page.
 
+(api-result-markers)=
 ## Result markers
 
 {py:class}`zanzibar.LookupResult` and {py:class}`zanzibar.ExpandResult` both report access
@@ -85,7 +83,9 @@ granted through a wildcard as *markers*, in different shapes:
 The `variant` of a `LookupResult` marker is one of:
 
 - `"any"`: a subject-side wildcard. It is meaningful in a `lookup_reverse` result, where
-  `("user", "...", "any")` means every user (a `user:*` tuple).
+  `("user", "...", "any")` means every user (a `user:*` tuple), and
+  `("group", "member", "any")` means every `member` userset of every group (a
+  `[group:*#member]` grant, an extension).
 - `"all"`: an object-side wildcard, which exists only when the store is opened with
   `object_wildcard_shapes`. It is meaningful in a `lookup` result, where
   `("doc", "reader", "all")` means reader of every doc (a `doc:*` tuple).
@@ -133,8 +133,53 @@ with Session(engine) as session:
     print(sorted(store.expand("viewer", "doc:1").markers))  # -> [('user', '...')]
 ```
 
-How to read markers together with their exclusions, and how to compare the two shapes, is
-covered in [Find who can access what](../../how-to/query-access.md#read-wildcard-grants).
+### Testing whether a subject is covered
+
+A result means "the listed keys, plus every subject of a marker's shape, minus the excluded
+keys". A subject that a marker already covers may also appear as a key, so do not compare
+two results by equality of their key sets; compare them by what they cover.
+
+An `ExpandResult` does this for you: `key in result` and
+{py:meth}`ExpandResult.covers <zanzibar.ExpandResult.covers>`. A `LookupResult` has no
+`covers()` method or `in` test of its own, because it holds internal ids that only the
+store can translate. For a `lookup_reverse` result, a helper in this shape answers the same
+question, and the first two fields of each triple compare a lookup's markers with an
+`expand`'s:
+
+```python
+BANNED_SCHEMA = """
+model
+  schema 1.1
+type user
+type doc
+  relations
+    define banned: [user]
+    define viewer: [user, user:*] but not banned
+"""
+
+def covers(store, result, key):
+    """Is the (type, name, predicate) subject in this lookup_reverse result?"""
+    t, _name, p = key
+    starred = (t, p, "any") in result.markers
+    return key in store.result_keys(result) or (
+        starred and key not in store.excluded_keys(result))
+
+with Session(engine) as session:
+    store = Store(session, "covers", schema=BANNED_SCHEMA)
+    store.add_tuple("user:*", "viewer", "doc:2")
+    store.add_tuple("user:mallory", "banned", "doc:2")
+    public = store.lookup_reverse("viewer", "doc:2")
+    print(covers(store, public, ("user", "zed", "...")))  # -> True
+    print(covers(store, public, ("user", "mallory", "...")))  # -> False
+
+    exp = store.expand("viewer", "doc:2")
+    print(("user", "mallory", "...") in exp)  # -> False
+    lookup_shapes = {(t, p) for t, p, _variant in public.markers}
+    print(lookup_shapes == set(exp.markers))  # -> True
+```
+
+How to read markers in practice is covered in
+[Find who can access what](../../how-to/query-access.md#read-wildcard-grants).
 
 ```{toctree}
 :maxdepth: 1

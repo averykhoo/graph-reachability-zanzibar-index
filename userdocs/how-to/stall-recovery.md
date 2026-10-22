@@ -106,20 +106,18 @@ except IndexStalled as exc:
 If `stall_error` names the same row and the same error after several attempts, treat it
 as permanent.
 
-The closure fan-out cap ({py:exc}`zanzibar.ClosureFanoutExceeded`) never stalls the
+The write fan-out cap ({py:exc}`zanzibar.ClosureFanoutExceeded`) never stalls the
 index: `catch_up()` applies an over-cap row with a logged warning instead of refusing it.
-Until it has, though, writes through a `sync=True` instance on the same store id are
-refused with `ClosureFanoutExceeded` naming that backlog row; see
-[Cap write fan-out](fanout-cap.md#what-the-cap-applies-to).
+Until it has, the row still blocks synchronous writers; see
+[A pending row can block every synchronous write](fanout-cap.md#a-pending-row-can-block-every-synchronous-write).
 
 ### Writes through a sync instance fail too
 
-A `sync=True` instance applies the pending backlog as part of each of its writes. While
-the bad row is in the backlog, every write through such an instance runs into it, additions
-and removals alike (even the removal of the bad tuple itself), and is refused with
-`PathCountExceeded`. The message describes the backlog row, not the tuple you wrote; the
-exception's `failing_log_row` attribute holds that row's log id and the row itself, and
-`stall_error` on the async instance names it too:
+While the bad row is pending, every write through a `sync=True` instance runs into it,
+even the removal of the bad tuple itself, and is refused with `PathCountExceeded` naming
+the pending row in `failing_log_row` (the general rule is in
+[A pending row can block every synchronous write](fanout-cap.md#a-pending-row-can-block-every-synchronous-write)).
+`stall_error` on the async instance names the same row:
 
 ```python
 sync_store = Store(Session(engine), "my-app")
