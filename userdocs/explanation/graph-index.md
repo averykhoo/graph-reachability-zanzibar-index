@@ -27,6 +27,19 @@ a relation becomes a path:
 "Does alice have `viewer` on `doc:1`?" is then the question "is there a path from
 `user:alice` to `doc:1#viewer`?"
 
+Here are the four tuples that the example further down this page writes, and the graph
+they make. Alice is in `eng`, `eng` is inside `staff`, and both groups can view `doc:1`:
+
+```{image} img/graph-index-tuples.svg
+:class: only-light
+:alt: Four tuples drawn as four edges: user:alice to group:eng#member, group:eng#member to group:staff#member, and both groups to doc:1#viewer.
+```
+
+```{image} img/graph-index-tuples-dark.svg
+:class: only-dark
+:alt: Four tuples drawn as four edges: user:alice to group:eng#member, group:eng#member to group:staff#member, and both groups to doc:1#viewer.
+```
+
 ## Remembering every path
 
 Following paths on every check is what the set engine does. The graph index instead stores
@@ -58,7 +71,21 @@ from `a` to `u` with a path from `v` to `b`, and the count goes up by their prod
 paths(a, b)  +=  paths(a, u) × paths(v, b)
 ```
 
-Here `paths(x, x)` counts as 1, for the empty path. Removing the edge subtracts the same
+Here `paths(x, x)` counts as 1, for the empty path. In the picture, two nodes reach `u`
+and `v` reaches two nodes; with `u` and `v` themselves that is a three-by-three grid of
+pairs, and each pair gains the product of the two counts:
+
+```{image} img/graph-index-add-edge.svg
+:class: only-light
+:alt: Adding an edge from u to v: a1 reaches u by 2 paths and a2 by 1; v reaches b1 by 1 path and b2 by 3. Each pair (a, b) gains paths(a, u) times paths(v, b), for example 6 for (a1, b2).
+```
+
+```{image} img/graph-index-add-edge-dark.svg
+:class: only-dark
+:alt: Adding an edge from u to v: a1 reaches u by 2 paths and a2 by 1; v reaches b1 by 1 path and b2 by 3. Each pair (a, b) gains paths(a, u) times paths(v, b), for example 6 for (a1, b2).
+```
+
+Removing the edge subtracts the same
 product, computed without the edge. A pair whose count reaches zero is no longer connected,
 and its row is deleted. Nothing has to be searched or recomputed from scratch: a removal is
 local arithmetic over the rows that touch the edge's two ends.
@@ -114,7 +141,20 @@ doc_viewer = ("doc", "1", "viewer")
 print(path_count(alice, doc_viewer))  # -> 2
 ```
 
-The two paths are alice → `eng` → `doc:1`, and alice → `eng` → `staff` → `doc:1`. Remove
+The two paths are alice → `eng` → `doc:1`, and alice → `eng` → `staff` → `doc:1`. Here
+they are, with every row of the closure table for this data:
+
+```{image} img/graph-index-paths.svg
+:class: only-light
+:alt: The two paths from user:alice to doc:1#viewer, and the six closure rows with their path counts before and after removing tuple 3; the row for alice and doc:1#viewer has 2 paths, then 1.
+```
+
+```{image} img/graph-index-paths-dark.svg
+:class: only-dark
+:alt: The two paths from user:alice to doc:1#viewer, and the six closure rows with their path counts before and after removing tuple 3; the row for alice and doc:1#viewer has 2 paths, then 1.
+```
+
+Remove
 one grant and the count drops to one; alice can still view the document, and nothing had
 to be searched to find that out:
 
@@ -191,6 +231,16 @@ there a path from `user:*`? Either one is enough. Because the second probe does 
 a node for bob, a user who appears in no tuple at all is still a viewer, and a check never
 creates a node.
 
+```{image} img/graph-index-wildcard.svg
+:class: only-light
+:alt: user:* has an edge to folder:p#viewer, which has an edge to doc:1#viewer, so the closure stores a row from user:* to doc:1#viewer. A check for a user with no node finds no row from the user, but finds the row from user:*.
+```
+
+```{image} img/graph-index-wildcard-dark.svg
+:class: only-dark
+:alt: user:* has an edge to folder:p#viewer, which has an edge to doc:1#viewer, so the closure stores a row from user:* to doc:1#viewer. A check for a user with no node finds no row from the user, but finds the row from user:*.
+```
+
 ```python
 SCHEMA_PUBLIC = """
 model
@@ -230,6 +280,16 @@ The library also supports wildcards in places OpenFGA does not: usersets such as
 
 A wildcard userset shape such as `group:*#member` gets an *any* node, a declared wildcard
 object such as `folder:*` gets an *all* node, and a shape that is both gets both.
+
+```{image} img/graph-index-any-all.svg
+:class: only-light
+:alt: Left: group:eng#member and group:ops#member each bridge into the any node group:*#member, which is granted viewer on doc:1, so alice reaches doc:1 through eng. Right: user:bob is granted the all node folder:*#viewer, which bridges out to folder:p#viewer and folder:q#viewer. There is never an edge from an any node to an all node.
+```
+
+```{image} img/graph-index-any-all-dark.svg
+:class: only-dark
+:alt: Left: group:eng#member and group:ops#member each bridge into the any node group:*#member, which is granted viewer on doc:1, so alice reaches doc:1 through eng. Right: user:bob is granted the all node folder:*#viewer, which bridges out to folder:p#viewer and folder:q#viewer. There is never an edge from an any node to an all node.
+```
 
 These extra instance edges, called *bridges*, are what makes the stored paths through the
 middle of the graph complete. They cost one edge per instance, plus closure rows, as soon

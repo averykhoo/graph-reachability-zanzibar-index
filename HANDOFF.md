@@ -13,6 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
+> 2026-10-23c -- TK151: 8 light/dark SVG diagrams on the graph-index and boolean-operators explanation pages (`userdocs/_diagrams/make_diagrams.py`; regenerate, never hand-edit; pinned by `tests/test_userdocs_diagrams.py`).
 > 2026-10-23b -- `TK166` (foreign token -> `ForeignToken`) and `TK164` (exceptions only from `zanzibar`; refusals are `ValueError`s; schema types public) CLOSED via ultracode; TK151 docs updated, fable-reviewed (`docs/tk151-fable-review-2026-10-23.md`, "ship after small fixes") and the review applied. **0.1.0 left: TK162 (another session), then TK151 lands last** (user); cut held, version stays 0.0.5 under `[Unreleased]`. At the cut, delete the pre-release prose `tests/test_userdocs_prerelease_prose.py` lists. Commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 

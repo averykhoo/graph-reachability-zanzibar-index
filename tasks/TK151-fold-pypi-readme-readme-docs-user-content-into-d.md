@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-14
-moved: 2026-10-23b
-updated: 2026-10-23b
+moved: 2026-10-23c
+updated: 2026-10-23c
 closed:
 ---
 
@@ -90,3 +90,7 @@ IN FLIGHT 2026-10-23b: ultracode wf_7da61747-5e0 (tk166-tk164-tk151): TK166 then
 Round 1 of 2026-10-23b (wf_7da61747-5e0) DONE uncommitted: TK166 + TK164 code (orchestrator re-ran both sabotages first-hand: TK166 ownership check -> 34 failed/4 passed; TK164 ValueError base removed -> 5 failed), audit + round result at the top of docs/tk151-diataxis-plan-2026-10-20.md. Fable editorial review DONE: docs/tk151-fable-review-2026-10-23.md, verdict ship after small fixes. Round 2 IN FLIGHT: wf_50abfcec-e4a applies MUST 1-3 (MUST 2 as a guard test tests/test_userdocs_prerelease_prose.py; the prose itself goes at the cut) + SHOULD 4-7 + NICE 9-10. Then: FINAL_REVIEW counts regen, full gate, commit.
 
 Round 2 (wf_50abfcec-e4a) DONE: fable recs 1-6, 9, 10 applied, 7 partial (message wording -> TK169), 8 not done (-> TK163); per-rec table in docs/tk151-diataxis-plan-2026-10-20.md Correction 2026-10-23c. New guard tests/test_userdocs_prerelease_prose.py (integrator sabotage: dropped a known hit -> red). TRAP for after the cut: the guard flags any userdocs line matching /unreleased/i once __version__ leaves 0.0.x, so the next [Unreleased] CHANGELOG section mirrored into reference/changelog.md will turn it red: word that heading differently or narrow the guard then. Left before the cut: delete the six pre-release hits the guard lists; TK162 limits.md figures; optional viewer_base dedup (5 homes).
+
+### 2026-10-23c
+
+Diagrams round (user request: illustrate the layered derived-relation settling and the path-counting closure). LANDED: userdocs/_diagrams/make_diagrams.py -> 8 figures x light/dark SVG in userdocs/explanation/img/, shown on graph-index.md (5) and boolean-operators.md (3) with furo only-light/only-dark; Layers prose now explains rounds and names the internal relations. Numbers observed by probe, recorded in each figure docstring and in docs/tk151-diataxis-plan-2026-10-20.md Correction 2026-10-23d. PINNED: tests/test_userdocs_diagrams.py (regenerate-equality + both-themes shown), sabotaged red both ways. NEXT: optional figures for two-backends.md and consistency.md; otherwise unchanged (TK162, then the cut).

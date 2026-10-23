@@ -2,6 +2,44 @@
 
 ACTIVE-PLAN (`docs/README.md` §3). Owner row: `TK151`. Corrections go at the top, dated.
 
+## Correction 2026-10-23d — diagrams for the two "how it works" pages (session 2026-10-23c)
+
+User request (2026-10-23): the explanation pages cover the mechanism but need illustrations,
+especially the layered settling of derived relations (internal operand relations and
+derived edges materialized one layer before the next reads them) and the path-counting
+closure. Labels: **READ** / **RAN** / **REASONED** as above.
+
+- **LANDED:** `userdocs/_diagrams/make_diagrams.py` draws 8 figures as plain SVG, each in a
+  light and a dark variant (`userdocs/explanation/img/*.svg`, 16 files), shown with furo's
+  `only-light` / `only-dark` image classes. No new dependency: no Sphinx diagram extension
+  (none installed; `sphinxcontrib-mermaid` would add a package and client-side JS), no
+  Graphviz (`dot` is not on this machine or the docs CI). RAN: furo's CSS hides the
+  inactive variant (`html body .only-dark{display:none!important}`), and the built
+  `graph-index.html` shows one figure per slot.
+  * `graph-index.md`: tuples as a graph; the add-edge product grid; the two paths with the
+    closure table before/after removing tuple 3; the `user:*` two-probe check; any/all
+    nodes and bridges.
+  * `boolean-operators.md`: the residue for `[user, user:*] but not banned`; the three
+    layers (closure, `viewer`, `commenter`); one write cascading through them. The
+    "Layers" prose now says how rounds work (each reads the outbox rows the previous step
+    added) and names the internal relations.
+- **Numbers are observed, not drawn** (RAN 2026-10-23, probes in `.scratch/diagrams/`,
+  results copied into each figure function's docstring): the counting example's closure
+  rows `alice->doc:1#viewer` paths=2 (1 after removing `eng viewer doc:1`),
+  `eng->doc:1#viewer` 2 -> 1, the rest 1; for `BOOL_SCHEMA`
+  `strata == [[('doc','viewer')], [('doc','commenter')]]`, leaves `viewer.0` (storage),
+  `viewer.1` (negative), `commenter.0`; writing `user:alice banned doc:1` appended outbox
+  rows ADDED `banned`, ADDED `viewer.1`, REMOVED `viewer`, REMOVED `commenter`
+  (`DeltaProcessor._run_cascade` reads rows since the previous round's frontier, READ).
+- **Pinned:** `tests/test_userdocs_diagrams.py`: committed SVGs equal the
+  generator's output; every figure is shown in both themes. Sabotage RAN: a label changed
+  in `graph_two_paths` without regenerating -> `stale=['graph-index-paths-dark.svg',
+  'graph-index-paths.svg']`; the dark `boolean-cascade` directive deleted -> `figures not
+  shown with their theme class: ['boolean-cascade-dark.svg']`; both restored -> 2 passed.
+- **Not done (REASONED):** `two-backends.md` (the memoization spectrum) and
+  `consistency.md` (log -> set engine -> index) would also profit from a figure; not asked.
+  The figures are 840-960 px wide and furo scales them to ~80% in its content column.
+
 ## Correction 2026-10-23c — fable round applied
 
 Integrator: workflow unit `r2-integrate` (run `wf-0p1`), after four writer+reviewer units

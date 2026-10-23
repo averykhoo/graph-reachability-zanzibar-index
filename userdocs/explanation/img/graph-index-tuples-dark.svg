@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 250" width="860" height="250" role="img">
+<style>.s{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif} .m{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace} .bgr{fill:#1a1c1e;stroke:#3d444d} .band{fill:#212529;stroke:none} .n{fill:#22272e;stroke:#768390;stroke-width:1.3} .gh{fill:none;stroke:#768390;stroke-width:1.3} .lf{fill:#3b3418;stroke:#768390;stroke-width:1.3} .dv{fill:#13304f;stroke:#4493f8;stroke-width:1.5} .wd{fill:#38254d;stroke:#ab7df8;stroke-width:1.5} .cell{fill:#22272e;stroke:#3d444d} .hl{fill:#13304f;stroke:#4493f8} .bdg{fill:#22272e;stroke-width:1.4} .ln{fill:none;stroke-linecap:round} .s-ink{stroke:#e6edf3} .c-ink{fill:#e6edf3} .s-muted{stroke:#9198a1} .c-muted{fill:#9198a1} .s-blue{stroke:#4493f8} .c-blue{fill:#4493f8} .s-orange{stroke:#f0883e} .c-orange{fill:#f0883e} .s-green{stroke:#3fb950} .c-green{fill:#3fb950} .s-red{stroke:#f85149} .c-red{fill:#f85149} .s-purple{stroke:#ab7df8} .c-purple{fill:#ab7df8}</style>
+<defs><marker id="h-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e6edf3"/></marker><marker id="h-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9198a1"/></marker><marker id="h-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4493f8"/></marker><marker id="h-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f0883e"/></marker><marker id="h-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3fb950"/></marker><marker id="h-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f85149"/></marker><marker id="h-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ab7df8"/></marker></defs>
+<rect class="bgr" x="0.5" y="0.5" width="859" height="249" rx="10"/>
+<text class="s c-ink" x="24.0" y="38.0" font-size="12.5" text-anchor="start" font-weight="600">tuples</text>
+<circle class="bdg s-ink" cx="36.0" cy="62.0" r="9"/>
+<text class="s c-ink" x="36.0" y="66.0" font-size="11" text-anchor="middle" font-weight="600">1</text>
+<text class="m c-ink" x="54.0" y="66.0" font-size="12.5" text-anchor="start">user:alice member group:eng</text>
+<circle class="bdg s-ink" cx="36.0" cy="92.0" r="9"/>
+<text class="s c-ink" x="36.0" y="96.0" font-size="11" text-anchor="middle" font-weight="600">2</text>
+<text class="m c-ink" x="54.0" y="96.0" font-size="12.5" text-anchor="start">group:eng#member member group:staff</text>
+<circle class="bdg s-ink" cx="36.0" cy="122.0" r="9"/>
+<text class="s c-ink" x="36.0" y="126.0" font-size="11" text-anchor="middle" font-weight="600">3</text>
+<text class="m c-ink" x="54.0" y="126.0" font-size="12.5" text-anchor="start">group:eng#member viewer doc:1</text>
+<circle class="bdg s-ink" cx="36.0" cy="152.0" r="9"/>
+<text class="s c-ink" x="36.0" y="156.0" font-size="11" text-anchor="middle" font-weight="600">4</text>
+<text class="m c-ink" x="54.0" y="156.0" font-size="12.5" text-anchor="start">group:staff#member viewer doc:1</text>
+<text class="s c-ink" x="320.0" y="38.0" font-size="12.5" text-anchor="start" font-weight="600">graph: each tuple is one edge, user → object#relation</text>
+<rect class="n" x="332.0" y="135.0" width="96.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="380.0" y="154.5" font-size="12.5" text-anchor="middle">user:alice</text>
+<rect class="n" x="479.8" y="135.0" width="140.4" height="30.0" rx="6"/>
+<text class="m c-ink" x="550.0" y="154.5" font-size="12.5" text-anchor="middle">group:eng#member</text>
+<rect class="n" x="627.4" y="67.0" width="155.2" height="30.0" rx="6"/>
+<text class="m c-ink" x="705.0" y="86.5" font-size="12.5" text-anchor="middle">group:staff#member</text>
+<rect class="n" x="714.6" y="175.0" width="110.8" height="30.0" rx="6"/>
+<text class="m c-ink" x="770.0" y="194.5" font-size="12.5" text-anchor="middle">doc:1#viewer</text>
+<path class="ln s-ink" d="M428.0,150.0 Q453.9,150.0 479.8,150.0" stroke-width="1.6" marker-end="url(#h-ink)"/>
+<circle class="bdg s-ink" cx="449.0" cy="134.0" r="9"/>
+<text class="s c-ink" x="449.0" y="138.0" font-size="11" text-anchor="middle" font-weight="600">1</text>
+<path class="ln s-ink" d="M588.6,135.0 Q619.6,116.0 650.7,97.0" stroke-width="1.6" marker-end="url(#h-ink)"/>
+<circle class="bdg s-ink" cx="600.0" cy="108.0" r="9"/>
+<text class="s c-ink" x="600.0" y="112.0" font-size="11" text-anchor="middle" font-weight="600">2</text>
+<path class="ln s-ink" d="M592.1,165.0 Q655.8,165.7 714.6,190.0" stroke-width="1.6" marker-end="url(#h-ink)"/>
+<circle class="bdg s-ink" cx="660.0" cy="192.0" r="9"/>
+<text class="s c-ink" x="660.0" y="196.0" font-size="11" text-anchor="middle" font-weight="600">3</text>
+<path class="ln s-ink" d="M751.6,97.0 Q769.1,136.0 786.6,175.0" stroke-width="1.6" marker-end="url(#h-ink)"/>
+<circle class="bdg s-ink" cx="766.0" cy="132.0" r="9"/>
+<text class="s c-ink" x="766.0" y="136.0" font-size="11" text-anchor="middle" font-weight="600">4</text>
+<text class="s c-muted" x="320.0" y="232.0" font-size="12.5" text-anchor="start" font-style="italic">“does alice have viewer on doc:1?” = is there a path from user:alice to doc:1#viewer?</text>
+</svg>

@@ -95,6 +95,16 @@ print(store.check("user:bob", "viewer", "doc:1"))  # -> True
 print(store.check("user:mallory", "viewer", "doc:1"))  # -> False
 ```
 
+```{image} img/boolean-residue.svg
+:class: only-light
+:alt: The tuple user:* viewer doc:1 becomes a closure edge to the leaf doc:1#viewer.0, and user:mallory banned doc:1 an edge to doc:1#viewer.1. The delta processor writes no derived edges for doc:1#viewer, only a residue record: covered by user:*, except user:mallory. So bob is a viewer and mallory is not.
+```
+
+```{image} img/boolean-residue-dark.svg
+:class: only-dark
+:alt: The tuple user:* viewer doc:1 becomes a closure edge to the leaf doc:1#viewer.0, and user:mallory banned doc:1 an edge to doc:1#viewer.1. The delta processor writes no derived edges for doc:1#viewer, only a residue record: covered by user:*, except user:mallory. So bob is a viewer and mallory is not.
+```
+
 The same structure shows through in a reverse lookup, which reports the wildcard grant as
 a marker and mallory as an exclusion from it, rather than listing every user:
 
@@ -138,9 +148,40 @@ define commenter: viewer and verified
 
 `commenter` can only be computed once `viewer` is right. So the schema compiler sorts
 derived relations into layers (*strata*): a relation's operands all sit in lower layers.
-After a write, the delta processor settles the lowest affected layer first, then the next,
-using only layers that are already final. Each recomputation works out a member's state
-from scratch and compares it with what is stored, so repeating one changes nothing.
+Layer 0 is the closure itself, holding the plain relations and the internal operand
+relations (`viewer.0` holds the stored `viewer` tuples, `viewer.1` the `banned` side,
+`commenter.0` the `verified` side). Every derived relation sits one layer above the
+highest layer it reads:
+
+```{image} img/boolean-layers.svg
+:class: only-light
+:alt: Three layers. Layer 0 is the closure, with the internal relations doc:1#viewer.0, doc:1#viewer.1 and doc:1#commenter.0. Layer 1 is doc:1#viewer, computed as viewer.0 but not viewer.1. Layer 2 is doc:1#commenter, computed as viewer and commenter.0.
+```
+
+```{image} img/boolean-layers-dark.svg
+:class: only-dark
+:alt: Three layers. Layer 0 is the closure, with the internal relations doc:1#viewer.0, doc:1#viewer.1 and doc:1#commenter.0. Layer 1 is doc:1#viewer, computed as viewer.0 but not viewer.1. Layer 2 is doc:1#commenter, computed as viewer and commenter.0.
+```
+
+After a write, the delta processor works in rounds. Each round reads the outbox rows that
+the previous step added, recomputes the derived relations they touch, lowest layer first,
+and writes the result as derived edges and residue rows, which add outbox rows of their
+own. So a derived relation is always computed from layers that are already final, and a
+change climbs the layers one round at a time until a round finds nothing to do. Here is
+the write that bans alice, with alice already a viewer and verified:
+
+```{image} img/boolean-cascade.svg
+:class: only-light
+:alt: One write, three steps. Layer 0: the write adds edges from alice to doc:1#banned and doc:1#viewer.1. Layer 1: viewer is recomputed for alice and her derived edge removed. Layer 2: commenter is recomputed from the updated viewer and her derived edge removed. Then the transaction commits.
+```
+
+```{image} img/boolean-cascade-dark.svg
+:class: only-dark
+:alt: One write, three steps. Layer 0: the write adds edges from alice to doc:1#banned and doc:1#viewer.1. Layer 1: viewer is recomputed for alice and her derived edge removed. Layer 2: commenter is recomputed from the updated viewer and her derived edge removed. Then the transaction commits.
+```
+
+Each recomputation works out a member's state from scratch and compares it with what is
+stored, so repeating one changes nothing.
 
 All of this happens inside the transaction that updates the index. In the default
 synchronous mode that is the write itself, so a check made after `add_tuple` returns sees

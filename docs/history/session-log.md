@@ -33,6 +33,34 @@ from here.
 
 ---
 
+## 2026-10-23c — TK151: diagrams for "How the graph index works" and "How `and` and `but not` work"
+
+rows: TK151 (comment: diagrams round)
+
+`task lint: clean (13 checks, 288 task file(s) parsed), 27 warning(s)`
+
+`read: board only`
+
+`asked: none`
+
+- **User asked for illustrations** of how it all works: the layered settling of derived
+  relations (internal operand relations, derived edges materialized before the next layer
+  reads them) and the path-counting closure from the original README.
+- **8 figures, light + dark SVG, no new dependency**, drawn by
+  `userdocs/_diagrams/make_diagrams.py` into `userdocs/explanation/img/`: five on
+  `graph-index.md` (tuples as a graph, add-edge product grid, two paths + closure table,
+  `user:*` two-probe check, any/all bridges), three on `boolean-operators.md` (residue,
+  the three layers, one write cascading through them). The "Layers" prose now explains the
+  rounds. Detail and probe evidence:
+  [`docs/tk151-diataxis-plan-2026-10-20.md`](../tk151-diataxis-plan-2026-10-20.md)
+  Correction 2026-10-23d.
+- **New guard** `tests/test_userdocs_diagrams.py`: committed SVGs equal the generator's
+  output, and every figure is shown in both themes; each sabotaged red first-hand.
+
+Still owed: nothing.
+
+---
+
 ## 2026-10-23b — `TK166` + `TK164` closed via ultracode; TK151 audited, fable-reviewed, review applied
 
 rows: TK166 (closed), TK164 (closed), TK151 (comments: in flight, rounds 1-2), TK163 + TK169 (comments: fable recs 8, 7)
