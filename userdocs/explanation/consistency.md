@@ -54,6 +54,16 @@ Async mode makes writes cheaper for the writer: the cost of updating the index m
 whoever runs `catch_up()`. The price is that, for a while, the index is behind the log.
 {py:meth}`zanzibar.Store.lag` counts the log rows the index has not applied yet.
 
+```{image} img/consistency-sync-async.svg
+:class: only-light
+:alt: Two tuple logs of six rows. With sync=True the cursor is after row 6, so lag is 0. With sync=False the cursor is after row 4, and rows 5 and 6 wait for catch_up, so lag is 2. The id of the newest row is the newest write's token.
+```
+
+```{image} img/consistency-sync-async-dark.svg
+:class: only-dark
+:alt: Two tuple logs of six rows. With sync=True the cursor is after row 6, so lag is 0. With sync=False the cursor is after row 4, and rows 5 and 6 wait for catch_up, so lag is 2. The id of the newest row is the newest write's token.
+```
+
 `sync` is a property of one `Store` object, not of the stored data. Two instances on the
 same store id can use different settings. A synchronous instance applies whatever backlog
 async instances left only at its own next write or `catch_up()`, so opening a store
@@ -160,6 +170,16 @@ print(store.check("user:alice", "viewer", "doc:1", at_least=revoke))    # -> Fal
 The first answer is the stale ALLOW: the removal is in the log but not in the index. The
 second carries the revoke's token and is correct.
 
+```{image} img/consistency-revoke.svg
+:class: only-light
+:alt: The log holds t1, the grant, and t2, the revoke; the index has applied only t1, while the set engine has read t2. A check without a token reads the index and returns True, a stale allow. A check with at_least=t2 sees that the index cursor is before t2, falls back to the set engine, and returns False.
+```
+
+```{image} img/consistency-revoke-dark.svg
+:class: only-dark
+:alt: The log holds t1, the grant, and t2, the revoke; the index has applied only t1, while the set engine has read t2. A check without a token reads the index and returns True, a stale allow. A check with at_least=t2 sees that the index cursor is before t2, falls back to the set engine, and returns False.
+```
+
 The staleness of an untokened read is **bounded**: the index trails the log by whatever the
 async worker has not applied *yet*. That bound is what makes an untokened read acceptable
 at all, and it is why a stalled index (below) changes the rules.
@@ -258,6 +278,16 @@ rules change:
 
 So a stall costs lookups, some speed, and synchronous writes. It never makes `check` give
 a wrong answer.
+
+```{image} img/consistency-stall.svg
+:class: only-light
+:alt: Seven log rows. Rows 1 to 3 are applied and the cursor is after row 3. Row 4 fails, and rows 5 to 7, revokes included, wait behind it. While the stall lasts, a check without a token uses the set engine, a lookup without a token raises IndexStalled, and writes through a sync=True instance are refused.
+```
+
+```{image} img/consistency-stall-dark.svg
+:class: only-dark
+:alt: Seven log rows. Rows 1 to 3 are applied and the cursor is after row 3. Row 4 fails, and rows 5 to 7, revokes included, wait behind it. While the stall lasts, a check without a token uses the set engine, a lookup without a token raises IndexStalled, and writes through a sync=True instance are refused.
+```
 
 **How a stall ends.** A successful `catch_up()` that applies at least one row clears it, so
 a transient failure clears at the next good run that has work to do. (A stall recorded

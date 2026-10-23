@@ -31,6 +31,20 @@ does the work: adding one tuple adds a row for every new pair it connects, which
 many, and removing it takes them away again. [How the graph index works](graph-index.md)
 explains how that is kept exact.
 
+Here is the chain from the example further down this page, both ways: alice is in `eng`,
+`eng` is in `staff`, `staff` can view `folder:root`, which is the parent of
+`folder:projects`, which is the parent of `doc:roadmap`.
+
+```{image} img/backends-work.svg
+:class: only-light
+:alt: The same chain of six nodes, from user:alice down to doc:roadmap#viewer, twice. The set engine walks all five hops on every check. The graph index stored one row from user:alice to doc:roadmap#viewer when the chain was connected, so a check reads that one row.
+```
+
+```{image} img/backends-work-dark.svg
+:class: only-dark
+:alt: The same chain of six nodes, from user:alice down to doc:roadmap#viewer, twice. The set engine walks all five hops on every check. The graph index stored one row from user:alice to doc:roadmap#viewer when the chain was connected, so a check reads that one row.
+```
+
 These are the two ends of one spectrum. A cache in front of the set engine would sit
 somewhere in the middle: it remembers some answers and has to forget them when the data
 changes. The graph index is the far end, where every answer is remembered and nothing is
@@ -89,6 +103,16 @@ Reads then go to whichever backend can answer correctly:
   write. Without a token, they raise {py:exc}`zanzibar.IndexStalled` only when the index
   is stalled, and otherwise read the index as it is, the same as an untokened `check`.
 - `expand` is served by the set engine only, so it never waits for the index.
+
+```{image} img/store-composition.svg
+:class: only-light
+:alt: A write first is validated by the set engine, then appended to the tuple log, which returns its id as the token, then applied to the graph index, in the same transaction when sync or later in catch_up when async. The set engine reads new log rows; the index applies them in order. expand always reads the set engine; check reads the index if it is fresh enough and the set engine otherwise; lookup and lookup_reverse read only the index and raise LookupNotFresh or IndexStalled when it is not fresh.
+```
+
+```{image} img/store-composition-dark.svg
+:class: only-dark
+:alt: A write first is validated by the set engine, then appended to the tuple log, which returns its id as the token, then applied to the graph index, in the same transaction when sync or later in catch_up when async. The set engine reads new log rows; the index applies them in order. expand always reads the set engine; check reads the index if it is fresh enough and the set engine otherwise; lookup and lookup_reverse read only the index and raise LookupNotFresh or IndexStalled when it is not fresh.
+```
 
 So in a store, the graph index is what makes reads fast and lookups possible, and the set
 engine is what keeps writes honest and lets a read be correct while the index is catching

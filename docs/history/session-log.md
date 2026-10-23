@@ -33,6 +33,28 @@ from here.
 
 ---
 
+## 2026-10-23d — TK151: diagrams for "The two backends" and "Consistency"; pushed
+
+rows: TK151 (comment: second diagrams round)
+
+`task lint: clean (13 checks, 288 task file(s) parsed), 27 warning(s)`
+
+`read: show TK151`
+
+`asked: none`
+
+- **User asked for the two figures 2026-10-23c left out, then a push.** Five figures from
+  `userdocs/_diagrams/make_diagrams.py`: two on `two-backends.md` (where the work happens;
+  how a `Store` routes writes and reads), three on `consistency.md` (sync vs async on the
+  log, the stale-revoke example, a stall). Detail:
+  [`docs/tk151-diataxis-plan-2026-10-20.md`](../tk151-diataxis-plan-2026-10-20.md)
+  Correction 2026-10-23e.
+- Pushed to `origin/master` with this entry's commit and 2026-10-23c's; CI babysat.
+
+Still owed: nothing.
+
+---
+
 ## 2026-10-23c — TK151: diagrams for "How the graph index works" and "How `and` and `but not` work"
 
 rows: TK151 (comment: diagrams round)

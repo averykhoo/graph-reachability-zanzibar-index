@@ -2,6 +2,27 @@
 
 ACTIVE-PLAN (`docs/README.md` §3). Owner row: `TK151`. Corrections go at the top, dated.
 
+## Correction 2026-10-23e — diagrams for two-backends and consistency (session 2026-10-23d)
+
+User request (2026-10-23): add the two figures the previous correction listed as not done,
+then push. Labels as above.
+
+- **LANDED:** five more figures from `userdocs/_diagrams/make_diagrams.py`, light and dark.
+  `two-backends.md`: `backends-work` (the page's alice -> `doc:roadmap` chain, walked on
+  every check vs one stored row) and `store-composition` (write steps validate / log /
+  apply; which backend each read surface uses). `consistency.md`: `consistency-sync-async`
+  (log rows and the cursor, `lag()`), `consistency-revoke` (the page's stale-ALLOW example
+  and the token's fallback), `consistency-stall` (one failing row blocks the rows behind
+  it; what each read does meanwhile).
+- **Provenance (READ):** every claim drawn is taken from the page it illustrates, whose
+  examples `tests/test_userdocs_examples.py` executes: the chain's five tuples
+  (two-backends "Seeing both answer"), the read routing (two-backends "How a Store
+  combines them" and consistency's table), the stale ALLOW then False under `at_least`
+  (consistency "What can be stale"), the stall rules (consistency "Stalls").
+- Two style classes (`lf2`, `bad`) joined the shared stylesheet, so all 13 figures'
+  SVGs were regenerated; the earlier eight changed only in their `<style>` line (REASONED
+  from the generator diff; `tests/test_userdocs_diagrams.py` is green, RAN).
+
 ## Correction 2026-10-23d — diagrams for the two "how it works" pages (session 2026-10-23c)
 
 User request (2026-10-23): the explanation pages cover the mechanism but need illustrations,

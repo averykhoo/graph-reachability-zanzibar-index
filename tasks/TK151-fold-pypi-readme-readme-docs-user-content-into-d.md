@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-14
-moved: 2026-10-23c
-updated: 2026-10-23c
+moved: 2026-10-23d
+updated: 2026-10-23d
 closed:
 ---
 
@@ -94,3 +94,7 @@ Round 2 (wf_50abfcec-e4a) DONE: fable recs 1-6, 9, 10 applied, 7 partial (messag
 ### 2026-10-23c
 
 Diagrams round (user request: illustrate the layered derived-relation settling and the path-counting closure). LANDED: userdocs/_diagrams/make_diagrams.py -> 8 figures x light/dark SVG in userdocs/explanation/img/, shown on graph-index.md (5) and boolean-operators.md (3) with furo only-light/only-dark; Layers prose now explains rounds and names the internal relations. Numbers observed by probe, recorded in each figure docstring and in docs/tk151-diataxis-plan-2026-10-20.md Correction 2026-10-23d. PINNED: tests/test_userdocs_diagrams.py (regenerate-equality + both-themes shown), sabotaged red both ways. NEXT: optional figures for two-backends.md and consistency.md; otherwise unchanged (TK162, then the cut).
+
+### 2026-10-23d
+
+Second diagrams round (user: add the two figures 2026-10-23c listed as not done, then push). LANDED: backends-work + store-composition on two-backends.md; consistency-sync-async, consistency-revoke, consistency-stall on consistency.md; all from userdocs/_diagrams/make_diagrams.py, light/dark, pinned by tests/test_userdocs_diagrams.py. Detail: docs/tk151-diataxis-plan-2026-10-20.md Correction 2026-10-23e. NEXT: unchanged (TK162, then the cut).

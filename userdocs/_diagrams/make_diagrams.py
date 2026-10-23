@@ -32,7 +32,7 @@ PALETTES = {
         "blue": "#0969da", "orange": "#bc4c00", "green": "#1a7f37", "red": "#cf222e",
         "purple": "#8250df",
         "leaf": "#fff8c5", "derived": "#ddf4ff", "wild": "#fbefff", "band": "#f2f4f6",
-        "badge": "#ffffff",
+        "badge": "#ffffff", "bad": "#ffebe9",
     },
     "dark": {
         "bg": "#1a1c1e", "frame": "#3d444d", "ink": "#e6edf3", "muted": "#9198a1",
@@ -40,7 +40,7 @@ PALETTES = {
         "blue": "#4493f8", "orange": "#f0883e", "green": "#3fb950", "red": "#f85149",
         "purple": "#ab7df8",
         "leaf": "#3b3418", "derived": "#13304f", "wild": "#38254d", "band": "#212529",
-        "badge": "#22272e",
+        "badge": "#22272e", "bad": "#4c1d1f",
     },
 }
 COLOURS = ("ink", "muted", "blue", "orange", "green", "red", "purple")
@@ -148,6 +148,8 @@ class Fig:
             f".wd{{fill:{pal['wild']};stroke:{pal['purple']};stroke-width:1.5}}",
             f".cell{{fill:{pal['node']};stroke:{pal['frame']}}}",
             f".hl{{fill:{pal['derived']};stroke:{pal['blue']}}}",
+            f".lf2{{fill:{pal['leaf']};stroke:{pal['frame']}}}",
+            f".bad{{fill:{pal['bad']};stroke:{pal['red']}}}",
             f".bdg{{fill:{pal['badge']};stroke-width:1.4}}",
             ".ln{fill:none;stroke-linecap:round}",
         ]
@@ -463,8 +465,176 @@ def boolean_residue() -> Fig:
     return f
 
 
+# ---------------------------------------------------------------------------
+# The two backends (explanation/two-backends.md)
+# ---------------------------------------------------------------------------
+
+CHAIN = ["user:alice", "group:eng#member", "group:staff#member", "folder:root#viewer",
+         "folder:projects#viewer", "doc:roadmap#viewer"]
+
+
+def backends_work() -> Fig:
+    """The page's example chain, evaluated at read time or stored at write time."""
+    f = Fig("backends-work", 920, 372)
+    for px, title, sub in [(12, "set engine", "does the work when you read"),
+                           (466, "graph index", "does the work when you write")]:
+        f.rect(px, 12, 442, 348)
+        f.text(px + 16, 38, title, bold=True)
+        f.text(px + 16, 56, sub, colour="muted", size=11.5)
+    stacks = []
+    for cx in (124, 578):
+        boxes = [f.box(Box(cx, 92 + 40 * i, name, w=186)) for i, name in enumerate(CHAIN)]
+        for a, b in zip(boxes, boxes[1:]):
+            f.arrow(a.bottom, b.top, colour="muted")
+        stacks.append(boxes)
+    left, right = stacks
+    f.arrow(left[-1].right, left[0].right, colour="orange", width=2.2, bend=70)
+    f.text(272, 186, "check walks the chain:", colour="orange", size=11.5)
+    f.text(272, 204, "5 hops, on every check", colour="orange", size=11.5)
+    f.arrow(right[0].right, right[-1].right, colour="green", width=2.2, dashed="2 4",
+            bend=-70)
+    f.text(726, 186, "one stored row, written when", colour="green", size=11.5)
+    f.text(726, 204, "the chain was connected;", colour="green", size=11.5)
+    f.text(726, 222, "check reads it: 1 lookup", colour="green", size=11.5)
+    f.text(28, 336, "write: record 1 tuple.  read: grows with depth and fan-out.",
+           colour="muted", size=11.5)
+    f.text(482, 336, "write: a row per newly connected pair.  read: a few lookups.",
+           colour="muted", size=11.5)
+    return f
+
+
+def store_composition() -> Fig:
+    """How a ``Store`` routes writes and reads (two-backends.md, "How a Store combines
+    them"; consistency.md, "What can be stale")."""
+    f = Fig("store-composition", 940, 372)
+    f.text(24, 34, "writes", bold=True)
+    f.text(470, 34, "inside a Store", bold=True, anchor="middle")
+    f.text(916, 34, "reads", bold=True, anchor="end")
+    eng = f.box(Box(470, 92, ["set engine", "in memory, bitmaps"]))
+    log = f.box(Box(470, 196, ["tuples + tuple log", "the source of truth"], kind="leaf"))
+    idx = f.box(Box(470, 300, ["graph index + cursor", "a view of the log"], kind="derived"))
+    w = f.box(Box(104, 196, ["add_tuple", "remove_tuple"]))
+    f.arrow(w.at(0.4, -1), eng.left, bend=-20, label="1  validate (else AdmissionRejected)",
+            label_at=0.55, label_dx=-6, label_dy=-10)
+    f.arrow(w.right, log.left, label="2  append a log row, return its id (the token)",
+            label_dx=6, label_dy=-8)
+    f.arrow(w.at(0.4, 1), idx.left, bend=20, dashed=True)
+    f.text(24, 330, "3  apply: in the same transaction (sync),", size=11.5)
+    f.text(24, 348, "    or later, in catch_up() (async)", size=11.5)
+    f.arrow(log.at(-0.2, -1), eng.at(-0.2, 1), colour="green", label="new rows",
+            label_dx=-34, label_dy=4)
+    f.arrow(log.at(-0.2, 1), idx.at(-0.2, -1), colour="green", label="rows in order",
+            label_dx=-44, label_dy=4)
+    ex = f.box(Box(840, 92, "expand"))
+    ck = f.box(Box(840, 196, "check"))
+    lk = f.box(Box(840, 300, ["lookup", "lookup_reverse"]))
+    f.arrow(ex.left, eng.right, colour="blue", label="always", label_dy=-8)
+    f.arrow(ck.at(-1, 0.3), idx.at(1, -0.4), colour="blue", label="if fresh enough",
+            label_at=0.45, label_dx=30, label_dy=-14)
+    f.arrow(ck.at(-1, -0.3), eng.at(1, 0.4), colour="orange", label="otherwise",
+            label_at=0.45, label_dx=8, label_dy=-6)
+    f.arrow(lk.left, idx.right, colour="blue", label="only", label_dy=-8)
+    f.text(700, 350, "not fresh: LookupNotFresh / IndexStalled", colour="red", size=11.5)
+    return f
+
+
+# ---------------------------------------------------------------------------
+# Consistency (explanation/consistency.md)
+# ---------------------------------------------------------------------------
+
+def log_strip(f: Fig, x, y, n, cw=56, h=34, styles=None, labels=None):
+    """``n`` log rows left to right."""
+    styles, labels = styles or {}, labels or {}
+    for i in range(n):
+        f.rect(x + cw * i, y, cw, h, cls=styles.get(i + 1, "cell"), rx=0)
+        f.text(x + cw * i + cw / 2, y + h / 2 + 4.5, labels.get(i + 1, f"row {i + 1}"),
+               anchor="middle", mono=True, size=11.5)
+
+
+def cursor(f: Fig, x, y, text="cursor", colour="blue"):
+    f.parts.append(f'<path class="c-{colour}" d="M{x:.1f},{y:.1f} l-7,12 h14 z"/>')
+    f.text(x, y + 28, text, anchor="middle", colour=colour, size=11.5, bold=True)
+
+
+def consistency_sync_async() -> Fig:
+    f = Fig("consistency-sync-async", 920, 262)
+    f.text(24, 34, "the tuple log, and how far the graph index has applied it", bold=True)
+    x0, cw = 190, 62
+    for y, name, sub, applied, note in [
+            (64, "sync=True", "the default", 6,
+             ["lag() is 0: each write and its index", "update commit together"]),
+            (160, "sync=False", "async", 4,
+             ["lag() is 2: these rows wait for", "catch_up(), which applies them in batches"])]:
+        f.text(24, y + 16, name, mono=True, bold=True)
+        f.text(24, y + 34, sub, colour="muted", size=11.5)
+        styles = {i: ("hl" if i <= applied else "lf2") for i in range(1, 7)}
+        log_strip(f, x0, y, 6, cw=cw, styles=styles)
+        cursor(f, x0 + cw * applied, y + 38)
+        f.text(x0 + cw * 6 + 24, y + 12, note[0], colour="muted", size=11.5)
+        f.text(x0 + cw * 6 + 24, y + 30, note[1], colour="muted", size=11.5)
+    f.text(x0 + cw * 5.5, 56, "newest write: its id is the token", anchor="middle",
+           colour="muted", size=11)
+    f.text(24, 250, "blue: applied to the index", colour="muted", size=11.5)
+    f.text(200, 250, "yellow: logged, not applied yet", colour="muted", size=11.5)
+    return f
+
+
+def consistency_revoke() -> Fig:
+    """The page's executed example: async store, grant caught up, then revoked."""
+    f = Fig("consistency-revoke", 980, 300)
+    f.text(24, 34, "async: the grant was applied, the revoke not yet", bold=True)
+    f.rect(24, 64, 250, 34, cls="hl", rx=0)
+    f.text(34, 86, "t1  ADD alice viewer doc:1", mono=True, size=11.5)
+    f.rect(24, 98, 250, 34, cls="lf2", rx=0)
+    f.text(34, 120, "t2  REMOVE alice viewer doc:1", mono=True, size=11.5)
+    f.text(150, 56, "tuple log", anchor="middle", colour="muted", size=11.5)
+    f.parts.append('<path class="c-blue" d="M276,98 l12,-7 v14 z"/>')
+    f.text(294, 102, "cursor", colour="blue", size=11.5, bold=True)
+    idx = f.box(Box(480, 110, ["graph index", "applied up to t1: alice can view"], kind="derived"))
+    eng = f.box(Box(480, 222, ["set engine", "has read t2: alice cannot"]))
+    f.arrow((276, 124), eng.left, colour="green", bend=12, label="read through t2",
+            label_at=0.55, label_dx=-56, label_dy=10)
+    r1 = f.box(Box(840, 110, "check(alice, viewer, doc:1)"))
+    r2 = f.box(Box(840, 222, ["check(alice, viewer, doc:1,", "      at_least=t2)"]))
+    f.arrow(r1.left, idx.right, colour="red", label="no token: the index as it is", label_dx=34,
+            label_dy=-14)
+    f.text(840, 148, "True: a stale ALLOW", anchor="middle", colour="red", bold=True)
+    f.arrow(r2.at(-0.6, -1), idx.at(0.7, 1), colour="muted", dashed=True)
+    f.cross(668, 170, colour="muted")
+    f.text(688, 174, "cursor is before t2", colour="muted", size=11.5)
+    f.arrow(r2.left, eng.right, colour="green", label="falls back", label_dy=-8)
+    f.text(840, 268, "False: correct", anchor="middle", colour="green", bold=True)
+    return f
+
+
+def consistency_stall() -> Fig:
+    f = Fig("consistency-stall", 920, 232)
+    f.text(24, 34, "a stall: one row cannot be applied, so nothing after it can be", bold=True)
+    x0, cw = 24, 70
+    styles = {1: "hl", 2: "hl", 3: "hl", 4: "bad", 5: "lf2", 6: "lf2", 7: "lf2"}
+    log_strip(f, x0, 60, 7, cw=cw, styles=styles)
+    cursor(f, x0 + cw * 3, 98)
+    f.text(x0 + cw * 3.5, 140, "fails", anchor="middle", colour="red", bold=True)
+    f.text(x0 + cw * 5.5, 120, "wait behind it, revokes too", anchor="middle", colour="muted",
+           size=11.5)
+    f.text(540, 74, "The stall is recorded on the cursor row, so every", colour="muted",
+           size=11.5)
+    f.text(540, 92, "instance sees it. While it lasts:", colour="muted", size=11.5)
+    for i, (what, then) in enumerate([("check without a token", "set engine"),
+                                      ("lookup without a token", "IndexStalled"),
+                                      ("sync=True writes", "refused")]):
+        f.text(540, 116 + 20 * i, what, mono=True, size=11.5)
+        f.text(728, 116 + 20 * i, "\u2192 " + then, mono=True, size=11.5)
+    f.text(24, 196, "It ends at the next catch_up() that applies a row; a row that can never be "
+                    "applied (PathCountExceeded)", colour="muted", size=11.5)
+    f.text(24, 214, "needs the tuple removed and the index rebuilt with rebuild_index().",
+           colour="muted", size=11.5)
+    return f
+
+
 FIGURES = [graph_tuples, graph_two_paths, graph_add_edge, graph_wildcard, graph_any_all,
-           boolean_layers, boolean_cascade, boolean_residue]
+           boolean_layers, boolean_cascade, boolean_residue, backends_work, store_composition,
+           consistency_sync_async, consistency_revoke, consistency_stall]
 
 
 def generate() -> dict[str, str]:

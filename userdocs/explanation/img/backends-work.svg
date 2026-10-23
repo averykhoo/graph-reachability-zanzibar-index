@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 372" width="920" height="372" role="img">
+<style>.s{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif} .m{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace} .bgr{fill:#fbfcfd;stroke:#d0d7de} .band{fill:#f2f4f6;stroke:none} .n{fill:#ffffff;stroke:#8c959f;stroke-width:1.3} .gh{fill:none;stroke:#8c959f;stroke-width:1.3} .lf{fill:#fff8c5;stroke:#8c959f;stroke-width:1.3} .dv{fill:#ddf4ff;stroke:#0969da;stroke-width:1.5} .wd{fill:#fbefff;stroke:#8250df;stroke-width:1.5} .cell{fill:#ffffff;stroke:#d0d7de} .hl{fill:#ddf4ff;stroke:#0969da} .lf2{fill:#fff8c5;stroke:#d0d7de} .bad{fill:#ffebe9;stroke:#cf222e} .bdg{fill:#ffffff;stroke-width:1.4} .ln{fill:none;stroke-linecap:round} .s-ink{stroke:#1f2328} .c-ink{fill:#1f2328} .s-muted{stroke:#59636e} .c-muted{fill:#59636e} .s-blue{stroke:#0969da} .c-blue{fill:#0969da} .s-orange{stroke:#bc4c00} .c-orange{fill:#bc4c00} .s-green{stroke:#1a7f37} .c-green{fill:#1a7f37} .s-red{stroke:#cf222e} .c-red{fill:#cf222e} .s-purple{stroke:#8250df} .c-purple{fill:#8250df}</style>
+<defs><marker id="h-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f2328"/></marker><marker id="h-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#59636e"/></marker><marker id="h-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0969da"/></marker><marker id="h-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#bc4c00"/></marker><marker id="h-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a7f37"/></marker><marker id="h-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#cf222e"/></marker><marker id="h-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8250df"/></marker></defs>
+<rect class="bgr" x="0.5" y="0.5" width="919" height="371" rx="10"/>
+<rect class="band" x="12" y="12" width="442" height="348" rx="8"/>
+<text class="s c-ink" x="28.0" y="38.0" font-size="12.5" text-anchor="start" font-weight="600">set engine</text>
+<text class="s c-muted" x="28.0" y="56.0" font-size="11.5" text-anchor="start">does the work when you read</text>
+<rect class="band" x="466" y="12" width="442" height="348" rx="8"/>
+<text class="s c-ink" x="482.0" y="38.0" font-size="12.5" text-anchor="start" font-weight="600">graph index</text>
+<text class="s c-muted" x="482.0" y="56.0" font-size="11.5" text-anchor="start">does the work when you write</text>
+<rect class="n" x="31.0" y="77.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="124.0" y="96.5" font-size="12.5" text-anchor="middle">user:alice</text>
+<rect class="n" x="31.0" y="117.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="124.0" y="136.5" font-size="12.5" text-anchor="middle">group:eng#member</text>
+<rect class="n" x="31.0" y="157.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="124.0" y="176.5" font-size="12.5" text-anchor="middle">group:staff#member</text>
+<rect class="n" x="31.0" y="197.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="124.0" y="216.5" font-size="12.5" text-anchor="middle">folder:root#viewer</text>
+<rect class="n" x="31.0" y="237.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="124.0" y="256.5" font-size="12.5" text-anchor="middle">folder:projects#viewer</text>
+<rect class="n" x="31.0" y="277.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="124.0" y="296.5" font-size="12.5" text-anchor="middle">doc:roadmap#viewer</text>
+<path class="ln s-muted" d="M124.0,107.0 Q124.0,112.0 124.0,117.0" stroke-width="1.6" marker-end="url(#h-muted)"/>
+<path class="ln s-muted" d="M124.0,147.0 Q124.0,152.0 124.0,157.0" stroke-width="1.6" marker-end="url(#h-muted)"/>
+<path class="ln s-muted" d="M124.0,187.0 Q124.0,192.0 124.0,197.0" stroke-width="1.6" marker-end="url(#h-muted)"/>
+<path class="ln s-muted" d="M124.0,227.0 Q124.0,232.0 124.0,237.0" stroke-width="1.6" marker-end="url(#h-muted)"/>
+<path class="ln s-muted" d="M124.0,267.0 Q124.0,272.0 124.0,277.0" stroke-width="1.6" marker-end="url(#h-muted)"/>
+<rect class="n" x="485.0" y="77.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="578.0" y="96.5" font-size="12.5" text-anchor="middle">user:alice</text>
+<rect class="n" x="485.0" y="117.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="578.0" y="136.5" font-size="12.5" text-anchor="middle">group:eng#member</text>
+<rect class="n" x="485.0" y="157.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="578.0" y="176.5" font-size="12.5" text-anchor="middle">group:staff#member</text>
+<rect class="n" x="485.0" y="197.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="578.0" y="216.5" font-size="12.5" text-anchor="middle">folder:root#viewer</text>
+<rect class="n" x="485.0" y="237.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="578.0" y="256.5" font-size="12.5" text-anchor="middle">folder:projects#viewer</text>
+<rect class="n" x="485.0" y="277.0" width="186.0" height="30.0" rx="6"/>
+<text class="m c-ink" x="578.0" y="296.5" font-size="12.5" text-anchor="middle">doc:roadmap#viewer</text>
+<path class="ln s-muted" d="M578.0,107.0 Q578.0,112.0 578.0,117.0" stroke-width="1.6" marker-end="url(#h-muted)"/>
+<path class="ln s-muted" d="M578.0,147.0 Q578.0,152.0 578.0,157.0" stroke-width="1.6" marker-end="url(#h-muted)"/>
+<path class="ln s-muted" d="M578.0,187.0 Q578.0,192.0 578.0,197.0" stroke-width="1.6" marker-end="url(#h-muted)"/>
+<path class="ln s-muted" d="M578.0,227.0 Q578.0,232.0 578.0,237.0" stroke-width="1.6" marker-end="url(#h-muted)"/>
+<path class="ln s-muted" d="M578.0,267.0 Q578.0,272.0 578.0,277.0" stroke-width="1.6" marker-end="url(#h-muted)"/>
+<path class="ln s-orange" d="M217.0,292.0 Q287.0,192.0 217.0,92.0" stroke-width="2.2" marker-end="url(#h-orange)"/>
+<text class="s c-orange" x="272.0" y="186.0" font-size="11.5" text-anchor="start">check walks the chain:</text>
+<text class="s c-orange" x="272.0" y="204.0" font-size="11.5" text-anchor="start">5 hops, on every check</text>
+<path class="ln s-green" d="M671.0,92.0 Q741.0,192.0 671.0,292.0" stroke-width="2.2" stroke-dasharray="2 4" marker-end="url(#h-green)"/>
+<text class="s c-green" x="726.0" y="186.0" font-size="11.5" text-anchor="start">one stored row, written when</text>
+<text class="s c-green" x="726.0" y="204.0" font-size="11.5" text-anchor="start">the chain was connected;</text>
+<text class="s c-green" x="726.0" y="222.0" font-size="11.5" text-anchor="start">check reads it: 1 lookup</text>
+<text class="s c-muted" x="28.0" y="336.0" font-size="11.5" text-anchor="start">write: record 1 tuple.  read: grows with depth and fan-out.</text>
+<text class="s c-muted" x="482.0" y="336.0" font-size="11.5" text-anchor="start">write: a row per newly connected pair.  read: a few lookups.</text>
+</svg>
