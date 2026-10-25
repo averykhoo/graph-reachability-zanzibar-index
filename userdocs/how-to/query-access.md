@@ -83,6 +83,11 @@ The result holds every relation alice reaches on every object, usersets on the w
 included (`group:eng#member`). The public grant on `doc:d2` is listed as a concrete
 object: from `lookup`, a `user:*` grant needs no special reading.
 
+A `lookup` for a userset subject such as `"group:eng#member"` is slow on a large store
+whose schema uses `and` / `but not`: it took seconds at 10,000 tuples in a benchmark. See
+[Lookups for a userset](../explanation/limits.md#lookups-for-a-userset-slow-on-large-stores-with-and--but-not)
+before you put one on a request path.
+
 To ask a narrower question, filter by object type and/or relation. "Which documents can
 alice view?":
 

@@ -55,7 +55,9 @@ def parse_user(text: str) -> tuple[str, str, str]:
                         f'not {type(text).__name__}')
     head, sep, predicate = text.partition('#')
     if sep:
-        if not predicate or '#' in predicate:
+        # TK168: ':' in the relation part is a shape error, as it is in the name, so
+        # 'user:a#b:c' is malformed on reads and writes alike (it used to read False).
+        if not predicate or '#' in predicate or ':' in predicate:
             raise MalformedTupleString(f'user {text!r} is not of the form {_USER_FORM}')
         if predicate == '...':
             raise MalformedTupleString(

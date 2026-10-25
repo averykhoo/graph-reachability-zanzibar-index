@@ -95,7 +95,9 @@ files marked ✚ below were entirely undeclared here before 2026-07-29, and one 
 **zcli exit codes (measured from `Cli.lean`'s header + dispatch):** `0` answers or
 state printed · `1` usage / JSON parse / decode error · `2` a graph op failed its
 gate (write admission or remove guard) · `3` graph state not drained · `4`
-unrecognized mode · **`5` an `"ops"` stream passed in spec mode**. The previous
+unrecognized mode · **`5` an `"ops"` stream passed in spec, fragment or leaf-rules
+mode** (`Cli.lean`'s header and its three `pure 5` dispatch arms; re-read 2026-10-23,
+`TK152` item 3). The previous
 revision listed only 0–4 in this section while §6 described rc 5 — the file
 contradicted itself; both places now say 0–5.
 

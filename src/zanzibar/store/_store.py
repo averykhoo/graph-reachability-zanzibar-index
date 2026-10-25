@@ -1011,7 +1011,7 @@ class Store:
         if self.source.evaluator_watermark < at_least:
             raise StaleRead(
                 f'token {at_least} is not visible in this session snapshot '
-                f'(evaluator at {self.source.evaluator_watermark}); call '
+                f'(set engine at log id {self.source.evaluator_watermark}); call '
                 f'refresh() to start a fresh read transaction and retry.'
                 + token_diagnosis(self.session, self.store_id, at_least))
 

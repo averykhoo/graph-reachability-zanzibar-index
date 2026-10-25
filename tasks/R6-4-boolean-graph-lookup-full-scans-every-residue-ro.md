@@ -11,8 +11,8 @@ labels: [perf]
 source: docs/perf-round6-audit-2026-08.md
 source_hash:
 created: 2026-08-15
-moved: 2026-09-22b
-updated: 2026-09-22b
+moved: 2026-10-26
+updated: 2026-10-26
 closed:
 ---
 
@@ -84,3 +84,7 @@ in the repo). `size: L` is, unusually for this repo, not an undercount.
 Full audit: docs/r6-sizing-census-2026-09-22.md
 
 Path correction, same session: the probe cited in the 2026-09-22b entry above now lives in the TRACKED tree at benchmarks/probe_r6_instance_by_class.py. It was first cited at a gitignored .scratch/ path, which would have rotted the citation and lost the instrument -- the measurement is evidence, so the instrument belongs in the tree. Re-run from the repo root; output is byte-identical (6,000 Residue / 16,410 Node+Edge, deduped total 22,410 reconciling to the profile line).
+
+### 2026-10-26
+
+Measured incidentally by TK162 (docs/tk162-self-lookup-cost-2026-10-26.md, "A side finding"): on a schema with two but-not relations, a plain-user graph lookup (user:u0, no TK144 pass) took 5 ms at 1k tuples, 26 ms at 10k, ~200 ms at 100k; the same lookup on the same data with but-not read as or took 5.5 ms at 100k. Linear growth matches WildcardIndex._collect_residue_memberships loading and JSON-decoding every Residue row per lookup (REASONED; not profiled). Raw: benchmarks/results/tk162-self-lookup-2026-10-26.jsonl. Not acted on: perf deprioritized.

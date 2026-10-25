@@ -84,17 +84,16 @@ So `rewriteClosureRawL` generalises `RulesWrite.lean::rewriteClosureRaw` from on
 to a seed list; at `[t]` with an untainted schema the two are definitionally equal
 (`rewriteClosureRawL_singleton`).
 
-## Measured before it was written
+## Checked against the compiler, every gate run
 
-The model below was transcribed into Python and diffed against the `Rule`s
-`compile_ruleset` actually emits, over every corpus dict in
-`formal/conformance/corpus.py` and every `tests/fga_schemas/*.fga` fixture:
-**50 / 50 schemas match, 0 mismatches**, of which **32 have a non-empty leaf rule set**
-(the non-vacuity count — a model that returned `[]` everywhere would have matched the
-other 18 and proved nothing).
-
-Reference: `formal/history/leaf-family-split-scope-2026-08-05.md` §11.6,
-`formal/history/PROOF_STATUS.md` 2026-08-16.
+`formal/conformance/test_conformance_leaf_rules.py` runs this definition itself
+(`zcli mode="leaf-rules"`) and diffs it, half by half, against the `Rule`s
+`compile_ruleset` actually emits over every curated corpus and `tests/fga_schemas/*.fga`
+fixture, with a non-vacuity floor on the schemas whose leaf rule set is non-empty
+(`test_mismatching_sources_are_none_and_sweep_is_not_vacuous`). The live counts are in
+that module, not here: the one-off 2026-08-16 transcription probe that first measured
+the match (`formal/history/leaf-family-split-scope-2026-08-05.md` §11.6) was never re-run,
+and its figure went stale (`TK119`, `TK152`).
 -/
 
 namespace Zanzibar
@@ -124,9 +123,12 @@ def leafRewrites (S : Schema) : List RRule :=
     (fun d => keyLeafRewrites S d.1.1 d.1.2 d.2)
 
 /-- **The full compiled rule set** — untainted fanout plus leaf-targeted derived rules.
-    Order mirrors `compile_ruleset`, which walks the untainted defs before the derived
-    plans; rule ORDER is not observable through `rewriteStep` (a `filterMap` over all
-    rules, not first-match) but keeping it faithful costs nothing. -/
+    Like `compile_ruleset`, it puts the untainted half before the derived half, and
+    within one derived key it keeps the emitter's order. Across derived keys it does
+    NOT: Python walks `sorted(tainted)`, the model walks declaration order (`TK119`
+    challenge C2). Rule ORDER is not observable through `rewriteStep` (a `filterMap`
+    over all rules, not first-match), so the differential test compares multisets and
+    pins only the untainted order and the within-key leaf order. -/
 def schemaRewritesL (S : Schema) : List RRule := schemaRewrites S ++ leafRewrites S
 
 /-! ## Disjointness — the untainted fragment is untouched BY CONSTRUCTION

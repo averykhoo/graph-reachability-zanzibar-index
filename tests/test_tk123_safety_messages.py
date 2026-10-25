@@ -214,6 +214,18 @@ def test_a_future_token_is_not_called_never_issued(store):
         store.lookup('user:alice', at_least=token + 10)
 
 
+def test_stale_read_names_the_set_engine_not_the_evaluator(store):
+    """TK169 (fable review rec 7): the message used to say "(evaluator at N)", an
+    internal name the user docs had to gloss. Both raise sites now say "set engine"."""
+    token = store.add_tuple('user:alice', 'owner', 'doc:d1')
+    for call in (lambda: store.check('user:alice', 'owner', 'doc:d1', at_least=token + 10),
+                 lambda: store.source.check('user:alice', 'owner', 'doc:d1',
+                                            at_least=token + 10)):
+        with pytest.raises(StaleRead, match=rf'\(set engine at log id {token}\)') as info:
+            call()
+        assert 'evaluator at' not in str(info.value)
+
+
 # --------------------------------------------------------------------------- item 12
 
 def test_store_not_found_is_a_keyerror_with_a_hint(engine):

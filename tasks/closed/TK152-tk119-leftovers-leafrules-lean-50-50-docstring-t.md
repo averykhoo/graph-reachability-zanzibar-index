@@ -11,9 +11,9 @@ labels: [formal]
 source: docs/tk119-leaf-rules-differential-2026-10-14.md
 source_hash:
 created: 2026-10-14
-moved: 2026-10-14
-updated: 2026-10-14
-closed:
+moved: 2026-10-26
+updated: 2026-10-26
+closed: 2026-10-26
 ---
 
 Leftovers from the TK119 build (builder notes, transcribed at TK119's close into the "Corrections 2026-10-14 (build, appended at close)" block of `docs/tk119-leaf-rules-differential-2026-10-14.md`). Each was READ first-hand as still true on 2026-10-14 by the round-4 `rows` agent unless marked.
@@ -31,3 +31,11 @@ All three are honesty fixes on the assurance surface (a stale number in a docstr
 - `formal/conformance/test_conformance_leaf_rules.py`.
 
 ## Log
+
+### 2026-10-23e
+
+Item 3 DONE 2026-10-23e: formal/CORRESPONDENCE.md zcli exit-code paragraph now says rc 5 = an "ops" stream in spec, fragment or leaf-rules mode (READ first-hand: Cli.lean header line 122 and the three pure 5 arms under .ok "fragment" / "leaf-rules" / "spec"). The UNVERIFIED "module table lacks the new module" claim: READ, every formal/conformance/test_conformance_*.py (16) is cited somewhere in CORRESPONDENCE.md; the leaf-rules module is cited at the LeafRules rows. Item 2 DECIDED (model): KEEP the duplicate. tests/ should not import its fixtures from formal/conformance (the dependency points the other way: corpus.py copies tests), and formal/conformance/test_conformance_leaf_rules.py::test_tk126_copies_match_their_source already refuses drift mechanically; an import would make that test tautological. Item 1 (LeafRules.lean docstrings) STILL OPEN: a Lean edit, 25-module rebuild, deferred while the CPU is shared. The schemaRewritesL order caveat is already stated in CORRESPONDENCE.md (LeafRules row), so only the Lean docstring text remains.
+
+### 2026-10-26
+
+Item 1 DONE 2026-10-26 (items 2-3 done 2026-10-23e): formal/lean/ZanzibarProofs/GraphIndex/LeafRules.lean module docstring now cites formal/conformance/test_conformance_leaf_rules.py (incl. test_mismatching_sources_are_none_and_sweep_is_not_vacuous) instead of the stale 2026-08-16 50/50 figure; schemaRewritesL docstring now says the order matches within a derived key only (Python sorted(tainted) vs model declaration order, TK119 C2), and that the differential test compares multisets plus the untainted and within-key order (READ: test_leaf_rules_match_python). Docstring-only; no statement or definition moved; verified by the lean phase of this session gate.

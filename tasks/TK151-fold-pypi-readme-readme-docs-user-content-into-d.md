@@ -11,8 +11,8 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-14
-moved: 2026-10-23d
-updated: 2026-10-23d
+moved: 2026-10-26
+updated: 2026-10-26
 closed:
 ---
 
@@ -98,3 +98,7 @@ Diagrams round (user request: illustrate the layered derived-relation settling a
 ### 2026-10-23d
 
 Second diagrams round (user: add the two figures 2026-10-23c listed as not done, then push). LANDED: backends-work + store-composition on two-backends.md; consistency-sync-async, consistency-revoke, consistency-stall on consistency.md; all from userdocs/_diagrams/make_diagrams.py, light/dark, pinned by tests/test_userdocs_diagrams.py. Detail: docs/tk151-diataxis-plan-2026-10-20.md Correction 2026-10-23e. NEXT: unchanged (TK162, then the cut).
+
+### 2026-10-26
+
+TK162 CLOSED 2026-10-26, so the BLOCKED-ON-TK162 items in docs/tk151-diataxis-plan-2026-10-20.md are resolved: userdocs/explanation/limits.md section renamed "Lookups for a userset: slow on large stores with and / but not" with measured figures (0.2 s / 2-2.6 s / 21-29 s at 1k / 10k / 100k tuples) and the advice to keep userset lookups off the request path; how-to/query-access.md "List what a subject can access" now points to it. NOT changed: the limits.md line saying the set engine read cost "has not been measured for large groups" (TK162 measured set-engine lookups under 1 ms, but on 10-member groups only, so the claim stands). Source: docs/tk162-self-lookup-cost-2026-10-26.md.

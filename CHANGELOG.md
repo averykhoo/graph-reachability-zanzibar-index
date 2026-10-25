@@ -110,6 +110,12 @@ Each is detailed below, under Changed or Added.
     node or interned id, so it arrives in the new `implicit_keys` field; read results
     through `result_keys` / `excluded_keys`, which include it. Callers that list USERS by
     taking keys of type `user` are unaffected.
+  - **A userset `lookup` is slow on large stores with `and` / `but not`** (TK162). To list
+    those answers, `Store.lookup` for a userset subject runs a `check` against every object
+    of each `and` / `but not` relation's type. It was measured at about 2 s at 10,000
+    tuples and 21 to 29 s at 100,000 (2026-10-26, SQLite). Lookups for plain users,
+    `lookup_reverse`, and schemas without `and` / `but not` are not affected. See the
+    user docs, "Limits and costs".
   - Unchanged: plain users and `user:*` answers (the rule adds only the userset itself,
     never its members), userset-star subjects such as `doc:*#viewer`, an undeclared
     relation (still `False`, where OpenFGA errors), and the write refusal of the exact
@@ -381,6 +387,11 @@ Each is detailed below, under Changed or Added.
   pruning claims are pinned by tests.
 
 ### Fixed
+- A user string with a `:` in its relation part, such as `"user:a#b:c"`, raises
+  `MalformedTupleString` on reads as well as writes (TK168). A read used to answer
+  `False` and a write raised `AdmissionRejected`.
+- The `StaleRead` message says "set engine at log id N" where it said "evaluator at
+  N", and `TupleSource.check`'s says to call `refresh_evaluator()` (TK169).
 - A write refused by `ZANZIBAR_MAX_CLOSURE_FANOUT` is cheap to refuse (TK158). The graph
   index counts the region with two indexed counts and refuses before loading it, and a
   `Store` takes the one admitted tuple back out of the set engine instead of rebuilding it

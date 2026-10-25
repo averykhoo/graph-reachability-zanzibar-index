@@ -90,7 +90,7 @@ print(issubclass(zanzibar.UnprovenExtensionWarning, UserWarning))  # -> True
 | {py:exc}`~zanzibar.SchemaMismatch` | a store is opened with a schema other than the one it was created with. |
 | {py:exc}`~zanzibar.UnsupportedByGraphIndex` | the graph index cannot represent a schema construct: a wildcard feature (a `[T:*#p]` restriction, a star tupleset or an `object_wildcard_shapes` entry) that reaches a relation using `and` / `but not` (for example `[group:*#member]` where `member` is `[user] but not banned`), or `and` / `but not` when the rule set is compiled with `enable_boolean=False`. Raised by `parse_openfga_schema` and `Store`; a standalone `SetEngine` accepts these schemas. A {py:exc}`ValueError`, not a {py:exc}`~zanzibar.SchemaError`. |
 | {py:exc}`~zanzibar.DoublyBridgedShapeError` | a shape is both a wildcard-userset shape and an object-wildcard shape. Both backends refuse it. |
-| {py:exc}`~zanzibar.MalformedTupleString` | a `"type:name"` / `"type:name#relation"` argument cannot be split into its parts. The part after `#` is not checked for allowed characters here, so `"group:g#b:c"` is not malformed: a read answers `False` and a write raises `AdmissionRejected`. |
+| {py:exc}`~zanzibar.MalformedTupleString` | a `"type:name"` / `"type:name#relation"` argument cannot be split into its parts, such as `"alice"`, `"user:a:b"` or `"group:g#b:c"`. Raised on reads and writes alike. |
 | {py:exc}`~zanzibar.AdmissionRejected` | a write is refused: an undeclared type or relation, a subject the type restriction does not admit, an identifier outside `A-Za-z0-9_./@+=-` or longer than 256 characters, a cycle (a group inside itself, a folder that is its own ancestor), or removing a tuple that is not stored. The store is unchanged. A read is not refused this way: a `check` naming an undeclared relation answers `False`. |
 | {py:exc}`~zanzibar.IndexResourceLimit` | never raised itself: the common base of the two refusals below, which depend on how large the index's closure has grown rather than on the tuple and the schema. Catch it to handle both. |
 | {py:exc}`~zanzibar.ClosureFanoutExceeded` | a synchronous write would add more rows to the index than the fan-out cap allows. Nothing is written. See [Cap write fan-out](../how-to/fanout-cap.md). |
@@ -291,9 +291,8 @@ print(missing_id)  # -> 'no-such-store'
    Bases: :py:exc:`zanzibar.ZanzibarError`, :py:exc:`ValueError`
 
    A ``"type:name"`` or ``"type:name#relation"`` string could not be split into its parts.
-   The message names the expected form. The relation part after ``#`` is not checked for
-   allowed characters at this step: ``"group:g#b:c"`` is not malformed, so a read with it
-   answers ``False`` and a write raises :py:exc:`~zanzibar.AdmissionRejected`.
+   The message names the expected form. A ``:`` in the relation part after ``#`` is a
+   shape error too, so ``"group:g#b:c"`` raises it on reads and writes alike.
 
 .. py:exception:: zanzibar.AdmissionRejected
 

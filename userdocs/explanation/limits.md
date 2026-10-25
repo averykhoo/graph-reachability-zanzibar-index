@@ -181,7 +181,7 @@ engine builds the graph it uses to check for cycles (15.6 s of the 15.8 s above)
 grows with the size of the whole store. Before 0.1.0 the same refusal took 91 s and 3.8 GB,
 because it read every row before counting and then rebuilt the set engine.
 
-## Lookups for a userset: a cost that has not been measured
+## Lookups for a userset: slow on large stores with `and` / `but not`
 
 A userset such as `group:eng#member` is a member of itself, as in OpenFGA (see
 [Semantics and differences from OpenFGA](semantics-vs-openfga.md)). To include those
@@ -195,14 +195,31 @@ answers, the graph index does extra work in two lookups:
 - {py:meth}`zanzibar.Store.lookup_reverse` on a relation defined with `and` or `but not`
   runs a full `check` for every candidate userset.
 
-Lookups for a plain subject such as `user:alice` are not affected by this extra pass. On
-schemas with no `and` or `but not` the extra work is small, with one exception:
-{py:meth}`zanzibar.Store.lookup_reverse` on a schema that grants a wildcard userset (such
-as `[group:*#member]`) can also go through every entity of that type the index holds. The
-cost of the extra pass therefore grows with the number of objects in the store, not with
-the size of the answer. This page gives no figures for it. If your application lists
-permissions for usersets on a large store with boolean relations, measure it on your own
-data first.
+The first one grows with the number of objects in the store, not with the size of the
+answer, and it is slow. In a benchmark (2026-10-26, SQLite file, one laptop; a schema
+with one `but not` relation on each of two types, about one object per 6 tuples) a
+`lookup` for a userset subject took:
+
+| tuples in the store | userset `lookup` | the same lookup without the extra pass |
+| --- | --- | --- |
+| 1,000 | about 0.2 s | about 3 ms |
+| 10,000 | about 2 to 2.6 s | about 20 ms |
+| 100,000 | about 21 to 29 s | about 0.2 s |
+
+Lookups for a plain subject such as `user:alice` do not run this pass. Neither does a
+`lookup_reverse`: in the same benchmark it took 2 to 16 ms at every size. On the same
+schema with every `but not` replaced by `or`, a userset `lookup` took 4 to 7 ms at every
+size. One case was not measured: {py:meth}`zanzibar.Store.lookup_reverse` on a schema
+that grants a wildcard userset (such as `[group:*#member]`) can also go through every
+entity of that type the index holds.
+
+**If you list permissions for usersets on a large store with `and` / `but not`**, do not
+call `Store.lookup` with a userset subject on a request path: run it in the background and
+keep the answer, or ask the narrower question with `check`. A `Store` has no faster way to
+ask it. The set engine used on its own (see
+[Use the set engine on its own](../how-to/backends-direct.md#use-the-set-engine-on-its-own))
+gave the same answers in under 1 ms in the benchmark, but that means giving up the
+`Store`. Checks, and lookups for plain users, are not affected.
 
 ## Storage that only grows
 

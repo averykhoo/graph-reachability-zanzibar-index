@@ -741,8 +741,8 @@ class TupleSource:
             if self.evaluator_watermark < at_least:
                 raise StaleRead(
                     f'token {at_least} is not visible in this session snapshot '
-                    f'(evaluator at {self.evaluator_watermark}); rollback to start '
-                    f'a fresh read transaction, refresh the evaluator, and retry.'
+                    f'(set engine at log id {self.evaluator_watermark}); rollback to start '
+                    f'a fresh read transaction, call refresh_evaluator(), and retry.'
                     + token_diagnosis(self.session, self.store_id, at_least))
         return self.engine.check(*q)
 

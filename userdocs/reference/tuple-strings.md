@@ -88,21 +88,17 @@ only for a relation enabled with `object_wildcard_shapes` (see
 ## Splitting rules
 
 A user string is a type and a name joined by exactly one `:`, followed by at most one
-`#relation`. The string is split at its `#` first, and the part before it must then hold
-exactly one `:`. An object string is the same without the `#relation`. A string that does
+`#relation`. The string is split at its `#` first; the part before it must then hold
+exactly one `:`, and the relation after it none. An object string is the same without the `#relation`. A string that does
 not split this way raises {py:exc}`zanzibar.MalformedTupleString`, which is a `ValueError`.
 Its message names the expected form.
-
-The relation after `#` is not checked for `:` when the string is split, so
-`"user:a#b:c"` splits into type `user`, name `a` and relation `b:c`. A write of it is
-refused when its identifiers are checked (see [Identifiers](#identifiers)), with
-{py:exc}`zanzibar.AdmissionRejected`; a read such as `check` answers `False`.
 
 | Input | Raises |
 |---|---|
 | `"alice"` (no `:`) | `MalformedTupleString` |
 | `"user:"`, `":alice"` (an empty part) | `MalformedTupleString` |
 | `"user:a:b"` (a second `:`) | `MalformedTupleString` |
+| `"user:a#b:c"` (a `:` in the relation) | `MalformedTupleString` |
 | `"user:alice#"` (an empty relation) | `MalformedTupleString` |
 | `"group:eng#a#b"` (a second `#`) | `MalformedTupleString` |
 | `"user:alice#..."` | `MalformedTupleString`: write `"user:alice"` |
@@ -111,14 +107,14 @@ refused when its identifiers are checked (see [Identifiers](#identifiers)), with
 
 Splitting only checks the shape. Whether the parts are valid identifiers, and whether
 the schema admits the tuple, is checked afterwards; see the next section. So a relation
-part with a character outside the allowed set, such as `"group:eng#b:c"`, is not
+part with another character outside the allowed set, such as `"group:eng#b c"`, is not
 malformed: a read with it answers `False`, and a write is refused with
 {py:exc}`zanzibar.AdmissionRejected`.
 
 ```python
 from zanzibar import MalformedTupleString
 
-for bad in ["alice", "user:a:b", "user:alice#...", "group:eng#a#b"]:
+for bad in ["alice", "user:a:b", "user:a#b:c", "user:alice#...", "group:eng#a#b"]:
     try:
         store.check(bad, "viewer", "doc:1")
     except MalformedTupleString as err:
@@ -191,12 +187,12 @@ except AdmissionRejected as err:
 
 print(store.check("user:al ice", "viewer", "doc:1"))  # -> False
 try:
-    store.add_tuple("group:eng#member:x", "viewer", "doc:1")  # ':' in the relation part
+    store.add_tuple("group:eng#member x", "viewer", "doc:1")  # a space in the relation part
     refused = False
 except AdmissionRejected:
     refused = True
 print(refused)  # -> True
-print(store.check("group:eng#member:x", "viewer", "doc:1"))  # -> False
+print(store.check("group:eng#member x", "viewer", "doc:1"))  # -> False
 print(store.check("user:alice", "veiwer", "doc:1"))  # -> False
 print(store.check(None, "user", "alice", "viewer", "doc", "1"))  # -> True
 session.close()

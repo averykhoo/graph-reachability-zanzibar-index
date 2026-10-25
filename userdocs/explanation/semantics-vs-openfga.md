@@ -296,11 +296,8 @@ relation's restriction does not admit, or a malformed name is refused with
 {py:exc}`zanzibar.AdmissionRejected`, and the message says what was wrong. A read with the
 same mistake does not raise. It answers `False`. The leniency covers names and declared
 relations only: a string that is not of the form `type:name`, `type:name#relation` or
-`type:*` (such as `useralice`, `user:`, or an object `doc:1#viewer`) raises
-{py:exc}`zanzibar.MalformedTupleString` on reads and writes alike. One exception: a
-relation part with a character outside the allowed set (`group:g#b:c`) passes the shape
-check, so a read with it answers `False` and only a write refuses it, with
-`AdmissionRejected`.
+`type:*` (such as `useralice`, `user:`, `group:g#b:c`, or an object `doc:1#viewer`)
+raises {py:exc}`zanzibar.MalformedTupleString` on reads and writes alike.
 
 ```python
 s = new_store("""

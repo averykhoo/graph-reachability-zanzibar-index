@@ -33,6 +33,68 @@ from here.
 
 ---
 
+## 2026-10-26 — `TK162` measured + closed (userdocs warning); `TK152` closed; 2026-10-23e work gated + committed
+
+rows: TK162 (closed), TK152 (closed), TK151 (comment), R6-4 (comment)
+
+`task lint: clean (13 checks, 288 task file(s) parsed), 27 warning(s)`
+
+`read: board + note`
+
+`asked: none`
+
+- **User: "CPU should be free in 15 mins, can we do 162 then? Anything else open that we
+  can finish up?"** So: TK162, then the 2026-10-23e change set (written but never gated
+  or committed), plus TK152 item 1, a Lean docstring that had waited on the CPU.
+- `TK162` CLOSED: new `benchmarks/tk162_self_lookup_bench.py`. Raw results are TRACKED in
+  `benchmarks/results/tk162-self-lookup-2026-10-26.jsonl`, and the write-up is
+  `docs/tk162-self-lookup-cost-2026-10-26.md` (FROZEN). A graph `lookup` for a userset
+  subject on a schema with `but not` took 0.2 s / 2-2.6 s / 21-29 s at 1k / 10k / 100k
+  tuples, 60-170x the same lookup without the pass. Reverse lookups and plain-user
+  lookups are flat, and so is the same lookup with `but not` read as `or`. The graph
+  answers equal the set engine on every query. Verdict: the docs need a warning. It is in
+  `userdocs/explanation/limits.md` (section renamed; anchor computed with MyST's slugify),
+  with a pointer from `how-to/query-access.md` and a CHANGELOG bullet under TK144. No
+  optimisation: it would change the modelled algorithm, and perf is deprioritized.
+- Side finding: a plain-user lookup on a boolean schema is also linear (about 200 ms at
+  100k) because of the residue full scan. That is `R6-4`, and is recorded there.
+- `TK152` CLOSED: `LeafRules.lean` cites the live differential test instead of the stale
+  50/50 figure. The `schemaRewritesL` order claim is narrowed to what is true (READ
+  against `test_leaf_rules_match_python`).
+- Gate: the full ten phases on this tree, after these records (see the commit).
+
+Still owed: nothing.
+
+---
+
+## 2026-10-23e — low-CPU fixes while another job held the CPU: `TK168` closed, `TK169` and `TK152` part-done
+
+rows: TK168 (closed), TK169 (comment), TK152 (comment)
+
+`task lint: clean (13 checks, 288 task file(s) parsed), 27 warning(s)`
+
+`read: show TK162, TK151, TK169, TK168, TK152`
+
+`asked: none`
+
+- **User: TK162 is for a future session** (it needs the CPU, and another job was using it).
+  The banner said "another session", but that never meant a live one. So this session
+  took small fixes that need little CPU.
+- `TK168` CLOSED: `parse_user` refuses a `:` in the relation part (`"user:a#b:c"`) with
+  `MalformedTupleString` on reads too; the `is_valid_identifier` docstring is fixed (B7).
+  Docs and the CHANGELOG updated. Sabotage: drop the check -> exactly the 2 new cases red.
+- `TK169` part: the `StaleRead` messages say "set engine at log id N", and the docs gloss
+  is gone. New test; sabotage -> that test red.
+- `TK152` items 2 and 3: the `CORRESPONDENCE.md` rc 5 line is corrected; the duplicate
+  `SERVED` stays (decision on the row). Item 1 (a Lean docstring) still needs a Lean
+  rebuild.
+- Gate: only the touched modules ran (green). The full gate was deferred while the CPU
+  was shared, so this entry was written before the commit.
+
+Still owed: nothing.
+
+---
+
 ## 2026-10-23d — TK151: diagrams for "The two backends" and "Consistency"; pushed
 
 rows: TK151 (comment: second diagrams round)

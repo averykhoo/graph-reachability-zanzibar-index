@@ -13,8 +13,9 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
+> 2026-10-26 -- `TK162` CLOSED: a graph `lookup` for a USERSET subject on an `and` / `but not` schema is linear in store size (21-29 s at 100k tuples; `docs/tk162-self-lookup-cost-2026-10-26.md`); the userdocs warning landed in `explanation/limits.md`. `TK152` closed. **0.1.0 left: TK151 lands last, then the cut** (user).
 > 2026-10-23d -- TK151: 13 light/dark SVG diagrams on four explanation pages (graph-index, boolean-operators, two-backends, consistency) (`userdocs/_diagrams/make_diagrams.py`; regenerate, never hand-edit; pinned by `tests/test_userdocs_diagrams.py`).
-> 2026-10-23b -- `TK166` (foreign token -> `ForeignToken`) and `TK164` (exceptions only from `zanzibar`; refusals are `ValueError`s; schema types public) CLOSED via ultracode; TK151 docs updated, fable-reviewed (`docs/tk151-fable-review-2026-10-23.md`, "ship after small fixes") and the review applied. **0.1.0 left: TK162 (another session), then TK151 lands last** (user); cut held, version stays 0.0.5 under `[Unreleased]`. At the cut, delete the pre-release prose `tests/test_userdocs_prerelease_prose.py` lists. Commit by path, never `git add -A` / `git stash`.
+> 2026-10-23b -- `TK166` (foreign token -> `ForeignToken`) and `TK164` (exceptions only from `zanzibar`; refusals are `ValueError`s; schema types public) CLOSED via ultracode; TK151 docs updated, fable-reviewed (`docs/tk151-fable-review-2026-10-23.md`, "ship after small fixes") and the review applied. 0.1.0 was then: TK162, then TK151 last (TK162 closed 2026-10-26); cut held, version stays 0.0.5 under `[Unreleased]`. At the cut, delete the pre-release prose `tests/test_userdocs_prerelease_prose.py` lists. Commit by path, never `git add -A` / `git stash`.
 > Gate: ask `python scripts/gate_status.py`, never this note. `t2c` includes `tasks/*.md` and `HANDOFF.md`, so a tree op or a note edit after the tiles stales them too.
 
 ## Still owed

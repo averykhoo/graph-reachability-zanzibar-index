@@ -164,6 +164,7 @@ def test_user_strings_split(text, parts):
     ('user', 'group:eng#member#x'), ('user', 'user'), ('user', ':alice'),
     ('user', 'user:'), ('user', 'user:a:b'), ('user', 'user:alice#'),
     ('user', 'user:alice#...'), ('user', ''), ('user', '#member'),
+    ('user', 'user:a#b:c'), ('user', 'group:*#b:c'),  # TK168
     ('object', 'doc:d1#viewer'), ('object', 'doc'), ('object', 'doc:'),
     ('object', ':d1'), ('object', 'doc:a:b'),
 ])

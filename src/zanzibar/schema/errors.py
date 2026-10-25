@@ -180,11 +180,12 @@ class ClosureFanoutExceeded(IndexResourceLimit):
 
 
 def is_valid_identifier(value) -> bool:
-    """Strict charset membership ONLY: the reserved sentinels ``'*'`` (wildcard name)
-    and ``'...'`` (bare subject predicate) are NOT valid identifiers -- they are
-    admitted positionally by ``_require``'s ``allow_star``/``allow_ellipsis`` flags,
-    never by this predicate. External callers wanting "is this writable as a name"
-    should go through ``validate_write_identifiers``."""
+    """Strict charset membership ONLY. ``'*'`` (the wildcard name) is outside the
+    charset, so this returns False for it; ``'...'`` (the bare subject predicate) is
+    three ``'.'`` and inside it, so this returns True. Both sentinels are reserved by
+    POSITION, through ``_require``'s ``allow_star``/``allow_ellipsis`` flags, not by
+    this predicate. External callers wanting "is this writable as a name" should go
+    through ``validate_write_identifiers``."""
     return isinstance(value, str) and _IDENTIFIER_RE.fullmatch(value) is not None
 
 

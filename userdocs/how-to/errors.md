@@ -217,7 +217,6 @@ See [Use async mode and freshness tokens](async-tokens.md).
 - {py:exc}`zanzibar.StaleRead`: a `check` or `expand` with `at_least=token` names a write
   this session cannot see yet. Call {py:meth}`zanzibar.Store.refresh` and retry once. If
   the retry fails the same way, the token is wrong, and retrying further will not help.
-  The message's "evaluator" is the store's in-memory set engine.
 - {py:exc}`zanzibar.LookupNotFresh`: a `lookup` or `lookup_reverse` with
   `at_least=` while the index is behind that write. Run `catch_up()`, or wait for your
   worker to, and retry. For a single decision, `check(..., at_least=token)` answers anyway.
