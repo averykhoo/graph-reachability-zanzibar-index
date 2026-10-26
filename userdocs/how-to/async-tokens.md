@@ -96,12 +96,12 @@ Points to keep in mind:
 
 - **Catch every exception, not only {py:exc}`zanzibar.ZanzibarError`.** A lock timeout or
   a dropped connection arrives as a SQLAlchemy error. The stall is recorded whatever the
-  error was, and a later successful `catch_up()` that applies at least one row clears it.
-  A stall recorded while nothing was pending stays until some write has been applied; see
-  [Recover a stalled index](stall-recovery.md).
+  error was, and the next successful `catch_up()` clears it, including one that applies
+  nothing because nothing is pending; see [Recover a stalled index](stall-recovery.md).
 - **`batch` sets how many log rows go into one transaction.** Each batch commits on its
   own, and a batch that fails changes nothing. With `batch=None` (the default) all
-  pending rows are one transaction, so a failure keeps none of them.
+  pending rows are one transaction, so a failure keeps none of them. `batch` must be
+  `None` or a whole number of at least 1; anything else raises `ValueError` or `TypeError`.
 - **Any instance may run `catch_up()`.** Every `catch_up()` takes a per-store lock before
   it reads how far the index has got, so two workers on one store take turns and never
   apply a row twice; running more than one gains nothing.

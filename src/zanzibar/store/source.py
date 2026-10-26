@@ -684,10 +684,11 @@ class TupleSource:
                       token, (token,))
         if gap is not None:
             raise WatermarkGap(
-                f'evaluator watermark {self.evaluator_watermark} -> {token} would skip '
+                f'set engine watermark {self.evaluator_watermark} -> {token} would skip '
                 f'committed log row {gap} for store {self.store_id!r}: this session\'s '
                 f'read snapshot predates it, so the catch-up could not see it. Roll '
-                f'back to start a fresh snapshot, refresh_evaluator(), and retry.')
+                f'back to start a fresh snapshot, call refresh() (Store) or '
+                f'refresh_evaluator() (TupleSource), and retry.')
         self.evaluator_watermark = token
 
     def _append(self, op: str, s_pred: str, s_type: str, s_name: str,

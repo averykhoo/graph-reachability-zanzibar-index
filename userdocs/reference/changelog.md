@@ -5,7 +5,7 @@ reworded message and every fixed edge case, is the project's
 [CHANGELOG.md](https://github.com/averykhoo/graph-reachability-zanzibar-index/blob/master/CHANGELOG.md).
 Read it before you upgrade: any 0.x release may change the API, including a patch release.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-26)
 
 A deliberate break of the 0.0.x API, with no compatibility aliases. Code written for 0.0.5
 stops importing until you rename a few things; [Upgrade from 0.0.x to 0.1](../how-to/upgrade-0.1.md)
@@ -73,6 +73,20 @@ Fixed:
   running the delta processor's cascade is refused at the commit with the new
   {py:exc}`zanzibar.CascadeNotRun`, instead of committing derived relations that disagree
   with the set engine. A `Store` is not affected.
+- With `ZANZIBAR_PARANOIA=full` or `fixpoint`, releasing a savepoint
+  (`session.begin_nested()`) ran the after-commit check, which on an in-memory SQLite
+  database rolled back the caller's whole open transaction. The check now runs only when
+  the outermost transaction commits.
+- A stall recorded while nothing was pending is cleared by the next successful
+  `catch_up()`, even one that applies nothing; until then untokened lookups raised
+  {py:exc}`zanzibar.IndexStalled`.
+- A sync write refused because an earlier backlog row cannot be applied now says so,
+  names that row, and gives the recovery, instead of reading as if your own write was too
+  big. See [Recover from a stalled index](../how-to/stall-recovery.md).
+- A user string with a `:` in its relation part, such as `"user:a#b:c"`, raises
+  {py:exc}`zanzibar.MalformedTupleString` on reads as well as writes.
+- The `StaleRead` and `WatermarkGap` messages say "set engine" where they said
+  "evaluator".
 
 ## 0.0.5 (2026-10-14)
 

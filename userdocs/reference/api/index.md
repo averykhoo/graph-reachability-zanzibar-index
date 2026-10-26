@@ -50,7 +50,7 @@ print("sqlmodel" in sys.modules)  # -> True
 .. py:data:: __version__
    :type: str
 
-   The installed version of the library as a string, for example ``"0.0.5"``.
+   The installed version of the library as a string, for example ``"0.1.0"``.
 ```
 
 ## Subpackages

@@ -135,9 +135,12 @@ A `sync=True` instance applies the pending backlog (rows other instances wrote w
 `sync=False` and no `catch_up()` has applied yet) as part of each of its own writes,
 before its own row, and that step is capped like any synchronous write. So while a row
 that the index refuses is pending, **every** write through a `sync=True` instance on the
-same store id fails, even an unrelated small grant, and removals included. The exception
-describes the pending row, not the tuple you wrote, and its `failing_log_row` attribute is
-`(log id, row)` for that pending row. Two refusals behave this way:
+same store id fails, even an unrelated small grant, and removals included. The exception's
+message says so: it starts "this write (log row N) was rolled back because the index
+backlog ... holds an earlier log row it cannot apply", names that pending row, and says how
+to unblock the store. Its `failing_log_row` attribute is `(log id, row)` for that pending
+row. (A duplicate add appends no log row, so its message starts "this write (a duplicate
+add, which appends no log row)" instead.) Two refusals behave this way:
 
 - {py:exc}`zanzibar.ClosureFanoutExceeded`, for a pending row over the write fan-out cap.
   `catch_up()` applies such a row anyway (with a warning), which unblocks the writers.
@@ -159,6 +162,8 @@ except ClosureFanoutExceeded as error:
     pending_row = error.failing_log_row
 print(refused)  # -> True
 print("this write would add 10" in message)  # -> True
+print("holds an earlier log row it cannot apply" in message)  # -> True
+print("run Store.catch_up()" in message)  # -> True
 print(pending_row[1])  # -> 'ADD group:big#member viewer doc:2'
 ```
 

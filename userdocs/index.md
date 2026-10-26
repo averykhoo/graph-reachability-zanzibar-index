@@ -100,6 +100,10 @@ This documentation has four parts. Each answers a different kind of question.
 : Background and design: what Zanzibar-style permissions are, how the library answers a
   question, and how far its answers can be trusted.
 
+Before a first deploy, read [Use async mode and freshness tokens](how-to/async-tokens.md),
+[Turn on runtime checks in production](how-to/runtime-checks.md),
+[Prune the change outbox](how-to/prune-outbox.md) and [Handle errors](how-to/errors.md).
+
 ## License
 
 Apache-2.0. The license text is the `LICENSE` file in the

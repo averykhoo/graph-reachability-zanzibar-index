@@ -12,6 +12,8 @@ signatures and every option, see [the reference](../reference/index.md).
 - [Common modelling patterns](patterns.md): groups, roles, parent inheritance, public
   access, block lists, requiring two relations.
 - [Change a schema](change-schema.md): move a store's tuples to a new schema.
+- [Test your permission model](test-permissions.md): a pytest fixture and tests for a
+  schema.
 
 **Load and read data**
 
@@ -46,6 +48,7 @@ port-openfga
 rewrite-refused-shape
 patterns
 change-schema
+test-permissions
 bulk-load-adopt
 query-access
 async-tokens

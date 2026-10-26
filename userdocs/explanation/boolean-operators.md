@@ -298,18 +298,5 @@ define viewer_base: [user] or viewer_base from parent
 define viewer: viewer_base but not blocked
 ```
 
-This is **not** the same schema. Here `blocked` is checked only on the folder you ask
-about, not on every folder above it. If someone blocked on a parent folder must also lose
-access to everything below, store the block on each folder they must not see, or make the
-block itself inherit, as in the previous section:
-
-```text
-define blocked: [user] or blocked from parent
-define viewer_base: [user] or viewer_base from parent
-define viewer: viewer_base but not blocked
-```
-
-That version removes a user blocked anywhere above, which is again a little different
-from the original, where a grant made below the block would still count. There is no
-legal form of "exclude at every level" in a schema that a `Store` accepts.
-[Rewrite a refused schema shape](../how-to/rewrite-refused-shape.md) has more of these rewrites.
+This is not the same schema; the differences, and the inheriting-block variant, are worked
+through in [Rewrite a refused schema shape](../how-to/rewrite-refused-shape.md#recursion-through-and-or-but-not).

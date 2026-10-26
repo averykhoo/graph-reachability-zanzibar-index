@@ -294,8 +294,7 @@ print(type(err).__name__)  # -> 'SchemaError'
 | --- | --- |
 | `schema 1.2` (or any version but `1.1`) | `schema 1.1`, or delete the line; the header is optional |
 | `relations define viewer: [user]`, `model x`, `schema 1.1 # comment` | one keyword per line; each `define` and each comment on its own line |
-| `[user with in_office]`, `condition ...` blocks | none: conditions are not supported. If the condition is a stored fact, model it as a relation, for example `define viewer: [user] but not suspended` |
-| `module ...`, `extend type ...` | none: write one self-contained schema 1.1 text, with each type's relations in its one `type` block |
+| conditions, modules | no rewrite; see [Port an OpenFGA model](port-openfga.md#2-fix-what-is-refused) |
 | a second `type doc` block, or a second `define viewer` in one type | merge them: one `type` block per type, one `define` per relation joining the arms with `or` |
 | an empty schema, or one where no type has a `define` | declare at least one relation; a store saves its schema once and could never be used |
 

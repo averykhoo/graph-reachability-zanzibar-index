@@ -74,24 +74,11 @@ never deleted, and a row that a reader still needs must not be deleted: the chan
 records would be lost, and the `and` / `but not` relations that depend on it would stay
 wrong.
 
-For a `Store`, the outbox position read after the last commit is always safe, as above.
-The library reads outbox rows in two places, and neither needs a row once it is
-committed:
-
-- On a schema with `and` or `but not`, each write reads its own new rows to update the
-  relations that use those operators, before it commits.
-- With runtime checks at `"full"` or `"fixpoint"` (the `paranoia` argument of
-  {py:class}`~zanzibar.Store`, or `ZANZIBAR_PARANOIA`), each commit checks the rows it is
-  about to commit.
-
-A prune only sees committed rows, so it can never delete a row that one of those reads
-needs. On a schema that uses only `or`, with runtime checks at `"off"` (the default)
-or `"residue"`, nothing reads the outbox at all. This holds for a `Store` opened with `sync=False` too,
-since its rows are written and read when {py:meth}`~zanzibar.Store.catch_up` applies the
-backlog.
-
-If you drive {py:class}`zanzibar.graphindex.DeltaProcessor` yourself and keep a position
-across transactions, pass the lowest position you are still holding instead.
+For a `Store`, the position read after its last commit is always safe: the library reads
+outbox rows only inside the transaction that wrote them (the `and` / `but not` update, and
+the `"full"` / `"fixpoint"` runtime checks), so a committed row is never needed again. This
+holds for `sync=False` too. If you drive {py:class}`zanzibar.graphindex.DeltaProcessor`
+yourself and hold a position across transactions, pass the lowest position you still hold.
 
 The prune takes no store lock: it only deletes rows that no reader needs any more. It is
 still a write, so run it in its own transaction, not inside a store's session.

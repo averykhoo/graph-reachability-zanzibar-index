@@ -16,8 +16,8 @@ not as a specification, and measure on your own hardware and data before relying
 ## Writes pay so that reads are cheap
 
 The graph index stores every permission that follows from your tuples, not only the tuples
-themselves (see [How the graph index works](graph-index.md)). That makes a `check` a single
-lookup, and it makes some writes large. When a write links a subject to an object, the
+themselves (see [How the graph index works](graph-index.md)). That makes a `check` a few
+indexed lookups, and it makes some writes large. When a write links a subject to an object, the
 index adds one row for every pair of "something that reaches the subject" and "something
 the object reaches", plus one for each of those on its own. In practice:
 
@@ -284,7 +284,7 @@ This library is probably the wrong choice if:
   `READ COMMITTED`.
 - **Your schema changes often.** A schema is fixed for the life of a store; changing it means
   building a new store (see [Change a schema](../how-to/change-schema.md)).
-- **You need a mature, stable API.** The library is at version 0.0.x, and any
+- **You need a mature, stable API.** The library is at version 0.x, and any
   release, including a patch release, may change the API. Pin an exact version and read the
   changelog's "Breaking" entries before upgrading (see the
   [changelog](../reference/changelog.md)).

@@ -9,7 +9,7 @@ with Google or OpenFGA.
 
 Two backends give the same answers with opposite cost models. The set engine stores only
 the raw tuples and computes each answer when you ask; the graph index stores every implied
-relationship ahead of time, so a check is one indexed lookup and the work moves to writes.
+relationship ahead of time, so a check is a few indexed lookups and the work moves to writes.
 
 **Status: alpha, research code, no support promised.** It is heavily tested but has never
 run in production, it has no performance target, and the API may change in any 0.x release.
@@ -80,8 +80,9 @@ The user documentation is at
 * [Reference](https://averykhoo.github.io/graph-reachability-zanzibar-index/reference/index.html):
   the Python API, the [schema language](https://averykhoo.github.io/graph-reachability-zanzibar-index/reference/schema-language.html),
   [exceptions](https://averykhoo.github.io/graph-reachability-zanzibar-index/reference/exceptions.html),
-  [configuration](https://averykhoo.github.io/graph-reachability-zanzibar-index/reference/configuration.html)
-  and [database tables](https://averykhoo.github.io/graph-reachability-zanzibar-index/reference/tables.html).
+  [configuration](https://averykhoo.github.io/graph-reachability-zanzibar-index/reference/configuration.html),
+  [database tables](https://averykhoo.github.io/graph-reachability-zanzibar-index/reference/tables.html),
+  and the [release notes](https://averykhoo.github.io/graph-reachability-zanzibar-index/reference/changelog.html).
 * [Explanation](https://averykhoo.github.io/graph-reachability-zanzibar-index/explanation/index.html):
   [the two backends](https://averykhoo.github.io/graph-reachability-zanzibar-index/explanation/two-backends.html),
   [differences from OpenFGA](https://averykhoo.github.io/graph-reachability-zanzibar-index/explanation/semantics-vs-openfga.html),
@@ -89,6 +90,7 @@ The user documentation is at
   and [how correctness is checked](https://averykhoo.github.io/graph-reachability-zanzibar-index/explanation/assurance.html).
 
 Before a first deploy, read the guides to [async mode and freshness tokens](https://averykhoo.github.io/graph-reachability-zanzibar-index/how-to/async-tokens.html),
+[runtime checks in production](https://averykhoo.github.io/graph-reachability-zanzibar-index/how-to/runtime-checks.html),
 [pruning the change outbox](https://averykhoo.github.io/graph-reachability-zanzibar-index/how-to/prune-outbox.html), and the
 [exceptions reference](https://averykhoo.github.io/graph-reachability-zanzibar-index/reference/exceptions.html).
 

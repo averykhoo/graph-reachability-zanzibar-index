@@ -38,6 +38,7 @@ from zanzibar.graphindex.wildcard import LookupResult
 from zanzibar.setengine.engine import StaleLookupIds
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import AdmissionRejected, IndexResourceLimit, validate_store_id
+from zanzibar.schema.errors import ClosureFanoutExceeded
 from zanzibar.schema.errors import SchemaError, ZanzibarError, reject_ellipsis_predicate
 from zanzibar.schema.json_frontend import _reject_duplicate_json_keys, openfga_json_to_dsl
 from zanzibar.schema.tuplestr import lookup_args, lookup_reverse_args, shape_filter, tuple_args
@@ -52,7 +53,51 @@ from .schema_io import (TablesNotCreated, TablesOutdated, ensure_schema, missing
 # StaleRead lives with the evaluator that raises it first (TupleSource.check);
 # re-exported here for backward compatibility.
 from .source import (StaleRead, TupleSource, _require_clean_session, assert_read_isolation,
-                     refuse_foreign_token, token_diagnosis, validate_token)
+                     log_rows, refuse_foreign_token, token_diagnosis, validate_token)
+
+
+def _name_blocking_backlog_row(exc: BaseException, own_row_id: int | None,
+                               store_id: str) -> None:
+    """TK167: a sync write that failed on a backlog row OTHER than its own says so.
+
+    The sync apply step replays the whole pending backlog inside the caller's write
+    transaction, so one unappliable row that a ``sync=False`` writer logged (a path-count
+    overflow, or a fan-out-capped row no ``catch_up`` has yet applied) refuses EVERY sync
+    write on the store id, removals of that very tuple included. The bare limit message
+    names the backlog row's closure row, not the caller's tuple, which reads as "your
+    write was too big". Rewrite the message in place (same instance, same type, so an
+    ``except PathCountExceeded`` keeps matching) to name the blocking row and the
+    recovery (``catch_up()`` for a fan-out-capped row, a ``sync=False`` removal plus
+    ``rebuild_index`` for a path-count overflow). A failure on the caller's OWN row is
+    left exactly as it was.
+
+    ``own_row_id`` is the id of the log row THIS call appended, or ``None`` when it
+    appended none (a duplicate ``add``, which returns the log head as its token). It is
+    deliberately not the returned token: on a duplicate add with the blocking row at the
+    log head the token EQUALS the blocking row's id, and comparing against it brought the
+    bare message back (TK167 repair round 1)."""
+    row = getattr(exc, 'failing_log_row', None)
+    if row is None or (own_row_id is not None and row[0] == own_row_id):
+        return
+    row_id, rendered = row
+    original = str(exc)
+    if isinstance(exc, ClosureFanoutExceeded):
+        # catch_up() runs with the fan-out cap suspended, so it applies this row (with a
+        # warning) and the writers are unblocked; nothing has to be removed.
+        until, recovery = ('until it is applied', 'run Store.catch_up() (any instance; it '
+                           'applies a logged over-cap row with a warning), then retry')
+    else:
+        until, recovery = ('until that row is gone', 'remove that tuple through a '
+                           'Store(..., sync=False) instance, then run '
+                           'zanzibar.store.rebuild_index')
+    this_write = (f'this write (log row {own_row_id})' if own_row_id is not None else
+                  'this write (a duplicate add, which appends no log row)')
+    exc.args = (
+        f'{this_write} was rolled back because the index backlog of '
+        f'store {store_id!r} holds an earlier log row it cannot apply: row {row_id} '
+        f'({rendered}). Every sync=True write on this store id, removals included, is '
+        f'refused {until}. Recovery: {recovery}. '
+        f'The index refused row {row_id} with: {original}',)
 
 
 class LookupNotFresh(StaleRead):
@@ -104,7 +149,8 @@ class IndexStalled(LookupNotFresh):
 
     RECOVERABLE once the stall clears: any successful ``catch_up`` batch ends it. A
     stall recorded on a transient failure (a lock timeout, a lost connection) clears on
-    the next good batch. A poison row needs operator action, and
+    the next good batch, including a ``catch_up()`` that applies nothing because the
+    index is already at the log head. A poison row needs operator action, and
     ``Store.stall_error`` says which row failed and why. The
     fan-out cap is suspended in ``catch_up``, so the poison row left is a path-count
     overflow (``PathCountExceeded``). It never clears by itself, not even when a later
@@ -608,6 +654,10 @@ class Store:
         #     re-reads from the log; no hint).
         #   * apply/commit failure: drained-and-discarded before re-raising.
         fn = self.source.add if op == 'add' else self.source.remove
+        # TK167: the id of the log row THIS call appended (None on a duplicate add, which
+        # appends nothing and returns the log head). Not ``token``: see
+        # ``_name_blocking_backlog_row``.
+        own_row_id: int | None = None
         try:
             token = fn(*raw)
         except AdmissionRejected:
@@ -639,6 +689,7 @@ class Store:
                 # re-SELECTing them (P12b); the guard in advance_index only trusts the
                 # hint when it equals what log_rows would return.
                 hint = self.source.pop_pending_rows()
+                own_row_id = hint[0].id if hint else None
                 advance_index(self.session, self.cursor, self.widx, self.ruleset,
                               self.proc, rows_hint=hint or None)
             else:
@@ -647,7 +698,7 @@ class Store:
                 self.source.pop_pending_rows()
             self.session.commit()
             return token
-        except IndexResourceLimit:
+        except IndexResourceLimit as exc:
             # TK158: the index refused the write on size (ClosureFanoutExceeded /
             # PathCountExceeded, re-raised unchanged by ``apply._apply_row``). That is
             # an expected refusal, not a bug signal, and the evaluator holds exactly
@@ -656,12 +707,15 @@ class Store:
             # fallback if the undo itself fails. Atomicity is unchanged: the log row
             # and every index change go with the rollback, the set engine with the
             # undo (tests/test_tk158_cheap_refusal.py).
-            self.source.pop_pending_rows()  # discard: nothing must span the rollback
+            undrained = self.source.pop_pending_rows()  # discard: nothing spans the rollback
+            if undrained:  # raised before the sync arm drained it
+                own_row_id = undrained[0].id
             self.session.rollback()
             try:
                 self.source.undo_last_admission()
             except Exception:
                 self.source.refresh_evaluator()
+            _name_blocking_backlog_row(exc, own_row_id, self.store_id)  # TK167
             raise
         except Exception:
             self.source.pop_pending_rows()  # discard: nothing must span the rollback
@@ -686,7 +740,17 @@ class Store:
         The closure fan-out cap is SUSPENDED here: every row is
         already committed truth, so the cap could only stall the index behind it, never
         refuse the write. An over-cap row is applied with a warning instead. The cap
-        stays in force on the sync path, where its refusal reaches the writer."""
+        stays in force on the sync path, where its refusal reaches the writer.
+
+        ``batch`` is ``None`` (no cap) or an ``int >= 1``; anything else raises
+        ``ValueError`` / ``TypeError`` before the log is read."""
+        # TK165 repair round 1: batch=0 made log_rows(limit=0) return [] with a poison
+        # row still pending, which looked like "at the head" and cleared the stall.
+        if batch is not None:
+            if type(batch) is bool or not isinstance(batch, int):
+                raise TypeError(f'batch must be None or an int >= 1, got {batch!r}')
+            if batch < 1:
+                raise ValueError(f'batch must be None or an int >= 1, got {batch}')
         # Provenance (moved out of the docstring, TK123 item 14): docs/tk111-stall-aware-
         # freshness-2026-10-02.md sec 7.
         # Provenance (moved out of the docstring, TK123 item 14): TK112, 2026-10-03b.
@@ -700,6 +764,26 @@ class Store:
                 applied = advance_index(self.session, self.cursor, self.widx,
                                         self.ruleset, self.proc, batch=batch)
                 if applied:
+                    self.session.commit()
+                elif (self.cursor.stalled_after is not None
+                      and self.cursor.stalled_after == self.cursor.applied_log_id
+                      and not log_rows(self.session, self.cursor.source_store_id,
+                                       self.cursor.applied_log_id, limit=1)):
+                    # TK165: a stall recorded at lag 0 (a transient failure on an idle
+                    # poll -- the store lock is taken before the log is read). The
+                    # zero-row batch just ran under that same lock, on a cursor
+                    # refreshed under it, and found nothing past ``applied_log_id``:
+                    # the index is at the log head, so the staleness bound is back.
+                    # "Zero rows applied" alone does NOT prove that (batch=0 once
+                    # read nothing with a poison row pending), so the head is probed
+                    # here, independent of ``batch``: no TupleLog id past
+                    # ``applied_log_id``, same lock and snapshot. A poison-row stall
+                    # is never cleared here: its failing row is past the cursor, so
+                    # the probe finds it. Commit (not roll back) so every reader of
+                    # the cursor row sees the stall end.
+                    self.cursor.stalled_after = None
+                    self.cursor.stall_error = None
+                    self.session.add(self.cursor)
                     self.session.commit()
                 else:
                     # Blind-audit X2: the zero-row path still opened a transaction

@@ -952,6 +952,17 @@ class ParanoiaGuard:
                                     self.i14_entities, self.i14_types)
 
     def after_commit(self, sess: Session) -> None:
+        # TK170: SQLAlchemy also fires after_commit when a SAVEPOINT is released
+        # (SessionTransaction.commit dispatches it for ``nested`` transactions, while
+        # the savepoint is still the session's current transaction). A release commits
+        # nothing: the root transaction is still open. Re-checking then is worse than
+        # useless -- on a SingletonThreadPool bind (in-memory SQLite) the fresh Session
+        # below shares the caller's DBAPI connection, and its close() ROLLS BACK the
+        # whole open transaction, savepoint writes included (a stale ALLOW, and "no
+        # such savepoint" on an outer rollback). The I14 sets are emptied only by a
+        # real commit, too (see __init__). So only the ROOT commit runs this hook.
+        if sess.in_nested_transaction():
+            return
         self.i14_entities.clear()
         self.i14_types.clear()
         # Post-commit re-checking is a FULL-tier facility only: it cannot abort

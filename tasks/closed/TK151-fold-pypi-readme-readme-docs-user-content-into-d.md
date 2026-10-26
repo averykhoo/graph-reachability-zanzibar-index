@@ -11,9 +11,9 @@ labels: [docs]
 source: hand
 source_hash:
 created: 2026-10-14
-moved: 2026-10-26
-updated: 2026-10-26
-closed:
+moved: 2026-10-26e
+updated: 2026-10-26e
+closed: 2026-10-26e
 ---
 
 User decision, 2026-10-14 (verbatim, on TK123 item 22, the new PyPI sections): "we can add the sections to pypi now but it should all get folded into the docs later, which i think there should be a task for. the docs will be written by you using the diataxis framework".
@@ -102,3 +102,11 @@ Second diagrams round (user: add the two figures 2026-10-23c listed as not done,
 ### 2026-10-26
 
 TK162 CLOSED 2026-10-26, so the BLOCKED-ON-TK162 items in docs/tk151-diataxis-plan-2026-10-20.md are resolved: userdocs/explanation/limits.md section renamed "Lookups for a userset: slow on large stores with and / but not" with measured figures (0.2 s / 2-2.6 s / 21-29 s at 1k / 10k / 100k tuples) and the advice to keep userset lookups off the request path; how-to/query-access.md "List what a subject can access" now points to it. NOT changed: the limits.md line saying the set engine read cost "has not been measured for large groups" (TK162 measured set-engine lookups under 1 ms, but on 10-member groups only, so the claim stands). Source: docs/tk162-self-lookup-cost-2026-10-26.md.
+
+### 2026-10-26e
+
+Site review (wf-rel010 stage site-review, 2026-10-26e): docs/tk151-site-review-2026-10-26.md, MUST 3 / SHOULD 9 / NICE 7. No Agent tool was available in the harness, so every page was read first-hand (full: index, PYPI_README, section indexes, both tutorials, all 15 how-tos, 6 explanation pages, 8 reference pages; by section + grep: graph-index, boolean-operators, semantics-vs-openfga, exceptions, schema-language, api/schema|setengine|graphindex). MUST: M1 the six guard hits + api/index.md:53 example "0.0.5" (exact replacement text per line); M2 reference/changelog.md re-cut at the tag and no later "Unreleased" heading under userdocs (guard trap); M3 exceptions.md:362-364 StaleRead "evaluator" gloss is stale (messages now say "set engine"; only WatermarkGap still says "evaluator"). SHOULD: viewer_base one home = rewrite-refused-shape.md (patterns keeps the recipe; errors/boolean-operators cut to a link); fanout-cap.md:138-142 reflow of the TK167 insertion; backends-direct.md:159-180 to four bullets; index.md pre-deploy pointer; new sections "Deleting a store" (tables.md) and a "Test your permission model" how-to; TK163 caveat to one home (runtime-checks.md); one phrase for the cost of a check; prune-outbox.md:77-91 to three sentences. TK165/167/170 page edits read and found correct; no stale caveats left from them. Code claims checked against src/ are listed at the end of the doc. userdocs NOT edited by this stage.
+
+Site review applied (docs/tk151-site-review-2026-10-26.md, correction 2026-10-26e at the top has the per-rec table). LANDED: M3 (WatermarkGap message now says set engine; StaleRead gloss removed), S1-S9, N1 N3-N7; new page userdocs/how-to/test-permissions.md; reference/tables.md "Deleting a store" (S5 corrected: zanzibar_store keys by id, zanzibar_index_cursor by index_store_id). NOT applied: M1/M2 (cut-time, the prose is true at 0.0.5 and test_userdocs_prerelease_prose requires it until the bump), N2 (would delete an executed example). GREEN: test_userdocs_{examples,build,refused_shapes,diagrams,prerelease_prose}, test_tk123_pypi_page, test_tk122_release_metadata. RED: none seen; full gate not run. NEXT: at the cut apply M1+M2 in the version-bump commit and list the WatermarkGap message change in CHANGELOG.md.
+
+LANDED: the Diataxis user docs site (userdocs/, Sphinx + MyST + Furo, GitHub Pages workflow; examples executed by tests/test_userdocs_examples.py, strict build, 13 diagrams), the fable editorial review (docs/tk151-fable-review-2026-10-23.md) and the 2026-10-26 site review (docs/tk151-site-review-2026-10-26.md, all MUST and SHOULD applied; N2 declined), and the 0.1.0 cut prep in session 2026-10-26e: __version__ = "0.1.0", CHANGELOG [0.1.0] - 2026-10-26, userdocs/reference/changelog.md re-dated with the TK165/167/168/169/170 fixes, M1 pre-release prose rewritten on six pages, tests/test_userdocs_prerelease_prose.py re-armed for the post-cut tree (test_guard_armed_on_current_tree; sabotages A/B/C red, in its docstring). GREEN: test_tk122_release_metadata, test_userdocs_*, test_tk123_pypi_page (60 passed, 2026-10-26). NOT done: the v0.1.0 tag awaits the user, then CI babysitter, PyPI-live check and install trial. TRAP: do not mirror a future [Unreleased] heading into userdocs/reference/changelog.md under that word.

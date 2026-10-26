@@ -75,6 +75,15 @@ phantom. Literal observed verdicts (``formal/probes/tk144_sabotage_plugin_2026_1
 So this module now pins the phantom case on the read-time branch (S14), not on the residue
 arm. The residue arm's phantom branch (``subj is None``) is reached only by a facade whose
 ``SchemaInfo`` carries no seed table, which ``compile_ruleset`` never builds.
+
+**TK161 (2026-10-26): S1 is still inert IN THIS MODULE, but it now has a live pin
+elsewhere.** The residue arm's
+phantom branch is now pinned on its own, through a SEEDLESS facade over this module's
+schema and store: ``tests/test_tk161_seedless_phantom_arm.py``. S1 transplanted there
+(``formal/probes/tk161_sabotage_2026_10_26.py``, mode S1) is RED (2 failed, 2 passed:
+``phantom f9 derived`` / ``phantom f9 strat2``, ``assert False is True``). So read the
+S0-S3 table above as history, S14 as THIS module's live sabotage, and the TK161 module as
+the residue arm's.
 """
 import pytest
 

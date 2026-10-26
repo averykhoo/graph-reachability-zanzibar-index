@@ -103,7 +103,9 @@ store, whether the check ran before or after the commit, and the rule that was b
 - **Before the commit** (`"residue"`, `"full"` and `"fixpoint"`): the write raises
   `InvariantViolation` and is not committed. The store rolls it back and stays usable, but
   the index was found in a state it should never reach.
-- **After the commit** (`"full"` and `"fixpoint"` only): the write has already been
+- **After the commit** (`"full"` and `"fixpoint"` only; it runs when the outermost
+  transaction commits, not when a savepoint is released). Known limitation, to be fixed
+  in a later release: the write has already been
   committed when this check runs, so the problem is in data that is now stored. In the
   current version the write does not raise `InvariantViolation` itself here: it raises
   `sqlalchemy.exc.InvalidRequestError` ("This session is in 'committed' state"), with the

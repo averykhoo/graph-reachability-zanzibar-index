@@ -1095,6 +1095,14 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   untokened read is served by which backend) have NO Lean model. They are pinned
   Python-to-Python by `tests/test_tk111_stall_aware_freshness.py`, whose mutation sweep
   is in `docs/tk111-stall-aware-freshness-2026-10-02.md` sec 5.
+  **TK165 (2026-10-26):** `Store.catch_up` now ALSO clears the marker itself on a
+  zero-row batch when the stall sits at `applied_log_id` and a head probe under the
+  same lock finds no `TupleLog` id past it (a lag-0 stall; a poison row past the cursor
+  is never cleared there), and it refuses a `batch` that is not `None` or an
+  `int >= 1`. Re-read 2026-10-26 when the anchor CONTENT pin flagged the body: the row
+  loop, the single cascade per batch and the `fanout_cap_suspended` window are
+  unchanged, so this row, the batched-schedule row and the fan-out-cap row still hold.
+  Python-only, pinned by `tests/test_tk165_idle_stall_clears.py`.
 
 * **Two resource REFUSALS on the add path that the model does not have (added 2026-10-03b,
   `TK111` + `TK112`).** Both raise an `src/zanzibar/schema/errors.py::IndexResourceLimit` before the
@@ -1443,6 +1451,10 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   (challenge C5, `src/zanzibar/graphindex/wildcard.py::WildcardIndex._derived_read_eval`),
   so the phantom case is pinned on that branch. Verdicts S13 (inert at the old site) and
   S14 (red on the read-time branch) are in `tests/test_p6_phantom_subject.py`'s docstring.
+  **TK161 (2026-10-26):** the residue arm's phantom branch is pinned on its own through a
+  seedless facade (`SchemaInfo.self_seeds` empty, so the public read takes the residue
+  arm): `tests/test_tk161_seedless_phantom_arm.py`, where S1 transplanted is RED. Test-only:
+  no modelled algorithm changed, the branch was kept rather than deleted.
 
   ⚠ **THE QUOTED MECHANISM IS REFUTED (2026-09-14g). The DIVERGENCE is real and the
   boundary stands; its stated CAUSE does not.** Kept above, struck here, because it was

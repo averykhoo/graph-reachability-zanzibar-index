@@ -11,9 +11,9 @@ labels: []
 source: hand
 source_hash:
 created: 2026-10-22
-moved: 2026-10-22
-updated: 2026-10-22
-closed:
+moved: 2026-10-26e
+updated: 2026-10-26e
+closed: 2026-10-26e
 ---
 
 Found 2026-10-22 by the TK3 fix stage (docs/tk3-cascade-ran-mark-2026-10-22.md, FIX-stage correction); re-run FIRST-HAND by the orchestrating session 2026-10-22.
@@ -37,3 +37,7 @@ Replacing `after_commit` with a no-op gives False after release (agent report, U
 Likely fix (REASONED): return early from `after_commit` when `sess.in_nested_transaction()`, or key it on the ROOT transaction's end. First check whether the `residue` tier's hook has the same shape. `tests/test_tk3_cascade_mark.py` N13 runs with paranoia 'off' because of this bug; switch it to 'full' once fixed. Fix the Python, never the expectation: this is an equivalence break, even though only an opt-in mode reaches it.
 
 ## Log
+
+### 2026-10-26e
+
+Fixed: src/zanzibar/graphindex/invariants.py::ParanoiaGuard.after_commit returns early while sess.in_nested_transaction() (SQLAlchemy dispatches after_commit on a savepoint RELEASE; the fresh Session on SingletonThreadPool rolled back the whole open txn). Repro first-hand 2026-10-26: full gave True after release (stale ALLOW) and N4d "no such savepoint"; residue/off unaffected. Pins: new tests/test_tk170_savepoint_paranoia.py (9 pass, off/residue/full); tests/test_tk3_cascade_mark.py N13, N4d, W7b, W7c now parametrized off+full (44 pass). Sabotage: early return deleted -> 5 failed 4 passed; widened to in_transaction() -> 3 failed 6 passed; literal output in the module docstring. Ran the 9 modules using install_paranoia/begin_nested/after_commit (166 passed); a wider 30-module subset run was still in progress at close (first attempt killed by the 30-min background cap at 40% with no failure). Docs: CHANGELOG [Unreleased] Fixed; userdocs/how-to/runtime-checks.md; plan doc docs/tk170-savepoint-paranoia-2026-10-26.md (FROZEN). Next: the full gate (later workflow stage).

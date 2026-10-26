@@ -20,7 +20,7 @@ The distribution is `zanzibar-index`; the import name is `zanzibar`.
 | --- | --- | --- |
 | `postgres` | `psycopg2-binary` | connecting to PostgreSQL |
 | `test` | `pytest`, `hypothesis` | running the library's test suite, in a source checkout of the repository (the tests are not in the published package) |
-| `docs` | `sphinx>=8,<9`, `myst-parser>=4,<5`, `furo` | building this documentation, in a source checkout of the repository. New in 0.1.0 (unreleased): 0.0.5 has no `docs` extra |
+| `docs` | `sphinx>=8,<9`, `myst-parser>=4,<5`, `furo` | building this documentation, in a source checkout of the repository. New in 0.1.0; 0.0.5 has no `docs` extra |
 
 ```text
 pip install zanzibar-index              # SQLite
@@ -90,6 +90,9 @@ print(refused)  # -> True
 - Each `Store` keeps the set engine's state in memory, rebuilt from the stored tuples when
   it opens. Several instances, in threads, processes or on other machines, may serve the
   same store id.
+- The API is synchronous: there are no `async` methods. From an asyncio application, run
+  the calls in a worker thread that creates and owns its own `Session` and `Store`, not on
+  the event loop.
 
 ## Status and license
 

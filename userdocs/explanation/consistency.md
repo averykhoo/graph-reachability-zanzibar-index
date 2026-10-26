@@ -18,7 +18,7 @@ A {py:class}`zanzibar.Store` keeps three things in your database and one in memo
 - **The tuple log**: one row per successful write, `ADD` or `REMOVE`, never deleted. Each
   row has an id that only grows. The log is the source of truth; everything else can be
   rebuilt from it.
-- **The graph index**: the precomputed answers that make `check` a single lookup (see
+- **The graph index**: the precomputed answers that make `check` a few indexed lookups (see
   [How the graph index works](graph-index.md)). With it, a **cursor** row records the id
   of the last log row the index has applied.
 - **The set engine**, in memory in each `Store` instance. It holds the tuples as bitmaps
@@ -274,7 +274,7 @@ rules change:
 | `lookup` / `lookup_reverse` with a token | unchanged: served from the index if it already applied the token's write, otherwise `LookupNotFresh`. A token at or below the cursor is genuinely reflected in the index, stalled or not |
 | `expand(...)` | unchanged: it never reads the index |
 | writes through a `sync=False` instance | unchanged: they only append to the log |
-| writes through a `sync=True` instance | such an instance applies the pending backlog as part of each write, so while the failing row is pending its writes run into it and are refused |
+| writes through a `sync=True` instance | such an instance applies the pending backlog as part of each write, so while the failing row is pending its writes run into it and are refused, with a message that names the row and the recovery |
 
 So a stall costs lookups, some speed, and synchronous writes. It never makes `check` give
 a wrong answer.
@@ -289,10 +289,10 @@ a wrong answer.
 :alt: Seven log rows. Rows 1 to 3 are applied and the cursor is after row 3. Row 4 fails, and rows 5 to 7, revokes included, wait behind it. While the stall lasts, a check without a token uses the set engine, a lookup without a token raises IndexStalled, and writes through a sync=True instance are refused.
 ```
 
-**How a stall ends.** A successful `catch_up()` that applies at least one row clears it, so
-a transient failure clears at the next good run that has work to do. (A stall recorded
-while nothing was pending stays until a later write has been applied; see
-[Recover a stalled index](../how-to/stall-recovery.md).) A row the index can never apply does not clear by itself.
+**How a stall ends.** The next successful `catch_up()` clears it, so a transient failure
+clears at the next good run. That includes a run that applies nothing because the index is
+already at the head of the log, as happens when the failure hit an idle poll; see
+[Recover a stalled index](../how-to/stall-recovery.md). A row the index can never apply does not clear by itself.
 With the write fan-out cap suspended inside `catch_up()` (an over-cap row is applied with a
 warning instead; see [Cap write fan-out](../how-to/fanout-cap.md)), the remaining cause of
 such a row is a path count too large to store, {py:exc}`zanzibar.PathCountExceeded`.

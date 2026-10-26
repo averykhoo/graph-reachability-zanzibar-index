@@ -524,7 +524,7 @@ src/zanzibar/setengine/memberset.py::intersect	py:function	943520d08202febc
 src/zanzibar/setengine/memberset.py::subtract	py:function	bb907fcf538b4bba
 src/zanzibar/setengine/memberset.py::union	py:function	6e110909c86098fc
 src/zanzibar/store/_store.py::Store._record_stall	py:function	fbabe60b0114c4a7
-src/zanzibar/store/_store.py::Store.catch_up	py:function	845d20dc3e693d25
+src/zanzibar/store/_store.py::Store.catch_up	py:function	9d752e89b1bd14f7
 src/zanzibar/store/apply.py::_apply_row	py:function	5ce78ea7ff223167
 src/zanzibar/store/apply.py::advance_index	py:function	94a39e3152a32118
 src/zanzibar/store/build.py::_materialise	py:function	62430a3254c77a5d

@@ -60,6 +60,32 @@ The row classes behind some of these tables are public, for reading:
 {py:class}`zanzibar.graphindex.Node` and {py:class}`zanzibar.graphindex.Edge`. They are
 exported for reading; the library's write path is {py:class}`zanzibar.Store`.
 
+(deleting-a-store)=
+## Deleting a store
+
+The library has no call that deletes a store. To remove one (for example a tenant's data),
+close every `Store` instance on that store id, then delete its rows from all ten tables in
+one transaction. Eight tables carry the id in `store_id`; `zanzibar_store` holds it in `id`
+and `zanzibar_index_cursor` in `index_store_id`. Delete the graph index's rows before
+`zanzibar_store`, which they reference. The SQL is yours to write and run; for example:
+
+```sql
+DELETE FROM zanzibar_residue_ref    WHERE store_id = :id;
+DELETE FROM zanzibar_residue        WHERE store_id = :id;
+DELETE FROM zanzibar_edge           WHERE store_id = :id;
+DELETE FROM zanzibar_node           WHERE store_id = :id;
+DELETE FROM zanzibar_delta_outbox   WHERE store_id = :id;
+DELETE FROM zanzibar_index_cursor   WHERE index_store_id = :id;
+DELETE FROM zanzibar_store          WHERE id = :id;
+DELETE FROM zanzibar_relation_tuple WHERE store_id = :id;
+DELETE FROM zanzibar_tuple_log      WHERE store_id = :id;
+DELETE FROM zanzibar_schema_record  WHERE store_id = :id;
+```
+
+Other stores in the same tables are not touched. The deleted store's freshness tokens
+mean nothing afterwards; do not pass them to any store. The same id can then be created
+again, with any schema, by `Store(session, store_id, schema=...)`.
+
 ## A name clash is an error
 
 No `zanzibar_*` table is declared with `extend_existing`. A table of yours with the same
@@ -90,8 +116,7 @@ print("zanzibar_tuple_log" in missing)  # -> True
 
 ## Old SQLite files: `TablesOutdated`
 
-This refusal is new in 0.1.0, which is not yet released; the 0.0.x releases do not have
-it.
+This refusal is new in 0.1.0; the 0.0.x releases do not have it.
 
 The 0.0.x releases created `zanzibar_node` on SQLite without `AUTOINCREMENT`, so SQLite
 could reuse a deleted node's id, and a lookup result held across a write could name the

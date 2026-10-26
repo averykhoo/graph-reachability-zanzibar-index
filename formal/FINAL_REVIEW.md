@@ -28,8 +28,8 @@ number INTO it over restating it.
 | quantity | value |
 |---|---|
 | `formal/conformance/` collected | **1246** |
-| `tests/` collected | **3067** |
-| whole-repo suite | **4313** |
+| `tests/` collected | **3106** |
+| whole-repo suite | **4352** |
 | differential conformance tests | **1163** across **19** files |
 | gate-tooling conformance tests | **83** across **4** files |
 | audited theorems (`#print axioms` in `Audit.lean`) | **745** |
@@ -39,7 +39,7 @@ number INTO it over restating it.
 | `corpus.SCHEMAS` | **30** |
 | `corpus.GRAPH_FRAGMENT` (graph-side gates) | **27** |
 | spec-scope corpora (four dicts) | **38** = 30 + 5 `TTU_USERSET` + 2 `SELF_REFERENTIAL` + 1 `MULTI_STRATUM` |
-| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1246 (=150+1096), `MIN_TESTS_ALL`=3067, `EXPECTED_MIN_AUDITS`=460 |
+| gate floors (`verify.sh`) | `MIN_CONF_ALL`=1246 (=150+1096), `MIN_TESTS_ALL`=3106, `EXPECTED_MIN_AUDITS`=460 |
 
 **State-gate projection ledger — what the differential gate does NOT compare.**
 Driven fresh over all **27** `GRAPH_FRAGMENT` corpora through the real graph
@@ -709,7 +709,9 @@ Everything §7 lists, plus the fragment carries:
    (`implicit_keys` / `implicit_excluded_keys`) has no Lean model, like every lookup
    surface (item 1). The residue's userset arm no longer serves a public read of a
    concrete userset subject, so the phantom-subject pin now guards the read-time branch
-   instead (`tests/test_p6_phantom_subject.py`, re-run 2026-10-17).
+   instead (`tests/test_p6_phantom_subject.py`, re-run 2026-10-17). The residue arm's own
+   phantom branch is pinned through a seedless facade since TK161
+   (`tests/test_tk161_seedless_phantom_arm.py`, sabotage S1 red, 2026-10-26).
 
 **Resolved divergence (found 2026-07-12 by the new repo-side lookup gate;
 FIXED 2026-07-13, Python-side).** `tests/test_lookup_oracle.py` (the

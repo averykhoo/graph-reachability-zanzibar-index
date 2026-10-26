@@ -91,13 +91,12 @@ except IndexStalled as exc:
 ## Decide whether it will clear by itself
 
 - **Transient: a lock timeout, a lost connection, the database restarting.** Nothing is
-  wrong with the row. The next successful `catch_up()` that applies at least one row
-  clears the stall, so keep the worker running. A worker loop that logs and retries is
-  enough; see the worker loop in [Use async mode and freshness tokens](async-tokens.md).
-  A stall recorded while nothing was pending (for example a connection lost while the
-  worker polled an idle store) is not cleared by a `catch_up()` that applies nothing: it
-  stays until a later `catch_up()` applies a row, and until then untokened lookups keep
-  raising `IndexStalled`. Any write followed by `catch_up()` clears it.
+  wrong with the row. The next successful `catch_up()` clears the stall, so keep the
+  worker running. A worker loop that logs and retries is enough; see the worker loop in
+  [Use async mode and freshness tokens](async-tokens.md). This includes a stall recorded
+  while nothing was pending (for example a connection lost while the worker polled an
+  idle store): a later `catch_up()` that finds nothing to apply clears it, because it has
+  just confirmed the index is at the head of the log.
 - **Permanent: {py:exc}`zanzibar.PathCountExceeded`.** The row can never be applied, so
   every later row waits behind it forever. That includes a later removal of the same
   tuple: the removal is a log row too, and it queues behind the row it would undo. This
@@ -114,8 +113,9 @@ Until it has, the row still blocks synchronous writers; see
 ### Writes through a sync instance fail too
 
 While the bad row is pending, every write through a `sync=True` instance runs into it,
-even the removal of the bad tuple itself, and is refused with `PathCountExceeded` naming
-the pending row in `failing_log_row` (the general rule is in
+even the removal of the bad tuple itself, and is refused with `PathCountExceeded`. The
+message says that the backlog holds a row the index cannot apply, names that row (also in
+`failing_log_row`), and points to the recovery below (the general rule is in
 [A pending row can block every synchronous write](fanout-cap.md#a-pending-row-can-block-every-synchronous-write)).
 `stall_error` on the async instance names the same row:
 
@@ -126,6 +126,7 @@ try:
     sync_store.add_tuple("user:bob", "member", "group:a0")
 except PathCountExceeded as exc:
     print("group:a32" in str(exc))  # -> True
+    print("rebuild_index" in str(exc))  # -> True
 ```
 
 The write was rolled back. Make the repair writes below through a `sync=False` instance.

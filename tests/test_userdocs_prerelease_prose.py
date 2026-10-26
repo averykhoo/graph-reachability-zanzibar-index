@@ -23,6 +23,8 @@ The guard is exercised two ways so that it cannot pass by being blind:
   with ``__version__`` monkeypatched to "0.1.0" over the REAL tree and assert it reports at
   least the pages known to carry pre-release prose today; with "0.0.5" it reports nothing.
   After the cut that half is covered by ``test_no_prerelease_prose_after_release`` itself.
+  **Replaced at the cut (2026-10-26)** by ``test_guard_armed_on_current_tree``: see the
+  correction below.
 
 Current hits (first-hand, 2026-10-23, version patched to "0.1.0"; see S3 below): explanation/limits.md,
 how-to/errors.md, how-to/upgrade-0.1.md, reference/changelog.md, reference/environments.md,
@@ -32,6 +34,18 @@ the ``TablesOutdated`` 0.0.5 note, now at line 182).
 (``index.md``'s pre-release note had already been removed when this was written, and
 ``reference/api/index.md``'s ``"0.0.5"`` is an example value that the regex does not and
 should not match.)
+
+Correction 2026-10-26 (the 0.1.0 cut, session 2026-10-26e). ``__version__`` is now "0.1.0",
+so the guard is armed on the real tree. At the cut it reported (literal, version bumped,
+prose not yet rewritten): ['explanation/limits.md:287', 'how-to/errors.md:182',
+'how-to/upgrade-0.1.md:15', 'reference/environments.md:23', 'reference/tables.md:119']
+(``reference/changelog.md`` had already been re-dated). Each line was rewritten per
+``docs/tk151-site-review-2026-10-26.md`` M1. ``KNOWN_CURRENT`` and the monkeypatched
+real-tree half were removed (nothing pre-release is left to know); the replacement
+``test_guard_armed_on_current_tree`` pins that the shipped version arms the guard.
+TRAP: the next "[Unreleased]" CHANGELOG section must not be mirrored into
+``userdocs/reference/changelog.md`` under that word (title it "Next release"), or narrow
+``PRERELEASE_RX`` deliberately. Sabotage at the cut: see "Sabotage 2026-10-26" at the end.
 
 Sabotage evidence (2026-10-23, literal pytest output), each applied alone and reverted:
 
@@ -55,6 +69,27 @@ Sabotage evidence (2026-10-23, literal pytest output), each applied alone and re
          FAILED tests/test_userdocs_prerelease_prose.py::test_no_prerelease_prose_after_release
          FAILED tests/test_userdocs_prerelease_prose.py::test_guard_fires_on_current_tree
     Restored (files byte-compared against their pre-sabotage copies): 3 passed.
+
+Sabotage 2026-10-26 (at the cut, version "0.1.0"; literal pytest output, each applied alone
+and restored byte-for-byte by the runner):
+
+    A ``_is_prerelease`` body replaced by ``return True`` (guard disarmed at 0.1.0):
+         E       AssertionError: assert [] == ['a.md:1', 'a... 'sub/b.md:1']
+         E       AssertionError: the guard is disarmed at the shipped version 0.1.0
+         FAILED tests/test_userdocs_prerelease_prose.py::test_guard_fires_on_synthetic_tree
+         FAILED tests/test_userdocs_prerelease_prose.py::test_guard_armed_on_current_tree
+         2 failed, 1 passed
+    B ``reference/changelog.md``'s "## 0.1.0 (2026-10-26)" put back to "## 0.1.0 (unreleased)":
+         E           Failed: pre-release prose survives at version 0.1.0; rewrite or delete
+                     these lines: ['reference/changelog.md:8']
+         FAILED tests/test_userdocs_prerelease_prose.py::test_no_prerelease_prose_after_release
+         FAILED tests/test_userdocs_prerelease_prose.py::test_guard_armed_on_current_tree
+         2 failed, 1 passed
+    C PRERELEASE_RX's "unreleased" alternative changed to "unreleasedX":
+         E       AssertionError: assert ['a.md:3', 'a... 'sub/b.md:1'] == ['a.md:1', 'a... 'sub/b.md:1']
+         FAILED tests/test_userdocs_prerelease_prose.py::test_guard_fires_on_synthetic_tree
+         1 failed, 2 passed
+    Restored: 3 passed.
 """
 from __future__ import annotations
 
@@ -70,17 +105,6 @@ USERDOCS = ROOT / "userdocs"
 
 PRERELEASE_RX = re.compile(
     r"unreleased|not yet released|reports[^\n]*0\.0\.5|is at version 0\.0", re.IGNORECASE)
-
-# Pages that carry pre-release prose on 2026-10-23 (see the module docstring).
-KNOWN_CURRENT = {
-    "explanation/limits.md",
-    "how-to/errors.md",
-    "how-to/upgrade-0.1.md",
-    "reference/changelog.md",
-    "reference/environments.md",
-    "reference/tables.md",
-}
-
 
 def _is_prerelease(version: str) -> bool:
     return re.fullmatch(r"0\.0\.\d+", version) is not None
@@ -126,14 +150,19 @@ def test_guard_fires_on_synthetic_tree(tmp_path, monkeypatch):
     assert find_prerelease_prose(tmp_path) == []
 
 
-def test_guard_fires_on_current_tree(monkeypatch):
-    if not _is_prerelease(zanzibar.__version__):
-        # After the cut the real-tree check IS test_no_prerelease_prose_after_release.
-        assert find_prerelease_prose() == []
-        return
-    monkeypatch.setattr(zanzibar, "__version__", "0.1.0")
-    pages = {hit.rsplit(":", 1)[0] for hit in find_prerelease_prose()}
-    missing = sorted(KNOWN_CURRENT - pages)
-    assert not missing, f"missing pre-release hits: {missing}"
-    monkeypatch.setattr(zanzibar, "__version__", "0.0.5")
+def test_guard_armed_on_current_tree():
+    """Since the 0.1.0 cut (2026-10-26) the real version must ARM the guard.
+
+    Before the cut this half monkeypatched the version to "0.1.0" and asserted the guard
+    found the pages in ``KNOWN_CURRENT``; at the cut those lines were rewritten, so the
+    real-tree check is ``test_no_prerelease_prose_after_release`` itself. What this test
+    still pins is that the guard is not silently disarmed at the shipped version (a
+    ``_is_prerelease`` that matches 0.1.x would make that test pass on any prose), and
+    that the scan really reads the real tree (it finds the pages).
+    """
+    assert not _is_prerelease(zanzibar.__version__), (
+        f"the guard is disarmed at the shipped version {zanzibar.__version__}")
+    assert _is_prerelease("0.0.5") and not _is_prerelease("0.1.0")
+    pages = [p for p in USERDOCS.rglob("*.md") if "_build" not in p.relative_to(USERDOCS).parts]
+    assert len(pages) >= 20, f"the scan sees only {len(pages)} userdocs pages"
     assert find_prerelease_prose() == []

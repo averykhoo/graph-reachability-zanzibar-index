@@ -38,8 +38,7 @@ the one before the commit, at any level, the commit does not happen and the stor
 back. At `full` and `fixpoint` the check after the commit runs once the write is already
 committed, so when it fails the write stays in the database and the error reports
 corruption that is already stored. In the current version that post-commit failure reaches
-the caller as `sqlalchemy.exc.InvalidRequestError`, with the `InvariantViolation` as its
-`__context__`, and the `Store` object cannot be used again (see
+the caller as `sqlalchemy.exc.InvalidRequestError` (see
 [When a check fails](../how-to/runtime-checks.md#when-a-check-fails)).
 
 The variable's name is also exported as `zanzibar.store.PARANOIA_ENV_VAR`. To choose and

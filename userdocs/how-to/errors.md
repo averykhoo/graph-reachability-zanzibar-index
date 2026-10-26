@@ -101,7 +101,8 @@ same write does not help; split it, or raise the limit. See
 
 While such a row, written by a `sync=False` instance, waits in the log, every write
 through a `sync=True` instance of the same store fails with the same exception, about
-that row rather than yours; see
+that row rather than yours. The message says so, names the row, and says how to unblock
+the store; see
 [A pending row can block every synchronous write](fanout-cap.md#a-pending-row-can-block-every-synchronous-write).
 
 ## Schema problems: fix the schema
@@ -136,25 +137,24 @@ except SchemaMismatch:
 ```
 
 A relation that uses `but not` and recurses through the side it keeps (here
-`viewer from parent`) is refused with `CyclicDerivedDependency`, which an
+`group#member`) is refused with `CyclicDerivedDependency`, which an
 `except SchemaError` lets through. Catch it by name, or catch `ZanzibarError`:
 
 ```python
 from zanzibar import CyclicDerivedDependency
 
-FOLDERS = """
+GROUPS = """
 model
   schema 1.1
 type user
-type folder
+type group
   relations
-    define parent: [folder]
-    define blocked: [user]
-    define viewer: ([user] or viewer from parent) but not blocked
+    define banned: [user]
+    define member: [user, group#member] but not banned
 """
 
 try:
-    parse_openfga_schema(FOLDERS)
+    parse_openfga_schema(GROUPS)
 except (SchemaError, CyclicDerivedDependency) as error:
     refusal = error
 print(type(refusal).__name__)  # -> 'CyclicDerivedDependency'
@@ -178,9 +178,7 @@ configuration; retrying does not help.
   attribute lists the missing tables.
 - {py:exc}`zanzibar.TablesOutdated`: the `zanzibar_*` tables in a SQLite file were created
   by a 0.0.x release, which made them in an older layout. Create the tables in a new
-  database file and write the tuples again. Until 0.1.0 is released, a build from source
-  also reports version 0.0.5, so check how the file was made, not the version number; see
-  the [note on the upgrade page](upgrade-0.1.md).
+  database file and write the tuples again.
 - {py:exc}`zanzibar.StoreNotFound`: `Store(session, store_id)` without a
   schema names a store that does not exist in this database. Create it once by passing
   `schema=`, or check that the session points at the right database.
@@ -265,10 +263,9 @@ except ForeignToken as error:
 
 - {py:exc}`zanzibar.InvariantViolation`, an `AssertionError`. It means the stored index is
   corrupt, not that a request was refused, so it is kept out of `ZanzibarError` on purpose.
-  Let it reach your error reporting. When it comes from the check that runs after a commit,
-  the current version raises `sqlalchemy.exc.InvalidRequestError` instead, with the
-  `InvariantViolation` as its `__context__`, and that `Store` object cannot be used again.
-  See [Turn on runtime checks in production](runtime-checks.md#when-a-check-fails).
+  Let it reach your error reporting. When it comes from the check that runs after a commit
+  it currently arrives wrapped in a SQLAlchemy error; see
+  [When a check fails](runtime-checks.md#when-a-check-fails).
 - {py:class}`zanzibar.UnprovenExtensionWarning`, a warning, not an exception. It is
   emitted for a schema that uses a wildcard feature beyond OpenFGA's; see
   [the section below](#silence-the-wildcard-extension-warning-or-make-it-an-error).

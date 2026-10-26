@@ -10,12 +10,6 @@ The full list of changes is in the [changelog](../reference/changelog.md). This 
 what a 0.0.x caller has to change, and its last steps list the smaller changes and what
 0.1 adds.
 
-```{note}
-Until 0.1.0 is released, a build from the source tree already has every change on this
-page but still reports `zanzibar.__version__ == "0.0.5"`. Do not use the version number to
-decide which API you have.
-```
-
 ## 1. Rename the imports
 
 The package that holds the composed store was renamed, and so was its class:
@@ -29,7 +23,8 @@ The package that holds the composed store was renamed, and so was its class:
 | `ShapeRefusedSinceTK137` | `zanzibar.ShapeNoLongerAccepted` |
 
 Everything else in `zanzibar.store` keeps its 0.0.x name: `TupleSource`, `build_index`,
-`rebuild_index`, `save_schema`, `SchemaRecord`, `TupleLog`. The database table names did not
+`rebuild_index`, `save_schema`, `SchemaRecord`, `TupleLog` (all documented on the
+[zanzibar.store](../reference/api/store.md) page). The database table names did not
 change either; the `IndexStore` model still uses the table `zanzibar_store`.
 
 Before, in 0.0.x:

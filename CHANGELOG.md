@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
-## [Unreleased]
+## [0.1.0] - 2026-10-26
 
 The public API break of `TK123`: the first-hour review of 0.0.x, accepted in full. There
 are no compatibility aliases. What breaks a 0.0.5 caller, in short:
@@ -253,6 +253,17 @@ Each is detailed below, under Changed or Added.
   answer. Schemas are write-once, so create a new store id with the entry dropped and write
   the tuples again. `ShapeNoLongerAccepted` gains `accepted_through` and `refused_since`
   (the versions `PersistedSchemaRefused` quotes).
+- **A sync write blocked by someone else's pending row now says so** (TK167). A
+  `sync=True` write applies the pending backlog first, so one row a `sync=False` instance
+  logged and the index cannot apply refuses every sync write on that store id, removals
+  of that very tuple included. The `PathCountExceeded` / `ClosureFanoutExceeded` message
+  used to describe only that row's closure, which read as "your write was too big". It
+  now starts "this write (log row N) was rolled back because the index backlog of store
+  ... holds an earlier log row it cannot apply", names the row, and gives the recovery: a
+  `sync=False` removal then `zanzibar.store.rebuild_index` for a path-count overflow,
+  `catch_up()` for a fan-out-capped row. A duplicate add (which appends no log row)
+  starts "this write (a duplicate add, which appends no log row)" instead. Same exception
+  type and `failing_log_row`; a refusal of your own row reads as before.
 
 ### Added
 - **The types in public signatures are public** (TK164). `zanzibar.schema` now exports
@@ -387,11 +398,19 @@ Each is detailed below, under Changed or Added.
   pruning claims are pinned by tests.
 
 ### Fixed
+- A stall recorded while nothing was pending (for example a lock timeout or a lost
+  connection while an async worker polled an idle store) is cleared by the next successful
+  `catch_up()`, even one that applies nothing (TK165). It used to last until some write
+  was made and applied, and until then untokened lookups raised `IndexStalled`. A stall on
+  a row that cannot be applied (`PathCountExceeded`) is unchanged.
 - A user string with a `:` in its relation part, such as `"user:a#b:c"`, raises
   `MalformedTupleString` on reads as well as writes (TK168). A read used to answer
   `False` and a write raised `AdmissionRejected`.
 - The `StaleRead` message says "set engine at log id N" where it said "evaluator at
   N", and `TupleSource.check`'s says to call `refresh_evaluator()` (TK169).
+- The `WatermarkGap` message raised by the set engine's catch-up says "set engine
+  watermark N -> M" where it said "evaluator watermark", and names `refresh()` for a
+  `Store` as well as `refresh_evaluator()` for a `TupleSource` (TK151).
 - A write refused by `ZANZIBAR_MAX_CLOSURE_FANOUT` is cheap to refuse (TK158). The graph
   index counts the region with two indexed counts and refuses before loading it, and a
   `Store` takes the one admitted tuple back out of the set engine instead of rebuilding it
@@ -405,6 +424,13 @@ Each is detailed below, under Changed or Added.
   always on, costs no SQL, and re-arms when a savepoint that held the cascade is rolled
   back. It shows that a cascade was called, not that its watermark was right. A `Store`
   is not affected.
+- With `ZANZIBAR_PARANOIA=full` (or `fixpoint`), releasing a savepoint
+  (`session.begin_nested()` ... `.commit()`) ran the after-commit check. On an in-memory
+  SQLite database that check shared the caller's connection and rolled back the whole open
+  transaction, so the savepoint's writes were lost: `check` could answer `True` where the
+  set engine answers `False`, and a later rollback of an outer savepoint failed with
+  `no such savepoint`. The after-commit check now runs only when the outermost transaction
+  commits (TK170). `off` and `residue` were not affected.
 - A `SetLookupResult` or graph `LookupResult` held across a write could translate to
   ANOTHER entity's key with no error (0.0.5 install trial F16): set-engine ids are
   recycled, and SQLite reused `zanzibar_node` row ids. Results are now stamped and checked

@@ -224,11 +224,9 @@ Grant on `viewer_base` and check `viewer`. The block overrides every grant below
 blocked folder, including a `viewer_base` grant made directly on a folder or doc inside
 it.
 
-The tempting one-relation form,
-`define viewer: ([user] or viewer from parent) but not blocked`, is refused by
-{py:class}`zanzibar.Store` for the same reason as above. It would also have meant
-something weaker: a block would stop only access inherited through the blocked folder,
-and a grant made directly on a child would still work.
+The one-relation form `define viewer: ([user] or viewer from parent) but not blocked` is
+refused; [Rewrite a refused schema shape](rewrite-refused-shape.md#recursion-through-and-or-but-not)
+explains why and how the rewrite differs.
 
 ## Require two relations with `and`
 
@@ -276,3 +274,11 @@ be mixed with `and` without parentheses. Parenthesise the reading you mean:
 
 An unparenthesised `a or b but not c` is refused with a message that names this rule.
 See [Rewrite a refused schema shape](rewrite-refused-shape.md).
+
+## One store per tenant
+
+A store id may be any non-blank string ([Store ids](../reference/tuple-strings.md#store-ids)),
+so `"tenant:acme"` works as a tenant key. All stores share the same ten tables, and each has
+its own schema and tuples. A freshness token belongs to the store that returned it:
+passing it to another store raises {py:exc}`zanzibar.ForeignToken`. To remove a tenant,
+see [Deleting a store](../reference/tables.md#deleting-a-store).

@@ -264,12 +264,14 @@ def test_n4c_releasing_a_savepoint_is_not_refused_and_a_later_cascade_pays(g):
     assert g.check('user:alice', 'viewer', 'doc:d1')
 
 
-def test_n4d_outer_savepoint_rollback_discards_an_inner_released_write():
-    # paranoia='off' on purpose: with the 'full' paranoia guard installed, releasing the
-    # inner savepoint on SQLite loses the outer one ("no such savepoint: sa_savepoint_1"
-    # on the outer rollback). PROBED 2026-10-22 to be independent of the cascade mark
-    # (the same failure with note_write patched to a no-op); recorded on the TK3 row.
-    g = G(paranoia='off')
+@pytest.mark.parametrize('paranoia', ['off', 'full'])
+def test_n4d_outer_savepoint_rollback_discards_an_inner_released_write(paranoia):
+    # Ran at paranoia='off' only until TK170 (2026-10-26): with the 'full' guard,
+    # releasing the inner savepoint fired ParanoiaGuard.after_commit, whose fresh
+    # Session's close() rolled back the shared in-memory SQLite connection, so the
+    # outer rollback failed with "no such savepoint: sa_savepoint_1". Fixed in
+    # invariants.py::ParanoiaGuard.after_commit; pinned in tests/test_tk170_*.
+    g = G(paranoia=paranoia)
     try:
         outer = g.session.begin_nested()
         inner = g.session.begin_nested()
@@ -512,10 +514,11 @@ def test_w7_a_cascade_in_a_rolled_back_savepoint_does_not_pay(paranoia):
         graph.session.close()
 
 
-def test_w7b_sibling_savepoints_write_released_cascade_rolled_back():
+@pytest.mark.parametrize('paranoia', ['off', 'full'])
+def test_w7b_sibling_savepoints_write_released_cascade_rolled_back(paranoia):
     """Reviewer probe P4 (rev_tk3_p1.py): write in savepoint A (released), cascade in
-    savepoint B (rolled back), commit -> must refuse."""
-    graph = G(paranoia='off')
+    savepoint B (rolled back), commit -> must refuse. 'full' added by TK170."""
+    graph = G(paranoia=paranoia)
     try:
         graph.committed_write('user:alice', 'viewer', 'doc:d1')
         wm = graph.wm()
@@ -531,10 +534,11 @@ def test_w7b_sibling_savepoints_write_released_cascade_rolled_back():
         graph.session.close()
 
 
-def test_w7c_an_ancestor_savepoint_rollback_re_arms_an_inner_payment():
+@pytest.mark.parametrize('paranoia', ['off', 'full'])
+def test_w7c_an_ancestor_savepoint_rollback_re_arms_an_inner_payment(paranoia):
     """Write at the root; cascade in an INNER savepoint that is released into an outer
-    one; the OUTER rolls back -> the payment is undone with it."""
-    graph, wm = _stale_ban_setup('off')
+    one; the OUTER rolls back -> the payment is undone with it. 'full' added by TK170."""
+    graph, wm = _stale_ban_setup(paranoia)
     try:
         outer = graph.session.begin_nested()
         inner = graph.session.begin_nested()
@@ -549,16 +553,15 @@ def test_w7c_an_ancestor_savepoint_rollback_re_arms_an_inner_payment():
         graph.session.close()
 
 
-def test_n13_a_cascade_in_a_released_savepoint_pays():
+@pytest.mark.parametrize('paranoia', ['off', 'full'])
+def test_n13_a_cascade_in_a_released_savepoint_pays(paranoia):
     """Control for W7: a released savepoint's cascade survives, so the commit goes
-    through and the answer is the cascaded one. paranoia='off' on purpose: under the
-    'full' guard on in-memory SQLite, releasing a savepoint fires
-    ParanoiaGuard.after_commit, whose fresh Session shares the SingletonThreadPool
-    connection and LOSES the cascade's writes (viewer True after the release; with
-    after_commit patched to a no-op, False). PROBED 2026-10-22
-    (.scratch/tk158-tk3/fix-probes/n13_cause.py), independent of the mark, and the
-    likely cause of N4d's 'no such savepoint'; filed for its own row."""
-    graph, wm = _stale_ban_setup('off')
+    through and the answer is the cascaded one. Ran at paranoia='off' only until TK170
+    (2026-10-26): under the 'full' guard on in-memory SQLite, releasing a savepoint
+    fired ParanoiaGuard.after_commit, whose fresh Session shared the SingletonThreadPool
+    connection and LOST the cascade's writes (viewer True after the release). Fixed in
+    invariants.py::ParanoiaGuard.after_commit; pinned in tests/test_tk170_*."""
+    graph, wm = _stale_ban_setup(paranoia)
     try:
         sp = graph.session.begin_nested()
         graph.proc.run_cascade(wm)

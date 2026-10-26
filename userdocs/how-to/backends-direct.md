@@ -161,23 +161,20 @@ session.close()
 The graph index ({py:class}`zanzibar.graphindex.WildcardIndex`) is public so that you can
 study or measure it. Do not write to it directly from an application; use a `Store`.
 
-**On a schema with `and` or `but not`, a direct write must be followed by
-{py:meth}`zanzibar.graphindex.DeltaProcessor.run_cascade` in the same transaction.** The
-graph index keeps each boolean relation up to date with a
-{py:class}`zanzibar.graphindex.DeltaProcessor`, and only the cascade brings the relation in
-line with the write. The index refuses a write on the boolean relation's own name (here
-`viewer`) with a `ValueError`; a write has to be rewritten onto the relation's internal
-parts first. That rewritten write is the dangerous one: if the cascade were skipped, the index would
-answer wrongly from then on. On the schema above, `alice` would never get `can_view` on
-`doc:1`, although she is a viewer and is not banned. So the commit refuses it: committing a
-transaction that wrote to the index on a boolean schema and ran no cascade after that write
-raises {py:exc}`zanzibar.CascadeNotRun`, and the transaction stays open, for you to roll it
-back or run the cascade and commit again. The check proves that a cascade was called, not
-that it was called with the right watermark: pass the `outbox_watermark` read before the
-first write. A refused write (for example {py:exc}`zanzibar.ClosureFanoutExceeded`) still
-leaves the transaction owing a cascade or a rollback. A `Store` runs the cascade for you,
-in the same transaction that applies the write to the index: the write itself with
-`sync=True`, or {py:meth}`zanzibar.Store.catch_up` with `sync=False`.
+- **On a schema with `and` or `but not`, the index refuses a write on the boolean
+  relation's own name** (here `viewer`) with a `ValueError`. A write goes onto the
+  relation's internal parts, and only
+  {py:meth}`zanzibar.graphindex.DeltaProcessor.run_cascade`, in the same transaction,
+  brings the relation in line with it.
+- Committing a transaction that wrote to the index on such a schema and ran no cascade
+  after that write raises {py:exc}`zanzibar.CascadeNotRun`; the transaction stays open:
+  roll back, or run the cascade and commit again.
+- The check proves a cascade ran, not that it ran with the right watermark: pass the
+  `outbox_watermark` read before the first write. A refused write (for example
+  {py:exc}`zanzibar.ClosureFanoutExceeded`) still leaves the transaction owing a cascade or
+  a rollback.
+- A `Store` does all of this for you, in the write (`sync=True`) or in
+  {py:meth}`zanzibar.Store.catch_up` (`sync=False`).
 
 ## Errors only the backends raise
 
@@ -188,8 +185,7 @@ attributes are in the [exceptions reference](../reference/exceptions.md).
 
 - {py:exc}`zanzibar.CascadeNotRun`: you wrote to a bare graph index on a schema with
   `and` / `but not` and committed without running the delta processor's `run_cascade`
-  after your last write. The commit is refused and the transaction stays open: roll back,
-  or run the cascade and commit again (see the section above).
+  after your last write (see the section above).
 - {py:exc}`zanzibar.MissingDeltaProcessor`: you drove the index's apply step yourself,
   on a schema with `and` / `but not`, without the delta processor that maintains those
   relations.

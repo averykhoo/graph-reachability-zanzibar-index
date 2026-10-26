@@ -54,7 +54,8 @@ new = Store(Session(engine), "app-v2", schema=NEW_SCHEMA)
 ```
 
 Use a new store id for the new schema. The old store and its tuple log stay in the
-database; the library has no call that deletes a store.
+database; the library has no call that deletes a store, but you can delete its rows
+yourself ([Deleting a store](../reference/tables.md#deleting-a-store)).
 
 If the old store was created with `object_wildcard_shapes`, pass the same argument
 (updated for any renames) when you create the new store. Without it, copied tuples whose

@@ -336,8 +336,10 @@ print(missing_id)  # -> 'no-such-store'
    groups) doubles them K times. A synchronous write is refused. With
    ``sync=False``, :py:meth:`Store.catch_up <zanzibar.Store.catch_up>` raises it and the
    index stalls (see :py:exc:`~zanzibar.IndexStalled`). While that row waits in the log,
-   writes through a ``sync=True`` instance raise it too, about the waiting row (see
-   :ref:`sync-writers-blocked-by-backlog`). See :doc:`../how-to/stall-recovery`.
+   writes through a ``sync=True`` instance raise it too, about the waiting row; the
+   message names that row and the recovery (a ``sync=False`` removal, then
+   :py:func:`zanzibar.store.rebuild_index`); see
+   :ref:`sync-writers-blocked-by-backlog`. See :doc:`../how-to/stall-recovery`.
 
    .. py:attribute:: failing_log_row
       :type: tuple[int, str]
@@ -358,8 +360,8 @@ print(missing_id)  # -> 'no-such-store'
    token and the write is not visible in this session's read snapshot. Call
    ``refresh()`` and retry once. If the retry fails the same way, the token is wrong:
    the library cannot tell a token that was never issued from one committed after this
-   session's snapshot began, so the message offers both. The message's "evaluator" is the
-   store's in-memory set engine. A token that another store's write returned raises the
+   session's snapshot began, so the message offers both. A token that another store's write
+   returned raises the
    subclass :py:exc:`~zanzibar.ForeignToken` instead, which no retry fixes.
 
 .. py:exception:: zanzibar.LookupNotFresh
@@ -380,11 +382,9 @@ print(missing_id)  # -> 'no-such-store'
    An untokened ``lookup`` / ``lookup_reverse`` was refused because the last
    ``catch_up()`` could not advance the index, so how far behind it is no longer bounded.
    ``check`` falls back to the set engine in this state. A stall from a transient failure
-   (a lock timeout, a lost connection) ends at the next successful ``catch_up()`` that
-   applies at least one row. A ``catch_up()`` that applies nothing does not end it, even
-   though the message suggests a successful ``catch_up()``: a stall recorded while nothing
-   was pending (the message says "lag 0") lasts until some write is made and applied, or
-   until :py:func:`~zanzibar.store.rebuild_index`. A row
+   (a lock timeout, a lost connection) ends at the next successful ``catch_up()``,
+   including one that applies nothing because the index is already at the head of the
+   log (a stall recorded on an idle poll, where the message says "lag 0"). A row
    that can never be applied, a path-count overflow, needs action: ``Store.stall_error``
    names the row and the failure. See :doc:`../how-to/stall-recovery`.
 

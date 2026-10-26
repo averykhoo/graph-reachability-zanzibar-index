@@ -33,6 +33,62 @@ from here.
 
 ---
 
+## 2026-10-26e — `TK170`/`TK165`/`TK167`/`TK161` closed; site review applied, `TK151` closed; 0.1.0 cut prepared, no tag
+
+rows: TK170 (closed), TK165 (closed), TK167 (closed), TK161 (closed), TK151 (closed), TK171 (new, NOW)
+
+`task lint: clean (13 checks, 289 task file(s) parsed), 27 warning(s)`
+
+`read: board + note`
+
+`asked: none`
+
+- **User: do TK170, TK165 and TK167 before the fable site review, then the cut prep, and
+  stop before tagging; TK161 if there is time.** Run as one ultracode workflow
+  (`wf-rel010`), stages in that order, all sharing session key 2026-10-26e. Per-agent
+  reports were in `.scratch/wf-rel010/` (gitignored); everything that is evidence is in
+  the tracked docs and test docstrings named below.
+- `TK170` CLOSED: with `ZANZIBAR_PARANOIA=full`/`fixpoint` a savepoint RELEASE fired the
+  after-commit check, which rolled back the caller's whole open transaction on in-memory
+  SQLite (a stale ALLOW). `src/zanzibar/graphindex/invariants.py::ParanoiaGuard.after_commit`
+  now returns early inside a nested transaction. Pins: `tests/test_tk170_savepoint_paranoia.py`,
+  and `tests/test_tk3_cascade_mark.py` N13/N4d/W7b/W7c parametrized off + full. Doc:
+  `docs/tk170-savepoint-paranoia-2026-10-26.md`.
+- `TK165` CLOSED: a stall recorded at lag 0 is cleared by the next successful `catch_up()`
+  that applies nothing (`src/zanzibar/store/_store.py::Store._catch_up`). Pins:
+  `tests/test_tk165_idle_stall_clears.py`. Caveat pages trimmed. Doc:
+  `docs/tk165-idle-stall-clear-2026-10-26.md`.
+- `TK167` CLOSED: a sync write refused by an earlier unappliable backlog row says so and
+  names the recovery (`src/zanzibar/store/_store.py::_name_blocking_backlog_row`); type and
+  `failing_log_row` unchanged. Pins: `tests/test_tk167_backlog_row_named.py`. Doc:
+  `docs/tk167-backlog-row-message-2026-10-26.md`.
+- `TK161` CLOSED: the seedless `subj is None` arm is pinned, not deleted
+  (`tests/test_tk161_seedless_phantom_arm.py`, sabotage probe
+  `formal/probes/tk161_sabotage_2026_10_26.py`). Doc:
+  `docs/tk161-seedless-phantom-arm-2026-10-26.md`.
+- TK151 site review (`docs/tk151-site-review-2026-10-26.md`, MUST 3 / SHOULD 9 / NICE 7):
+  every MUST and SHOULD applied, N2 declined; new page `userdocs/how-to/test-permissions.md`;
+  the `WatermarkGap` message now says "set engine".
+- **0.1.0 cut prepared, NOT tagged:** `src/zanzibar/__init__.py::__version__ = "0.1.0"`;
+  `CHANGELOG.md` `## [0.1.0] - 2026-10-26`; `userdocs/reference/changelog.md` re-dated and
+  given the TK165/167/168/169/170 fixes; the site review's M1 lines rewritten (limits,
+  errors, upgrade-0.1, environments, tables, api/index). `tests/test_userdocs_prerelease_prose.py`:
+  `KNOWN_CURRENT` and the monkeypatched real-tree half removed, `test_guard_armed_on_current_tree`
+  added; sabotages A (guard disarmed), B (the "(unreleased)" heading put back), C (regex
+  weakened) each went red, literal output in its docstring. RAN 2026-10-26:
+  `test_tk122_release_metadata`, `test_userdocs_*`, `test_tk123_pypi_page`: 60 passed.
+  `doc_counts --generate` regenerated `formal/FINAL_REVIEW.md` and ratcheted
+  `MIN_TESTS_ALL` 3105 -> 3106. A grep of src, userdocs, both READMEs and tests for "0.0.5"
+  / "unreleased" / "not yet released" found only true historical statements.
+- `TK171` filed at NOW (model decision: with TK151 closed no row was NOW, and the release
+  follow-through is the next thing a session should pick up): the tag on the user's word,
+  CI babysitter, PyPI-live check, install trial.
+- Gate: the full gate is run by the workflow's later stage, after these records.
+
+Still owed: nothing.
+
+---
+
 ## 2026-10-26 — `TK162` measured + closed (userdocs warning); `TK152` closed; 2026-10-23e work gated + committed
 
 rows: TK162 (closed), TK152 (closed), TK151 (comment), R6-4 (comment)
