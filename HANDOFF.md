@@ -13,6 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
+> 2026-10-28 -- **`TK163` and `TK169` closed and folded into 0.1.0 (user: "nice to have" before the tag); 0.1.0 still prepared, untagged** (`TK171` NOW waits on the user's word). A post-commit `InvariantViolation` now reaches the caller as itself and the `Store` stays usable; public docstrings are leak-free and guarded (`tests/test_tk169_public_docstrings.py`). CHANGELOG heading still dated 2026-10-26: re-date at the tag.
 > 2026-10-26e -- **0.1.0 is prepared and gated on this tree; only the user's word on the `v0.1.0` tag remains** (`TK171`, NOW: then the CI babysitter, the PyPI-live check and the install trial). `TK170` / `TK165` / `TK167` / `TK161` closed, the TK151 site review applied, `TK151` closed. Do not mirror a future `[Unreleased]` heading into `userdocs/reference/changelog.md` under that word.
 > 2026-10-26 -- `TK162` CLOSED: a graph `lookup` for a USERSET subject on an `and` / `but not` schema is linear in store size (21-29 s at 100k tuples; `docs/tk162-self-lookup-cost-2026-10-26.md`); the userdocs warning landed in `explanation/limits.md`. `TK152` closed. **0.1.0 left: TK151 lands last, then the cut** (user).
 > 2026-10-23d -- TK151: 13 light/dark SVG diagrams on four explanation pages (graph-index, boolean-operators, two-backends, consistency) (`userdocs/_diagrams/make_diagrams.py`; regenerate, never hand-edit; pinned by `tests/test_userdocs_diagrams.py`).

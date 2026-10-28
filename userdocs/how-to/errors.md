@@ -263,8 +263,8 @@ except ForeignToken as error:
 
 - {py:exc}`zanzibar.InvariantViolation`, an `AssertionError`. It means the stored index is
   corrupt, not that a request was refused, so it is kept out of `ZanzibarError` on purpose.
-  Let it reach your error reporting. When it comes from the check that runs after a commit
-  it currently arrives wrapped in a SQLAlchemy error; see
+  Let it reach your error reporting. When it comes from the check that runs after a commit,
+  the write it reports on is already stored; see
   [When a check fails](runtime-checks.md#when-a-check-fails).
 - {py:class}`zanzibar.UnprovenExtensionWarning`, a warning, not an exception. It is
   emitted for a schema that uses a wildcard feature beyond OpenFGA's; see

@@ -104,39 +104,21 @@ store, whether the check ran before or after the commit, and the rule that was b
   `InvariantViolation` and is not committed. The store rolls it back and stays usable, but
   the index was found in a state it should never reach.
 - **After the commit** (`"full"` and `"fixpoint"` only; it runs when the outermost
-  transaction commits, not when a savepoint is released). Known limitation, to be fixed
-  in a later release: the write has already been
-  committed when this check runs, so the problem is in data that is now stored. In the
-  current version the write does not raise `InvariantViolation` itself here: it raises
-  `sqlalchemy.exc.InvalidRequestError` ("This session is in 'committed' state"), with the
-  `InvariantViolation` attached as its `__context__`. That `Store` object cannot be used
-  again: every later `check`, write or `refresh()` on it raises the same
-  `InvalidRequestError`. Discard it, and open a new `Store` on a new `Session` for the
-  steps below. A release that changes this behaviour says so in the
-  [changelog](../reference/changelog.md).
-
-To recognise both cases in one handler, look at the exception and at its `__context__`:
-
-```python
-from sqlalchemy.exc import InvalidRequestError
-from zanzibar import InvariantViolation
-
-def is_invariant_violation(error: BaseException) -> bool:
-    if isinstance(error, InvariantViolation):
-        return True
-    return (isinstance(error, InvalidRequestError)
-            and isinstance(error.__context__, InvariantViolation))
-
-print(is_invariant_violation(InvariantViolation("example")))  # -> True
-```
+  transaction commits, not when a savepoint is released). The write raises
+  `InvariantViolation`, but it **is** committed: the tuple is in the log and in the index,
+  and the message says so (`[post-commit] ... the transaction IS committed`). So do not
+  retry it as if it had failed. The store stays usable; at these two levels the next
+  write's before-commit check re-checks the whole store, so if the state is still broken
+  that write is refused too. For an async store the error comes from `catch_up()`: the
+  batch it reports on is applied, and the failure is recorded as a stall until the next
+  `catch_up()` call finds the index at the head of the log.
 
 `InvariantViolation` is an `AssertionError`, and it is deliberately **not** a
 {py:exc}`zanzibar.ZanzibarError`, so a handler for ordinary refusals does not swallow it.
 Do not treat it as a rejected request. It means the library has a bug or the database was
 changed behind the library's back. When you see one:
 
-1. Stop writing to that store and alert someone. Keep the full message (for the
-   after-commit case, the message of the `InvariantViolation` in `__context__`).
+1. Stop writing to that store and alert someone. Keep the full message.
 2. Report it as a bug, with the message and, if you can, the sequence of writes that led
    to it.
 3. Rebuild the index from the stored tuples, which are the source of truth, with

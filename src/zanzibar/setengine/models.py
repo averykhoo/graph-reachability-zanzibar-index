@@ -1,11 +1,10 @@
 """
 Persistence for the set engine.
 
-``RelationTuple`` is the missing *source of truth* the repo lacked: a raw-tuple table. The
-graph index stores *derived* edges (post-`RuleSet.apply`), so it cannot serve as ground
-truth for a rewrite-free engine; JSON dumps of bitmaps are opaque and duplicate state.
-The set engine rebuilds its in-memory state from these rows on open (replay), the oracle
-reads the same rows, and the validation harness gets one canonical op log.
+``RelationTuple`` is the *source of truth*: a raw-tuple table. The graph index stores
+*derived* edges (post-`RuleSet.apply`), so it cannot serve as ground truth for a
+rewrite-free engine; JSON dumps of bitmaps are opaque and duplicate state. The set engine
+rebuilds its in-memory state from these rows on open (replay).
 
 Bitmap snapshot persistence (`BitMap.serialize()` blobs) is a documented non-goal;
 state is in-memory, rebuilt on open.
@@ -18,10 +17,11 @@ from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
 class RelationTuple(SQLModel, table=True):
-    """A single raw relation tuple. ``subject_predicate`` is ``'...'`` for a bare entity.
+    """One stored relation tuple, a row of table ``zanzibar_relation_tuple``.
 
-    Deliberately independent of the graph index's ``store`` table (no FK): the set
-    engine is a standalone backend that happens to share a database in the test harness.
+    ``subject_type:subject_name#subject_predicate`` is related by ``relation`` to
+    ``object_type:object_name``, within ``store_id``. ``subject_predicate`` is ``'...'``
+    for a bare entity.
     """
     __tablename__ = "zanzibar_relation_tuple"
     __table_args__ = (

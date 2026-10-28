@@ -33,6 +33,41 @@ from here.
 
 ---
 
+## 2026-10-28 — `TK163` and `TK169` closed into 0.1.0; still no tag
+
+rows: TK163 (closed), TK169 (closed), TK171 (unchanged, NOW)
+
+`task lint: clean (13 checks, 289 task file(s) parsed), 26 warning(s)`
+
+`read: board only`
+
+`asked: none`
+
+- **User: get TK163 and TK169 done before 0.1.0, ultracode as needed, minimal context.**
+  One workflow (`wf_669b0281-028`): TK163 implementer and TK169 census in parallel, six
+  per-file-group docstring fixers, a leak guard, an adversarial reviewer. Agents were barred
+  from CHANGELOG / HANDOFF / tasks / git / `verify.sh`; the session did those.
+- `TK163` CLOSED: `src/zanzibar/graphindex/invariants.py::ParanoiaGuard.after_commit` parks a
+  post-commit violation on sessions opted in via `defer_post_commit_violations`;
+  `src/zanzibar/store/_store.py::Store._commit` and (session fix after the review)
+  `src/zanzibar/store/build.py::build_index` / `rebuild_index` re-raise it via
+  `raise_post_commit_violation`. Pins: `tests/test_tk163_post_commit_violation.py`. Doc:
+  `docs/tk163-post-commit-violation-2026-10-28.md`. The reviewer re-read the
+  `formal/CORRESPONDENCE.md` §7.3 stall row (`Store._record_stall` body changed) and
+  regenerated `formal/correspondence_anchor_pin.txt`.
+- `TK169` CLOSED: census `docs/tk169-docstring-census-2026-10-28.md` (66 findings), all
+  fixed; guard `tests/test_tk169_public_docstrings.py`. One message string changed
+  (`schema/boolean.py`: now "This is a library bug; please report it"); the stall message
+  names `zanzibar.store.rebuild_index(session, <id>)`, with `tests/test_tk121_stall_recovery.py`
+  updated to match.
+- Counts block regenerated (`doc_counts --generate`) for the new tests.
+
+Still owed: the `v0.1.0` tag on the user's word (`TK171`), re-dating the 0.1.0 CHANGELOG
+headings to the tag day. `.scratch/tk163-tk169/` holds only per-agent reports and probes
+whose conclusions are in the docs above; delete it after the commit.
+
+---
+
 ## 2026-10-26e — `TK170`/`TK165`/`TK167`/`TK161` closed; site review applied, `TK151` closed; 0.1.0 cut prepared, no tag
 
 rows: TK170 (closed), TK165 (closed), TK167 (closed), TK161 (closed), TK151 (closed), TK171 (new, NOW)

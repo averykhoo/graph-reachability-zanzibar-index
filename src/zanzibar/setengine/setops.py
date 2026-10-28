@@ -28,7 +28,7 @@ class SetOps:
     is sufficient). ``update`` unions an arbitrary iterable INTO an existing mutable set
     in place, without materialising a full intermediate copy -- both backends' native
     ``.update`` normalises any iterable (bare tuples, generators, or a peer set/bitmap),
-    so it is a copy-free normaliser (see ``memberset._starpop``).
+    so it is a copy-free normaliser.
     """
     name: str
     new: Callable[..., object]      # (Iterable[int] = ()) -> MutSet

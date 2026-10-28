@@ -44,16 +44,19 @@ class TTU:
 
 @dataclass(frozen=True, slots=True)
 class Union:
+    """``a or b`` -> ``Union((a, b))``."""
     children: tuple['Expr', ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Intersection:
+    """``a and b`` -> ``Intersection((a, b))``."""
     children: tuple['Expr', ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Exclusion:
+    """``base but not subtract`` -> ``Exclusion(base, subtract)``."""
     base: 'Expr'
     subtract: 'Expr'
 

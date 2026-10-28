@@ -166,12 +166,12 @@ class WildcardIndex:
     def processor_writes(self) -> bool:
         """Is the CALLING thread inside the delta processor's write window?
 
-        Read by ``_assert_derived_exclusivity`` (may this write touch a derived-public
-        family at all) and ``_derived_write_ctx`` (is the resulting direct edge row a
-        derived grant). Both fail CLOSED for a thread that never opened the window --
-        the write is refused, and no row is stamped ``derived`` -- so a mis-threaded
-        caller is told, loudly, instead of quietly writing authorization state."""
-        # Provenance (moved out of the docstring, TK123 item 14): I5.
+        Only the delta processor writes the edges of a derived (boolean) relation. A
+        write to one from a thread outside this window is refused, and no edge is
+        marked as a derived grant, so a mis-threaded caller fails loudly instead of
+        quietly writing authorization state."""
+        # Provenance (moved out of the docstring, TK123 item 14): I5. Read by
+        # _assert_derived_exclusivity and _derived_write_ctx; both fail CLOSED.
         return self._processor_writes_flag.on
 
     @processor_writes.setter
@@ -635,7 +635,7 @@ class WildcardIndex:
         (two different raw tuples may derive the same edge and must retire
         independently) -- it is NOT the raw-tuple API. Zanzibar raw tuples are a SET;
         set-semantics idempotence lives one layer up, at the tuple boundary
-        (store.TupleSource / the harness adapters). Do not feed raw user
+        (``zanzibar.store.TupleSource`` / ``Store``). Do not feed raw user
         writes here directly unless you deduplicate them yourself."""
         s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
@@ -705,6 +705,14 @@ class WildcardIndex:
 
     def remove_tuple(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str,
                      relation: str, object_type: str, object_name: str) -> None:
+        """Remove one (possibly rewrite-derived) triple: decrement its direct-edge count.
+
+        WARNING: MULTIGRAPH SEMANTICS, the mirror of ``add_tuple``: a triple added twice
+        takes two removes to retire, and the edge (with the closure it supports) goes
+        only when its count reaches 0. This is NOT the raw-tuple API; set semantics
+        live one layer up, at the tuple boundary (``zanzibar.store.TupleSource`` /
+        ``Store``). Removing a triple whose endpoints were never written raises
+        ``AdmissionRejected``."""
         s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
         validate_write_identifiers(subject_predicate, s_type, s_name, relation, o_type, o_name)
         self._remove_tuple_trusted(subject_predicate, s_type, s_name, relation, o_type, o_name)
@@ -846,21 +854,18 @@ class WildcardIndex:
 
     def check(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str,
               relation: str, object_type: str, object_name: str) -> bool:
-        """Public read entry: the BL-2 leaf-name fence, then the ordinary probe.
+        """Is the subject related to the object by ``relation``?
 
-        Compiled leaf predicates (``<rel>.<idx>``, spec deviations 2026-08-21b)
-        are processor-internal storage names, not public read surface --
-        ``RuleSet.apply`` fans every public write onto the leaf families at
-        WRITE time, so a leaf-name query that fell through to the ordinary edge
-        probe would FIND the routed node and answer the positive operand of
-        e.g. ``viewer: editor but not banned`` with the owning relation's
-        boolean guard unapplied (BL-2). DENY, do not raise: the set engine and
-        the oracle treat an undeclared name as one that never matches (reads
-        are lenient by contract), and writes are already fenced by
-        ``RuleSet.apply`` / ``SetEngine.add_tuple`` (``AdmissionRejected``).
-        Internal readers that legitimately probe leaf names -- the delta
-        processor's plan evaluation (``_EvalContext.leaf_check`` /
-        ``leaf_stars``) -- enter via ``_check_internal`` below the fence."""
+        A compiled leaf name (``<relation>.<n>``) is an internal storage name, not a
+        readable relation: querying one always answers False, like any undeclared
+        name (reads deny rather than raise). Answering it would expose, e.g., the
+        ``editor`` operand of ``viewer: editor but not banned`` without the
+        ``but not`` applied."""
+        # Provenance (moved out of the docstring, TK169): the BL-2 leaf-name fence; spec
+        # deviations 2026-08-21b. Matches the set engine and the oracle on undeclared
+        # names; writes are fenced by RuleSet.apply / SetEngine.add_tuple. Internal
+        # readers that probe leaf names (_EvalContext.leaf_check / leaf_stars) enter via
+        # _check_internal below the fence.
         s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
         if (o_type, relation) in self.schema_info.leaf_families:
             return False

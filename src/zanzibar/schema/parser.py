@@ -311,9 +311,10 @@ def parse_schema_ast(schema: str) -> SchemaAST:
     blocks in one definition, a ``[...]`` block that is not the first operand, no header, and
     a ``define`` with no ``relations`` line. Since 0.0.5 the header must be ``schema 1.1``,
     header lines stand alone, ``but not`` may not share a level with another operator, and
-    every restriction type must be declared (`_validate_restriction_types_declared`).
+    every restriction type must be declared.
 
-    Succeeds for well-formed, SELF-CONSISTENT syntax (`_validate_ast_consistency`),
+    Succeeds for well-formed, SELF-CONSISTENT syntax (no relation reference that names an
+    undeclared relation, and no cycle of computed or ``from`` references),
     including boolean (``and`` / ``but not``) definitions -- refusing booleans is
     compilation's job, not parsing's.
     """

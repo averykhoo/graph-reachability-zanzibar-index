@@ -369,9 +369,10 @@ def compile_ruleset(ast: SchemaAST, schema_info: SchemaInfo, *,
                     declared_types: frozenset[str] = frozenset()) -> RuleSet:
     """Compile an AST into the graph index's Filters/Rules.
 
-    Boolean (`and` / `but not`) relations compile into derived predicates: untainted relations byte-identically to the pure-union path, tainted
-    ones into leaf routing + executable plans on ``RuleSet.compiled``, with
-    ``RuleSet.schema_info`` enriched with the derived/leaf namespace facts.
+    Relations that use no ``and`` / ``but not`` (directly or through a relation they
+    reference) compile exactly as in a schema without boolean operators. Boolean relations
+    compile into derived predicates, described by ``RuleSet.compiled``, and
+    ``RuleSet.schema_info`` records which relations are derived.
     ``UnsupportedByGraphIndex`` survives only for the wildcard-object scope rejections;
     derived-dependency cycles raise ``CyclicDerivedDependency`` (a ``ValueError``).
 

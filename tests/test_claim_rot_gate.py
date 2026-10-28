@@ -162,8 +162,8 @@ def test_B_comment_and_docstring_edits_do_not_move_the_pin(monkeypatch, tmp_path
 
     monkeypatch.undo()
     _patch_file(monkeypatch, tmp_path, "src/zanzibar/graphindex/wildcard.py",
-                lambda t: _sub(t, '"""Public read entry: the BL-2 leaf-name fence',
-                               '"""Public read entry (reworded): the BL-2 leaf-name fence')
+                lambda t: _sub(t, '"""Is the subject related to the object by ``relation``?',
+                               '"""Is the subject related (reworded) to the object by ``relation``?')
                 .replace(WCHECK, "        # a comment\n" + WCHECK, 1))
     assert claim_rot.check_content_pin(DOC_TEXT, claim_rot.read_pin(), cache) == []
 

@@ -97,10 +97,9 @@ def note_write(widx: 'WildcardIndex', op: str, *, derived_write: bool = False) -
     """Record that ``widx``'s store owes a cascade in the current transaction.
 
     A no-op unless the schema compiled boolean plans, for a ``derived_write`` (the
-    caller passes ``WildcardIndex._derived_write_ctx``: the processor window is open
-    AND the target is a derived-public family -- the processor's own output), and
-    inside a waiver. An open ``processor_writes`` window alone exempts nothing: a LEAF
-    write made with the flag on still owes (fix-stage hole 2, 2026-10-22). Call it
+    processor window is open AND the target is a derived-public family -- the
+    processor's own output), and inside a waiver. An open ``processor_writes`` window
+    alone exempts nothing: a LEAF write made with the flag on still owes. Call it
     AFTER a write's pure pre-checks and BEFORE its first index mutation, so a write
     refused before it changed anything owes nothing, and one refused part-way still
     owes a cascade or a rollback."""
@@ -129,8 +128,8 @@ def clear(session: Session, store_id: str) -> None:
 
     A payment made inside a SAVEPOINT is provisional: the cascade's writes die with
     that savepoint, so each cleared entry is kept in ``PAID_KEY`` against the
-    transaction the cascade ran in, and ``_after_soft_rollback`` re-arms it when that
-    transaction (or an ancestor savepoint) rolls back (fix-stage hole 1, 2026-10-22).
+    transaction the cascade ran in, and is re-armed when that transaction (or an
+    ancestor savepoint) rolls back.
     A payment at the root needs no record: only the root's own end can undo it, and
     that discards everything."""
     info = session.info

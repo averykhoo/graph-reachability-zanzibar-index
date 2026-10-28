@@ -398,6 +398,18 @@ Each is detailed below, under Changed or Added.
   pruning claims are pinned by tests.
 
 ### Fixed
+- With paranoia `full` or `fixpoint`, a post-commit check that fails reaches the caller
+  as `InvariantViolation`, raised after the commit returns; its message says the write IS
+  committed, and the `Store` stays usable (TK163). It used to surface as
+  `sqlalchemy.exc.InvalidRequestError` and leave that `Store` refusing every later call.
+  `build_index` / `rebuild_index` on a `Store`'s session raise such a violation from their
+  own commit. `residue` was never affected.
+- Public docstrings no longer cite internal task ids, private functions or repository
+  paths, the paranoia-default text matches the code (`Store` defaults to `'off'`), and
+  public classes and methods that had no docstring now have one (TK169). A test walks the
+  public API and refuses a leak.
+- A post-commit violation recorded while a `catch_up` failure is stalled is added to the
+  stall error as a note rather than replacing it (TK163).
 - A stall recorded while nothing was pending (for example a lock timeout or a lost
   connection while an async worker polled an idle store) is cleared by the next successful
   `catch_up()`, even one that applies nothing (TK165). It used to last until some write

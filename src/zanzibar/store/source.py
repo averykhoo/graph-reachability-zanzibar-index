@@ -419,7 +419,7 @@ class TupleSource:
 
     @property
     def engine(self) -> SetEngine:
-        """The online evaluator, READ-ONLY.
+        """The set engine, READ-ONLY.
 
         Kept as a public attribute because reads through it are legitimate and used
         (``check``/``expand``/``lookup`` against always-fresh in-memory state), but a
@@ -706,17 +706,18 @@ class TupleSource:
         return row.id
 
     def pop_pending_rows(self) -> list[TupleLog]:
-        """Return the row(s) flushed since the last pop and reset the buffer.
+        """Internal: used by ``Store``'s sync write path. Return the log row(s) flushed
+        since the last pop and reset the buffer.
 
-        The sync write path drains this right after a successful append to hand
-        ``advance_index`` the exact rows it would otherwise re-SELECT; the rollback/except
-        paths drain-and-discard it so no row ever survives into a later transaction."""
+        ``Store`` drains this right after a successful append, to apply exactly those
+        rows to the index without reading them back; its failure paths drain and
+        discard it, so no row survives into a later transaction."""
         # Provenance (moved out of the docstring, TK123 item 14): perf P12b.
         row, self._pending_row = self._pending_row, None
         return [] if row is None else [row]
 
     # ------------------------------------------------------------------ #
-    # Reads (the always-fresh online evaluator)
+    # Reads (the always-fresh set engine)
     # ------------------------------------------------------------------ #
 
     @overload
@@ -728,10 +729,10 @@ class TupleSource:
               at_least: int | None = None) -> bool: ...
 
     def check(self, *args, at_least: int | None = None, **kwargs) -> bool:
-        """Evaluate a check against the online evaluator, in either call form
+        """Evaluate a check against the set engine, in either call form
         (``check("user:alice", "viewer", "doc:d1")`` or six parts, as on
         ``Store.check``). ``at_least`` (``None`` or a non-negative ``int`` token)
-        demands the evaluator reflect the log through that token first (catch up
+        demands the set engine reflect the log through that token first (catch up
         O(delta) on demand; ``StaleRead`` if the token is not visible in this
         session's snapshot -- rollback/refresh and retry)."""
         q = tuple_args('check', args, kwargs)
@@ -748,20 +749,20 @@ class TupleSource:
         return self.engine.check(*q)
 
     def catch_up_evaluator(self, batch: int | None = None) -> int:
-        """Tail committed log rows past the evaluator watermark into the in-memory
-        evaluator (``SetEngine.apply_logged`` per row, watermark advanced to each
+        """Tail committed log rows past the set engine's watermark into the in-memory
+        set engine (``SetEngine.apply_logged`` per row, watermark advanced to each
         applied row's id); loops until the log read comes back empty. Returns the
         number of rows applied. O(delta) where ``refresh_evaluator`` is O(store) --
         the incremental refresh. ``batch`` caps rows per log query (``None`` = one
         drain query).
 
         Visibility: the rows tailed are this SESSION's read snapshot -- a long-lived
-        read session must ``rollback()`` first to advance its snapshot. Gap-freedom relies on the writer lock discipline (``_lock_source``):
-        the log append happens inside the per-store critical section, so ids commit
-        in id order per store and ``id > watermark`` tailing never skips a row.
-        After a rollback of this instance's OWN uncommitted write the watermark may
-        claim an id that never committed -- callers must ``refresh_evaluator()``
-        after rolling back their own writes, exactly the pre-existing contract.
+        read session must ``rollback()`` first to advance its snapshot. Gap-freedom
+        relies on the per-store writer lock: every log append happens while it is held,
+        so log ids commit in id order per store and ``id > watermark`` tailing never
+        skips a row. After a rollback of this instance's OWN uncommitted write the
+        watermark may claim an id that never committed -- callers must
+        ``refresh_evaluator()`` after rolling back their own writes.
 
         ``apply_logged``'s ``RuntimeError`` propagates: a presence mismatch during
         trusted replay means the watermark is corrupt, and the loud failure is the
@@ -782,7 +783,7 @@ class TupleSource:
             total += len(rows)
 
     def evaluator_lag(self) -> int:
-        """Log rows the evaluator has not yet applied (0 = fully caught up). A COUNT
+        """Log rows the set engine has not yet applied (0 = fully caught up). A COUNT
         query -- never materializes rows (ids are globally monotonic across stores,
         so counting, not id-subtraction, is also what makes the number meaningful)."""
         from sqlalchemy import func
@@ -795,13 +796,13 @@ class TupleSource:
 
     def undo_last_admission(self) -> None:
         """Reverse, in memory only, the one tuple the most recent ``add`` / ``remove``
-        admitted, and restore the evaluator watermark it had just before -- the cheap
+        admitted, and restore the set engine's watermark it had just before -- the cheap
         alternative to ``refresh_evaluator`` after the caller has ROLLED BACK that
         write. The caller must already have rolled the transaction back.
 
-        Sound because the record pins exactly what changed: one ``_apply_add`` /
-        ``_apply_remove`` of one tuple since a watermark that ``catch_up_evaluator``
-        reached under ``_lock_source``, so every row at or below it is committed and
+        Sound because the record pins exactly what changed: one tuple added or
+        removed since a watermark that ``catch_up_evaluator`` reached under the
+        store's writer lock, so every row at or below it is committed and
         applied, and rows other writers commit after the rollback sit above it and
         are tailed by the next catch-up. The inverse goes through
         ``SetEngine.apply_logged`` -- the in-memory replay a replica uses, which keeps
@@ -820,19 +821,22 @@ class TupleSource:
         self.evaluator_watermark = prior_watermark
 
     def refresh_evaluator(self) -> None:
-        """Rebuild the in-memory evaluator from the current RelationTuple snapshot and
-        RESET the evaluator watermark to it. Assignment, not max: after a rollback the
-        old watermark may claim a token that never committed.
-
-        The watermark/rebuild pair goes through ``_consistent_rebuild`` (2026-07-27).
-        It used to be a bare read-then-rebuild, whose comment called reading the
-        watermark first "conservative: rows committed in between are included in the
-        rebuild but not claimed" -- that is precisely BACKWARDS. A row in the rebuild
-        but not in the watermark leaves the evaluator AHEAD of its watermark, and the
-        next catch-up replays it into ``apply_logged``'s strict guard and bricks the
-        instance. Live on PostgreSQL READ COMMITTED, and this method sits on
-        ``Store._write``'s error path, so any failed write could enter it."""
+        """Rebuild the in-memory set engine from the current RelationTuple snapshot and
+        RESET its watermark to it. Assignment, not max: after a rollback the
+        old watermark may claim a token that never committed."""
+        # Provenance (moved out of the docstring, TK169): the watermark/rebuild pair goes
+        # through ``_consistent_rebuild`` (2026-07-27). It used to be a bare
+        # read-then-rebuild, whose comment called reading the watermark first
+        # "conservative: rows committed in between are included in the rebuild but not
+        # claimed" -- that is precisely BACKWARDS. A row in the rebuild but not in the
+        # watermark leaves the evaluator AHEAD of its watermark, and the next catch-up
+        # replays it into ``apply_logged``'s strict guard and bricks the instance. Live
+        # on PostgreSQL READ COMMITTED, and this method sits on ``Store._write``'s error
+        # path, so any failed write could enter it.
         self.evaluator_watermark = self._consistent_rebuild(self.engine.rebuild)
 
     def watermark(self) -> int:
+        """The newest freshness token in this store's tuple log (0 for an empty log),
+        as far as this session can see. The set engine's own position is
+        ``evaluator_watermark``."""
         return log_watermark(self.session, self.store_id)

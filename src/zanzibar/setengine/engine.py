@@ -61,21 +61,21 @@ NodeKey = tuple[str, str, str]      # (type, name, predicate) flow-graph node
 
 class UnloggedWriteRefused(ZanzibarError, RuntimeError):
     """A direct ``SetEngine.add_tuple``/``remove_tuple`` was refused because this
-    engine is the evaluator of a LOGGED store.
+    engine is the set engine of a LOGGED store.
 
     ``add_tuple`` mutates ``RelationTuple`` -- the source of truth -- and appends NOTHING to
     ``TupleLog``. Standalone that is the whole contract (see ``log_governed``). But
     once a ``TupleSource`` owns the store, the log is what every other component reads:
-    the graph index advances off it (``advance_index``), replica evaluators tail it
-    (``catch_up_evaluator``), and the freshness tokens ARE log ids. A tuple that lands
-    in ``RelationTuple`` without a log row is therefore invisible to all of them **for good**
-    -- the index never learns of it, ``lag()`` reports 0 because there is no unapplied
-    row to count, and no invariant or gate looks for source/index divergence. It is
+    the graph index advances from it (``Store.catch_up``), replica set engines tail it
+    (``TupleSource.catch_up_evaluator``), and the freshness tokens ARE log ids. A tuple
+    that lands in ``RelationTuple`` without a log row is therefore invisible to all of them
+    **for good** -- the index never learns of it, ``lag()`` reports 0 because there is no
+    unapplied row to count, and nothing else detects the source/index divergence. It is
     silent, permanent, and in the fail-OPEN direction when the bypassed write is a
     ``remove`` (the grant stays materialized in the index and keeps answering ALLOW).
 
     ``TupleSource.add``/``remove`` are the only sanctioned write path: they take the
-    per-store lock, catch the evaluator up, validate against CURRENT committed state,
+    per-store lock, catch the set engine up, validate against CURRENT committed state,
     and land the tuple and its log row in ONE transaction. This exception exists so the
     bypass fails LOUDLY at the call instead of corrupting the store quietly."""
     # Provenance (moved out of the docstring, TK123 item 14): zero-trust review ZT-P1-8a.
@@ -810,7 +810,8 @@ class SetEngine:
         return restr
 
     def population(self, shape: tuple[str, str]):
-        """Concrete member ids of a shape: ids_of_type[T] for bare, ids_of_shape[(T,P)]."""
+        """Concrete member ids (instance-local) of a ``(type, predicate)`` shape;
+        predicate ``'...'`` means the bare entities of that type."""
         entity_type, pred = shape
         if pred == '...':
             return self.interner.ids_of_type.get(entity_type, self.ops.new())
@@ -823,13 +824,12 @@ class SetEngine:
     def add_tuple(self, subject_predicate, subject_type: str, subject_name: str,
                   relation: str, object_type: str, object_name: str) -> bool:
         """Add one raw tuple; True if added, False for the idempotent duplicate
-        no-op. Does not commit: the caller commits the session. Raises ``ValueError`` only from validation, BEFORE any in-memory
-        mutation (Store's rejection path relies on this to skip the
-        evaluator rebuild). This backend computes no deltas.
+        no-op. Does not commit: the caller commits the session. Raises ``ValueError``
+        only from validation, BEFORE any in-memory mutation. This backend computes no
+        deltas.
 
-        Refused with ``UnloggedWriteRefused`` on a log-governed store --
-        the guard is HERE rather than on the caller's side because the attribute
-        holding this engine is reachable from anywhere the ``TupleSource`` is."""
+        Refused with ``UnloggedWriteRefused`` on a log-governed store: write through
+        ``TupleSource.add`` there instead."""
         # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-8a.
         # Provenance (moved out of the docstring, TK123 item 14): §6.1.
         s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
@@ -922,10 +922,8 @@ class SetEngine:
         writing instance; validity was enforced at its admission).
 
         The incremental analog of ``rebuild()``: it performs exactly the
-        ``_apply_add`` / ``_apply_remove`` sequence ``rebuild()`` would, so the
-        in-memory state after tailing a log prefix equals a rebuild at that prefix.
-        Flow-graph maintenance comes free (those methods already maintain it when the
-        graph is built).
+        same in-memory mutation ``rebuild()`` would, so the in-memory state after
+        tailing a log prefix equals a rebuild at that prefix.
 
         Presence mismatches are HARD failures, never op rejections: the log is
         admission-validated and applied exactly-once, so an ADD of a present tuple or
@@ -1818,7 +1816,7 @@ class SetEngine:
         with a ``user:*`` grant and ``mallory`` banned, the result is the ``('user',
         '...')`` marker with mallory's id excluded (before 0.0.5, ``neg`` was dropped
         and the result read as "every user"). ``pos`` and ``neg`` are disjoint by
-        construction (``memberset._normalize``), so the subtraction is unambiguous."""
+        construction, so the subtraction is unambiguous."""
         # Provenance (moved out of the docstring, TK123 item 14): TK139.
         # Provenance (moved out of the docstring, TK123 item 14): §6.4.
         o_type, o_name = object_type, object_name  # TK123 item 7

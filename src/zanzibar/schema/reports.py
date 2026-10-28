@@ -1,4 +1,4 @@
-"""Opt-in, non-raising scope reports: `w4_fragment_report` (mirror of the Lean decider) and `graph_admission_report`.
+"""Opt-in, non-raising scope reports: `w4_fragment_report` (is a schema inside the fragment the formal proofs cover?) and `graph_admission_report`.
 
 Part of `zanzibar.schema`.
 """

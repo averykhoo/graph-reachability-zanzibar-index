@@ -63,6 +63,12 @@ Added:
 
 Fixed:
 
+- With paranoia `full` or `fixpoint`, a failed post-commit check now raises
+  {py:exc}`zanzibar.InvariantViolation` after the commit, saying the write is committed, and
+  the `Store` stays usable. It used to surface as SQLAlchemy's `InvalidRequestError` and
+  leave the `Store` unusable.
+- Public docstrings no longer cite internal task ids or repository paths, and the ones that
+  were missing were written.
 - A lookup result held across a write could translate to the wrong subjects; it is now
   refused with `StaleLookupIds`.
 - A write refused by the fan-out cap is cheap to refuse: the graph index counts the rows

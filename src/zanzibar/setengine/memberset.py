@@ -47,7 +47,15 @@ Population = Callable[[Shape], Iterable[int]] # shape -> its concrete member ids
 
 @dataclass(frozen=True)
 class MemberSet:
-    pos: object                               # FrozSet: concrete member ids
+    """The member set of one ``(object, relation)``, as ``SetEngine.expand`` returns it.
+
+    ``pos`` holds concrete member ids; ``stars`` holds ``(type, predicate)`` shapes whose
+    every member is included (a wildcard grant); ``neg`` holds ids a star covers that are
+    excluded (from ``but not``). ``ipos`` / ``ineg`` carry the same two roles for
+    ``(type, name, predicate)`` keys that have no id. Ids are instance-local handles of
+    the engine that produced the set; translate them through that engine.
+    """
+    pos: object                              # FrozSet: concrete member ids
     stars: frozenset                          # covered star shapes (intensional)
     neg: object                               # FrozSet: exclusions within starred shapes
     # TK144 (TK138 D3a): the KEY channel for members with no interned id. OpenFGA's
@@ -63,16 +71,19 @@ class MemberSet:
     # --- membership (all intensional in `stars`, so ghost-safe) ---
 
     def contains_star(self, shape: Shape) -> bool:
+        """Whether every member of the ``(type, predicate)`` shape is included."""
         return shape in self.stars
 
     def _contains(self, uid: int, shape: Shape) -> bool:
         return uid in self.pos or (shape in self.stars and uid not in self.neg)
 
     def contains_entity(self, uid: int, utype: str) -> bool:
+        """Membership of the concrete entity with id ``uid`` and type ``utype``."""
         # a concrete entity is covered by the BARE star of its type
         return self._contains(uid, (utype, '...'))
 
     def contains_userset(self, uid: int, shape: Shape) -> bool:
+        """Membership of the userset with id ``uid`` and ``(type, predicate)`` shape."""
         return self._contains(uid, shape)
 
     def contains_key(self, key: tuple[str, str, str]) -> bool:

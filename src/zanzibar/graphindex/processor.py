@@ -326,18 +326,19 @@ class DeltaProcessor:
         return self.widx._residue_state(rel, object_type, obj_name)
 
     def residue_stars(self, object_type: str, rel: str, obj_name: str) -> frozenset:
+        """The ``(subject_type, predicate)`` star shapes recorded as members of the
+        derived relation ``(object_type, rel)`` on object ``obj_name``."""
         return self._residue_state(object_type, rel, obj_name)[0]
 
     def derived_check(self, object_type: str, rel: str, obj_name: str, s: SubjectKey,
                       reflexive: bool = False) -> bool:
         """The derived membership check: edge probe + residue (point reads).
 
-        Delegates to the facade's ``_check_derived`` -- the read path and the
-        processor's reconcile MUST share one implementation, or a semantics fix in
-        one (e.g. the ``upos`` rule) silently diverges the other. ``reflexive`` applies
-        the implicit userset self-relation (see ``_EvalContext``): False -- the
-        reconcile's reading, the residue's own semantics -- unless a reflexive context
-        asks."""
+        Shares one implementation with the ``WildcardIndex.check`` read path, so the
+        two cannot drift apart. ``reflexive`` applies OpenFGA's implicit userset
+        self-relation (``T:o#p`` is a member of ``T:o#p``); it defaults to False, the
+        reading the processor maintains derived state under."""
+        # Delegates to the facade's _check_derived (reflexive: see _EvalContext).
         # Provenance (moved out of the docstring, TK123 item 14): boolean spec sec 6; the upos
         # rule is blind-audit P4. The reflexive flag: TK144 (TK138 landing 2, C5).
         sp, st, sn = s
@@ -356,6 +357,9 @@ class DeltaProcessor:
                                        reflexive=reflexive)
 
     def member_stars(self, object_type: str, rel: str, obj_name: str) -> frozenset:
+        """The ``(subject_type, predicate)`` star shapes that are members of
+        ``(object_type, rel)`` on object ``obj_name``, derived or not; the companion
+        of ``member_check``."""
         # Star subjects never take the self-relation (D1), so this reads the same
         # either way; it stays non-reflexive, the reconcile's reading.
         if (object_type, rel) in self.compiled.tainted:
@@ -404,11 +408,10 @@ class DeltaProcessor:
     def stored_userset_subjects(self, object_type: str, obj_name: str, leaf: str,
                                 t: str, p: str) -> list[str]:
         """Names x of userset subjects (t, x, p) holding a stored tuple on the storage
-        leaf (obj, leaf).
-
-        Memoized inside an open ``_stored_cache_scope`` -- see that
-        method's docstring for why a cascade/reconcile-scoped memo is exact."""
-        # Provenance (moved out of the docstring, TK123 item 14): perf R6-10.
+        leaf (obj, leaf). Memoized for the duration of a cascade or reconcile, during
+        which stored tuples cannot change."""
+        # Provenance (moved out of the docstring, TK123 item 14): perf R6-10. The memo is
+        # _stored_cache_scope; its docstring says why a cascade/reconcile-scoped memo is exact.
         cache = self._stored_cache
         key = ('us', object_type, obj_name, leaf, t, p)
         if cache is not None:
@@ -502,16 +505,18 @@ class DeltaProcessor:
 
     def tupleset_parents(self, object_type: str, obj_name: str, ts: str,
                          parent_types: tuple) -> list[tuple[str, str]]:
-        """Entity parents p with a stored tupleset tuple (p, ts, obj): DIRECT incoming
-        entity subjects on the (obj, ts) node. Stored tuples only -- the pinned TTU
-        semantics (oracle ttu_leaf); computed members of the tupleset never count.
+        """Entity parents p with a stored tupleset tuple (p, ts, obj). Only STORED
+        tupleset tuples count (the Zanzibar ``x from parent`` semantics); computed
+        members of the tupleset never do.
 
-        A stored ``T:*`` parent is EXPANDED here into the concrete instances of ``T``
-        (RC2), which is what makes every downstream consumer -- ``_from_chain_keys``,
-        ``_leaf_concretes``, ``_derived_leaf_neg_ids`` -- correct without edits: each
-        instance really is a parent. The half the expansion cannot express, "the shape
-        ``(T, target_rel)`` is a member whatever its name", is carried separately by
-        ``tupleset_star_types`` and consumed by the ``_EvalContext`` TTU methods."""
+        A stored ``T:*`` parent expands here to every concrete instance of ``T``, since
+        each instance really is a parent. The part the expansion cannot express, "the
+        shape ``(T, target_rel)`` is a member whatever its name", is reported
+        separately by ``tupleset_star_types``."""
+        # Provenance (moved out of the docstring, TK169): the TTU semantics are pinned by
+        # the oracle's ttu_leaf; the star expansion is RC2, and is what makes
+        # _from_chain_keys, _leaf_concretes and _derived_leaf_neg_ids correct without
+        # edits. tupleset_star_types is consumed by the _EvalContext TTU methods.
         return self._expand_tupleset_parents(
             *self._stored_tupleset_subjects(object_type, obj_name, ts, parent_types))
 
@@ -756,6 +761,8 @@ class DeltaProcessor:
 
     def reconcile_subject(self, object_type: str, rel: str, obj_name: str,
                           s: SubjectKey) -> bool:
+        """Bring one subject's membership in the derived relation ``(object_type, rel)``
+        on ``obj_name`` up to date. Returns True iff anything changed."""
         with self._residue_cache_scope(), self._stored_cache_scope():
             return self._reconcile_subject(object_type, rel, obj_name, s)
 
@@ -857,6 +864,8 @@ class DeltaProcessor:
         return changed
 
     def reconcile(self, object_type: str, rel: str, obj_name: str) -> bool:
+        """Recompute the derived relation ``(object_type, rel)`` on ``obj_name`` in
+        full. Returns True iff anything changed (False at a fixpoint)."""
         with self._residue_cache_scope(), self._stored_cache_scope():
             return self._reconcile(object_type, rel, obj_name)
 
@@ -1441,34 +1450,40 @@ class DeltaProcessor:
         """The in-transaction cascade: per stratum round, map the frontier's
         deltas (plus pending residue bumps) to keys, reconcile each, advance.
 
-        A TWO-CACHE wrapper around ``_run_cascade``; both scopes are reentrant and both
-        close before the caller commits, so the paranoia checker reads true state.
-
-        (1) The per-batch node-resolution cache: the cascade re-resolves the
-        same concrete subject/object/leaf nodes across every reconcile, leaf probe and
-        residue read of a round, so one scope over the whole cascade collapses the
-        ``node`` SELECTs (with negative caching for the many absent probes). Being
-        reentrant, under ``advance_index`` (which installs its own outer scope) it is a
-        no-op, and under a standalone ``run_cascade`` (test-matrix GraphBackend) it is
-        the outermost -- exercised under paranoia either way. See
-        ``ReachabilityIndex._node_cache_scope``.
-
-        (2) The stored-tuple enumeration memo, installed cascade-wide
-        because the raw stored tuples it reads cannot change inside a cascade -- the
-        full premise, and the two places it must NOT be installed or widened, are in
-        ``_stored_cache_scope``'s own docstring. Unlike (1) this one is NOT installed
-        by ``advance_index``, deliberately: that scope spans the raw-write apply loop.
-
-        (3) The opt-in ``'fixpoint'`` paranoia tier runs AFTER both scopes close, not inside
-        them. That is the stronger question -- a memoized node resolution or stored-tuple
-        enumeration cannot mask a divergence the check exists to see -- it is what
-        an earlier staleness measurement actually observed (its instrument
-        wrapped this public method), and one call site here covers all three of
-        ``_run_cascade``'s normal exits, where a check placed inside would have to be
-        repeated at each and silently skipped by the next one added. WARNING: Bound: under
-        ``advance_index`` an OUTER node-cache scope spans the apply loop, so there the
-        tier still runs inside *that* one; the tier closes its own scopes, not a
-        caller's."""
+        Call it in the SAME transaction as the graph writes on a boolean schema, before
+        committing, with ``txn_start_watermark`` the ``outbox_watermark(session,
+        store_id)`` read before the first write. A transaction that wrote without
+        running it refuses to commit with ``CascadeNotRun``. ``zanzibar.store.Store``
+        does all of this for you."""
+        # Implementation notes (moved out of the docstring, TK169):
+        # A TWO-CACHE wrapper around ``_run_cascade``; both scopes are reentrant and both
+        # close before the caller commits, so the paranoia checker reads true state.
+        #
+        # (1) The per-batch node-resolution cache: the cascade re-resolves the
+        # same concrete subject/object/leaf nodes across every reconcile, leaf probe and
+        # residue read of a round, so one scope over the whole cascade collapses the
+        # ``node`` SELECTs (with negative caching for the many absent probes). Being
+        # reentrant, under ``advance_index`` (which installs its own outer scope) it is a
+        # no-op, and under a standalone ``run_cascade`` (test-matrix GraphBackend) it is
+        # the outermost -- exercised under paranoia either way. See
+        # ``ReachabilityIndex._node_cache_scope``.
+        #
+        # (2) The stored-tuple enumeration memo, installed cascade-wide
+        # because the raw stored tuples it reads cannot change inside a cascade -- the
+        # full premise, and the two places it must NOT be installed or widened, are in
+        # ``_stored_cache_scope``'s own docstring. Unlike (1) this one is NOT installed
+        # by ``advance_index``, deliberately: that scope spans the raw-write apply loop.
+        #
+        # (3) The opt-in ``'fixpoint'`` paranoia tier runs AFTER both scopes close, not inside
+        # them. That is the stronger question -- a memoized node resolution or stored-tuple
+        # enumeration cannot mask a divergence the check exists to see -- it is what
+        # an earlier staleness measurement actually observed (its instrument
+        # wrapped this public method), and one call site here covers all three of
+        # ``_run_cascade``'s normal exits, where a check placed inside would have to be
+        # repeated at each and silently skipped by the next one added. WARNING: Bound: under
+        # ``advance_index`` an OUTER node-cache scope spans the apply loop, so there the
+        # tier still runs inside *that* one; the tier closes its own scopes, not a
+        # caller's.
         # Provenance (moved out of the docstring, TK123 item 14): the fixpoint tier is TK82;
         # the measurement is docs/tk74-staleness-net-2026-09-18.md sec 10.3.
         # Provenance (moved out of the docstring, TK123 item 14): perf N15; perf R6-10.
@@ -1722,8 +1737,7 @@ class DeltaProcessor:
         check. It walks strata in topo order and calls ``reconcile`` on each live
         derived key; on the FIRST key whose reconcile changed anything it has ALREADY
         WRITTEN that key's repair, then raises ``InvariantViolation``. Every later key
-        is left untouched (neither checked nor repaired), and ``_bumped`` is cleared
-        only on the clean path. So:
+        is left untouched (neither checked nor repaired). So:
 
           * for DIAGNOSIS, call it inside a transaction the caller ROLLS BACK -- a
             raise then means "at least one key was stale", nothing more;
@@ -1735,15 +1749,15 @@ class DeltaProcessor:
 
         Cost is O(live derived keys in the store), unbounded by the size of any write,
         so it is never a write-path default and is deliberately absent from the
-        paranoia ladder. Execution-side missed reconciles are caught per cascade by
-        the ``'fixpoint'`` tier (``_check_cascade_fixpoint``); a key that was never
-        SCHEDULED is outside that tier by construction, and this audit is the only
-        detector for that class. Production callers: none -- it is reached from
-        the test suite and, on the composed system, via the public ``Store.proc``
-        attribute (``None`` when the schema has no boolean relation). The whole-store
-        repair ``backfill()`` does have a production caller, ``build_index(bulk=False)``.
+        paranoia ladder. Missed reconciles inside a cascade are caught per cascade by
+        the ``'fixpoint'`` paranoia level; a key that was never SCHEDULED is outside
+        that check by construction, and this audit is the only detector for that
+        class. On the composed system it is reached via ``Store.proc`` (``None`` when
+        the schema has no boolean relation).
         """
         # Provenance (moved out of the docstring, TK123 item 14): invariant I9.
+        # (TK169) The per-cascade check is _check_cascade_fixpoint; _bumped is cleared
+        # only on the clean path. No library code calls this; the test suite does.
         # Provenance (moved out of the docstring, TK123 item 14): §5.5; TK85, 2026-10-13.
         for stratum in self.compiled.strata:
             for (object_type, rel) in stratum:

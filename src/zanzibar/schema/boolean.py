@@ -77,8 +77,8 @@ def _assert_ttu_parent_types_cover_admission(compiled, rules_and_filters: list) 
                     f'{tuple(node.parent_types)!r} omits type(s) {missing!r} that '
                     f'ADMISSION accepts onto {o_type}#{node.tupleset_rel}. A stored '
                     f'tupleset tuple of that type would be silently dropped as a TTU '
-                    f'parent (fail-open under a negated TTU). This is the RC1 class -- '
-                    f'suspect _member_types, not this check.')
+                    f'parent (fail-open under a negated TTU). This is a library bug; '
+                    f'please report it with the schema.')
 
 
 def _rule_subject_types_fn(ast: SchemaAST, rules_and_filters: list

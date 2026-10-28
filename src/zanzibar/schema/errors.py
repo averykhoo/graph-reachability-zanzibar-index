@@ -40,7 +40,7 @@ class ZanzibarError(Exception):
     builtin keeps working. Every refusal of a schema (parse or compile) is a
     ``ValueError``; ``UnsupportedByGraphIndex`` gained that base in 0.1.0.
 
-    Deliberately NOT a subclass of this: ``zanzibar.graphindex.InvariantViolation``. It is
+    Deliberately NOT a subclass of this: ``zanzibar.InvariantViolation``. It is
     an ``AssertionError`` that means the stored index is CORRUPT, not that a call was
     refused, and a handler written for refusals must never swallow it. Also outside:
     ``UnprovenExtensionWarning``, which is a warning, not an error.
@@ -61,7 +61,7 @@ class SchemaError(ZanzibarError, ValueError):
 class AdmissionRejected(ZanzibarError, ValueError):
     """A write was CORRECTLY REFUSED at admission -- never a sign of corruption.
 
-    The exact mirror of ``zanzibar.graphindex.invariants.InvariantViolation`` ("a rejection is a
+    The exact mirror of ``zanzibar.InvariantViolation`` ("a rejection is a
     *correct* refusal; a violation is corruption"). This class is the *rejection* half
     said out loud, as a TYPE rather than as message text: the store is intact, the
     write was inadmissible. The refusal families are
@@ -83,30 +83,19 @@ class AdmissionRejected(ZanzibarError, ValueError):
     doubt a site stays unclassified, because the fail-closed direction is for the
     classifier to propagate it.
 
-    **Subclassing ``ValueError`` is deliberate and load-bearing**, not an accident of
-    convenience: every existing caller and test catches ``ValueError`` around a write
-    (``zanzibar.store._store._write``'s narrow rejection path, the test harnesses'
-    backends, ``zanzibar.graphindex.processor``'s cycle guard,
-    ``zanzibar.store.apply._apply_row``'s ValueError->InvariantViolation promotion).
-    All of those keep working unchanged. Narrowing to ``AdmissionRejected`` is strictly
-    OPT-IN, and the only thing it buys is the ability to tell a correct refusal from an
-    internal-contract ``ValueError``, which is a bug.
-
-    WHY IT LIVES HERE. This is the shared schema layer: it imports neither backend, and
-    both backends plus the composition layer import it. So both ``zanzibar.graphindex`` and
-    ``zanzibar.setengine`` can raise the same rejection type without either importing the other,
-    and ``validate_write_identifiers`` (called by both) raises it directly.
-    ``zanzibar.graphindex.core`` re-exports it for convenience.
-
-    NOTE the caller-relativity: the same raise can be a refusal at ADMISSION and
-    corruption further downstream. ``zanzibar.store.apply._apply_row`` replays an
-    already-admission-validated log row, so it promotes ANY ``ValueError`` (this class
-    included) to ``InvariantViolation``. That promotion is the caller's judgement, and
-    this class does not weaken it -- EXCEPT for ``ClosureFanoutExceeded``, whose whole
-    point is that admission provably could not have predicted it.
+    It subclasses ``ValueError``, so code that catches ``ValueError`` around a write keeps
+    working unchanged. Catching ``AdmissionRejected`` instead is opt-in, and it buys one
+    thing: telling a correct refusal apart from a plain ``ValueError``, which is a bug.
+    Both backends raise this same type.
     """
-    # Provenance (moved out of the docstring, TK123 item 14): the harnesses are
-    # tests/parity.py and tests/test_matrix.py.
+    # Moved out of the docstring (TK169, 2026-10-28): every in-tree caller catches
+    # ValueError around a write -- zanzibar.store._store._write's narrow rejection path,
+    # the test harnesses' backends (tests/parity.py, tests/test_matrix.py),
+    # zanzibar.graphindex.processor's cycle guard, and zanzibar.store.apply._apply_row,
+    # which replays an already-admitted log row and so promotes ANY ValueError (this class
+    # included) to InvariantViolation -- except IndexResourceLimit, which admission could
+    # not predict. The class lives in the shared schema layer so both backends can raise
+    # it without importing each other; zanzibar.graphindex.core re-exports it.
     # Provenance (moved out of the docstring, TK123 item 14): the routing breach is invariant
     # I5.
 
@@ -115,29 +104,31 @@ class IndexResourceLimit(AdmissionRejected):
     """The graph index declined to MATERIALISE an admitted write: a resource limit
     over the closure, not a property of the tuple and the schema.
 
-    The common base of the refusals ``zanzibar.store.apply._apply_row`` must NOT promote
-    to ``InvariantViolation`` (see ``ClosureFanoutExceeded`` for why that promotion is
-    wrong for this family). Two members: ``ClosureFanoutExceeded`` and
-    ``PathCountExceeded``. ``_apply_row`` catches THIS class, so a new member
-    is exempt from the promotion by construction.
+    The base of the index-side resource limits. A store replaying its tuple log treats
+    these as limits, never as corruption, so they are never reported as
+    ``InvariantViolation``. Two members: ``ClosureFanoutExceeded`` and
+    ``PathCountExceeded``.
     """
+    # TK169 (2026-10-28): zanzibar.store.apply._apply_row catches THIS class, so a new
+    # member is exempt from its ValueError->InvariantViolation promotion by construction.
     # Provenance (moved out of the docstring, TK123 item 14): ClosureFanoutExceeded is
     # ZT-P1-6a.
     # Provenance (moved out of the docstring, TK123 item 14): ``TK111``.
 
 
 class PathCountExceeded(IndexResourceLimit):
-    """A write would push a closure row's path count past ``MAX_PATH_COUNT``.
+    """A write would push a closure row's path count past ``2**31 - 1``.
 
-    ``Edge.indirect_edge_count`` counts derivations (paths), not reachability, so a
-    K-layer diamond chain makes it ``2**K``. The column is ``INTEGER``: int4 on
-    PostgreSQL, int64 on SQLite. Before this refusal the write failed at FLUSH with a raw
-    ``DataError`` (PostgreSQL, K=31) or ``OverflowError`` (SQLite, K=63) -- a refusal
-    nobody could classify, which ``Store._write`` treated as an unknown bug.
-    The bound is the int4 ceiling on BOTH dialects, so the same write is refused the
-    same way on dev SQLite as on the PostgreSQL server. Saturating the count instead
-    was rejected: it breaks the exact decrement a later removal relies on.
+    The graph index counts derivations (paths) between two nodes, not mere reachability,
+    so a K-layer diamond chain makes that count ``2**K``. The bound is the int4 ceiling on
+    BOTH dialects, so the same write is refused the same way on SQLite as on PostgreSQL.
     """
+    # TK169 (2026-10-28), moved out of the docstring: the bound is
+    # graphindex/core.py::MAX_PATH_COUNT (not exported), over Edge.indirect_edge_count.
+    # Before this refusal the write failed at FLUSH with a raw DataError (PostgreSQL, K=31)
+    # or OverflowError (SQLite, K=63), which Store._write treated as an unknown bug.
+    # Saturating the count instead was rejected: it breaks the exact decrement a later
+    # removal relies on.
     # Provenance (moved out of the docstring, TK123 item 14): the refusal landed with TK111.
     # Provenance (moved out of the docstring, TK123 item 14): ``TK111``.
 
@@ -148,8 +139,8 @@ class ClosureFanoutExceeded(IndexResourceLimit):
     The cap bounds how many permission-closure rows ONE write may add, and so how long
     that write holds the store's write locks; it is a blast-radius bound, not an
     authorization policy. It is set by the ``ZANZIBAR_MAX_CLOSURE_FANOUT`` environment
-    variable (default 100,000; ``0`` disables it) or ``ReachabilityIndex(
-    max_closure_fanout=...)``. The refusal is atomic: the write is absent from the tuple
+    variable (default 100,000; ``0`` disables it); a directly built ``ReachabilityIndex``
+    also takes ``max_closure_fanout=``. The refusal is atomic: the write is absent from the tuple
     log, the set engine and the graph index alike, so both backends still agree.
 
     It can bite at the default: granting, banning or adding a member to a group whose
@@ -165,8 +156,8 @@ class ClosureFanoutExceeded(IndexResourceLimit):
     (``Store.catch_up``, ``build_index``) is applied with a logged warning instead,
     because refusing a committed row would stall the index.
 
-    A subclass of ``IndexResourceLimit``, which ``zanzibar.store.apply._apply_row``
-    does not promote to ``InvariantViolation``: a cap refusal is never corruption.
+    A subclass of ``IndexResourceLimit``, so a replayed over-cap row is never reported as
+    corruption (``InvariantViolation``).
     """
     # Provenance: corrected 2026-10-17 (TK153; the TK150 scout,
     # docs/closure-fanout-cost-2026-10-14.md Correction 2026-10-16 (c)). The old text said
@@ -182,10 +173,9 @@ class ClosureFanoutExceeded(IndexResourceLimit):
 def is_valid_identifier(value) -> bool:
     """Strict charset membership ONLY. ``'*'`` (the wildcard name) is outside the
     charset, so this returns False for it; ``'...'`` (the bare subject predicate) is
-    three ``'.'`` and inside it, so this returns True. Both sentinels are reserved by
-    POSITION, through ``_require``'s ``allow_star``/``allow_ellipsis`` flags, not by
-    this predicate. External callers wanting "is this writable as a name" should go
-    through ``validate_write_identifiers``."""
+    three ``'.'`` and inside it, so this returns True. Both are reserved by POSITION,
+    not by this predicate: ``'*'`` only as a name, ``'...'`` only as a subject
+    predicate. Writes through ``Store`` validate both."""
     return isinstance(value, str) and _IDENTIFIER_RE.fullmatch(value) is not None
 
 
@@ -303,7 +293,7 @@ class UnsupportedByGraphIndex(ZanzibarError, ValueError):
 class DoublyBridgedShapeError(UnsupportedByGraphIndex):
     """A shape that is BOTH a wildcard-userset shape (``T:*#p`` restriction ->
     ``bridged_in_shapes``) and an object-wildcard shape (``bridged_out_shapes``)
-    -- the "doubly-bridged" precondition of the F1/F2 divergences. A wildcard write on such a shape
+    -- the "doubly-bridged" precondition of a latent cycle. A wildcard write on such a shape
     materializes a ``w_any(T,p) -> w_all(T,p)`` path; every present-or-future
     concrete node of that shape carries both bridges (concrete->w_any in-bridge,
     w_all->concrete out-bridge), so the path is a latent cycle -- the graph
@@ -311,11 +301,12 @@ class DoublyBridgedShapeError(UnsupportedByGraphIndex):
     concrete write of that shape (accept/reject + completeness divergences vs the
     set engine, plus an innocent-write lockout).
 
-    A subclass of ``UnsupportedByGraphIndex`` (the third entry in the
-    wildcard-object scope-rejection family), but its OWN type so the set engine can
-    re-raise it -- unlike the other scope rejections, which the set engine
-    swallows to degrade to a ruleset-less/oracle-only mode, this one must reject
-    on BOTH backends identically (the state must be unconstructible everywhere)."""
+    A subclass of ``UnsupportedByGraphIndex``, but unlike the other graph-index
+    refusals the set engine refuses this shape too, so it is refused on BOTH backends
+    identically: the state must be unconstructible everywhere."""
+    # TK169 (2026-10-28), moved out of the docstring: these are the F1/F2 divergences;
+    # the set engine re-raises this type where it swallows the other scope rejections
+    # to run ruleset-less (setengine/engine.py::SetEngine.__init__).
     # Provenance (moved out of the docstring, TK123 item 14): the decision-15 family.
     # Provenance (moved out of the docstring, TK123 item 14): see docs/spec-deviations.md
     # 2026-07-17.
@@ -323,11 +314,10 @@ class DoublyBridgedShapeError(UnsupportedByGraphIndex):
 
 class CyclicDerivedDependency(ZanzibarError, ValueError):
     """Derived relations form a dependency cycle (recursion through boolean
-    relations is not supported). A ``ValueError`` subclass for backwards
-    compatibility, but its OWN type so graph-optional consumers (ParityEngine,
-    the set engine's cycle-parity compile) can degrade on exactly this rejection
-    without swallowing every other ``ValueError`` a compile regression might
-    raise."""
+    relations is not supported). A ``ValueError`` subclass, but its own type so a
+    caller can handle exactly this refusal without catching every ``ValueError``."""
+    # TK169 (2026-10-28): the in-tree consumers that degrade on it are ParityEngine and
+    # the set engine's cycle-parity compile.
     # Provenance (moved out of the docstring, TK123 item 14): boolean spec sec 1.9.
 
 
@@ -347,19 +337,17 @@ class SchemaMismatch(ZanzibarError, ValueError):
 class ShapeNoLongerAccepted(SchemaError):
     """A schema shape that zanzibar-index 0.0.4 and earlier ACCEPTED and 0.0.5
     refuses: a ``schema`` line naming a version but ``1.1``, extra words on
-    a header line, ``but not`` sharing a level with another operator (S7), or a
-    restriction to an undeclared type (S8). Raised by `parser.py::_validate_header_line`,
-    `parser.py::_reject_unparenthesised_but_not` and
-    `parser.py::_validate_restriction_types_declared`. Since 0.1.0 it is also raised for an
-    ``object_wildcard_shapes`` entry that names no declared relation (0.0.5 and earlier
-    accepted it as a no-op), by `compiler.py::_validate_object_wildcard_shapes`.
+    a header line, ``but not`` sharing a level with another operator, or a
+    restriction to an undeclared type. Raised by the parser (``parse_schema_ast``,
+    ``parse_openfga_schema``, ``Store(..., schema=...)``). Since 0.1.0 it is also raised,
+    by ``compile_ruleset``, for an ``object_wildcard_shapes`` entry that names no declared
+    relation (0.0.5 and earlier accepted it as a no-op).
 
-    It exists for ONE reader: `zanzibar.store.schema_io` re-parses a store's
-    PERSISTED schema text on every open, so a store saved under 0.0.4 with one of these
-    shapes stops opening. Telling that version break apart from corruption needs a type,
-    not message matching; the store layer turns it into
-    `zanzibar.store.PersistedSchemaRefused`. ``instead`` is the rewrite that keeps
-    the meaning the 0.0.4 store was serving.
+    It exists for ONE reader: a store re-parses its PERSISTED schema text on every open,
+    so a store saved under 0.0.4 with one of these shapes stops opening. Telling that
+    version break apart from corruption needs a type, not message matching; the store
+    turns it into ``zanzibar.PersistedSchemaRefused``. ``instead`` is the rewrite that
+    keeps the meaning the 0.0.4 store was serving.
 
     A ``SchemaError`` (so a ``ValueError``) subclass, so every caller that catches the
     parser's refusals is unchanged. A consumer usually catches ``SchemaError`` (a fresh

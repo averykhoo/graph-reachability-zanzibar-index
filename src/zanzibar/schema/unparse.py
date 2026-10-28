@@ -19,10 +19,10 @@ def unparse_schema_ast(ast: SchemaAST) -> str:
 
     * BOTH operands of ``but not`` render as units, so an operator operand is
       parenthesised: ``Exclusion(Union(a, b), c)`` renders ``(a or b) but not c``. The old
-      rendering ``a or b but not c`` is refused now (S7).
+      rendering ``a or b but not c`` is refused since 0.0.5.
     * Every restriction type that keys no relation (``user`` in ``[user]``) gets its own
       ``type`` line FIRST, sorted, the way OpenFGA examples declare ``type user`` before
-      the types that use it. A restriction to an undeclared type is refused now (S8), and
+      the types that use it. A restriction to an undeclared type is refused since 0.0.5, and
       a relation-less ``type`` line is not an AST key, so the round trip still holds."""
       # Provenance (moved out of the docstring, TK123 item 14): TK137 (2026-10-14).
     # Provenance (moved out of the docstring, TK123 item 14): `TK124`.

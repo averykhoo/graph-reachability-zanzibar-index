@@ -191,8 +191,7 @@ def take_row_write_lock(session: Session, lock_select, lock_update) -> None:
 
     * **PostgreSQL** (the supported server; this arm is what any non-SQLite dialect
       gets) -- ``lock_select``, a ``SELECT ... FOR UPDATE`` on the store's lock row.
-      Unchanged from before this fix, and first exercised for real on 2026-07-27:
-      it blocks a second writer, at ROW granularity, and releases on commit.
+      It blocks a second writer, at ROW granularity, and releases on commit.
     * **SQLite** -- ``with_for_update()`` compiles to a PLAIN SELECT on pysqlite (no
       ``FOR UPDATE`` in the emitted statement; verified), so the documented lock was a
       silent NO-OP and, worse, pysqlite's default ``isolation_level=''`` runs SELECTs
@@ -294,14 +293,15 @@ class ReachabilityIndex:
     Stateful interface to interact with the transitive closure DAG.
     Operates inside a provided Session to allow multi-edge transactional batching.
 
-    Concurrency: every write funnels through ``_lock_store`` (a ``FOR UPDATE`` row lock on
-    the store row) so that a whole logical write -- the check-then-act cycle test *and* the
+    Concurrency: every write takes a per-store row lock (``SELECT ... FOR UPDATE`` on
+    PostgreSQL; SQLite's database write lock) so that a whole logical write -- the check-then-act cycle test *and* the
     read-modify-write ref-count updates across the affected closure region -- is atomic
     with respect to other writers to the same store. Without it, two concurrent writers on
     a real MVCC backend (PostgreSQL at READ COMMITTED, the only supported server/level
     combination) would (a) lose ref-count increments on any shared edge and (b) be able to
-    each pass the cycle check yet jointly create a cycle. See ``_lock_store`` for why the
-    lock is at store rather than per-edge granularity.
+    each pass the cycle check yet jointly create a cycle. The lock is per store rather
+    than per edge because the rows a write touches are only discovered while walking
+    the graph, and locking them one by one in that order could deadlock.
     """
 
     def __init__(self, session: Session, store_id: str, *,
@@ -1074,6 +1074,11 @@ class ReachabilityIndex:
 
     def node(self, predicate: str | EllipsisType, entity_type: str, entity_name: str, *, create_if_missing: bool,
              implicit: bool | None = None, wildcard: str = '') -> Node:
+        """Return the node ``(predicate, entity_type, entity_name, wildcard)``.
+
+        Creates it (implicit unless ``implicit=False``) when ``create_if_missing`` is
+        true, otherwise raises ``KeyError`` when it is absent. Passing
+        ``implicit=False`` promotes an existing implicit node to explicit."""
         if predicate is Ellipsis:
             predicate = '...'
 
@@ -1157,8 +1162,7 @@ class ReachabilityIndex:
         returns the node or ``None``, never creates, never promotes implicit->explicit.
         Shares ``node``'s per-batch cache, so a concrete resolved, created,
         or evicted through the ``node`` choke point stays coherent with this read path.
-        Outside a batch (cache ``None``) it is a single point SELECT -- byte-identical
-        to the former ``DeltaProcessor._node``, whose sole implementation this is."""
+        Outside a batch (cache ``None``) it is a single point SELECT."""
         # Provenance (moved out of the docstring, TK123 item 14): pre-N15.
         # Provenance (moved out of the docstring, TK123 item 14): perf N15.
         cache = self._node_cache
@@ -1177,23 +1181,11 @@ class ReachabilityIndex:
         """Resolve a SET of node identity tuples ``(predicate, type, name, wildcard)``
         to ids in ONE statement; read-only.
 
-        The read path resolves several identities before it can probe anything, and
-        each was its own ``_db_node`` point SELECT: an untainted
-        ``WildcardIndex._check_internal`` needs up to four (subject, object, and the
-        two wildcard variants), measured at **4.00 ``node`` statements per
-        ``check``** against the 0.75 its already-batched edge probe pays. The four are
-        independent, so they go into one row-value ``IN`` served by
-        ``zanzibar_node_unique_constraint`` (``models.py::Node.__table_args__``) -- the
-        same shape, on the same dialects, as the edge probe this feeds.
-
-        CACHE-COHERENT, not cache-bypassing. It serves AND populates the per-batch
-        ``_node_cache`` exactly as ``node`` / ``cached_concrete_node`` do, so
-        inside a cascade (cache installed and warm) this still costs zero statements;
-        replacing warm cache hits with a fresh SELECT would have been a write-path
-        regression, and this entry point is on the write path via
-        ``_EvalContext.leaf_check``. Only genuine misses reach SQL. That is also why
-        it selects ENTITIES rather than projected columns: a bare row cannot be cached,
-        and the four statements it replaces already built entities, so nothing is lost.
+        A ``check`` resolves several independent identities (subject, object, and
+        their wildcard variants) before it can probe an edge; this resolves them with
+        one row-value ``IN`` instead of one SELECT each. It serves and populates the
+        same per-batch node cache as ``node`` / ``cached_concrete_node``, so only
+        genuine cache misses reach SQL.
 
         Read-only by contract -- never creates, never flushes, never promotes
         ``implicit`` -- because the read path must not run ``node``'s creation or
@@ -1353,6 +1345,9 @@ class ReachabilityIndex:
 
     def add_edge(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str, relation: str,
                  object_type: str, object_name: str) -> None:
+        """Add a direct edge from the subject node to the ``relation`` node of the
+        object, creating either node if needed; refuses (``AdmissionRejected``) an
+        edge that would create a cycle."""
         validate_write_identifiers(subject_predicate, subject_type, subject_name,
                                    relation, object_type, object_name)
         self._lock_store()   # lock BEFORE resolution: a concurrent remove_node in the
@@ -1364,6 +1359,8 @@ class ReachabilityIndex:
 
     def remove_edge(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str, relation: str,
                     object_type: str, object_name: str) -> None:
+        """Remove one direct edge added by ``add_edge`` (ref-counted -1); refuses
+        (``AdmissionRejected``) an edge that does not exist."""
         validate_write_identifiers(subject_predicate, subject_type, subject_name,
                                    relation, object_type, object_name)
         self._lock_store()   # lock before resolution (blind-audit C2)
@@ -1378,6 +1375,8 @@ class ReachabilityIndex:
         self._remove_edge_locked(_subject.id, _object.id)
 
     def remove_node(self, predicate: str | EllipsisType, entity_type: str, entity_name: str) -> None:
+        """Delete a node and every edge that touches it, updating the closure.
+        Raises ``KeyError`` when the node does not exist."""
         validate_node_identifiers(predicate, entity_type, entity_name)
         self._lock_store()   # serialize node deletion + its closure fixups (held until commit)
         _node = self.node(predicate, entity_type, entity_name, create_if_missing=False)
@@ -1404,6 +1403,8 @@ class ReachabilityIndex:
 
     def check_reachable(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str,
                         relation: str, object_type: str, object_name: str) -> bool:
+        """Is the object's ``relation`` node reachable from the subject node?
+        ``False`` when either node does not exist."""
         try:
             _subject = self.node(subject_predicate, subject_type, subject_name, create_if_missing=False)
             _object = self.node(relation, object_type, object_name, create_if_missing=False)
@@ -1413,12 +1414,14 @@ class ReachabilityIndex:
         return self.check_reachable_by_id(_subject.id, _object.id)
 
     def lookup_reachable(self, subject_id: int) -> set[int]:
+        """Ids of every node reachable from node ``subject_id``."""
         triples = self.session.exec(
             select(Edge).where(Edge.store_id == self.store_id).where(Edge.subject_id == subject_id)
         ).all()
         return {t.object_id for t in triples if t.indirect_edge_count > 0}
 
     def lookup_reverse(self, object_id: int) -> set[int]:
+        """Ids of every node that can reach node ``object_id``."""
         triples = self.session.exec(
             select(Edge).where(Edge.store_id == self.store_id).where(Edge.object_id == object_id)
         ).all()

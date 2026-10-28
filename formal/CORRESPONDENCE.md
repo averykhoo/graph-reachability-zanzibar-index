@@ -1103,6 +1103,12 @@ auditor must know the pin is a Python↔Python differential, not a Lean twin.
   loop, the single cascade per batch and the `fanout_cap_suspended` window are
   unchanged, so this row, the batched-schedule row and the fan-out-cap row still hold.
   Python-only, pinned by `tests/test_tk165_idle_stall_clears.py`.
+  **TK163 (2026-10-28):** `Store._record_stall`, after its stall commit, now re-raises a
+  post-commit `InvariantViolation` the paranoia guard parked during that commit and
+  attaches it to the original exception as a note. Re-read 2026-10-28 when the anchor
+  CONTENT pin flagged the body: the stall is still recorded on any `catch_up` failure in
+  its own transaction, and a failure to record is still a note, so this row holds.
+  Python-only, pinned by `tests/test_tk163_post_commit_violation.py`.
 
 * **Two resource REFUSALS on the add path that the model does not have (added 2026-10-03b,
   `TK111` + `TK112`).** Both raise an `src/zanzibar/schema/errors.py::IndexResourceLimit` before the

@@ -266,12 +266,10 @@ class SchemaInfo:
 
         On such a shape ``(T, p)`` the two wildcard nodes compose through any
         concrete ``(T, x, p)`` -- "granted on all T#p" reaches "some T#p reaches ..."
-        the moment one instance exists. That
-        existential is ENTITY-wise (the reference oracle witnesses it with
-        any tuple-mentioned entity of type ``T``, whatever relation mentioned it), so
-        the concrete middle must track ENTITY existence rather than node existence:
-        the graph index interns ``(T, x, p)`` -- with both bridges -- for every live
-        entity ``x`` of type ``T`` (``WildcardIndex._ensure_entity_middles``).
+        the moment one instance exists. "One instance" means any entity of type ``T``
+        that some stored tuple mentions, whatever relation mentions it, so the graph
+        index creates ``(T, x, p)``, with both bridges, for every live entity ``x`` of
+        type ``T``.
 
         Because ``bridged_in_shapes`` excludes bare ``(T, '...')`` shapes, plain
         OpenFGA ``[user:*]`` usage is never crossable and keeps costing zero bridges
@@ -285,6 +283,14 @@ class SchemaInfo:
 
 @dataclass
 class RuleSet:
+    """A schema compiled for the graph index.
+
+    You do not build one by hand: ``parse_openfga_schema`` / ``compile_ruleset`` return it.
+    ``rules_and_filters`` holds the admission filters and rewrite rules; ``schema_info``
+    (a ``SchemaInfo``) the wildcard and derived-relation facts that ``WildcardIndex``
+    takes; ``compiled`` the boolean (``and`` / ``but not``) artifacts, which have no plans
+    when the schema has no boolean relation (``None`` when compiled with
+    ``enable_boolean=False``). ``apply`` turns one stored tuple into the edges the index holds."""
     rules_and_filters: list[Rule | Filter]
     # Populated by parse_openfga_schema; None for hand-built rulesets. The façade
     # (§6) reads this; ingestion via .apply ignores it (spec §2.3: "returned
@@ -338,6 +344,15 @@ class RuleSet:
         return sorted(keyed + anyrel)
 
     def apply(self, relational_triple: RelationalTriple):
+        """Admit one ``RelationalTriple`` and yield every triple it implies.
+
+        The triple must be admitted by a declared type restriction; on a boolean relation
+        it is routed to the internal predicates that implement it. The rewrite rules are
+        then applied until nothing new appears, and each resulting triple, the admitted
+        one included, is yielded once. Raises ``AdmissionRejected`` (a ``ValueError``) when
+        no declared restriction admits the triple, or when it names an internal predicate
+        instead of a declared relation. A hand-built ``RuleSet`` with no ``schema_info``
+        yields nothing for an unadmitted triple instead of raising."""
         if not hasattr(self, '_plain_filters'):
             self._build_dispatch()
 

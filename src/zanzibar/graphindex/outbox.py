@@ -36,15 +36,14 @@ def outbox_rows(session: Session, store_id: str, after_id: int = 0) -> list[Delt
 def prune_outbox(session: Session, store_id: str, before_watermark: int) -> int:
     """Delete this store's DRAINED outbox rows; return how many were removed.
 
-    ``delta_outbox`` had no ``DELETE`` anywhere: every reachability flip ever
-    emitted stayed for the life of the store, even though the cascade -- its only
-    in-tree consumer -- reads a row exactly once, in the transaction that wrote it.
+    Nothing deletes outbox rows (table ``zanzibar_delta_outbox``) automatically:
+    every reachability flip stays for the life of the store unless pruned here, even
+    though the cascade reads a row exactly once, in the transaction that wrote it.
 
     WHICH ROWS ARE SAFE, and why. Every consumer in this module's contract is a
     keyset cursor: it reads ``id > cursor`` (``outbox_rows`` / ``drain_deltas``) and
-    then advances the cursor. ``DeltaProcessor._run_cascade`` starts from the
-    watermark captured before the write, ``ParanoiaGuard`` from the last committed
-    one. So a row is drained exactly when its id is ``<= cursor`` for EVERY live
+    then advances the cursor. The cascade reads from the watermark taken before the
+    write, the paranoia checker from the last commit. So a row is drained exactly when its id is ``<= cursor`` for EVERY live
     consumer, and this function deletes ``id <= before_watermark`` -- the caller
     supplies that number because only the caller knows its consumers. Pass the
     minimum cursor across them (with one synchronous cascade per write, that is
@@ -59,8 +58,7 @@ def prune_outbox(session: Session, store_id: str, before_watermark: int) -> int:
     holding cursor 500 would never see the next 500 deltas. Retaining the highest row
     pins ``max(id)``, so ids stay monotone for the life of the store and
     ``outbox_watermark`` keeps returning the same value across a prune. The cost is
-    one row per store; the alternative is silent, permanent delta loss on the one
-    dialect CI runs.
+    one row per store; the alternative is silent, permanent delta loss on SQLite.
 
     NOT called from any write path, deliberately: "drained" is knowledge the caller
     has and the library does not. Concurrency-wise this only writes rows at or below

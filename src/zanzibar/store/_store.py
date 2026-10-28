@@ -32,7 +32,9 @@ from sqlmodel import Session, select
 
 from zanzibar.graphindex.core import probe_store_write_lock
 from zanzibar.graphindex.invariants import (PARANOIA_ENV_VAR, PARANOIA_OFF,
-                                 install_paranoia, resolve_paranoia_level)
+                                 defer_post_commit_violations, install_paranoia,
+                                 InvariantViolation, raise_post_commit_violation,
+                                 resolve_paranoia_level)
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.graphindex.wildcard import LookupResult
 from zanzibar.setengine.engine import StaleLookupIds
@@ -118,9 +120,7 @@ class LookupNotFresh(StaleRead):
       these", the ``neg`` channel) is filled on both sides but, like
       ``node_ids``, in each backend's own id domain.
 
-    Unifying that contract is a real, breaking API change with its own oracle-gate
-    arc. Until it lands, the honest
-    behaviour under an explicit freshness demand is to REFUSE: silently serving the
+    So under an explicit freshness demand the lookup REFUSES: silently serving the
     stale enumeration is how a revoked principal stays listed in a revocation UI, and
     silently swapping id domains is a different bug in a nicer costume.
 
@@ -155,7 +155,7 @@ class IndexStalled(LookupNotFresh):
     fan-out cap is suspended in ``catch_up``, so the poison row left is a path-count
     overflow (``PathCountExceeded``). It never clears by itself, not even when a later
     REMOVE undoes it, because that REMOVE waits behind it. Remove the tuple at the
-    source, then ``store.rebuild_index``."""
+    source, then call ``zanzibar.store.rebuild_index(session, store_id)``."""
     # Provenance (moved out of the docstring, TK123 item 14): TK112.
     # Provenance (moved out of the docstring, TK123 item 14): TK111/TK112; TK121,
     # ``docs/tk121-stall-recovery-2026-10-04.md``.
@@ -396,9 +396,7 @@ class Store:
         lags (token-carrying LOOKUPs raise ``LookupNotFresh`` instead -- see there).
 
         ``paranoia`` wires the runtime invariant layer (``zanzibar.graphindex.invariants``)
-        into this store's commits. Before this parameter existed
-        the layer had two callers, both tests, so every runtime corruption detector
-        was dark in production. Levels:
+        into this store's commits. Levels:
 
         * ``'off'`` / ``False`` -- no checking. **The default** -- see
           ``DEFAULT_PARANOIA`` for the measurement behind that choice.
@@ -422,10 +420,17 @@ class Store:
         The ints ``1`` / ``0`` are accepted as ``'full'`` / ``'off'``, like the booleans;
         any other value raises ``ValueError``.
 
-        **Fail-closed:** a violation raises ``InvariantViolation`` inside
-        ``before_commit``, so the write's commit never happens and ``_write``'s
-        handler rolls back both halves and rebuilds the evaluator. The message
-        carries the store id, the commit phase, and the violated clause.
+        **Fail-closed:** a violation raises ``InvariantViolation`` before the write
+        commits, so nothing is stored: the write is rolled back in the log and the
+        index, and the set engine is rebuilt to match. The message carries the store
+        id, the commit phase, and the violated clause.
+
+        Under ``'full'`` / ``'fixpoint'`` the same checks run again AFTER the commit.
+        A violation found there cannot undo anything: the write IS stored in the log
+        and the index. It is raised as ``InvariantViolation`` (phase ``post-commit``,
+        message saying the transaction is committed) once ``commit()`` has returned,
+        and this Store stays usable; under ``'full'`` the next write's pre-commit
+        pass re-checks the whole store, so a state that is still broken refuses it.
 
         Precedence: this argument (when not ``None``) > the ``ZANZIBAR_PARANOIA``
         environment variable (``off``/``residue``/``full``/``fixpoint``, or ``0``/``1``) >
@@ -500,7 +505,8 @@ class Store:
             # ordinary ValueError!) or one documented refresh() poll rolled them back
             # and bricked the instance; a read-only open also held the write lock for
             # its lifetime. The class owns commits everywhere else; it owns this one too.
-            self.session.commit()
+            defer_post_commit_violations(session)  # TK163: see Store._commit
+            self._commit()
         except Exception as exc:
             session.rollback()
             if isinstance(exc, DBAPIError):
@@ -697,7 +703,6 @@ class Store:
                 # it can never leak into a later transaction.
                 self.source.pop_pending_rows()
             self.session.commit()
-            return token
         except IndexResourceLimit as exc:
             # TK158: the index refused the write on size (ClosureFanoutExceeded /
             # PathCountExceeded, re-raised unchanged by ``apply._apply_row``). That is
@@ -725,6 +730,19 @@ class Store:
             # the evaluator watermark past the discarded token)
             self.source.refresh_evaluator()
             raise
+        # TK163: OUTSIDE the try on purpose -- the write is committed, so neither the
+        # rollback nor the evaluator rebuild above applies to a post-commit violation.
+        raise_post_commit_violation(self.session)
+        return token
+
+    def _commit(self) -> None:
+        """``session.commit()``, then re-raise a post-commit ``InvariantViolation``
+        the paranoia guard parked during it (TK163). Raising from inside SQLAlchemy's
+        ``after_commit`` hook left the session stuck in the COMMITTED state: the
+        caller saw ``InvalidRequestError`` and this Store refused every later call.
+        Raised here, the session is clean and the Store stays usable."""
+        self.session.commit()
+        raise_post_commit_violation(self.session)
 
     # ------------------------------------------------------------------ #
     # The worker loop (async schedule): same apply step, batched
@@ -764,7 +782,7 @@ class Store:
                 applied = advance_index(self.session, self.cursor, self.widx,
                                         self.ruleset, self.proc, batch=batch)
                 if applied:
-                    self.session.commit()
+                    self._commit()
                 elif (self.cursor.stalled_after is not None
                       and self.cursor.stalled_after == self.cursor.applied_log_id
                       and not log_rows(self.session, self.cursor.source_store_id,
@@ -784,7 +802,7 @@ class Store:
                     self.cursor.stalled_after = None
                     self.cursor.stall_error = None
                     self.session.add(self.cursor)
-                    self.session.commit()
+                    self._commit()
                 else:
                     # Blind-audit X2: the zero-row path still opened a transaction
                     # (store lock + cursor refresh + log read). Leaving it open
@@ -828,6 +846,12 @@ class Store:
             exc.add_note(f'Store: recording the index stall ALSO failed '
                          f'({type(rec).__name__}: {rec}); untokened reads may still '
                          f'be served from the stalled index until it is recorded')
+            return
+        try:  # TK163: the stall IS recorded; a late violation rides on the original
+            raise_post_commit_violation(self.session)
+        except InvariantViolation as late:
+            exc.add_note(f'Store: the stall was recorded, but the post-commit '
+                         f're-check of that commit failed: {late}')
 
     @property
     def index_stalled(self) -> bool:
@@ -848,7 +872,7 @@ class Store:
     def refresh(self) -> None:
         """Replica-reader poll: drop the current read snapshot and every read-path
         cache, so the next queries see the latest committed state coherently
-        (fresh transaction + rebuilt evaluator; the graph read path is uncached
+        (fresh transaction + rebuilt set engine; the graph read path is uncached
         by design). Refused on a session with pending ORM changes,
         which the rollback would silently discard."""
         # Provenance (moved out of the docstring, TK123 item 14): blind-audit W2.
@@ -916,7 +940,8 @@ class Store:
                 f'revoked principal could stay listed indefinitely. check() '
                 f'still answers, from the set engine. Clear the stall (a successful '
                 f'catch_up(); for a poison row, remove the tuple at the source and '
-                f'then rebuild_index()) and retry.')
+                f'then call zanzibar.store.rebuild_index(session, {self.store_id!r})) '
+                f'and retry.')
         # Provenance: zero-trust review ZT-P1-8b.
         raise LookupNotFresh(
             f'{surface}(at_least={at_least}) cannot be served: the index for store '

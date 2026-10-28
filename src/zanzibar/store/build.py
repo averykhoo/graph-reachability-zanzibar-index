@@ -28,6 +28,7 @@ from sqlmodel import Session, select
 
 from zanzibar.graphindex import Edge, Node, WildcardIndex
 from zanzibar.graphindex.bulk_build import bulk_build
+from zanzibar.graphindex.invariants import raise_post_commit_violation
 from zanzibar.graphindex.models import ResidueRef, Residue
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.setengine.models import RelationTuple
@@ -73,21 +74,20 @@ class BuildReport(_BuildFields):
     A ``NamedTuple``, so ``report.cursor`` reads by name and every
     ``cursor, widx, ruleset = build_index(...)`` call site is untouched.
 
-    WHY THIS FIELD EXISTS. The two constructors are byte-identical in effect by
-    design, so no assertion about the resulting STATE --
-    anywhere, in any test -- can tell them apart. A flipped default, or a silent
-    fallback added here, would downgrade every "bulk" test in the repo to a
-    second run of the incremental path with nothing going red. Measured
-    2026-09-20: forcing
-    ``if bulk:`` to ``if False:`` left the bulk-build conformance test green
-    while ``bulk_build`` ran 0 times instead of 130 -- an assurance step that
-    fails by PASSING. A mechanical refusal beats a doc warning, so callers
-    that need the bulk path refuse on this field.
-
-    The label is assigned INSIDE each branch, AFTER that branch's constructor
-    returns, and ``build_index`` gives it no default: deleting an assignment is
-    an ``UnboundLocalError``, not a wrong label.
+    ``.constructor`` lets a caller confirm which path ran; both produce identical
+    state.
     """
+    # WHY THE FIELD EXISTS (moved out of the docstring, TK169). The two constructors are
+    # byte-identical in effect by design, so no assertion about the resulting STATE --
+    # anywhere, in any test -- can tell them apart. A flipped default, or a silent
+    # fallback added here, would downgrade every "bulk" test in the repo to a second run
+    # of the incremental path with nothing going red. Measured 2026-09-20: forcing
+    # ``if bulk:`` to ``if False:`` left the bulk-build conformance test green while
+    # ``bulk_build`` ran 0 times instead of 130 -- an assurance step that fails by
+    # PASSING. A mechanical refusal beats a doc warning, so callers that need the bulk
+    # path refuse on this field. The label is assigned INSIDE each branch, AFTER that
+    # branch's constructor returns, and ``build_index`` gives it no default: deleting an
+    # assignment is an ``UnboundLocalError``, not a wrong label.
     # Provenance (moved out of the docstring, TK123 item 14): P13's correctness bar; the
     # measured sabotage ran
     # formal/conformance/test_conformance_remove.py::test_graph_remove_bulk_build_survivors;
@@ -131,8 +131,7 @@ def build_index(session: Session, source_store_id: str, *,
     ``bulk`` (default True) constructs the final pre-backfill state directly via
     ``zanzibar.graphindex.bulk_build`` -- one in-memory pass + bulk INSERTs -- instead of replaying
     every routed triple through the incremental ``widx.add_tuple``. ``bulk=False`` keeps
-    that per-tuple loop; it is byte-identical in effect and is the identity gate's
-    reference side. Everything else (guards, backfill,
+    that per-tuple loop; it produces the same state, more slowly. Everything else (guards, backfill,
     watermark re-check, cursor) is shared by both paths.
 
     Returns a `BuildReport`: the named ``(cursor, widx, ruleset)`` tuple it has always
@@ -179,6 +178,8 @@ def build_index(session: Session, source_store_id: str, *,
         cursor.applied_log_id = watermark
         session.add(cursor)
         session.commit()
+        # A post-commit check parked by a Store on this session belongs to THIS commit (TK163).
+        raise_post_commit_violation(session)
         return BuildReport(cursor, widx, ruleset, constructor)
     except Exception:
         session.rollback()
@@ -217,8 +218,8 @@ def rebuild_index(session: Session, source_store_id: str, *,
     the watermark) leaves reads exactly as correct as before it ran -- untokened
     ``check`` still falls back to the set engine and lookups still refuse.
 
-    Stop the store's async worker first: a write committed during the rebuild makes it
-    refuse with "concurrent writes", as ``build_index`` does.
+    Stop every writer and any ``catch_up`` loop first: a write committed during the
+    rebuild makes it refuse with "concurrent writes", as ``build_index`` does.
     """
     # Provenance (moved out of the docstring, TK123 item 14): procedure and decision:
     # docs/tk121-stall-recovery-2026-10-04.md.
@@ -263,6 +264,8 @@ def rebuild_index(session: Session, source_store_id: str, *,
         cursor.stall_error = None
         session.add(cursor)
         session.commit()
+        # A post-commit check parked by a Store on this session belongs to THIS commit (TK163).
+        raise_post_commit_violation(session)
         return BuildReport(cursor, widx, ruleset, constructor)
     except Exception:
         session.rollback()

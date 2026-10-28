@@ -523,12 +523,12 @@ src/zanzibar/setengine/memberset.py::_starpop	py:function	daaceff738ab7e5e
 src/zanzibar/setengine/memberset.py::intersect	py:function	943520d08202febc
 src/zanzibar/setengine/memberset.py::subtract	py:function	bb907fcf538b4bba
 src/zanzibar/setengine/memberset.py::union	py:function	6e110909c86098fc
-src/zanzibar/store/_store.py::Store._record_stall	py:function	fbabe60b0114c4a7
+src/zanzibar/store/_store.py::Store._record_stall	py:function	d5dd2acd8a816796
 src/zanzibar/store/_store.py::Store.catch_up	py:function	9d752e89b1bd14f7
 src/zanzibar/store/apply.py::_apply_row	py:function	5ce78ea7ff223167
 src/zanzibar/store/apply.py::advance_index	py:function	94a39e3152a32118
 src/zanzibar/store/build.py::_materialise	py:function	62430a3254c77a5d
-src/zanzibar/store/build.py::rebuild_index	py:function	5d9b2a79ce99d456
+src/zanzibar/store/build.py::rebuild_index	py:function	bfa3896a86618bfa
 src/zanzibar/store/source.py::TupleSource._lock_source	py:function	93d03986be2bc7fd
 src/zanzibar/store/source.py::TupleSource.catch_up_evaluator	py:function	aed382a7b7fa190c
 src/zanzibar/store/source.py::TupleSource.undo_last_admission	py:function	b07461227bc96c64

@@ -1,5 +1,5 @@
 """
-setengine -- a raw-tuple, bitmap-backed evaluation backend (spec: set-engine).
+setengine -- a raw-tuple, bitmap-backed evaluation backend.
 
 The opposite endpoint of the memoization spectrum from the graph index: it stores only
 raw set memberships and computes reachability on the fly with bitmap algebra, `and` and

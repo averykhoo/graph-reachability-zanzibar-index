@@ -13,26 +13,28 @@ invariants that can be asserted from a session snapshot:
   I14 crossing-middle completeness: on every crossable shape (bridged in AND out) the
       concrete middle of the w_all -> concrete -> w_any crossing exists -- with both
       bridges -- for every live ENTITY of the shape's type, not merely for entities
-      that happen to intern a node of that shape (2026-08-09).
-  (I4-I10 arrive with the derived-predicate state in later phases.)
+      that happen to intern a node of that shape.
+  I4-I7 cover derived-predicate state (namespace classification, derived-flag
+      exclusivity, residue placement, residue-version monotonicity); I10 is outbox
+      row sanity and I13 node reference-count degree. ``check_invariants`` lists
+      exactly what it runs.
 
 I11 (read purity) and I12 (rejection cleanliness) are *differential* invariants -- they
-compare two snapshots -- so they live with the harness (``snapshot_rows`` here provides
-the id-independent snapshot; the ParityEngine does the comparison).
+compare two snapshots -- so they are not checked here; ``snapshot_rows`` provides the
+id-independent snapshot such a comparison needs.
 
 Paranoia mode: ``install_paranoia(session, ...)`` wires the checker
 to run pre-commit *inside* the transaction (a violation raises ``InvariantViolation``
 and aborts the commit) and post-commit in a *fresh* session on the same bind (catching
-commit-boundary/session-state bugs). Default ON while prerelease; pass
-``paranoia=False`` at the wiring site for benchmarks.
+commit-boundary/session-state bugs). ``Store`` defaults to ``'off'``;
+``install_paranoia`` called directly defaults to ``'full'``.
 
 **Tiers.** Paranoia has four
 levels, because the full
-checker is an O(store) per-commit cost (measured 4.8x-10x on the write path)
-and was therefore never wired into
-production at all -- leaving every runtime corruption detector dark:
+checker is an O(store) per-commit cost (measured 4.8x-10x on the write path),
+too expensive for production, while a cheaper tier can still run there:
 
-  ``'off'``      no listeners (the historical production behaviour).
+  ``'off'``      no listeners (the ``Store`` default).
   ``'residue'``  the CHEAP, security-relevant tier: residue hygiene only (the I6
                  family, minus its two edge-overlap clauses), scoped to the store's
                  ``Residue`` rows and the node ids those rows reference --
@@ -41,9 +43,8 @@ production at all -- leaving every runtime corruption detector dark:
                  ``upos``/``neg`` id class, i.e. a known authorization
                  escalation.
                  PLUS I14 crossing-middle completeness, DELTA-SCOPED to the entities
-                 the transaction touched (``check_i14_delta``): a regression of
-                 the 2026-08-09 middle fix is a fail-OPEN under a negated consumer,
-                 and this tier used to serve it.
+                 the transaction touched (``check_i14_delta``): a missing crossing
+                 middle is a fail-OPEN under a negated consumer.
                  Vacuous on a schema with no crossable shape (every plain OpenFGA
                  schema). An untouched entity's I14 state, and an I13 refcount
                  corruption, stay full-tier only.
@@ -51,8 +52,7 @@ production at all -- leaving every runtime corruption detector dark:
   ``'full'``     everything above: ``check_invariants`` plus the delta-scoped BFS verifier, pre-commit AND post-commit
                  in a fresh session. O(store) per commit, plus O(pairs x edges) for
                  the verifier. Prerelease/test tier.
-  ``'fixpoint'`` everything ``'full'`` runs, PLUS the per-cascade I9 tier
-                 (``DeltaProcessor._check_cascade_fixpoint``): after each cascade
+  ``'fixpoint'`` everything ``'full'`` runs, PLUS a per-cascade I9 check: after each cascade
                  drains, re-reconcile every key the cascade SCHEDULED and require each
                  to be a fixpoint. It is the only detector for an execution-side
                  missed reconcile -- the settle pass is structurally blind to one
@@ -971,10 +971,54 @@ class ParanoiaGuard:
         if not paranoia_at_least(self.level, PARANOIA_FULL):
             return
         with Session(sess.get_bind()) as fresh:
-            with _violations_tagged(self.store_id, 'post-commit'):
-                check_invariants(fresh, self.store_id, self.schema_info,
-                                 residue_versions=self.committed_versions)
+            try:
+                with _violations_tagged(self.store_id, 'post-commit'):
+                    check_invariants(fresh, self.store_id, self.schema_info,
+                                     residue_versions=self.committed_versions)
+            except InvariantViolation as exc:
+                # TK163: raising from inside SQLAlchemy's after_commit hook leaves the
+                # session stuck in the COMMITTED state, so the caller's rollback raised
+                # InvalidRequestError over this violation and the session refused every
+                # later call. A session that opted in (``defer_post_commit_violations``,
+                # what ``Store`` does) gets the violation parked instead; the committer
+                # re-raises it once ``commit()`` has returned on a clean session.
+                if not sess.info.get(_DEFER_POST_COMMIT_KEY):
+                    raise
+                parked = InvariantViolation(
+                    f'{exc} -- found AFTER the commit: the transaction IS committed '
+                    f'(tuple log and index); nothing was rolled back')
+                parked.__cause__ = exc
+                sess.info.setdefault(_PENDING_POST_COMMIT_KEY, []).append(parked)
+            # The rows are committed whether or not the re-check passed: advance the
+            # delta verifier's baseline past them either way, or every later
+            # pre-commit pass re-verifies (and re-fails on) this transaction's range.
             self.wm = outbox_watermark(fresh, self.store_id)
+
+
+_DEFER_POST_COMMIT_KEY = 'zanzibar_defer_post_commit_violations'
+_PENDING_POST_COMMIT_KEY = 'zanzibar_pending_post_commit_violations'
+
+
+def defer_post_commit_violations(session: Session) -> None:
+    """Opt ``session`` in to DEFERRED post-commit violations: a guard's
+    post-commit re-check that fails parks its ``InvariantViolation`` on the session
+    instead of raising from inside SQLAlchemy's ``after_commit`` hook (which leaves the
+    session stuck in the COMMITTED state). The committer must then call
+    ``raise_post_commit_violation`` right after every ``commit()``. Per session, so a
+    guard installed later on the same session defers too."""
+    session.info[_DEFER_POST_COMMIT_KEY] = True
+
+
+def raise_post_commit_violation(session: Session) -> None:
+    """Raise (and clear) the first post-commit ``InvariantViolation`` parked on
+    ``session`` since the last call; a no-op when none is. Further parked ones are
+    attached to it as notes."""
+    pending = session.info.pop(_PENDING_POST_COMMIT_KEY, None)
+    if pending:
+        first = pending[0]
+        for more in pending[1:]:
+            first.add_note(f'also: {more}')
+        raise first
 
 
 class _violations_tagged:

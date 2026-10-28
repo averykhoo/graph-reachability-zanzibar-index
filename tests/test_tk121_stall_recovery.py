@@ -160,7 +160,7 @@ def test_rebuild_that_cannot_succeed_changes_nothing(session, bulk):
     assert cs.check(*MALLORY) is False
     # and the refusal names the recovery, not the pre-TK112 'raise the fan-out cap'
     with pytest.raises(IndexStalled, match='remove the tuple at the source and then '
-                                           r'rebuild_index\(\)'):
+                                           r'call zanzibar\.store\.rebuild_index\('):
         cs.lookup('...', 'user', 'mallory')
 
 

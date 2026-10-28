@@ -116,10 +116,9 @@ At every level, the checks made before the commit abort the write: a violation r
 {py:exc}`zanzibar.InvariantViolation` and nothing is written. At `"full"` and `"fixpoint"`
 the re-check after the commit can also fail, but by then the write has already committed.
 That failure reports corruption that is now stored; it does not undo the write, so a caller
-that sees it must not assume the write failed. (In the current version it reaches the
-caller wrapped in a SQLAlchemy error rather than as a bare
-{py:exc}`zanzibar.InvariantViolation`; [Turn on runtime checks in
-production](../how-to/runtime-checks.md#when-a-check-fails) shows how to recognise it.)
+that sees it must not assume the write failed; its message says that the transaction is
+committed ([Turn on runtime checks in
+production](../how-to/runtime-checks.md#when-a-check-fails)).
 {py:exc}`zanzibar.InvariantViolation` deliberately does not inherit from
 {py:exc}`zanzibar.ZanzibarError`: it reports corruption, not a refused request. How to turn
 the checks on is in [Turn on runtime checks in production](../how-to/runtime-checks.md).
