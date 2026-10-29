@@ -169,7 +169,7 @@ jobs:
           src = pathlib.Path("PYPI_README.md").read_text(encoding="utf-8")
           blocks = re.findall(r"```python\n(.*?)```", src, re.S)
           assert len(blocks) == 1, len(blocks)
-          code, n = re.subn(r"^(\s*)(store\.check\(.*\))\s*#\s*(True|False)\s*$",
+          code, n = re.subn(r"^(\s*)print\((store\.check\(.*\))\)\s*#\s*(True|False)\s*$",
                             r"\1assert (\2) is \3", blocks[0], flags=re.M)
           assert n >= 2, n
           exec(compile(code, "quickstart", "exec"), {})

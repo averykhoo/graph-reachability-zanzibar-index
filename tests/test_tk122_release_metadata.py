@@ -61,6 +61,41 @@ def test_the_pypi_readme_quickstart_runs_and_its_comments_are_true(tmp_path):
     assert r.stdout.strip().endswith("QUICKSTART-OK"), r.stdout
 
 
+PUBLISH = ROOT / ".github" / "workflows" / "publish.yml"
+_SITE_PACKAGES_GUARD = 'assert "site-packages" in zanzibar.__file__, zanzibar.__file__'
+
+
+def _publish_smoke_script() -> str:
+    """The python heredoc of publish.yml's wheel smoke step, minus its site-packages guard.
+
+    TK171 (2026-10-30): the step carried its OWN copy of `_EXPECT`, which TK123 item 22
+    retargeted here but not there. The 0.1.0 publish dry run then died at the smoke step
+    (`AssertionError: 0`, run 40913645340), after the gate and fuzz had passed.
+    """
+    text = PUBLISH.read_text(encoding="utf-8")
+    m = re.search(r"python - <<'PY'\n(.*?)\n\s*PY\n", text, re.S)
+    assert m, "publish.yml lost its smoke-test heredoc"
+    lines = m.group(1).splitlines()
+    indent = min(len(l) - len(l.lstrip()) for l in lines if l.strip())
+    lines = [l[indent:] for l in lines]
+    assert lines.count(_SITE_PACKAGES_GUARD) == 1, "smoke step's site-packages guard changed"
+    lines.remove(_SITE_PACKAGES_GUARD)
+    return "\n".join(lines) + "\n"
+
+
+def test_the_publish_smoke_step_runs_on_the_current_readme(tmp_path):
+    """Run publish.yml's own wheel smoke script against the current PYPI_README.md.
+
+    Sabotage (2026-10-30, TK171): with publish.yml's regex put back to the bare
+    `store.check(...)` form that broke the 0.1.0 dry run -> red, `AssertionError: 0`.
+    """
+    (tmp_path / "PYPI_README.md").write_bytes(README.read_bytes())
+    r = subprocess.run([sys.executable, "-c", _publish_smoke_script()], cwd=tmp_path,
+                       capture_output=True, text=True, env=os.environ.copy(), timeout=300)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "wheel smoke test OK: " + zanzibar.__version__ in r.stdout, r.stdout
+
+
 def test_changelog_newest_version_is_the_package_version():
     versions = re.findall(r"^## \[(\d+\.\d+\.\d+[^\]]*)\]", CHANGELOG.read_text(encoding="utf-8"),
                           re.M)

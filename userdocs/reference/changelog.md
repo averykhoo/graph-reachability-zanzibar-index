@@ -5,7 +5,7 @@ reworded message and every fixed edge case, is the project's
 [CHANGELOG.md](https://github.com/averykhoo/graph-reachability-zanzibar-index/blob/master/CHANGELOG.md).
 Read it before you upgrade: any 0.x release may change the API, including a patch release.
 
-## 0.1.0 (2026-10-26)
+## 0.1.0 (2026-10-30)
 
 A deliberate break of the 0.0.x API, with no compatibility aliases. Code written for 0.0.5
 stops importing until you rename a few things; [Upgrade from 0.0.x to 0.1](../how-to/upgrade-0.1.md)

@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
-## [0.1.0] - 2026-10-26
+## [0.1.0] - 2026-10-30
 
 The public API break of `TK123`: the first-hour review of 0.0.x, accepted in full. There
 are no compatibility aliases. What breaks a 0.0.5 caller, in short:
