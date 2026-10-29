@@ -883,14 +883,19 @@ class Store:
     def lag(self) -> int:
         """Log rows the index has not yet applied (0 = fully caught up). A COUNT
         query -- never materializes rows (ids are globally monotonic across stores,
-        so counting, not id-subtraction, is also what makes the number meaningful)."""
-        from sqlalchemy import func
-        from .models import TupleLog
+        so counting, not id-subtraction, is also what makes the number meaningful).
+        Counted against the cursor row as committed, so another instance's
+        ``catch_up()`` shows up without a ``refresh()``."""
+        # TK172: never the ORM-cached self.cursor.applied_log_id, which nothing
+        # re-reads -- a long-lived monitoring instance reported a stale backlog forever.
+        applied = (select(IndexCursor.applied_log_id)
+                   .where(IndexCursor.id == self.cursor.id)
+                   .scalar_subquery())
         return self.session.exec(
             select(func.count())
             .select_from(TupleLog)
             .where(TupleLog.store_id == self.store_id)
-            .where(TupleLog.id > self.cursor.applied_log_id)
+            .where(TupleLog.id > applied)
         ).one()
 
     # ------------------------------------------------------------------ #

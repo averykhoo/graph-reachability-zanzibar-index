@@ -33,6 +33,39 @@ from here.
 
 ---
 
+## 2026-10-30 — 0.1.0 RELEASED (`TK171` closed); trial bug `TK172` fixed on master; 0.1.1 awaits the tag
+
+rows: TK171 (closed), TK172 (new, closed), TK173 (new, LATER), TK174 (new, NOW)
+
+`task lint: clean (13 checks, 292 task file(s) parsed), 27 warning(s)`
+
+`read: board + note`
+
+`asked: none`
+
+- **User: "do that all and let's get 0.1.0 fully tested and published".** Pushed master
+  `984f00b`; CI there: gate, docs and the 6-seed `fuzz.yml` green, but the **publish dry run
+  failed** at the wheel smoke step (`AssertionError: 0`). Cause: `publish.yml` kept its own
+  copy of the quickstart regex, missed by TK123 item 22. Fixed in `556011e` with a pin that
+  runs the workflow's own heredoc
+  (`tests/test_tk122_release_metadata.py::test_the_publish_smoke_step_runs_on_the_current_readme`,
+  sabotage red with the CI error). Lesson: run the publish dry run before every tag; it is
+  the only thing that ran that step.
+- 0.1.0 CHANGELOG headings re-dated to 2026-10-30; full local gate, push, dry run green on
+  `556011e`, then tag `v0.1.0`. Publish run 40924665912 success through upload; docs
+  deployed; PyPI 0.1.0 JSON 200 (wheel + sdist), first-hand. Before the tag, a local wheel in a
+  fresh venv ran `scripts/installed_smoke.py --version 0.1.0`: 68 passed, 0 failed.
+- Install trial: [`docs/pypi-trial-0.1.0-2026-10-30.md`](../pypi-trial-0.1.0-2026-10-30.md),
+  1 BROKEN / 5 DOC GAP / 17 WORKS, 0 wrong answers over 24,480 differential cells. F18
+  re-run first-hand and fixed as `TK172` (`Store.lag` counts against the committed cursor
+  row; `tests/test_tk172_lag_reads_committed_cursor.py`, red before; PG leg 51 passed / 2
+  documented skips). Doc gaps filed as `TK173`. `TK174` (NOW) = cut and tag 0.1.1 on the
+  user's word.
+
+Still owed: nothing.
+
+---
+
 ## 2026-10-28 — `TK163` and `TK169` closed into 0.1.0; still no tag
 
 rows: TK163 (closed), TK169 (closed), TK171 (unchanged, NOW)

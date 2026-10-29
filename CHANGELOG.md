@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
+## [Unreleased]
+
+### Fixed
+- `Store.lag()` counts against the index cursor as committed, so a long-lived instance sees
+  another instance's `catch_up()` without calling `refresh()` (TK172). It used to keep
+  reporting the old backlog; it never under-reported.
+
 ## [0.1.0] - 2026-10-30
 
 The public API break of `TK123`: the first-hour review of 0.0.x, accepted in full. There

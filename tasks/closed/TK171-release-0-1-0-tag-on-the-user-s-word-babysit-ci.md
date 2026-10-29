@@ -13,7 +13,7 @@ source_hash:
 created: 2026-10-26e
 moved: 2026-10-30
 updated: 2026-10-30
-closed:
+closed: 2026-10-30
 ---
 
 ## What
@@ -48,3 +48,5 @@ User gave the word to tag (2026-10-30). Pre-tag run, in order:
 - CHANGELOG.md and userdocs/reference/changelog.md re-dated to 2026-10-30.
 
 Next: full gate on this tree, commit, push master, re-run the publish dry run (must be green), then tag v0.1.0.
+
+0.1.0 RELEASED 2026-10-30. Tag v0.1.0 on 556011e (annotated, pushed by name after master). Release CI (babysitter, first-hand re-check of conclusions): Publish to PyPI 40924665912 success through the upload step (gate + 5-module fuzz inside it green); docs 40924665866 success, Pages deployed. https://pypi.org/pypi/zanzibar-index/0.1.0/json -> 200 (wheel + sdist), first-hand. Install trial: docs/pypi-trial-0.1.0-2026-10-30.md -- 1 BROKEN (F18, re-run first-hand, filed + fixed on master as TK172), 5 DOC GAP / CONFUSING (TK173), 17 WORKS; smoke script 68/0. 0.1.1 to ship TK172: TK174.
