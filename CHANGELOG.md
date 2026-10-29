@@ -6,12 +6,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
-## [Unreleased]
+## [0.1.1] - 2026-10-30
+
+Fixes from the 0.1.0 fresh-user install trial, and one crash the test suite found. No
+permission answer changes.
 
 ### Fixed
 - `Store.lag()` counts against the index cursor as committed, so a long-lived instance sees
   another instance's `catch_up()` without calling `refresh()` (TK172). It used to keep
   reporting the old backlog; it never under-reported.
+- A write that makes an object its own parent through a `from` chain no longer fails with
+  a raw `IntegrityError` (UNIQUE constraint on `zanzibar_node`) when the same cascade
+  removes a derived node and then needs it again (TK175). On 0.1.0 such a valid tuple could
+  never be written in sync mode, and in async mode it stalled the index until removed. No
+  wrong answer was served.
+
+### Changed
+- Error messages say what to write instead (TK173):
+  - An old 0.0.x keyword (`s_type=`, `o_name=`, ...) is named, with its 0.1 name, instead
+    of an arity error ("got 5"). Any unknown keyword is named the same way.
+  - The six-part keyword form missing `subject_predicate` says to pass
+    `subject_predicate='...'`; "takes 1 arguments" is now "takes 1 argument".
+  - Calling `PySets()` or `RoaringSets()` says to pass the object (`ops=PySets`); it was
+    "'SetOps' object is not callable".
+  - A trailing `# comment` after a definition says comments go on their own line;
+    `[user: *]` says to write `user:*` with no spaces; a malformed `type` line names the
+    allowed characters; `a but not b but not c` suggests `(a but not b) but not c`, and the
+    hint no longer refers to 0.0.4.
+  - A `SchemaMismatch` on a relation both schemas declare says that swapped operands of
+    `or` / `and` / `but not` count as a different schema (they always did; the reference
+    pages said "reordered" without saying which order).
+
+### Documentation
+- Every docs page that opens a SQLite file uses its own file, so following two pages in one
+  folder no longer hits `SchemaMismatch` on a shared `perms.db`.
+- The configuration reference says `ops` takes the `PySets` / `RoaringSets` object itself.
 
 ## [0.1.0] - 2026-10-30
 

@@ -13,6 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
+> 2026-10-30b -- **0.1.1 cut** (`TK172` lag fix + all five `TK173` doc gaps as clearer messages, pinned by `tests/test_tk173_trial_messages.py`; `TK173` closed). The gate found `TK175` (self-parent tuple -> raw `IntegrityError` / async stall; fixed + closed, ships in 0.1.1). `TK174` (NOW): gate, push, dry run, tag `v0.1.1` (user's word given), babysit, PyPI, install trial.
 > 2026-10-30 -- **0.1.0 released** (tag `v0.1.0` on `556011e`, on PyPI; `TK171` closed). The pre-tag publish dry run caught a broken wheel smoke step (fixed + pinned). The install trial found one low-severity bug, `TK172` (`Store.lag()` stale across instances): **fixed on master under `[Unreleased]`, not yet released**. `TK174` (NOW) = cut 0.1.1 and tag on the user's word. Doc gaps: `TK173`.
 > 2026-10-28 -- **`TK163` and `TK169` closed and folded into 0.1.0 (user: "nice to have" before the tag)**. A post-commit `InvariantViolation` now reaches the caller as itself and the `Store` stays usable; public docstrings are leak-free and guarded (`tests/test_tk169_public_docstrings.py`).
 > 2026-10-26e -- 0.1.0 prepared; `TK170` / `TK165` / `TK167` / `TK161` / `TK151` closed. Do not mirror a future `[Unreleased]` heading into `userdocs/reference/changelog.md` under that word.

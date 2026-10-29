@@ -198,7 +198,7 @@ type doc
     define viewer: [user] or viewer from parent
 """
 
-engine = create_engine("sqlite:///perms.db")
+engine = create_engine("sqlite:///two-backends.db")
 SQLModel.metadata.create_all(engine)
 
 store = Store(Session(engine), "my-app", schema=SCHEMA)

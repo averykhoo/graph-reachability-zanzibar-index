@@ -210,3 +210,13 @@ def first_schema_difference(a: SchemaAST, b: SchemaAST) -> str | None:
         if _canonical_expr(a[key]) != _canonical_expr(b[key]):
             return f'{t}#{rel}'
     return None
+
+
+def explain_difference(diff: str) -> str:
+    """``first_schema_difference``'s answer for a message: a relation both schemas declare
+    gets the reason, since swapped ``or`` operands look like an accepted reordering."""
+    # TK173 F14 (0.1.0 install trial): the docs said "reordered" without saying which order.
+    if '(' in diff:
+        return diff
+    return (f"{diff} (its definition differs; type blocks, define lines and restriction "
+            f"lists may be reordered, but the operands of 'or' / 'and' / 'but not' may not)")

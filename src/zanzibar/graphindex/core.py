@@ -1133,6 +1133,12 @@ class ReachabilityIndex:
 
         _node = Node(store_id=self.store_id, predicate=predicate, type=entity_type, name=entity_name,
                        wildcard=wildcard, implicit=implicit)
+        # TK175: the same identity may be PENDING DELETE in this session -- the delta
+        # processor's `_gc_public_node` collected ``doc:d1#r1``, then a self-parent ``from``
+        # chain re-interns it in the same cascade. The unit of work emits a mapper's INSERTs
+        # before its DELETEs, so flush the delete first or the INSERT hits the UNIQUE key.
+        if self.session.deleted:
+            self.session.flush()
         self.session.add(_node)
         self.session.flush()  # flush to get auto-increment id immediately without committing transaction
         # Creation-site invalidation (perf N15): this is the SOLE node-creation choke

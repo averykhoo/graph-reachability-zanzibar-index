@@ -19,7 +19,7 @@ table and the first {py:class}`~zanzibar.Store` would raise
 from sqlmodel import SQLModel, create_engine
 import zanzibar.store  # registers the zanzibar_* tables on SQLModel.metadata
 
-engine = create_engine("sqlite:///perms.db")
+engine = create_engine("sqlite:///tables.db")
 SQLModel.metadata.create_all(engine)  # creates them next to your own tables
 
 print(sorted(n for n in SQLModel.metadata.tables if n.startswith("zanzibar_")))  # -> ['zanzibar_delta_outbox', 'zanzibar_edge', 'zanzibar_index_cursor', 'zanzibar_node', 'zanzibar_relation_tuple', 'zanzibar_residue', 'zanzibar_residue_ref', 'zanzibar_schema_record', 'zanzibar_store', 'zanzibar_tuple_log']

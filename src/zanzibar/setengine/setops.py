@@ -40,6 +40,13 @@ class SetOps:
         # which is what ``help(Store)`` showed for the ``ops=`` default.
         return f'SetOps({self.name!r})'
 
+    def __call__(self, *args, **kwargs):
+        # TK173 F12: the CapWords names read as classes, so ``ops=PySets()`` is the natural
+        # first try; it used to fail as "'SetOps' object is not callable".
+        exported = {'py': 'PySets', 'roaring': 'RoaringSets'}.get(self.name, 'it')
+        raise TypeError(f'{exported} is already a SetOps object, not a class: pass '
+                        f'ops={exported}, without the parentheses')
+
 
 PySets = SetOps(
     name='py',

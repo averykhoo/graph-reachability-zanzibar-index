@@ -5,6 +5,22 @@ reworded message and every fixed edge case, is the project's
 [CHANGELOG.md](https://github.com/averykhoo/graph-reachability-zanzibar-index/blob/master/CHANGELOG.md).
 Read it before you upgrade: any 0.x release may change the API, including a patch release.
 
+## 0.1.1 (2026-10-30)
+
+Fixes from the 0.1.0 install trial and one crash found in testing; no permission answer
+changes.
+
+- {py:meth}`zanzibar.Store.lag` sees another instance's `catch_up()` without a
+  `refresh()`. It used to keep reporting the old backlog (it never under-reported).
+- A tuple that makes an object its own parent (`doc:d1 parent doc:d1`) under a `from`
+  chain could fail with a raw `IntegrityError` and, in async mode, stall the index. It is
+  written normally now. No wrong answer was served.
+- Clearer errors: an old 0.0.x keyword such as `s_type=` is named with its 0.1 name;
+  `ops=PySets()` says to pass `ops=PySets`; a trailing `# comment`, `[user: *]` and a chain
+  of two `but not`s say what to write instead; a `SchemaMismatch` says when swapped
+  `or` / `and` / `but not` operands are the difference.
+- Each docs page uses its own SQLite file, so two pages run in one folder no longer clash.
+
 ## 0.1.0 (2026-10-30)
 
 A deliberate break of the 0.0.x API, with no compatibility aliases. Code written for 0.0.5

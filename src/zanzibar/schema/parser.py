@@ -79,7 +79,12 @@ class _RelationParser:
         expr = self._parse_expr()
         if self.pos != len(self.tokens):
             _, text = self._peek()
-            raise SchemaError(f"relation {self.relation!r}: unexpected token {text!r}")
+            hint = ''
+            if text == '#':
+                # TK173 F7: an OpenFGA model with trailing comments hits this first.
+                hint = '; a comment must be on its own line, not after a definition'
+            raise SchemaError(
+                f"relation {self.relation!r}: unexpected token {text!r}{hint}")
         return expr
 
     def _parse_expr(self) -> Expr:
@@ -187,11 +192,11 @@ def _reject_unparenthesised_but_not(relation: str) -> None:
     # ``a but not (b or c)``, ``(a but not b) or c``.
     raise ShapeNoLongerAccepted(
         f"relation {relation!r}: 'but not' may not share a level with 'or', 'and' or "
-        f"another 'but not'; parenthesise the intended reading, e.g. '(a or b) but not c' "
-        f"or 'a but not (b or c)'",
-        instead=("parenthesise each side of 'but not' as the whole 'or' / 'and' chain "
-                 "beside it, which is how 0.0.4 read it: 'a or b but not c or d' was served "
-                 "as '(a or b) but not (c or d)', so write exactly that"))
+        f"another 'but not'; parenthesise the intended reading, e.g. '(a or b) but not c', "
+        f"'a but not (b or c)' or '(a but not b) but not c'",
+        instead=("parenthesise so that each level holds only 'or's, only 'and's, or one "
+                 "'but not': 'a or b but not c or d' becomes '(a or b) but not (c or d)', "
+                 "and 'a but not b but not c' becomes '(a but not b) but not c'"))
 
 
 def _reject_conditional_restriction(relation: str, bracket: str) -> None:
@@ -364,7 +369,9 @@ def _parse_schema_ast_declared(schema: str) -> tuple[SchemaAST, frozenset[str]]:
             continue
         if head == 'type':
             if len(words) != 2:
-                raise SchemaError(f'malformed type declaration: {line!r}')
+                raise SchemaError(
+                    f'malformed type declaration: {line!r} (write "type <name>", where the '
+                    f'name is one word of letters, digits and _ . / @ + = -)')
             current_type = words[1]
             _validate_declared_name('type', current_type)
             # duplicate type blocks silently merged before -- a pasted schema with a

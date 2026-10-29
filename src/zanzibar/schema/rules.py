@@ -519,7 +519,11 @@ def parse_relation_rule(
         # garbage like '[group#]' / '[user: *]' previously produced dead,
         # never-matching Filters instead of a parse error (blind-audit S-4)
         if not is_valid_identifier(subject_type):
-            raise SchemaError(f'invalid subject type in restriction {subject!r}')
+            hint = ''
+            if ':' in subject_type:
+                # TK173 F7: ``[user: *]`` -- the space is the problem.
+                hint = '; a wildcard is written type:* with no spaces, e.g. [user:*]'
+            raise SchemaError(f'invalid subject type in restriction {subject!r}{hint}')
         if subject_predicate is not None and not is_valid_identifier(subject_predicate):
             raise SchemaError(f'invalid userset relation in restriction {subject!r}')
         direct_assignments.append((subject_type, subject_predicate, subject_name))

@@ -30,7 +30,7 @@ MODEL = {
     ],
 }
 
-engine = create_engine("sqlite:///perms.db")
+engine = create_engine("sqlite:///port-openfga.db")
 SQLModel.metadata.create_all(engine)
 store = Store(Session(engine), "my-app", schema={"authorization_model": MODEL})
 ```

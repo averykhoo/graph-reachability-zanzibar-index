@@ -30,7 +30,7 @@ type doc
     define viewer: [user, group#member]
 """
 
-engine = create_engine("sqlite:///perms.db")
+engine = create_engine("sqlite:///prune-outbox.db")
 SQLModel.metadata.create_all(engine)
 
 store = Store(Session(engine), "my-app", schema=SCHEMA)

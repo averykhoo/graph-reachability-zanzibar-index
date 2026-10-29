@@ -257,7 +257,9 @@ print(missing_id)  # -> 'no-such-store'
    An explicit schema, or set of object-wildcard shapes, disagrees with the one the store
    was created with. Stored schemas never change. Raised by :py:class:`zanzibar.Store`
    and by :py:class:`zanzibar.setengine.SetEngine` opened on a store id that has a stored schema.
-   The same schema reformatted, reordered or with comments is not a mismatch.
+   The same schema reformatted, with comments, or with its type blocks, ``define`` lines or
+   restriction lists reordered is not a mismatch; swapped operands of ``or``, ``and`` or
+   ``but not`` are.
 
 .. py:exception:: zanzibar.UnsupportedByGraphIndex
 

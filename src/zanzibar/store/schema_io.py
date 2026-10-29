@@ -21,7 +21,7 @@ from zanzibar.graphindex import ReachabilityIndex, IndexStore, WildcardIndex
 from zanzibar.setengine import SetEngine
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
 from zanzibar.schema import RuleSet, parse_openfga_schema, parse_schema_ast, validate_store_id
-from zanzibar.schema.syntax import first_schema_difference
+from zanzibar.schema.syntax import explain_difference, first_schema_difference
 from zanzibar.schema.parser import _parse_schema_ast_checked
 from zanzibar.schema.compiler import _validate_object_wildcard_shapes
 # ``SchemaMismatch`` (TK123 A53) and ``PersistedSchemaRefused`` (TK153 F17) live in
@@ -223,7 +223,7 @@ def _verify_same_schema(row: SchemaRecord, schema_text: str,
     if diff is not None:
         raise SchemaMismatch(
             f"explicit schema for store {store_id!r} disagrees with its persisted "
-            f"schema, first at {diff}; schemas are static (write-once)")
+            f"schema, first at {explain_difference(diff)}; schemas are static (write-once)")
 
 
 def _schema_difference(store_id: str, stored_text: str, schema_text: str, *,

@@ -33,6 +33,48 @@ from here.
 
 ---
 
+## 2026-10-30b — 0.1.1 cut: `TK172` lag fix, all five `TK173` doc gaps, gate-found `TK175` crash fixed
+
+rows: TK173 (closed), TK175 (new, closed), TK174 (NOW, in progress)
+
+`task lint: clean (13 checks, 293 task file(s) parsed), 26 warning(s)`
+
+`read: board + note`
+
+`asked: none`
+
+- **User: "Do both and clean up and fix anything outstanding then push a 0.1.1 fix".** That
+  is the word to tag `v0.1.1`. Board had nothing else at NOW/NEXT and no open asks, so
+  "outstanding" = `TK172` (already on master) + `TK173`.
+- All five `TK173` findings re-run FIRST-HAND against `src/` (`.scratch/tk173/probe.py`),
+  every one reproduced, then fixed in messages and docs, not only docs: unknown keywords
+  named (with 0.1 names), `PySets()` explains itself, token-level parse errors name the
+  rewrite, `but not` hint loses the 0.0.4 history, `SchemaMismatch` says operand order
+  counts, docs pages each get their own SQLite file. **F14 decided, not narrowed by accident:**
+  swapped `or` operands stay refused, because the compiled leaf numbering follows operand
+  order and `tests/test_tk136_schema_reopen_semantic.py` already pins it; the docs were what
+  overpromised. Pins: `tests/test_tk173_trial_messages.py`, 9 sabotages all red.
+- `__version__` 0.1.1; `CHANGELOG.md` `## [0.1.1] - 2026-10-30`; userdocs changelog mirrored.
+  Release steps (gate, push, dry run, tag, babysit, PyPI, trial) are on the `TK174` log.
+- **The gate found a real 0.1.0 bug, `TK175`, unrelated to this change.** `tests-tile:4/4`
+  went red on `test_hypothesis.py::test_add_then_remove_restores_row_multiset` (a rare draw;
+  the same tile was green one run earlier): a self-parent tuple under a `from` chain made one
+  cascade delete a derived node and re-create it, and SQLAlchemy flushed the INSERT before the
+  DELETE. Sync writes of that valid tuple raised a raw `IntegrityError`; async stalled. No
+  wrong answer. A diagnosis agent reproduced it on HEAD; the session re-ran the repro, applied
+  a one-guard fix in `core.py::ReachabilityIndex.node` and pinned it
+  (`tests/test_tk175_self_parent_node_recreate.py`, 3 red without the guard; its first draft
+  had an async leg that passed under sabotage). Map:
+  [`docs/tk175-self-parent-node-recreate-2026-10-30.md`](../tk175-self-parent-node-recreate-2026-10-30.md).
+  Lesson: "flake" was not the answer; the draw was a real bug.
+- Two gate reds of my own on the way: the generated counts block (regenerated, floor
+  ratcheted 3118 -> 3128 by the tool), and a new test reading `README.md` outside `t2c`
+  plus a task id in a public docstring (both fixed).
+
+Still owed: nothing.
+
+---
+
 ## 2026-10-30 — 0.1.0 RELEASED (`TK171` closed); trial bug `TK172` fixed on master; 0.1.1 awaits the tag
 
 rows: TK171 (closed), TK172 (new, closed), TK173 (new, LATER), TK174 (new, NOW)

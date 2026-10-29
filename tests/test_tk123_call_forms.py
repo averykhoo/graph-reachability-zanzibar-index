@@ -253,7 +253,7 @@ def test_wrong_arity_and_keywords_name_both_forms(engine):
             store.check('user:alice', 'viewer', 'doc:d1', user='user:bob')
         with pytest.raises(TypeError):
             store.check('user:alice', 'viewer', object_name='d1')
-        with pytest.raises(TypeError, match='takes 1 arguments'):
+        with pytest.raises(TypeError, match=r'takes 1 argument \(user\)'):
             store.lookup('user', 'alice')
         with pytest.raises(MalformedTupleString):
             store.add_tuple('user:alice', 'viewer', 'doc:d1#viewer')

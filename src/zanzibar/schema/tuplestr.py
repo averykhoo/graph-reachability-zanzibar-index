@@ -93,6 +93,14 @@ _LOOKUP_LONG = ('subject_predicate', 'subject_type', 'subject_name')
 _LOOKUP_SHORT = ('user',)
 _REVERSE_LONG = ('relation', 'object_type', 'object_name')
 _REVERSE_SHORT = ('relation', 'object')
+_RENAMED_0_1 = {'s_type': 'subject_type', 's_name': 'subject_name',
+                'o_type': 'object_type', 'o_name': 'object_name'}
+
+
+def _form(names: tuple[str, ...]) -> str:
+    """``'3 arguments (user, relation, object)'`` -- the singular for one."""
+    noun = 'argument' if len(names) == 1 else 'arguments'
+    return f'{len(names)} {noun} ({", ".join(names)})'
 
 
 def _bind(method: str, args: tuple, kwargs: dict,
@@ -101,6 +109,17 @@ def _bind(method: str, args: tuple, kwargs: dict,
 
     A keyword only one form has decides; otherwise the argument count does."""
     keys = set(kwargs)
+    unknown = sorted(keys - set(long) - set(short))
+    if unknown:
+        # TK173 F9: an old 0.0.x keyword (``s_type=``) used to surface as an arity error
+        # ("got 5") that never named it.
+        noun = 'argument' if len(unknown) == 1 else 'arguments'
+        renamed = [f'{k} is now {_RENAMED_0_1[k]}' for k in unknown if k in _RENAMED_0_1]
+        hint = f' (0.1 renamed the 0.0.x keywords: {", ".join(renamed)})' if renamed else ''
+        raise TypeError(
+            f'{method}() got an unexpected keyword {noun} '
+            f'{", ".join(repr(k) for k in unknown)}{hint}; it takes {_form(short)} or '
+            f'{_form(long)}')
     if keys & (set(short) - set(long)):
         is_short = True
     elif keys & (set(long) - set(short)):
@@ -108,15 +127,17 @@ def _bind(method: str, args: tuple, kwargs: dict,
     else:
         count = len(args) + len(kwargs)
         if count not in (len(long), len(short)):
-            raise TypeError(
-                f'{method}() takes {len(short)} arguments ({", ".join(short)}) or '
-                f'{len(long)} ({", ".join(long)}); got {count}')
+            raise TypeError(f'{method}() takes {_form(short)} or {_form(long)}; got {count}')
         is_short = count == len(short)
     names = short if is_short else long
     try:
         bound = _signature(names).bind(*args, **kwargs)
     except TypeError as exc:
-        raise TypeError(f'{method}({", ".join(names)}): {exc}') from None
+        hint = ''
+        filled = set(names[:len(args)]) | keys
+        if 'subject_predicate' in names and 'subject_predicate' not in filled:
+            hint = " (pass subject_predicate='...' for a plain subject such as user:alice)"
+        raise TypeError(f'{method}({", ".join(names)}): {exc}{hint}') from None
     return is_short, tuple(bound.arguments[n] for n in names)
 
 

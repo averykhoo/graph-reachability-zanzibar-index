@@ -33,7 +33,7 @@ type doc
     define viewer: [user] but not blocked
 """
 
-engine = create_engine("sqlite:///perms.db")
+engine = create_engine("sqlite:///change-schema.db")
 SQLModel.metadata.create_all(engine)
 
 # The store as it exists today.

@@ -43,7 +43,8 @@ from zanzibar.schema import (
     Intersection,
     Exclusion,
 )
-from zanzibar.schema.syntax import (declared_relations, first_schema_difference,
+from zanzibar.schema.syntax import (declared_relations, explain_difference,
+                                    first_schema_difference,
                                     no_restriction_message)
 from zanzibar.schema.parser import _parse_schema_ast_checked
 from zanzibar.schema.tuplestr import shape_filter
@@ -259,7 +260,7 @@ def _assert_schema_matches_record(store_id: str, record, schema: str, ast,
                     .replace('only in the second schema', 'only in the schema passed here'))
         raise SchemaMismatch(
             f'SetEngine on store {store_id!r}: the schema passed here disagrees with the '
-            f'persisted schema of this store, first at {diff} '
+            f'persisted schema of this store, first at {explain_difference(diff)} '
             f'(a Store owns this store id, and schemas '
             f'are write-once). Answering under a different schema would give different '
             f'answers from the same tuples, e.g. a dropped "but not" reads as ALLOW. Open '
