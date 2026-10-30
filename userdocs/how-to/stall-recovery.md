@@ -29,6 +29,7 @@ group to the bottom one doubles with every layer, and the index stores that coun
 32-bit column, so the last tuple pushes it past the limit.
 
 ```python
+from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
 from zanzibar import Store
 
@@ -41,6 +42,7 @@ type group
     define member: [user, group#member]
 """
 
+Path("stall.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///stall.db")
 SQLModel.metadata.create_all(engine)
 

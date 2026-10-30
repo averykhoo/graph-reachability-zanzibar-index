@@ -33,11 +33,11 @@ from here.
 
 ---
 
-## 2026-10-30b — 0.1.1 cut: `TK172` lag fix, all five `TK173` doc gaps, gate-found `TK175` crash fixed
+## 2026-10-30b — 0.1.1 RELEASED (`TK173`/`TK174`/`TK175` closed); trial BROKEN `TK176` fixed; 0.1.2 awaits the tag
 
-rows: TK173 (closed), TK175 (new, closed), TK174 (NOW, in progress)
+rows: TK173 (closed), TK174 (closed), TK175 (new, closed), TK176 (new, closed), TK177 (new, LATER), TK178 (new, NOW)
 
-`task lint: clean (13 checks, 293 task file(s) parsed), 26 warning(s)`
+`task lint: clean (13 checks, 296 task file(s) parsed), 27 warning(s)`
 
 `read: board + note`
 
@@ -70,6 +70,17 @@ rows: TK173 (closed), TK175 (new, closed), TK174 (NOW, in progress)
 - Two gate reds of my own on the way: the generated counts block (regenerated, floor
   ratcheted 3118 -> 3128 by the tool), and a new test reading `README.md` outside `t2c`
   plus a task id in a public docstring (both fixed).
+- **Released.** Commit `047bc0b` pushed; on it gate, docs, the 6-seed `fuzz.yml` and the
+  publish dry run all green (first-hand `gh run list --commit`); then tag `v0.1.1`. Publish
+  run 40976245515 success through upload, docs deployed, PyPI 0.1.1 JSON 200 (wheel + sdist),
+  first-hand. CI watched by two babysitter agents.
+- Install trial: [`docs/pypi-trial-0.1.1-2026-10-30.md`](../pypi-trial-0.1.1-2026-10-30.md),
+  1 BROKEN / 4 DOC GAP / 19 WORKS, smoke 68/0; every 0.1.1 claim held on the wheel. **F19
+  BROKEN, re-run first-hand:** `Store(sync=None)` / `sync=0` silently chose async mode. Fixed
+  with F10 (`ops="pysets"`), F5 (docs pages now delete their SQLite file first) and F17 (the
+  self-parent note) as `TK176`, pinned by `tests/test_tk176_open_arg_types.py` (3 sabotages
+  red), under CHANGELOG `[Unreleased]`. F21 (message notation) filed as `TK177`. `TK178` (NOW)
+  = cut 0.1.2: the user's word covered 0.1.1 only, so it is NOT tagged.
 
 Still owed: nothing.
 

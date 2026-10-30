@@ -73,6 +73,7 @@ Here is the gap in action. A synchronous store answers at once; an async one ans
 an index that has not seen the write:
 
 ```python
+from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
 from zanzibar import Store
 
@@ -85,6 +86,7 @@ type doc
     define viewer: [user]
 """
 
+Path("consistency.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///consistency.db")
 SQLModel.metadata.create_all(engine)
 

@@ -42,6 +42,7 @@ In a real deployment you would set the variable in the process environment inste
 code:
 
 ```python
+from pathlib import Path
 import os
 os.environ["ZANZIBAR_MAX_CLOSURE_FANOUT"] = "5"   # must be set before the Store opens
 
@@ -60,6 +61,7 @@ type doc
     define viewer: [user, group#member]
 """
 
+Path("fanout.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///fanout.db")
 SQLModel.metadata.create_all(engine)
 store = Store(Session(engine), "my-app", schema=SCHEMA)

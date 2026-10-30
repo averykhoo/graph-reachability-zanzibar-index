@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
+## [Unreleased]
+
+### Fixed
+- `Store(sync=...)` and `Store.adopt(sync=...)` take only `True` or `False` (TK176). Any
+  other value used to pick the mode by truthiness without a word: `sync=None` or `sync=0`
+  silently gave async mode, and `sync="false"` gave sync mode. It is now a `TypeError`.
+- `ops=` on `Store` and `SetEngine` refuses anything but `PySets` / `RoaringSets` with a
+  `TypeError` naming them; `ops="pysets"` used to fail later with
+  `'str' object has no attribute 'new'` (TK176).
+
+### Documentation
+- Every docs page that opens a SQLite file deletes it first, so running a page twice gives
+  the same output (TK176).
+- The 0.1.1 note on self-parent tuples now says when one is accepted (TK176).
+
 ## [0.1.1] - 2026-10-30
 
 Fixes from the 0.1.0 fresh-user install trial, and one crash the test suite found. No
@@ -17,7 +32,9 @@ permission answer changes.
   reporting the old backlog; it never under-reported.
 - A write that makes an object its own parent through a `from` chain no longer fails with
   a raw `IntegrityError` (UNIQUE constraint on `zanzibar_node`) when the same cascade
-  removes a derived node and then needs it again (TK175). On 0.1.0 such a valid tuple could
+  removes a derived node and then needs it again (TK175). This is for schemas that accept
+  such a tuple; one whose `from` chain recurses through `parent` still refuses it as a
+  cycle (`AdmissionRejected`), as before. On 0.1.0 such a valid tuple could
   never be written in sync mode, and in async mode it stalled the index until removed. No
   wrong answer was served.
 

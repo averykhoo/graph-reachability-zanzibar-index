@@ -14,6 +14,7 @@ string, bare or wrapped as `{"authorization_model": {...}}`, the form an OpenFGA
 returns):
 
 ```python
+from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
 from zanzibar import Store
 
@@ -30,6 +31,7 @@ MODEL = {
     ],
 }
 
+Path("port-openfga.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///port-openfga.db")
 SQLModel.metadata.create_all(engine)
 store = Store(Session(engine), "my-app", schema={"authorization_model": MODEL})

@@ -13,8 +13,10 @@ changes.
 - {py:meth}`zanzibar.Store.lag` sees another instance's `catch_up()` without a
   `refresh()`. It used to keep reporting the old backlog (it never under-reported).
 - A tuple that makes an object its own parent (`doc:d1 parent doc:d1`) under a `from`
-  chain could fail with a raw `IntegrityError` and, in async mode, stall the index. It is
-  written normally now. No wrong answer was served.
+  chain could fail with a raw `IntegrityError` and, in async mode, stall the index. Where
+  the schema accepts such a tuple, it is written normally now; a `from` chain that recurses
+  through `parent` still refuses it as a cycle, as documented for
+  {py:exc}`zanzibar.AdmissionRejected`. No wrong answer was served.
 - Clearer errors: an old 0.0.x keyword such as `s_type=` is named with its 0.1 name;
   `ops=PySets()` says to pass `ops=PySets`; a trailing `# comment`, `[user: *]` and a chain
   of two `but not`s say what to write instead; a `SchemaMismatch` says when swapped

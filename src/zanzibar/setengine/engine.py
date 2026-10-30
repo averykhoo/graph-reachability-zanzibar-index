@@ -52,7 +52,7 @@ from zanzibar.schema.compiler import _validate_object_wildcard_shapes
 from zanzibar.schema.errors import (PersistedSchemaRefused, SchemaMismatch,
                                     ShapeNoLongerAccepted, ZanzibarError,
                                     reject_ellipsis_predicate)
-from .setops import SetOps, DEFAULT_SETOPS
+from .setops import SetOps, DEFAULT_SETOPS, require_setops
 from .models import RelationTuple
 from . import memberset as ms
 from .memberset import MemberSet
@@ -571,6 +571,7 @@ class SetEngine:
         ``object_wildcard_shapes``). Omitting it for a store with no persisted schema
         raises ``TypeError``."""
         validate_store_id(store_id)  # TK127 follow-up: before any statement
+        require_setops(ops)          # TK176 (0.1.1 install trial F10)
         if schema is None:
             # TK123 item 9: the schema is optional when the store has a SchemaRecord.
             record = _schema_record_row(session, store_id)

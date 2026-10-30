@@ -66,6 +66,14 @@ try:
 except ImportError:                 # pyroaring is a declared dependency; guard only for dev envs
     RoaringSets = None
 
+def require_setops(ops: object) -> None:
+    """Refuse an ``ops=`` argument that is not a ``SetOps`` object (``ops="pysets"`` used to
+    fail later as ``'str' object has no attribute 'new'``)."""
+    if not isinstance(ops, SetOps):
+        raise TypeError(f'ops must be a SetOps (PySets or RoaringSets, from '
+                        f'zanzibar.setengine), not {ops!r}')
+
+
 # Default is roaring (spec §1); PySets is the always-available fallback.
 DEFAULT_SETOPS = RoaringSets if RoaringSets is not None else PySets
 

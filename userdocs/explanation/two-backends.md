@@ -139,6 +139,7 @@ grant is committed in the middle of that work, and then the application's work f
 Its own row is rolled back; the grant is not:
 
 ```python
+from pathlib import Path
 from sqlmodel import Field, SQLModel, Session, create_engine, select
 from zanzibar import Store
 
@@ -146,6 +147,7 @@ class Order(SQLModel, table=True):              # one of your application's tabl
     id: int | None = Field(default=None, primary_key=True)
     item: str
 
+Path("txn.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///txn.db")
 SQLModel.metadata.create_all(engine)
 SCHEMA = """
@@ -177,6 +179,7 @@ store's saved schema and its tuples, and refuses to write. It loads the tuples o
 it is opened: to see later writes, call its `rebuild()` method or open a new one.
 
 ```python
+from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
 from zanzibar import Store
 from zanzibar.setengine import SetEngine
@@ -198,6 +201,7 @@ type doc
     define viewer: [user] or viewer from parent
 """
 
+Path("two-backends.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///two-backends.db")
 SQLModel.metadata.create_all(engine)
 

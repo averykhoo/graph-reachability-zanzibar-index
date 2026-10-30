@@ -16,9 +16,11 @@ table and the first {py:class}`~zanzibar.Store` would raise
 {py:exc}`zanzibar.TablesNotCreated` naming the other nine.
 
 ```python
+from pathlib import Path
 from sqlmodel import SQLModel, create_engine
 import zanzibar.store  # registers the zanzibar_* tables on SQLModel.metadata
 
+Path("tables.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///tables.db")
 SQLModel.metadata.create_all(engine)  # creates them next to your own tables
 

@@ -239,6 +239,7 @@ store id, and run this once per store id:
 
 ```python
 # not run: needs a SQLite file written by 0.0.x
+from pathlib import Path
 import json
 import sqlite3
 
@@ -256,6 +257,7 @@ tuples = old.execute(
     " from zanzibar_relation_tuple where store_id = ? order by id", ("app",)).fetchall()
 old.close()
 
+Path("new.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///new.db")
 SQLModel.metadata.create_all(engine)
 with Session(engine) as session:

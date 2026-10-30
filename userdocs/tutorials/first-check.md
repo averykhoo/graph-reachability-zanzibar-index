@@ -48,9 +48,11 @@ The store keeps its data in database tables. Add the code that creates a SQLite 
 file, creates the tables, and opens a store named `"my-app"` with your schema:
 
 ```python
+from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
 from zanzibar import Store
 
+Path("first-check.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///first-check.db")
 SQLModel.metadata.create_all(engine)
 

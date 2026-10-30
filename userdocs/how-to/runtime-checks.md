@@ -9,6 +9,7 @@ default. For anything security-sensitive, turn on the `residue` level.
 Pass `paranoia="residue"` when you open the store:
 
 ```python
+from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
 from zanzibar import Store
 
@@ -22,6 +23,7 @@ type doc
     define viewer: [user] but not blocked
 """
 
+Path("checks.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///checks.db")
 SQLModel.metadata.create_all(engine)
 

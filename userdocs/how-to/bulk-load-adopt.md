@@ -20,6 +20,7 @@ tuple-log rows and **never commits**: you commit once, at the end.
 subject), subject type, subject name, relation, object type, object name.
 
 ```python
+from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
 from zanzibar import Store
 from zanzibar.setengine import SetEngine
@@ -36,6 +37,7 @@ type doc
     define viewer: [user, group#member]
 """
 
+Path("app.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///app.db")
 SQLModel.metadata.create_all(engine)
 

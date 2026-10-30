@@ -38,7 +38,7 @@ from zanzibar.graphindex.invariants import (PARANOIA_ENV_VAR, PARANOIA_OFF,
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.graphindex.wildcard import LookupResult
 from zanzibar.setengine.engine import StaleLookupIds
-from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
+from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS, require_setops
 from zanzibar.schema import AdmissionRejected, IndexResourceLimit, validate_store_id
 from zanzibar.schema.errors import ClosureFanoutExceeded
 from zanzibar.schema.errors import SchemaError, ZanzibarError, reject_ellipsis_predicate
@@ -175,6 +175,16 @@ class UnloggedTuplesPresent(ZanzibarError, RuntimeError):
     ``RelationTuple`` snapshot instead of from the log."""
     # Provenance (moved out of the docstring, TK123 item 14): TK140; 0.0.4 trial BROKEN-3,
     # p09; docs/tk140-one-write-path-per-store-2026-10-13.md.
+
+
+def _check_open_args(ops: object, sync: object) -> None:
+    """``ops`` and ``sync`` of ``Store`` / ``Store.adopt``, before any statement (TK176, the
+    0.1.1 install trial F10 / F19)."""
+    require_setops(ops)
+    # Only a real bool: ``sync=None`` / ``0`` silently chose async mode (an untokened check
+    # may then serve a revoked grant until catch_up), and ``sync="false"`` chose sync.
+    if not isinstance(sync, bool):
+        raise TypeError(f'sync must be True (sync mode) or False (async mode), not {sync!r}')
 
 
 def _schema_text(schema) -> str | None:
@@ -451,6 +461,7 @@ class Store:
         # TK123 item 10: this class owns its transactions (it commits on success and
         # rolls back on failure), so a caller's pending ORM rows would ride along.
         _require_clean_session(session, 'Store')
+        _check_open_args(ops, sync)
         self.session = session
         self.store_id = store_id
         self.sync = sync
@@ -573,9 +584,7 @@ class Store:
         # built. Store.__init__ checks them too, but only after build_index has committed,
         # which left a half-adopted id whose retry raised IndexExists.
         resolve_paranoia_level(paranoia, default=cls.DEFAULT_PARANOIA)
-        if not isinstance(ops, SetOps):
-            raise TypeError(f'ops must be a SetOps (PySets or RoaringSets), '
-                            f'not {type(ops).__name__}')
+        _check_open_args(ops, sync)
         try:
             # D3: refuse before building. build_index checks neither, so without these an
             # index would be committed and only the Store open below would refuse.

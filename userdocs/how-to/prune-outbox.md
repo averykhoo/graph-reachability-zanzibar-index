@@ -14,6 +14,7 @@ Use {py:func}`zanzibar.graphindex.prune_outbox` with the store's current outbox 
 {py:func}`zanzibar.graphindex.outbox_watermark`, in a session of its own, and commit:
 
 ```python
+from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine, text
 from zanzibar import Store
 from zanzibar.graphindex import outbox_watermark, prune_outbox
@@ -30,6 +31,7 @@ type doc
     define viewer: [user, group#member]
 """
 
+Path("prune-outbox.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///prune-outbox.db")
 SQLModel.metadata.create_all(engine)
 

@@ -10,6 +10,7 @@ application at the new store id.
 ## 1. Create the new store
 
 ```python
+from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine, select
 from zanzibar import SchemaMismatch, Store
 from zanzibar.setengine import RelationTuple
@@ -33,6 +34,7 @@ type doc
     define viewer: [user] but not blocked
 """
 
+Path("change-schema.db").unlink(missing_ok=True)   # start from an empty database each run
 engine = create_engine("sqlite:///change-schema.db")
 SQLModel.metadata.create_all(engine)
 
