@@ -175,9 +175,9 @@ def _iter_exprs(expr):
 
 def _names_by_type(pool):
     names = {}
-    for (_sp, st, sn, _rel, ot, on) in pool:
+    for (_sp, stype, sn, _rel, ot, on) in pool:
         if sn != '*':
-            names.setdefault(st, set()).add(sn)
+            names.setdefault(stype, set()).add(sn)
         if on != '*':
             names.setdefault(ot, set()).add(on)
     return names
@@ -320,19 +320,19 @@ def _check_graph_reverse(widx, oc, subjects, obj, res):
             f'uncovered or has a node')
         assert not oc(p, t, n, rel, ot, on), (
             f'graph.lookup_reverse{obj}: implicit exclusion {t}:{n}#{p} is oracle-TRUE')
-    for (sp, st, sn) in subjects:                               # G3 exactness
-        expected = oc(sp, st, sn, rel, ot, on)
+    for (sp, stype, sn) in subjects:                               # G3 exactness
+        expected = oc(sp, stype, sn, rel, ot, on)
         if sn == '*':
-            got = (st, sp) in markers_any
+            got = (stype, sp) in markers_any
         else:
-            nid = _gnode_id(widx, sp, st, sn)
+            nid = _gnode_id(widx, sp, stype, sn)
             got = ((nid is not None and nid in res.node_ids)
-                   or (st, sn, sp) in res.implicit_keys) or (
-                (st, sp) in markers_any
+                   or (stype, sn, sp) in res.implicit_keys) or (
+                (stype, sp) in markers_any
                 and not (nid is not None and nid in res.excluded_node_ids)
-                and (st, sn, sp) not in res.implicit_excluded_keys)
+                and (stype, sn, sp) not in res.implicit_excluded_keys)
         assert got == expected, (
-            f'graph.lookup_reverse{obj} vs oracle on subject ({sp},{st},{sn}): '
+            f'graph.lookup_reverse{obj} vs oracle on subject ({sp},{stype},{sn}): '
             f'graph={got} oracle={expected}')
 
 
@@ -364,15 +364,15 @@ def _check_set_expand(se, oc, subjects, obj, m):
             f'set.expand{obj} [{se.ops.name}]: ineg key {t}:{n}#{p} is interned or outside stars')
         assert not oc(p, t, n, rel, ot, on), (
             f'set.expand{obj} [{se.ops.name}]: ineg key {t}:{n}#{p} is oracle-TRUE')
-    for (sp, st, sn) in subjects:                               # S1 exactness
-        expected = oc(sp, st, sn, rel, ot, on)
+    for (sp, stype, sn) in subjects:                               # S1 exactness
+        expected = oc(sp, stype, sn, rel, ot, on)
         if sn == '*':
-            got = (st, sp) in m.stars
+            got = (stype, sp) in m.stars
             assert got == expected, (
-                f'set.expand{obj} [{se.ops.name}] star shape ({st},{sp}): '
+                f'set.expand{obj} [{se.ops.name}] star shape ({stype},{sp}): '
                 f'stars={got} oracle={expected}')
             continue
-        uid = se.interner.get(st, sn, sp)
+        uid = se.interner.get(stype, sn, sp)
         if uid is None:
             # uninterned subject (entity or userset): star coverage, or -- since TK144 --
             # the KEY channel: OpenFGA's implicit userset self-relation makes an
@@ -380,13 +380,13 @@ def _check_set_expand(se, oc, subjects, obj, m):
             # ``doc:d1``), and ``expand`` never interns on read, so it lists such keys in
             # ``ipos`` / excludes them in ``ineg``. Before TK144 (the X3 fix) every
             # oracle-true userset subject was interned or star-covered.
-            got = m.contains_key((st, sn, sp))
+            got = m.contains_key((stype, sn, sp))
         elif sp == '...':
-            got = m.contains_entity(uid, st)
+            got = m.contains_entity(uid, stype)
         else:
-            got = m.contains_userset(uid, (st, sp))
+            got = m.contains_userset(uid, (stype, sp))
         assert got == expected, (
-            f'set.expand{obj} [{se.ops.name}] vs oracle on subject ({sp},{st},{sn}): '
+            f'set.expand{obj} [{se.ops.name}] vs oracle on subject ({sp},{stype},{sn}): '
             f'set={got} oracle={expected}')
 
 
@@ -418,20 +418,20 @@ def _check_set_reverse(se, oc, subjects, obj, m, res):
         assert n != '*' and (t, p) in res.markers and not oc(p, t, n, rel, ot, on), (
             f'set.lookup_reverse{obj} [{se.ops.name}] excluded {t}:{n}#{p}, which is '
             f'star-only, marker-uncovered, or oracle-true')
-    for (sp, st, sn) in subjects:                               # two-sided exactness
-        expected = oc(sp, st, sn, rel, ot, on)
+    for (sp, stype, sn) in subjects:                               # two-sided exactness
+        expected = oc(sp, stype, sn, rel, ot, on)
         if sn == '*':
-            got = (st, sp) in res.markers
+            got = (stype, sp) in res.markers
         else:
-            uid = se.interner.get(st, sn, sp)
+            uid = se.interner.get(stype, sn, sp)
             got = ((uid is not None and uid in res.node_ids)
-                   or (st, sn, sp) in res.implicit_keys) or (
-                (st, sp) in res.markers
+                   or (stype, sn, sp) in res.implicit_keys) or (
+                (stype, sp) in res.markers
                 and not (uid is not None and uid in res.excluded_node_ids)
-                and (st, sn, sp) not in res.implicit_excluded_keys)
+                and (stype, sn, sp) not in res.implicit_excluded_keys)
         assert got == expected, (
             f'set.lookup_reverse{obj} [{se.ops.name}] vs oracle on subject '
-            f'({sp},{st},{sn}): set={got} oracle={expected} (node_ids, or a marker '
+            f'({sp},{stype},{sn}): set={got} oracle={expected} (node_ids, or a marker '
             f'minus excluded_node_ids)')
 
 

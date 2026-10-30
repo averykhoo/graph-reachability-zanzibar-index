@@ -89,12 +89,12 @@ from __future__ import annotations
 
 import os
 from collections import Counter
-from typing import NamedTuple, TYPE_CHECKING
+from typing import NamedTuple, NoReturn, TYPE_CHECKING
 
 import json
 
 from sqlalchemy import event, tuple_
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from .models import DeltaOutbox, Edge, Node, ResidueRef, Residue
 from .outbox import outbox_rows, outbox_watermark
@@ -199,7 +199,7 @@ def normalize_paranoia_level(value: 'bool | int | str | None') -> str:
         f'(or a bool, the int 0 / 1, or one of {sorted(_BOOLISH)})')
 
 
-def resolve_paranoia_level(explicit: 'bool | str | None' = None, *,
+def resolve_paranoia_level(explicit: 'bool | int | str | None' = None, *,
                            default: str = PARANOIA_OFF,
                            env: 'dict[str, str] | None' = None) -> str:
     """Precedence: explicit argument > ``ZANZIBAR_PARANOIA`` > ``default``.
@@ -222,7 +222,7 @@ def _load(session: Session, store_id: str) -> tuple[list[Node], list[Edge]]:
     return nodes, edges
 
 
-def _fail(msg: str) -> None:
+def _fail(msg: str) -> NoReturn:
     raise InvariantViolation(msg)
 
 
@@ -378,7 +378,9 @@ def check_invariants(session: Session, store_id: str,
     # defeats bridge GC and derived-node GC -- visible to paranoia instead of latent.
     # Runs AFTER the bridge checks: a missing/extra bridge edge also skews degree,
     # and I3 is the more specific diagnosis for that corruption.
-    degree: dict[int, int] = {}
+    # Keyed by Node.id, typed ``int | None`` by the ORM (None only before a flush;
+    # every row here was loaded from the database).
+    degree: dict[int | None, int] = {}
     for e in edges:
         if e.direct_edge_count > 0:
             degree[e.subject_id] = degree.get(e.subject_id, 0) + e.direct_edge_count
@@ -478,22 +480,25 @@ def check_i14_delta(session: Session, store_id: str, schema_info: 'SchemaInfo',
     concrete: list[_I14NodeFacts] = []
     for t in sorted(types):
         concrete += [_I14NodeFacts(*r) for r in session.exec(
-            select(*_I14_COLS).where(Node.store_id == store_id)
+            select(*_I14_COLS)  # type: ignore[call-overload]  # sqlmodel stubs overload select() for <=4 columns only
+            .where(Node.store_id == store_id)
             .where(Node.type == t).where(Node.wildcard == '')).all()]
     keys = sorted(entities)
     # Chunked: SQLite's default bound-parameter limit is 999.
     for i in range(0, len(keys), 400):
         chunk = keys[i:i + 400]
         concrete += [_I14NodeFacts(*r) for r in session.exec(
-            select(*_I14_COLS).where(Node.store_id == store_id)
+            select(*_I14_COLS)  # type: ignore[call-overload]  # sqlmodel stubs overload select() for <=4 columns only
+            .where(Node.store_id == store_id)
             .where(Node.wildcard == '')
-            .where(tuple_(Node.type, Node.name).in_(chunk))).all()]
+            .where(tuple_(col(Node.type), col(Node.name)).in_(chunk))).all()]
     if not concrete:
         return
     wildcards = [_I14NodeFacts(*r) for r in session.exec(
-        select(*_I14_COLS).where(Node.store_id == store_id)
+        select(*_I14_COLS)  # type: ignore[call-overload]  # sqlmodel stubs overload select() for <=4 columns only
+        .where(Node.store_id == store_id)
         .where(Node.wildcard != '')
-        .where(Node.type.in_(sorted(crossable_types)))).all()]
+        .where(col(Node.type).in_(sorted(crossable_types)))).all()]
 
     # Only the bridge pairs the clause asks about: (middle -> w_any), (w_all -> middle).
     wildcard_ids = [n.id for n in wildcards]
@@ -501,15 +506,15 @@ def check_i14_delta(session: Session, store_id: str, schema_info: 'SchemaInfo',
     direct_edge_set: set[tuple[int, int]] = set()
     if wildcard_ids:
         for i in range(0, len(mid_ids), 400):
-            chunk = mid_ids[i:i + 400]
+            id_chunk = mid_ids[i:i + 400]
             for s, o in session.exec(
                     select(Edge.subject_id, Edge.object_id)
                     .where(Edge.store_id == store_id)
                     .where(Edge.direct_edge_count > 0)
-                    .where(((Edge.subject_id.in_(chunk))
-                            & (Edge.object_id.in_(wildcard_ids)))
-                           | ((Edge.object_id.in_(chunk))
-                              & (Edge.subject_id.in_(wildcard_ids))))).all():
+                    .where(((col(Edge.subject_id).in_(id_chunk))
+                            & (col(Edge.object_id).in_(wildcard_ids)))
+                           | ((col(Edge.object_id).in_(id_chunk))
+                              & (col(Edge.subject_id).in_(wildcard_ids))))).all():
                 direct_edge_set.add((s, o))
     _check_i14(crossable, concrete, wildcards, direct_edge_set)
 
@@ -749,7 +754,7 @@ def check_residue_hygiene(session: Session, store_id: str,
     # state) measured as the bulk of the tier's cost. The lightweight records below
     # duck-type the attributes the shared clause code reads.
     rows = [_ResidueFacts(*t) for t in session.exec(
-        select(Residue.id, Residue.object_node_id, Residue.relation,
+        select(Residue.id, Residue.object_node_id, Residue.relation,  # type: ignore[call-overload]  # sqlmodel stubs overload select() for <=4 columns only
                Residue.stars, Residue.neg, Residue.upos)
         .where(Residue.store_id == store_id)).all()]
     refs = _load_residue_refs(session, store_id)
@@ -773,10 +778,10 @@ def check_residue_hygiene(session: Session, store_id: str,
     for i in range(0, len(ids), 400):
         chunk = ids[i:i + 400]
         for t in session.exec(
-                select(Node.id, Node.type, Node.name, Node.predicate,
+                select(Node.id, Node.type, Node.name, Node.predicate,  # type: ignore[call-overload]  # sqlmodel stubs overload select() for <=4 columns only
                        Node.wildcard, Node.implicit)
                 .where(Node.store_id == store_id)
-                .where(Node.id.in_(chunk))).all():
+                .where(col(Node.id).in_(chunk))).all():
             by_id[t[0]] = _NodeFacts(*t)
 
     _check_residue_rows(

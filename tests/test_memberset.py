@@ -73,9 +73,9 @@ def test_memberset_algebra_homomorphism(ops):
         _assert_contains_matches_materialisation(a, ops)
 
         for op, ref, star_expected in (
-            (ms.union, ma | mb, lambda s: (s in a.stars) or (s in b.stars)),
-            (ms.intersect, ma & mb, lambda s: (s in a.stars) and (s in b.stars)),
-            (ms.subtract, ma - mb, lambda s: (s in a.stars) and (s not in b.stars)),
+            (ms.union, ma | mb, lambda s, a=a, b=b: (s in a.stars) or (s in b.stars)),
+            (ms.intersect, ma & mb, lambda s, a=a, b=b: (s in a.stars) and (s in b.stars)),
+            (ms.subtract, ma - mb, lambda s, a=a, b=b: (s in a.stars) and (s not in b.stars)),
         ):
             r = op(a, b, ops, _pop)
             assert _materialize(r, ops) == ref, (op.__name__, a, b)

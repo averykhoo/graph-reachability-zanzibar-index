@@ -68,7 +68,6 @@ from zanzibar.setengine import RoaringSets
 
 from benchmarks._harness import build_set, build_graph
 from benchmarks import scale_bench as sb
-from benchmarks import set_engine_bench as seb
 
 
 # ---------------------------------------------------------------------------

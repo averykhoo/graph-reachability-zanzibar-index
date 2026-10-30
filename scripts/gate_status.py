@@ -402,7 +402,7 @@ def read_ledger(path: Path) -> list[dict]:
         parts = line.split("\t")
         if len(parts) != len(COLUMNS):
             continue          # a torn append; skip rather than guess
-        rows.append(dict(zip(COLUMNS, parts)))
+        rows.append(dict(zip(COLUMNS, parts, strict=True)))
     return rows
 
 
@@ -576,8 +576,8 @@ def report(require_green: bool) -> int:
     logged = {r["log"] for r in rows}
     orphans = sorted(p.name for p in d.glob("*.log") if p.name not in logged)
     if orphans:
-        print(f"\nincomplete run(s) -- output log, no ledger row (killed mid-phase, or "
-              f"still running):")
+        print("\nincomplete run(s) -- output log, no ledger row (killed mid-phase, or "
+              "still running):")
         for name in orphans[-10:]:
             print(f"  {name}")
 

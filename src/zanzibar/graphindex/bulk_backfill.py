@@ -156,7 +156,7 @@ class _BulkBackfill:
         self._leaf_node_by_spec = {
             id(spec): node
             for plan in compiled.plans.values()
-            for spec, node in zip(plan.leaves, plan.leaf_nodes)
+            for spec, node in zip(plan.leaves, plan.leaf_nodes, strict=True)
         }
 
         # Outputs consumed by Phase W.
@@ -535,7 +535,7 @@ class _BulkBackfill:
             node = self._find_leaf_node(spec)
             parents = self._tupleset_parents(o_type, o_name, node.tupleset_rel,
                                              node.parent_types)
-            out: dict[NodeKey, None] = {}
+            out = {}
             for (pt, pn) in parents:
                 p_key = self._concrete_key(node.target_rel, pt, pn)
                 if p_key is not None:
@@ -572,7 +572,7 @@ class _BulkBackfill:
         """From-chain userset subjects of every TTU leaf (any polarity): one key
         (target_rel, parent_type, parent_name) per stored tupleset parent (X4a)."""
         keys: dict[SubjectKey, None] = {}
-        for spec, node in zip(plan.leaves, plan.leaf_nodes):
+        for spec, node in zip(plan.leaves, plan.leaf_nodes, strict=True):
             if spec.kind != 'derived-ttu':
                 continue
             parents = self._tupleset_parents(o_type, o_name, node.tupleset_rel,

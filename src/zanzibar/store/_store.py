@@ -31,7 +31,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlmodel import Session, select
 
 from zanzibar.graphindex.core import probe_store_write_lock
-from zanzibar.graphindex.invariants import (PARANOIA_ENV_VAR, PARANOIA_OFF,
+from zanzibar.graphindex.invariants import (PARANOIA_OFF,
                                  defer_post_commit_violations, install_paranoia,
                                  InvariantViolation, raise_post_commit_violation,
                                  resolve_paranoia_level)
@@ -39,6 +39,7 @@ from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.graphindex.wildcard import LookupResult
 from zanzibar.setengine.engine import StaleLookupIds
 from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS, require_setops
+from zanzibar.schema.argcheck import require_bool, require_instance, require_shapes
 from zanzibar.schema import AdmissionRejected, IndexResourceLimit, validate_store_id
 from zanzibar.schema.errors import ClosureFanoutExceeded
 from zanzibar.schema.errors import SchemaError, ZanzibarError, reject_ellipsis_predicate
@@ -50,7 +51,7 @@ from zanzibar.setengine.models import RelationTuple
 from .apply import advance_index, ensure_cursor
 from .build import BuildReport, IndexExists, build_index
 from .models import IndexCursor, TupleLog
-from .schema_io import (TablesNotCreated, TablesOutdated, ensure_schema, missing_tables,
+from .schema_io import (TablesNotCreated, ensure_schema, missing_tables,
                         open_graph_index, refuse_reusable_node_ids, save_schema)
 # StaleRead lives with the evaluator that raises it first (TupleSource.check);
 # re-exported here for backward compatibility.
@@ -334,7 +335,7 @@ class ExpandResult:
         return key in self.keys or ((t, p) in self.markers and key not in self.excluded_keys)
 
     def __contains__(self, key: object) -> bool:
-        return isinstance(key, tuple) and len(key) == 3 and self.covers(key)  # type: ignore[arg-type]
+        return isinstance(key, tuple) and len(key) == 3 and self.covers(key)
 
 
 class Store:
@@ -462,6 +463,7 @@ class Store:
         # rolls back on failure), so a caller's pending ORM rows would ride along.
         _require_clean_session(session, 'Store')
         _check_open_args(ops, sync)
+        object_wildcard_shapes = require_shapes('Store', object_wildcard_shapes)  # TK179 G4
         self.session = session
         self.store_id = store_id
         self.sync = sync
@@ -585,6 +587,8 @@ class Store:
         # which left a half-adopted id whose retry raised IndexExists.
         resolve_paranoia_level(paranoia, default=cls.DEFAULT_PARANOIA)
         _check_open_args(ops, sync)
+        require_bool('Store.adopt', 'bulk', bulk)                                    # TK179 G3
+        object_wildcard_shapes = require_shapes('Store.adopt', object_wildcard_shapes)
         try:
             # D3: refuse before building. build_index checks neither, so without these an
             # index would be committed and only the Store open below would refuse.
@@ -1155,12 +1159,14 @@ class Store:
         Read a result before the next write: ids are database row ids, which are never
         reused; an id whose node a later write removed raises ``StaleLookupIds`` (a
         ``KeyError``)."""
+        require_instance('Store.result_keys', 'res', res, LookupResult, what="lookup() or lookup_reverse()'s result")  # TK179
         return self._node_keys(res.node_ids, 'node_ids') | set(res.implicit_keys)
 
     def excluded_keys(self, res: LookupResult) -> set[tuple[str, str, str]]:
         """Translate ``res.excluded_node_ids`` to ``(type, name, predicate)`` keys: the
         portable form of "every subject of a marker's shape EXCEPT these". The companion
         of ``result_keys``; a caller expanding ``res.markers`` must subtract these."""
+        require_instance('Store.excluded_keys', 'res', res, LookupResult, what="lookup() or lookup_reverse()'s result")  # TK179
         return (self._node_keys(res.excluded_node_ids, 'excluded_node_ids')
                 | set(res.implicit_excluded_keys))
 

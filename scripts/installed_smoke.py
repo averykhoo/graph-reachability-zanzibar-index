@@ -22,9 +22,15 @@ What it covers:
    hand-written expectations, lookups and the watermark;
 3. reopening a store from disk (schema read back, same answers);
 4. the async schedule: token reads before and after ``catch_up``;
-5. bad input: the 0.0.2 trial bugs (TK124 empty schema, TK125 ``None``
+5. several instances on ONE store in one SQLite file (TK181): two ``Store``
+   instances (one writes, the other catches up; ``lag()`` agrees without
+   ``refresh()``, TK172), then a second OS process (``sys.executable``) that
+   writes, with and without catching up, while the parent's ``lag()`` / ``check``
+   follow; and TK175's self-parent ``doc:d1 parent doc:d1``, sync and async;
+6. bad input: the 0.0.2 trial bugs (TK124 empty schema, TK125 ``None``
    predicate), bad identifiers, undeclared relations, a schema
-   mismatch on reopen, and the ``ZANZIBAR_MAX_CLOSURE_FANOUT`` cap.
+   mismatch on reopen, ``sync=None`` / ``ops="pysets"`` (TK176), and the
+   ``ZANZIBAR_MAX_CLOSURE_FANOUT`` cap.
 
 Exit status 0 means every check passed. Any failure prints ``FAIL`` lines and
 exits 1.
@@ -214,7 +220,7 @@ def differential(label, schema, args, engine_at, Store, SetEngine,
             d = diff(g_graph, grid(se.check))
             ok(not d, f'{label} op {i}: graph index vs set engine ({name}) disagree: {d}')
         # async: a tokened read before catch_up is served by the set engine
-        d = diff(g_graph, grid(lambda *a: async_st.check(*a, at_least=last_tok)))
+        d = diff(g_graph, grid(lambda *a, t=last_tok: async_st.check(*a, at_least=t)))
         ok(not d, f'{label} op {i}: async tokened reads (pre-catch_up) disagree: {d}')
         async_st.catch_up()
         ok(async_st.lag() == 0, f'{label} op {i}: async lag after catch_up is {async_st.lag()}')
@@ -227,6 +233,136 @@ def differential(label, schema, args, engine_at, Store, SetEngine,
               f'cells True, {verdict}')
     for sess in (s_sync, s_async, s_set):
         sess.close()
+
+
+# ---------------------------------------------------------------------------
+# Multi-instance (TK181): several Store instances, and a second OS process, on ONE
+# store in ONE SQLite file -- the deployment the docs describe (writers, a catch-up
+# worker, a monitoring instance), which a single-instance smoke never exercises.
+# ---------------------------------------------------------------------------
+MULTI_SCHEMA = 'type user\ntype doc\n  relations\n    define viewer: [user]\n'
+
+# Run by a SECOND interpreter (sys.executable). argv: db path, mode ('write' or
+# 'write+catch_up'), user. Prints the zanzibar it imported, the token and the lag.
+CHILD = r'''
+import sys
+import zanzibar
+from sqlmodel import Session, create_engine
+from zanzibar.store import Store
+db, mode, user = sys.argv[1:4]
+eng = create_engine(f"sqlite:///{db}")
+with Session(eng) as s:
+    st = Store(s, "multi", sync=False)
+    tok = st.add_tuple(f"user:{user}", "viewer", "doc:2")
+    if mode == "write+catch_up":
+        st.catch_up()
+    print(zanzibar.__file__)
+    print(tok, st.lag(), st.check(f"user:{user}", "viewer", "doc:2", at_least=tok))
+eng.dispose()
+'''
+
+
+def multi_instance(engine_at, Store, Session) -> None:
+    import subprocess
+    section('multi-instance: two Store instances, then a second process, one SQLite file')
+    eng = engine_at('multi.db')
+    db = eng.url.database
+    with Session(eng) as sa, Session(eng) as sb:
+        a = Store(sa, 'multi', schema=MULTI_SCHEMA, sync=False)
+        tok = a.add_tuple('user:a', 'viewer', 'doc:1')
+        ok(a.lag() == 1, f'A wrote one row async: lag is {a.lag()}, expected 1')
+        b = Store(sb, 'multi', sync=False)
+        ok(b.catch_up() == 1, 'B (a second instance) catches up the row A wrote')
+        # TK172: A sees B's catch_up without refresh(); 0.1.0 reported lag 1 forever
+        ok(a.lag() == 0, f'TK172: A.lag() after B.catch_up() is {a.lag()}, expected 0 '
+                         f'without refresh()')
+        ok(a.check('user:a', 'viewer', 'doc:1') is True, 'A.check sees the write B applied')
+        ok(a.check('user:a', 'viewer', 'doc:1', at_least=tok) is True,
+           'A.check(at_least=token) sees the write')
+        # the other way round: B writes, A catches up, B's view agrees
+        tok_b = b.add_tuple('user:b', 'viewer', 'doc:1')
+        ok(a.catch_up() == 1, 'A catches up the row B wrote')
+        ok(b.lag() == 0, f'B.lag() after A.catch_up() is {b.lag()}, expected 0')
+        ok(b.check('user:b', 'viewer', 'doc:1', at_least=tok_b) is True,
+           'B.check sees its own write after A applied it')
+
+        # a second OS process: one write it catches up itself, one it leaves for us
+        def child(mode: str, user: str):
+            r = subprocess.run([sys.executable, '-c', CHILD, db, mode, user],
+                               capture_output=True, text=True, timeout=120)
+            ok(r.returncode == 0, f'child process ({mode}) exited {r.returncode}: '
+                                  f'{r.stderr.strip()[-600:]}')
+            return r.stdout.split('\n')
+        out = child('write+catch_up', 'c')
+        ok(len(out) >= 2 and Path(out[0]).resolve() == Path(sys.modules['zanzibar'].__file__)
+           .resolve(), f'child imported the same zanzibar: {out[:1]}')
+        ok(len(out) >= 2 and out[1].split()[1:] == ['0', 'True'],
+           f'child: lag 0 and its own write visible after its catch_up, got {out[1:2]}')
+        ok(a.lag() == 0, f'parent A.lag() after the child caught up is {a.lag()}, expected 0')
+        ok(a.check('user:c', 'viewer', 'doc:2') is True,
+           'parent A.check sees the write the child process applied')
+        out = child('write', 'd')
+        ok(len(out) >= 2 and out[1].split()[1:] == ['1', 'True'],
+           f'child: lag 1 and a tokened read served before catch_up, got {out[1:2]}')
+        ok(a.lag() == 1, f'parent A.lag() sees the child\'s unapplied row: {a.lag()}')
+        ok(b.lag() == 1, f'parent B.lag() sees the child\'s unapplied row: {b.lag()}')
+        ok(a.catch_up() == 1, 'parent A catches up the row the child wrote')
+        ok(a.lag() == 0 and b.lag() == 0, f'both lags 0 after that: {a.lag()}, {b.lag()}')
+        ok(b.check('user:d', 'viewer', 'doc:2') is True and
+           a.check('user:d', 'viewer', 'doc:2') is True,
+           'A and B both see the child\'s write once A applied it')
+        ok(a.check('user:z', 'viewer', 'doc:2') is False, 'a stranger still reads False')
+
+
+# TK175 (docs/tk175-self-parent-node-recreate-2026-10-30.md): a self-parent under a
+# boolean + TTU-of-derived schema made 0.1.0 raise a raw IntegrityError (sync) or stall
+# the index (async). The valid tuple must be writable and removable.
+TK175_SCHEMA = """model
+  schema 1.1
+type user
+type folder
+  relations
+    define r0: [user]
+type doc
+  relations
+    define parent: [doc, folder]
+    define r0: [user] and [user]
+    define r1: r0 but not (r0 from parent)
+    define r2: r1 from parent
+"""
+
+
+def self_parent(engine_at, Store, Session) -> None:
+    section('TK175: self-parent doc:d1 parent doc:d1, sync and async')
+    for sync in (True, False):
+        mode = 'sync' if sync else 'async'
+        eng = engine_at(f'tk175-{mode}.db')
+        with Session(eng) as s:
+            st = Store(s, 'tk175', schema=TK175_SCHEMA, sync=sync)
+
+            def settle(st=st, sync=sync):
+                if not sync:
+                    st.catch_up()
+            st.add_tuple('user:u2', 'r0', 'doc:d1')
+            settle()   # one batch holding both tuples would never hit the bug
+            ok(st.check('user:u2', 'r1', 'doc:d1') is True, f'{mode}: r1 before the self-parent')
+            try:
+                st.add_tuple('doc:d1', 'parent', 'doc:d1')
+                settle()
+                err = None
+            except Exception as e:  # noqa: BLE001 -- reported as a FAIL below
+                err = f'{type(e).__name__}: {str(e)[:200]}'
+            ok(err is None and not st.index_stalled,
+               f'{mode}: self-parent write applied ({err or st.stall_error})')
+            if err is not None:
+                continue
+            ok(st.check('user:u2', 'r1', 'doc:d1') is False, f'{mode}: r1 False under self-parent')
+            ok(st.check('user:u2', 'r2', 'doc:d1') is False, f'{mode}: r2 False under self-parent')
+            st.remove_tuple('doc:d1', 'parent', 'doc:d1')
+            settle()
+            ok(not st.index_stalled and st.check('user:u2', 'r1', 'doc:d1') is True,
+               f'{mode}: removing the self-parent restores r1')
+            ok(st.check('doc:d1', 'parent', 'doc:d1') is False, f'{mode}: self-parent gone')
 
 
 # ---------------------------------------------------------------------------
@@ -341,7 +477,11 @@ type doc
         ok(len(lr.node_ids) > 0, f'lookup_reverse for doc:d0#viewer returns results, got {lr!r}')
         ok(st.watermark() > 0, 'watermark advances')
 
-    # -- 3. bad input --------------------------------------------------------
+    # -- 3. several instances / processes on one store; TK175 -------------------
+    multi_instance(engine_at, Store, Session)
+    self_parent(engine_at, Store, Session)
+
+    # -- 4. bad input --------------------------------------------------------
     section('bad input')
     # The exceptions' one public home is the top level (TK164).
     from zanzibar import AdmissionRejected, SchemaMismatch  # noqa: F401 -- public names exist
@@ -350,6 +490,12 @@ type doc
         # TK124: an empty schema is refused and does NOT brick the store id
         raises(('ValueError',), lambda: Store(s, 'x', schema=''),
                'TK124: empty schema refused')
+        s.rollback()
+        # TK176: sync picked the mode by truthiness (None -> async), ops='pysets' failed late
+        raises(('TypeError',), lambda: Store(s, 'x176', schema=QUICK, sync=None),
+               'TK176: sync=None refused')
+        raises(('TypeError',), lambda: Store(s, 'x176', schema=QUICK, ops='pysets'),
+               'TK176: ops="pysets" refused')
         s.rollback()
         st = Store(s, 'x', schema=QUICK)
         ok(st.add_tuple('...', 'user', 'bob', 'banned', 'doc', 'd1') > 0,

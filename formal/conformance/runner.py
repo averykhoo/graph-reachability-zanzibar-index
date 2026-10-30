@@ -115,10 +115,10 @@ def invoke_zcli(request_json: str,
             proc = subprocess.run([str(exe), req_path], capture_output=True,
                                   text=True, encoding="utf-8",
                                   timeout=_ZCLI_TIMEOUT_S)
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
             raise RuntimeError(
                 f"zcli {what} timed out after {_ZCLI_TIMEOUT_S}s "
-                f"(possible hang/loop); request kept at {req_path}")
+                f"(possible hang/loop); request kept at {req_path}") from exc
         except OSError as e:
             if getattr(e, "winerror", None) not in _TRANSIENT_SPAWN_WINERRORS:
                 # A real environment fault, not spawn-time pressure. It carries no

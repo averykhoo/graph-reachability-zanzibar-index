@@ -506,7 +506,7 @@ _OTHER_OVERRIDES: dict[str, dict[tuple[str, int], dict]] = {
         },
     },
     "schema/compiler.py": {
-        ("_validate_object_wildcard_shapes", 0): {
+        ("_reject_non_pair_shapes", 0): {
             "fingerprint": "b6aab2d264cb",
             "what": ["An ``object_wildcard_shapes`` entry that is not a pair of strings -- "
                      "``\"doc:viewer\"``, ``(\"doc\",)``, ``(\"doc\", \"viewer\", \"x\")``."],
@@ -516,7 +516,7 @@ _OTHER_OVERRIDES: dict[str, dict[tuple[str, int], dict]] = {
             "instead": ["A set of ``(object_type, relation)`` tuples, for example "
                         "``object_wildcard_shapes={(\"doc\", \"viewer\")}``."],
         },
-        ("_validate_object_wildcard_shapes", 1): {
+        ("_validate_object_wildcard_shapes", 0): {
             "fingerprint": "e7cccf659b6c",
             "what": ["An ``object_wildcard_shapes`` entry naming an undeclared type -- "
                      "``(\"nosuch\", \"viewer\")``."],
@@ -526,7 +526,7 @@ _OTHER_OVERRIDES: dict[str, dict[tuple[str, int], dict]] = {
             "instead": ["Name a type the schema declares, ``(\"doc\", \"viewer\")`` for "
                         "``type doc``, or drop the entry; dropping it changes no answer."],
         },
-        ("_validate_object_wildcard_shapes", 2): {
+        ("_validate_object_wildcard_shapes", 1): {
             "fingerprint": "e916daec5b30",
             "what": ["An ``object_wildcard_shapes`` entry naming a relation the type does "
                      "not declare -- ``(\"doc\", \"nosuchrel\")``, or a name containing "
@@ -805,7 +805,8 @@ STAGES: list[tuple[str, str, list, list | None]] = [
      "The ``object_wildcard_shapes`` argument is checked against the schema it comes with, "
      "by :func:`zanzibar.parse_openfga_schema`, :class:`zanzibar.Store` and "
      ":class:`zanzibar.setengine.SetEngine` alike.",
-     [("schema/compiler.py", "_validate_object_wildcard_shapes")], None),
+     [("schema/compiler.py", "_reject_non_pair_shapes"),
+      ("schema/compiler.py", "_validate_object_wildcard_shapes")], None),
     ("Shapes the graph index cannot compile",
      "The schema is valid, but the graph index cannot serve it. "
      ":func:`zanzibar.parse_openfga_schema` and :class:`zanzibar.Store` raise these, because "

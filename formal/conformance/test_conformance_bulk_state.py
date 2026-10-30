@@ -167,7 +167,8 @@ def _exact_state_diff(inc: dict, bulk: dict) -> str | None:
         lines.append(f"  residue only in BULK        : {k} = {bulk['residues'][k]}")
     for k in sorted(ikeys & bkeys):
         for field, iv, bv in zip(("stars", "neg", "upos"),
-                                 inc["residues"][k], bulk["residues"][k]):
+                                 inc["residues"][k], bulk["residues"][k],
+                                 strict=True):
             if iv != bv:
                 lines.append(
                     f"  residue {k} field {field}: only-incremental="

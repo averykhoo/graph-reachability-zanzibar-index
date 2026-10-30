@@ -274,7 +274,7 @@ def test_churn_preserves_correctness_vs_oracle(seed):
     grid = [('...', 'user', u, 'viewer', 'doc', d)
             for u in ['core', 'ghost'] for d in ['keep', 'tmp0', 'tmp5', 'gone']]
 
-    for step in range(60):
+    for _step in range(60):
         u, d = f'u{rng.randint(0, 9)}', f'tmp{rng.randint(0, 9)}'
         raw = ('...', 'user', u, 'viewer', 'doc', d)
         if raw in present:

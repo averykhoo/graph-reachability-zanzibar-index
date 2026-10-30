@@ -9,7 +9,7 @@ Predicate convention: '...' is the bare subject predicate; a relation name means
 a userset subject (T#relation).
 """
 
-from tests.oracle import Oracle, OracleTuple, t, parse_schema
+from tests.oracle import Oracle, t, parse_schema
 
 
 # ---------------------------------------------------------------------------

@@ -115,7 +115,7 @@ def _system_times():
 def _busy_pct(t0, t1):
     if not t0 or not t1:
         return None
-    di, dk, du = (b - a for a, b in zip(t0, t1))
+    di, dk, du = (b - a for a, b in zip(t0, t1, strict=True))
     total = dk + du        # kernel time includes idle time
     return round(100.0 * (1 - di / total), 1) if total else None
 

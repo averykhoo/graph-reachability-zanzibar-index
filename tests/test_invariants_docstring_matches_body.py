@@ -24,7 +24,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from zanzibar.graphindex import ReachabilityIndex, IndexStore
 from zanzibar.graphindex.invariants import InvariantViolation, check_invariants
-from zanzibar.graphindex.models import Node, Residue
+from zanzibar.graphindex.models import Residue
 from zanzibar.schema import parse_openfga_schema
 from tests.wildcard_helpers import make_wildcard_index
 
@@ -217,12 +217,12 @@ def test_every_schema_backed_check_invariants_call_passes_schema_info():
             continue
         stack: list = []
 
-        def walk(node):
+        def walk(node, stack, rel):
             nonlocal total
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 stack.append(node.name)
                 for child in ast.iter_child_nodes(node):
-                    walk(child)
+                    walk(child, stack, rel)
                 stack.pop()
                 return
             if isinstance(node, ast.Call):
@@ -235,9 +235,9 @@ def test_every_schema_backed_check_invariants_call_passes_schema_info():
                         bare.setdefault((rel, stack[-1] if stack else '<module>'), []) \
                             .append(node.lineno)
             for child in ast.iter_child_nodes(node):
-                walk(child)
+                walk(child, stack, rel)
 
-        walk(tree)
+        walk(tree, stack, rel)
 
     # CEILING CONTROL: a walker that found nothing would pass this test silently.
     assert total >= _MIN_CALL_SITES, (

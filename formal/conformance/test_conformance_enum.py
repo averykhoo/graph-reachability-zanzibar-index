@@ -248,8 +248,8 @@ def _pool_renamings() -> list[dict[tuple[str, str], str]]:
     the pool, so every renaming fixes them."""
     types = sorted(_POOL)
     return [
-        {(ty, a): b for ty, perm in zip(types, choice)
-         for a, b in zip(_POOL[ty], perm)}
+        {(ty, a): b for ty, perm in zip(types, choice, strict=True)
+         for a, b in zip(_POOL[ty], perm, strict=True)}
         for choice in itertools.product(
             *(itertools.permutations(_POOL[ty]) for ty in types))
     ]

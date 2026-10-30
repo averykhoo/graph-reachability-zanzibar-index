@@ -488,7 +488,7 @@ def _from_chain_userset_subjects(schema_text, names):
 
 def _demorgan_pool(schema_text):
     """All schema-valid raw tuples over a tiny universe, derived from the AST directions."""
-    from zanzibar.schema import parse_schema_ast, Direct
+    from zanzibar.schema import parse_schema_ast
     ast = parse_schema_ast(schema_text)
     names = {'user': ['a', 'b'], 'role': ['r1'], 'cond': ['c1'], 'attr': ['at1'],
              'doc': ['dc1'], 'group': ['g1']}

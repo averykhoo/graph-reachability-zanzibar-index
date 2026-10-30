@@ -162,7 +162,7 @@ def main(workload='demorgans', scale=40):
     if multi:
         worst = sorted(CALLS.items(), key=lambda kv: -kv[1])[:5]
         print('  worst offenders (evaluations of one pair):')
-        for (pid, key), n in worst:
+        for (_pid, key), n in worst:
             print(f'    {n:5,}x  {key}')
     print(f'\npairs whose ANSWER CHANGED between evaluations: {len(flipped):,}')
     if flipped:

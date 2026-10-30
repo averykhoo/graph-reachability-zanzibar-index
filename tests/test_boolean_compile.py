@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from zanzibar.schema import (
-    Entity, Exclusion, Intersection, RelationalTriple, RewriteFilter, Rule, Union,
+    Entity, Exclusion, Intersection, RelationalTriple, Union,
     UnsupportedByGraphIndex,
     PClosureLeaf, PDerivedTTU, PExclusion,
     PIntersection, PUnion,

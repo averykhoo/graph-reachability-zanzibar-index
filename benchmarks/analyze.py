@@ -42,7 +42,7 @@ def linfit(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
     n = len(xs)
     sx, sy = sum(xs), sum(ys)
     sxx = sum(x * x for x in xs)
-    sxy = sum(x * y for x, y in zip(xs, ys))
+    sxy = sum(x * y for x, y in zip(xs, ys, strict=True))
     denom = n * sxx - sx * sx
     if denom == 0:
         return float('nan'), float('nan'), float('nan')
@@ -50,7 +50,7 @@ def linfit(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
     a = (sy - b * sx) / n
     ybar = sy / n
     ss_tot = sum((y - ybar) ** 2 for y in ys)
-    ss_res = sum((y - (a + b * x)) ** 2 for x, y in zip(xs, ys))
+    ss_res = sum((y - (a + b * x)) ** 2 for x, y in zip(xs, ys, strict=True))
     r2 = 1.0 - ss_res / ss_tot if ss_tot else float('nan')
     return b, a, r2
 
@@ -87,14 +87,14 @@ def scaling_section(rows: list[dict]) -> None:
             continue
         # write: time vs tuples (build_s on scale_bench/graph rows; the bulk bench's
         # set rows carry rebuild_s instead and would TypeError on log10(None))
-        pts = [(x, math.log10(t)) for x, r in zip(xs, rs)
+        pts = [(x, math.log10(t)) for x, r in zip(xs, rs, strict=True)
                if (t := (r.get('build_s') or r.get('rebuild_s')))]
         if len(pts) >= 3:
             b, _, r2 = linfit([p[0] for p in pts], [p[1] for p in pts])
             print(f'| {impl} | {wl} | write(time) | {len(pts)} | {b:+.2f} | {r2:.3f} | {cost_law(b)} |')
         # throughput surfaces: rate vs tuples; cost exponent = -slope
         for label, field in THROUGHPUT:
-            pts = [(x, math.log10(r[field])) for x, r in zip(xs, rs) if r.get(field)]
+            pts = [(x, math.log10(r[field])) for x, r in zip(xs, rs, strict=True) if r.get(field)]
             if len(pts) < 3:
                 continue
             b, _, r2 = linfit([p[0] for p in pts], [p[1] for p in pts])
@@ -116,7 +116,7 @@ def pyroaring_section(rows: list[dict]) -> None:
     print('|---|--:|--:|--:|--:|--:|')
     geo: dict[str, list[float]] = {s: [] for s in ['writes_per_s', 'checks_per_s',
                                                    'lookups_per_s', 'reverses_per_s']}
-    for (wl, scale), impls in sorted(idx.items(), key=lambda kv: (kv[0][0], kv[0][1])):
+    for (wl, _scale), impls in sorted(idx.items(), key=lambda kv: (kv[0][0], kv[0][1])):
         rr, py = impls.get('set:roaring'), impls.get('set:py')
         if not (rr and py):
             continue

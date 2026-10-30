@@ -353,7 +353,7 @@ def extract_sql_state(session, store_id: str) -> dict:
                 f"(dangling id — extraction cannot be trusted)")
         stars = frozenset((t, p) for (t, p) in json.loads(r.stars))
 
-        def _subjects(ids_json: str, field: str) -> frozenset:
+        def _subjects(ids_json: str, field: str, r=r) -> frozenset:  # bind loop var (B023)
             out = set()
             for nid in json.loads(ids_json):
                 n = nodes.get(nid)
@@ -557,7 +557,7 @@ def diff_states(lean: dict, py: dict, tainted: frozenset) -> str | None:
         lines.append(f"  residue only in PYTHON     : {k} = {py['residues'][k]}")
     for k in sorted(lkeys & pkeys):
         lres, pres = lean["residues"][k], py["residues"][k]
-        for field, lv, pv in zip(("stars", "neg", "upos"), lres, pres):
+        for field, lv, pv in zip(("stars", "neg", "upos"), lres, pres, strict=True):
             if lv != pv:
                 lines.append(
                     f"  residue {k} field {field}: "

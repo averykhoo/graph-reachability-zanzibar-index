@@ -36,7 +36,7 @@ def mannwhitney(a, b):
         for k in range(i, j + 1):
             ranks[k] = mid
         i = j + 1
-    r_a = sum(r for r, (_, g) in zip(ranks, pooled) if g == 0)
+    r_a = sum(r for r, (_, g) in zip(ranks, pooled, strict=True) if g == 0)
     n1, n2 = len(a), len(b)
     u_a = r_a - n1 * (n1 + 1) / 2.0
     return min(u_a, n1 * n2 - u_a)

@@ -6,8 +6,9 @@ Part of `zanzibar.schema`.
 # by TK120 (2026-10-06).
 from dataclasses import dataclass, field
 from types import EllipsisType
+from typing import cast
 from .errors import AdmissionRejected, SchemaError, is_valid_identifier
-from .syntax import Computed, DeclaredRelations, Restriction, no_restriction_message
+from .syntax import Computed, DeclaredRelations, Restriction, TTU, no_restriction_message, tuple_text
 
 
 @dataclass(frozen=True, slots=True, order=True, unsafe_hash=True)
@@ -92,6 +93,12 @@ class EntityPattern:
                       name=self.name or entity.name)
 
 
+def _triple_text(t: 'RelationalTriple') -> str:
+    """``t`` as a refusal quotes it (``syntax.tuple_text``)."""
+    return tuple_text(t.subject_predicate, t.subject.type, t.subject.name, t.relation,
+                      t.object.type, t.object.name)
+
+
 @dataclass(frozen=True, slots=True, order=True, kw_only=True)
 class RelationalTriplePattern:
     subject_predicate: str | EllipsisType | None = None
@@ -114,8 +121,11 @@ class RelationalTriplePattern:
     # -- the property construction was ~20% of RuleSet.apply's tottime. init=False keeps
     # them out of __init__, repr=False keeps the compiled-RuleSet snapshot bytes
     # byte-identical, compare=False keeps eq/order over the declared fields only.
-    _subject: 'EntityPattern' = field(init=False, repr=False, compare=False, default=None)
-    _object: 'EntityPattern' = field(init=False, repr=False, compare=False, default=None)
+    # cast: the None default is never observed -- __post_init__ always sets both.
+    _subject: 'EntityPattern' = field(init=False, repr=False, compare=False,
+                                      default=cast('EntityPattern', None))
+    _object: 'EntityPattern' = field(init=False, repr=False, compare=False,
+                                     default=cast('EntityPattern', None))
 
     def __post_init__(self):
         omw = (self.match_wildcards if self.object_match_wildcards is None
@@ -242,7 +252,7 @@ class SchemaInfo:
     # TK144 (C5): the boolean compile artifacts (``CompiledBooleans``), so the derived read
     # path can evaluate a plan at read time for a userset subject. Not compared, hashed or
     # printed: it is a function of the schema the other fields already describe.
-    compiled: object = field(default=None, compare=False, repr=False)
+    compiled: 'CompiledBooleans | None' = field(default=None, compare=False, repr=False)
 
     @property
     def bridged_in_shapes(self) -> frozenset[tuple[str, str]]:
@@ -386,7 +396,7 @@ class RuleSet:
                 # refuses the identical tuple in `_validate`; this is the graph side of
                 # ONE admission rule, so it carries the rejection type.
                 raise AdmissionRejected(no_restriction_message(
-                    self.declared, str(relational_triple), o_type, rel, derived=True))
+                    self.declared, _triple_text(relational_triple), o_type, rel, derived=True))
         else:
             # Pure-union relations keep first-match admission semantics, unchanged.
             for _, flt in self._candidates(self._plain_filters, rel):
@@ -426,7 +436,7 @@ class RuleSet:
                 # from this path to `InvariantViolation`. `AdmissionRejected` subclasses
                 # ValueError, so that promotion is untouched.
                 raise AdmissionRejected(no_restriction_message(
-                    self.declared, str(relational_triple), o_type, rel))
+                    self.declared, _triple_text(relational_triple), o_type, rel))
 
         # Fast path (the dominant case: a direct restriction with no rewrite rule):
         # if no rule can fire on any seed relation the worklist can never grow, and
@@ -473,7 +483,7 @@ def norm_pred(pred: 'str | EllipsisType | None') -> str:
 
 def parse_relation_rule(
         rule: str,
-) -> tuple[list[tuple[str | None, str | None, str | None]], list[tuple[str, str]]]:
+) -> tuple[list[tuple[str, str | None, str | None]], list[tuple[str, str]]]:
     """
     Parse one bracketed type-restriction list into direct assignments:
     (type, predicate, name) tuples, where name is '*' for a wildcard declaration
@@ -489,7 +499,7 @@ def parse_relation_rule(
         "[group:*#member]" -> ([(group, member, '*')], [])
     """
     # Provenance (moved out of the docstring, TK123 item 14): spec §2.1.
-    direct_assignments: list[tuple[str | None, str | None, str | None]] = []
+    direct_assignments: list[tuple[str, str | None, str | None]] = []
 
     # Bracket lists only (blind-audit S-4: '[user from x]' used to hit a
     # ' from ' fallback branch and silently parse to an empty, un-writable Direct).

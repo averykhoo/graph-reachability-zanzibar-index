@@ -29,9 +29,8 @@ import threading
 import time
 
 import pytest
-from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError, OperationalError
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session
 
 from zanzibar.schema import AdmissionRejected
 from zanzibar.store import Store
@@ -126,7 +125,7 @@ def test_concurrent_writers_converge(tmp_path):
 
     errors: list = []
     threads = [threading.Thread(target=worker, args=(cs, ops, errors))
-               for cs, ops in zip(stores, (ops_a, ops_b))]
+               for cs, ops in zip(stores, (ops_a, ops_b), strict=True)]
     for t in threads:
         t.start()
     for t in threads:
@@ -251,7 +250,6 @@ def test_token_fallback_rebuilds_stale_evaluator(tmp_path):
     """The cross-session token contract: a write committed AFTER the reader opened
     must still be honored by a token-carrying read -- the reader's in-memory
     evaluator rebuilds on demand instead of serving its stale cache."""
-    from zanzibar.store import StaleRead
 
     engine = _file_engine(tmp_path, 'token.db')
     with Session(engine) as boot:

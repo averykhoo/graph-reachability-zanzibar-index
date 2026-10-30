@@ -29,7 +29,7 @@ This module pins the replacement contract:
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from zanzibar.graphindex import ReachabilityIndex, IndexStore, WildcardIndex
+from zanzibar.graphindex import ReachabilityIndex, IndexStore
 from zanzibar.graphindex.core import AdmissionRejected as CoreAdmissionRejected
 from zanzibar.graphindex.invariants import InvariantViolation
 from zanzibar.setengine import SetEngine

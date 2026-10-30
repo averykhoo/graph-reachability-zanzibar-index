@@ -172,10 +172,11 @@ See [Schema language](schema-language.md#relations).
   removing a tuple that is not stored. On a write the subject predicate must be a string;
   `None` is refused.
 - A **read** (`check`, `lookup`, `lookup_reverse`, `expand`) does not validate
-  identifiers. A name that cannot exist, or an undeclared type or relation, matches
+  identifier VALUES. A name that cannot exist, or an undeclared type or relation, matches
   nothing: `check` returns `False` with no error, so a typo in a relation name reads as
-  "denied". On a read, `None` as the subject predicate means the bare subject, like
-  `"..."`.
+  "denied". A part that is not a string at all (`None`, a number, bytes) is a mistake,
+  not a name, and raises `TypeError`. The one exception: on a read, `None` as the subject
+  predicate means the bare subject, like `"..."`.
 
 ```python
 from zanzibar import AdmissionRejected

@@ -37,7 +37,7 @@ property suite under both ``SetOps`` implementations.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from .setops import SetOps
 
@@ -55,9 +55,9 @@ class MemberSet:
     ``(type, name, predicate)`` keys that have no id. Ids are instance-local handles of
     the engine that produced the set; translate them through that engine.
     """
-    pos: object                              # FrozSet: concrete member ids
+    pos: Any                                 # FrozSet: concrete member ids
     stars: frozenset                          # covered star shapes (intensional)
-    neg: object                               # FrozSet: exclusions within starred shapes
+    neg: Any                                  # FrozSet: exclusions within starred shapes
     # TK144 (TK138 D3a): the KEY channel for members with no interned id. OpenFGA's
     # implicit userset self-relation makes ``T:o#r`` a member of ``(T, o, r)`` (and of what
     # depends on it) whether or not any tuple ever interned that key, and ``expand``

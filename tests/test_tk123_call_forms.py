@@ -107,7 +107,7 @@ def _populated(session, store_id='app'):
 
 
 def test_documented_keyword_names_bind_on_every_entry(engine):
-    six = dict(zip(_LONG, ('...', 'user', 'alice', 'viewer', 'doc', 'd1')))
+    six = dict(zip(_LONG, ('...', 'user', 'alice', 'viewer', 'doc', 'd1'), strict=True))
     with Session(engine) as session:
         store = _populated(session)
         for target in (store, store.source, store.source.engine, store.widx):

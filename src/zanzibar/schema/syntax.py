@@ -164,6 +164,18 @@ def no_restriction_reason(declared: 'DeclaredRelations | None', object_type: str
     return f": it admits only {', '.join(allowed)}"
 
 
+def tuple_text(subject_predicate, subject_type: str, subject_name: str, relation: str,
+               object_type: str, object_name: str) -> str:
+    """A tuple as a refusal quotes it: in the user's own OpenFGA string form,
+    ``user:alice viewer doc:1`` or ``group:eng#member viewer doc:1``."""
+    # TK177 (0.1.1 install trial F21): messages used to show Zanzibar's internal
+    # ``doc:1#viewer@user:alice#...`` or ``user:alice#... viewer doc:1``.
+    user = f'{subject_type}:{subject_name}'
+    if isinstance(subject_predicate, str) and subject_predicate != '...':
+        user += f'#{subject_predicate}'
+    return f'{user} {relation} {object_type}:{object_name}'
+
+
 def no_restriction_message(declared: 'DeclaredRelations | None', tuple_text: str,
                            object_type: str, relation: str, *, derived: bool = False) -> str:
     """The whole admission refusal for a tuple no declared type restriction admits, the

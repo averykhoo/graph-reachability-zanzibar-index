@@ -24,7 +24,6 @@ What this proves and what it does not:
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-import pytest
 from sqlalchemy import event
 from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlmodel import Session, SQLModel, create_engine

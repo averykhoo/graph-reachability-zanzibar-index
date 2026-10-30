@@ -3,10 +3,13 @@ import os
 import threading
 import time
 from contextlib import contextmanager
+from enum import Enum
 from types import EllipsisType
+from typing import Final, Protocol, cast
 from sqlalchemy import func, insert, tuple_, update
 from sqlalchemy.exc import OperationalError
-from sqlmodel import Session, select
+from sqlalchemy.orm import SessionTransaction
+from sqlmodel import Session, col, select
 
 from zanzibar.graphindex.multiset import MultiSet
 from zanzibar.schema import (AdmissionRejected, ClosureFanoutExceeded,
@@ -34,9 +37,33 @@ _log = logging.getLogger(__name__)
 
 # Per-batch node-resolution cache sentinels (perf N15). ``_UNCACHED`` distinguishes
 # "key absent from the cache" (do the DB lookup) from ``_MISSING`` ("known-absent this
-# batch" -- a negative cache entry). Both are private module singletons.
-_UNCACHED = object()
-_MISSING = object()
+# batch" -- a negative cache entry). Both are private module singletons, members of a
+# one-off enum only so the checker can narrow ``entry is _MISSING`` (TK182); they are
+# compared by identity exactly as the former bare ``object()`` sentinels were.
+class _CacheSentinel(Enum):
+    UNCACHED = 'uncached'
+    MISSING = 'missing'
+
+
+_UNCACHED: Final = _CacheSentinel.UNCACHED
+_MISSING: Final = _CacheSentinel.MISSING
+
+
+class _HasRowId(Protocol):
+    @property
+    def id(self) -> int | None: ...
+
+
+def persisted_id(row: _HasRowId) -> int:
+    """``row.id`` typed as ``int`` (a typing helper, no runtime check).
+
+    A table model's ``id`` is ``int | None`` only because SQLModel needs ``None``
+    before the INSERT. Every ``Node`` the index hands around is either loaded from the
+    database or flushed at its creation (``ReachabilityIndex.node`` flushes before
+    returning), and every ``DeltaOutbox`` row a reader sees was loaded by a SELECT, so
+    the id is always set where this is called."""
+    # TK182 (mypy in the gate): replaces ~70 ``.id`` reads typed ``int | None``.
+    return cast(int, row.id)
 
 
 class _ThreadFlag(threading.local):
@@ -232,7 +259,7 @@ def store_lock_statements(store_id: str):
         select(IndexStore).where(IndexStore.id == store_id).with_for_update(),
         # no-op UPDATE (SQLite arm): same row, unchanged value -- it exists to take the
         # write lock, not to change data.
-        update(IndexStore).where(IndexStore.id == store_id)
+        update(IndexStore).where(col(IndexStore.id) == store_id)
         .values(description=IndexStore.description),
     )
 
@@ -329,7 +356,7 @@ class ReachabilityIndex:
         # Identity of the SessionTransaction under which this store's FOR UPDATE lock
         # is already held (perf P12a). ``None`` = no lock taken in the current
         # transaction. See ``_lock_store``.
-        self._locked_txn = None
+        self._locked_txn: tuple[SessionTransaction | None, SessionTransaction | None] | None = None
         # Outbox emit buffer (perf N16): ``_emit`` denormalizes endpoint identities
         # eagerly (while the nodes are alive) but stages the row as a plain dict here
         # instead of ``session.add``-ing an ORM instance. ``_flush_outbox`` drains the
@@ -354,7 +381,7 @@ class ReachabilityIndex:
         # it is immune to the SQLite rowid reuse that sank every id-based cache
         # (blind-audit W2 -- that hazard was cross-session; this cache never survives a
         # commit/rollback, see ``_node_cache_scope``).
-        self._node_cache: dict[tuple[str, str, str, str], Node] | None = None
+        self._node_cache: dict[tuple[str, str, str, str], Node | _CacheSentinel] | None = None
 
     @property
     def _writing_derived(self) -> bool:
@@ -493,10 +520,10 @@ class ReachabilityIndex:
         for start in range(0, len(want), _CHUNK):
             rows = self.session.exec(
                 select(Node).where(Node.store_id == self.store_id)
-                .where(Node.id.in_(want[start:start + _CHUNK]))  # type: ignore[attr-defined]
+                .where(col(Node.id).in_(want[start:start + _CHUNK]))
             ).all()
             for n in rows:
-                out[n.id] = n
+                out[persisted_id(n)] = n
         return out
 
     def _lock_store(self) -> None:
@@ -705,7 +732,7 @@ class ReachabilityIndex:
             pairs = [(f, t) for (f, t, _d) in checks[start:start + _CHUNK]]
             rows = self.session.exec(
                 select(Edge).where(Edge.store_id == self.store_id)
-                .where(tuple_(Edge.subject_id, Edge.object_id).in_(pairs))
+                .where(tuple_(col(Edge.subject_id), col(Edge.object_id)).in_(pairs))
             ).all()
             for r in rows:
                 existing[(r.subject_id, r.object_id)] = r
@@ -822,7 +849,7 @@ class ReachabilityIndex:
             .where(Edge.store_id == self.store_id)
             .where(Edge.subject_id == object_id)
             .where(Edge.object_id == subject_id)
-            .where(Edge.indirect_edge_count > 0)  # type: ignore[arg-type]
+            .where(Edge.indirect_edge_count > 0)
         ).first() is not None
 
     def _raise_closure_fanout(self, fanout: int, n_anc: int, n_desc: int) -> None:
@@ -863,7 +890,7 @@ class ReachabilityIndex:
             incident = self.session.exec(
                 select(Edge).where(Edge.store_id == self.store_id)
                 .where((Edge.subject_id == subject_id) | (Edge.object_id == subject_id))
-                .where(Edge.direct_edge_count > 0)  # type: ignore[arg-type]
+                .where(Edge.direct_edge_count > 0)
             ).all()
             neighbour_debits: dict[int, int] = {}
             for e in incident:
@@ -1209,7 +1236,7 @@ class ReachabilityIndex:
                 entry = cache.get(key, _UNCACHED)
                 if entry is not _UNCACHED:
                     if entry is not _MISSING:
-                        out[key] = entry.id
+                        out[key] = persisted_id(entry)
                     continue
             misses.append(key)
         if not misses:
@@ -1217,14 +1244,14 @@ class ReachabilityIndex:
         rows = self.session.exec(
             select(Node)
             .where(Node.store_id == self.store_id)
-            .where(tuple_(Node.predicate, Node.type,
-                          Node.name, Node.wildcard).in_(misses))
+            .where(tuple_(col(Node.predicate), col(Node.type),
+                          col(Node.name), col(Node.wildcard)).in_(misses))
         ).all()
         found = {(n.predicate, n.type, n.name, n.wildcard): n for n in rows}
         for key in misses:
             node = found.get(key)
             if node is not None:
-                out[key] = node.id
+                out[key] = persisted_id(node)
             # negative entries too: same honesty contract as ``cached_concrete_node``
             # (``node``'s creation choke point overwrites them)
             if cache is not None:
@@ -1240,7 +1267,7 @@ class ReachabilityIndex:
         N15 node cache) -- one IN-query for both endpoints, not a SELECT per id."""
         live = set(self.session.exec(
             select(Node.id).where(Node.store_id == self.store_id)
-            .where(Node.id.in_(list(dict.fromkeys(node_ids))))  # type: ignore[attr-defined]
+            .where(col(Node.id).in_(list(dict.fromkeys(node_ids))))
         ).all())
         for nid in node_ids:
             if nid not in live:
@@ -1361,7 +1388,7 @@ class ReachabilityIndex:
         _subject = self.node(subject_predicate, subject_type, subject_name, create_if_missing=True)
         _object = self.node(relation, object_type, object_name, create_if_missing=True)
         # resolved under the lock: live by construction, no re-verification round trip
-        self._add_edge_locked(_subject.id, _object.id)
+        self._add_edge_locked(persisted_id(_subject), persisted_id(_object))
 
     def remove_edge(self, subject_predicate: str | EllipsisType, subject_type: str, subject_name: str, relation: str,
                     object_type: str, object_name: str) -> None:
@@ -1378,7 +1405,7 @@ class ReachabilityIndex:
             # not there is a correct refusal (validity parity with the set engine).
             raise AdmissionRejected('Non-existent edge cannot be removed') from e
 
-        self._remove_edge_locked(_subject.id, _object.id)
+        self._remove_edge_locked(persisted_id(_subject), persisted_id(_object))
 
     def remove_node(self, predicate: str | EllipsisType, entity_type: str, entity_name: str) -> None:
         """Delete a node and every edge that touches it, updating the closure.
@@ -1386,7 +1413,7 @@ class ReachabilityIndex:
         validate_node_identifiers(predicate, entity_type, entity_name)
         self._lock_store()   # serialize node deletion + its closure fixups (held until commit)
         _node = self.node(predicate, entity_type, entity_name, create_if_missing=False)
-        node_id = _node.id
+        node_id = persisted_id(_node)
         self._add_direct_edge_unsafe(node_id, node_id, -1)
         # Post-condition (defense in depth): the counting math must have retired every
         # edge row touching the node before the node row itself was deleted -- a
@@ -1417,7 +1444,7 @@ class ReachabilityIndex:
         except KeyError:
             return False
 
-        return self.check_reachable_by_id(_subject.id, _object.id)
+        return self.check_reachable_by_id(persisted_id(_subject), persisted_id(_object))
 
     def lookup_reachable(self, subject_id: int) -> set[int]:
         """Ids of every node reachable from node ``subject_id``."""

@@ -62,7 +62,7 @@ _LAZY = {
     'TablesOutdated': 'zanzibar.store.schema_io',
 }
 
-__all__ = ['__version__', *_LAZY]
+__all__ = ['__version__', *_LAZY]  # noqa: PLE0604 -- _LAZY's keys are all str
 
 
 def __getattr__(name: str):

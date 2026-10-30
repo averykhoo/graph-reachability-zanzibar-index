@@ -6,7 +6,7 @@ Part of `zanzibar.schema`.
 # by TK120 (2026-10-06).
 from dataclasses import dataclass, replace
 from functools import reduce
-from typing import Callable
+from typing import Callable, cast
 from .errors import CyclicDerivedDependency, UnsupportedByGraphIndex
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union
 from .rules import Filter, RewriteFilter, Rule, SchemaInfo, _restriction_pattern, _rewrite_rule
@@ -46,13 +46,14 @@ def _assert_ttu_parent_types_cover_admission(compiled, rules_and_filters: list) 
     # filters alone. Only bare-entity subjects can be TTU parents -- a userset node is
     # not a parent -- and only STORAGE leaves hold raw stored tuples (rule-routed leaves
     # carry computed state, which stored-tuple TTU semantics never count).
-    admitted: dict[tuple[str, str], set[str]] = {}
+    admitted: dict[tuple[str | None, str | None], set[str]] = {}
     for rf in rules_and_filters:
         if not isinstance(rf, Filter):
             continue                                  # a Rule admits nothing
         pat = rf.if_pattern
         if pat.subject_predicate is not Ellipsis:
             continue                                  # userset restriction
+        key: tuple[str | None, str | None]
         if isinstance(rf, RewriteFilter):
             fam = compiled.namespace.get((pat.object_type, rf.rewrite_relation))
             if not isinstance(fam, LeafFamily) or not fam.storage:
@@ -107,7 +108,7 @@ def _rule_subject_types_fn(ast: SchemaAST, rules_and_filters: list
     hand-built / unchecked AST): the defensive behaviour must not weaken where the types
     are not pinned by admission.
     """
-    admitted: dict[tuple[str, str], set[str]] = {}
+    admitted: dict[tuple[str | None, str | None], set[str]] = {}
     unpinned: set[tuple] = set()
     for rf in rules_and_filters:
         if isinstance(rf, RewriteFilter):
@@ -127,7 +128,8 @@ def _rule_subject_types_fn(ast: SchemaAST, rules_and_filters: list
         if key[0] is None or key in unpinned:
             return None
         out = set(admitted.get(key, ()))
-        out |= _member_types(key[0], key[1], ast, frozenset())
+        # cast: a Filter/Rule if-pattern built by the compiler always names its relation
+        out |= _member_types(key[0], cast(str, key[1]), ast, frozenset())
         return frozenset(out) or None
 
     return types
@@ -466,7 +468,9 @@ def _build_plan_tree(key: tuple[str, str], expr: Expr, tainted: frozenset,
                 rewrite_relation=leaf,
             ))
         else:
-            _emit_leaf_expr(subtree_for_emission, object_type, relation, leaf, out_rules)
+            # cast: every ``userset=None`` call site passes a subtree
+            _emit_leaf_expr(cast(Expr, subtree_for_emission), object_type, relation, leaf,
+                            out_rules)
         return leaf
 
     def _split_pure(e: Expr) -> tuple[tuple, list]:
@@ -490,7 +494,7 @@ def _build_plan_tree(key: tuple[str, str], expr: Expr, tainted: frozenset,
             # the relation's raw stored tuples (never mixed with rule-routed state),
             # which TTU-over-this-relation parent enumeration depends on.
             restrictions, others = _split_pure(e)
-            nodes = []
+            nodes: list = []
             if restrictions:
                 nodes.append(PClosureLeaf(
                     alloc(Direct(tuple(restrictions)), positive=positive),
@@ -823,7 +827,6 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
     # and no Rule then-target lands on a derived-public family. Real raises, not
     # asserts (blind-audit: last line of defense for I5, must survive python -O).
     derived = compiled.derived_families
-    derived_predicates = {r for (_t, r) in derived}
     rule_subject_types = _rule_subject_types_fn(ast, rules_and_filters)
     for rf in rules_and_filters:
         if isinstance(rf, RewriteFilter):
@@ -842,7 +845,7 @@ def compile_boolean_schema(ast: SchemaAST, schema_info: SchemaInfo,
             # `rules._rewrite_rule`) produces the subject node (T, name, sp), where T is
             # the stored tupleset tuple's subject type. I5 forbids that node being
             # derived-public, i.e. (T, sp) in `derived`. Keyed on (type, relation) since
-            # TK126 (2026-10-08): the NAME test (`sp in derived_predicates`) refused the
+            # TK126 (2026-10-08): the NAME test (`sp` among derived relation names) refused the
             # OpenFGA idiom where another type's same-named relation is boolean. The
             # types are read off the emitted Filters (independent of `_member_types`,
             # see `_rule_subject_types_fn`); when they are unknown, the NAME test stays.

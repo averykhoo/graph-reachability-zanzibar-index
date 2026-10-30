@@ -5,7 +5,7 @@ Part of `zanzibar.schema`.
 # Provenance (moved out of the docstring, TK123 item 14): split out of the single-file module
 # by TK120 (2026-10-06).
 from dataclasses import dataclass
-from .syntax import Computed, Direct, Exclusion, Expr, Intersection, TTU, Union
+from .syntax import Computed, Direct, Exclusion, Expr, Intersection, SchemaAST, TTU, Union
 from .parser import _parse_schema_ast_unchecked
 from .boolean import compute_taint
 

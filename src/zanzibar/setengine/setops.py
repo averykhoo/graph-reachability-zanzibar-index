@@ -16,7 +16,7 @@ both, default roaring, and let the benchmark inform the per-deployment choice.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 
 @dataclass(frozen=True, repr=False)
@@ -31,9 +31,9 @@ class SetOps:
     so it is a copy-free normaliser.
     """
     name: str
-    new: Callable[..., object]      # (Iterable[int] = ()) -> MutSet
-    freeze: Callable[..., object]   # (Iterable[int] = ()) -> FrozSet
-    update: Callable[[object, object], None]  # (MutSet, Iterable[int]) -> None, in place
+    new: Callable[..., Any]         # (Iterable[int] = ()) -> MutSet
+    freeze: Callable[..., Any]      # (Iterable[int] = ()) -> FrozSet
+    update: Callable[[Any, Any], None]  # (MutSet, Iterable[int]) -> None, in place
 
     def __repr__(self) -> str:
         # Short on purpose: the generated dataclass repr printed three lambda addresses,

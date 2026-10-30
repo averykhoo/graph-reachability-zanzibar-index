@@ -22,15 +22,15 @@ impossible, so a hit means a corrupted store.
 from __future__ import annotations
 
 import json
-from collections import defaultdict
 from contextlib import contextmanager
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
-from sqlmodel import select
+from sqlmodel import col, select
 
 from zanzibar.schema import (CompiledBooleans, DerivedFamily, LeafFamily)
 
 from .cascade_mark import clear as _clear_cascade_owed
+from .core import persisted_id
 from .invariants import (InvariantViolation, PARANOIA_FIXPOINT,
                          paranoia_at_least, paranoia_level)
 from .models import Edge, Node, ResidueRef, Residue
@@ -266,7 +266,7 @@ class DeltaProcessor:
         self._leaf_node_by_spec = {
             id(spec): node
             for plan in compiled.plans.values()
-            for spec, node in zip(plan.leaves, plan.leaf_nodes)
+            for spec, node in zip(plan.leaves, plan.leaf_nodes, strict=True)
         }
         # residue bumps of the current round, consumed by the cascade as extra
         # invalidations for the next round (spec §5.2: version bumps enqueue the same
@@ -380,7 +380,7 @@ class DeltaProcessor:
             return []
         nodes = self.session.exec(
             select(Node).where(Node.store_id == self.store_id)
-            .where(Node.id.in_(ids))  # type: ignore[attr-defined]
+            .where(col(Node.id).in_(ids))
         ).all()
         return [n for n in nodes if n.wildcard == '']
 
@@ -394,15 +394,15 @@ class DeltaProcessor:
             return {}
         rows = self.session.exec(
             select(Node).where(Node.store_id == self.store_id)
-            .where(Node.id.in_(want))  # type: ignore[attr-defined]
+            .where(col(Node.id).in_(want))
         ).all()
-        return {n.id: n for n in rows}
+        return {persisted_id(n): n for n in rows}
 
     def _direct_incoming(self, obj_node_id: int) -> list[Edge]:
         return list(self.session.exec(
             select(Edge).where(Edge.store_id == self.store_id)
             .where(Edge.object_id == obj_node_id)
-            .where(Edge.direct_edge_count > 0)  # type: ignore[arg-type]
+            .where(Edge.direct_edge_count > 0)
         ).all())
 
     def stored_userset_subjects(self, object_type: str, obj_name: str, leaf: str,
@@ -424,7 +424,7 @@ class DeltaProcessor:
         if leaf_node is None:
             out: list[str] = []
         else:
-            edges = self._direct_incoming(leaf_node.id)
+            edges = self._direct_incoming(persisted_id(leaf_node))
             nodes = self._nodes_by_ids(e.subject_id for e in edges)
             out = []
             for e in edges:
@@ -449,7 +449,7 @@ class DeltaProcessor:
 
         Rare path: only reached when a stored ``T:*`` tupleset tuple exists."""
         rows = self.session.exec(
-            select(Node.name).where(Node.store_id == self.store_id)   # type: ignore[arg-type]
+            select(Node.name).where(Node.store_id == self.store_id)
             .where(Node.type == t).where(Node.wildcard == '')
         ).all()
         return sorted({n for n in rows if n != '*'})
@@ -489,7 +489,7 @@ class DeltaProcessor:
         star_types: list[str] = []
         ts_node = self._node(ts, object_type, obj_name)
         if ts_node is not None:
-            edges = self._direct_incoming(ts_node.id)
+            edges = self._direct_incoming(persisted_id(ts_node))
             nodes = self._nodes_by_ids(e.subject_id for e in edges)
             for e in edges:
                 n = nodes.get(e.subject_id)
@@ -591,7 +591,7 @@ class DeltaProcessor:
         ttu_leaf identity rule; lookup-gate X4a). Key-level -- the subjects need not
         have nodes."""
         keys: dict[SubjectKey, None] = {}
-        for spec, node in zip(plan.leaves, plan.leaf_nodes):
+        for spec, node in zip(plan.leaves, plan.leaf_nodes, strict=True):
             if spec.kind != 'derived-ttu':
                 continue
             parents = self.tupleset_parents(object_type, obj_name,
@@ -822,8 +822,8 @@ class DeltaProcessor:
             want_upos = should and not covered
             want_neg = covered and not should
             if want_upos != (s_node.id in upos) or want_neg != (s_node.id in neg):
-                (upos.add if want_upos else upos.discard)(s_node.id)
-                (neg.add if want_neg else neg.discard)(s_node.id)
+                (upos.add if want_upos else upos.discard)(persisted_id(s_node))
+                (neg.add if want_neg else neg.discard)(persisted_id(s_node))
                 self._store_residue(object_type, rel, obj_name, stars, neg, upos)
                 changed = True
                 if want_upos or want_neg:
@@ -835,7 +835,7 @@ class DeltaProcessor:
                         self.idx.node(s_node.predicate, s_node.type, s_node.name,
                                       create_if_missing=False, implicit=False)
                 else:
-                    self._gc_subject_node(s_node.id)
+                    self._gc_subject_node(persisted_id(s_node))
             if changed:
                 self._gc_public_node(object_type, rel, obj_name)
             return changed
@@ -843,7 +843,7 @@ class DeltaProcessor:
         want_edge = should and not covered
         obj_node = self._node(rel, object_type, obj_name)
         has_edge = (s_node is not None and obj_node is not None
-                    and self.idx.direct_edge_exists_by_id(s_node.id, obj_node.id))
+                    and self.idx.direct_edge_exists_by_id(persisted_id(s_node), persisted_id(obj_node)))
 
         if want_edge and not has_edge:
             self._write_derived(s, object_type, rel, obj_name, add=True)
@@ -856,7 +856,7 @@ class DeltaProcessor:
         if s_node is not None:
             want_neg = covered and not should
             if want_neg != (s_node.id in neg):
-                (neg.add if want_neg else neg.discard)(s_node.id)
+                (neg.add if want_neg else neg.discard)(persisted_id(s_node))
                 self._store_residue(object_type, rel, obj_name, stars, neg, upos)
                 changed = True
         if changed:
@@ -882,18 +882,19 @@ class DeltaProcessor:
         #     sets of every referenced derived leaf (any kind -- exclusions propagate
         #     up through residues); then neg = star-covered ∧ expr-false.
         candidates: dict[int, Node] = {}
+        n: Node | None    # one name across the loops below; some bind Optional lookups
         for spec in plan.leaves:
             if spec.positive:
                 continue
             for n in self._leaf_concretes(object_type, obj_name, spec):
-                candidates[n.id] = n
+                candidates[persisted_id(n)] = n
         for spec in plan.leaves:
             neg_ids = self._derived_leaf_neg_ids(object_type, obj_name, spec)
             nodes = self._nodes_by_ids(neg_ids)
             for nid in neg_ids:
                 n = nodes.get(nid)
                 if n is not None:
-                    candidates[n.id] = n
+                    candidates[persisted_id(n)] = n
 
         # (2a) from-chain userset subjects of TTU leaves (oracle ttu_leaf identity
         #      rule; lookup-gate X4a). Evaluated by KEY -- a from-chain userset may
@@ -924,7 +925,7 @@ class DeltaProcessor:
                 n = self.idx.node(sp, st, sn, create_if_missing=True, implicit=False)
                 # I3: a fresh concrete of a bridged shape must get its bridges
                 self.widx._ensure_bridges(n)
-            candidates[n.id] = n
+            candidates[persisted_id(n)] = n
 
         neg: set[int] = set()
         for nid, n in candidates.items():
@@ -938,19 +939,19 @@ class DeltaProcessor:
         audit: dict[int, Node] = dict(candidates)
         obj_node = self._node(rel, object_type, obj_name)
         if obj_node is not None:
-            for n in self._incoming_concretes(obj_node.id):
-                audit[n.id] = n
+            for n in self._incoming_concretes(persisted_id(obj_node)):
+                audit[persisted_id(n)] = n
         for spec in plan.leaves:
             if not spec.positive:
                 continue
             for n in self._leaf_concretes(object_type, obj_name, spec):
-                audit[n.id] = n
+                audit[persisted_id(n)] = n
         old_stars, old_neg, old_upos = self._residue_state(object_type, rel, obj_name)
         upos_nodes = self._nodes_by_ids(old_upos)
         for nid in old_upos:
             n = upos_nodes.get(nid)
             if n is not None:
-                audit[n.id] = n
+                audit[persisted_id(n)] = n
 
         # (2c) upos: userset-shaped audit members, recomputed wholesale (blind-audit
         #      P4 -- userset memberships are edge-free; wholesale recompute prunes
@@ -1020,7 +1021,7 @@ class DeltaProcessor:
         n = self.session.get(Node, node_id)
         if n is None or n.store_id != self.store_id or n.wildcard != '':
             return
-        if self._residue_row(n.id) is not None or self._residue_references(n.id):
+        if self._residue_row(persisted_id(n)) is not None or self._residue_references(persisted_id(n)):
             return
         entity = (n.type, n.name)
         # DEMOTE BEFORE STRIP (BL-1, docs/spec-deviations.md 2026-08-21). The node
@@ -1058,7 +1059,7 @@ class DeltaProcessor:
         return self.session.exec(
             select(Edge).where(Edge.store_id == self.store_id)
             .where(Edge.object_id == node_id)
-            .where(Edge.direct_edge_count > 0)  # type: ignore[arg-type]
+            .where(Edge.direct_edge_count > 0)
         ).first() is not None
 
     def _any_residue_reference(self, node_id: int) -> bool:
@@ -1098,11 +1099,11 @@ class DeltaProcessor:
         established."""
         if n.implicit:
             return
-        if self._residue_row(n.id) is not None:
+        if self._residue_row(persisted_id(n)) is not None:
             return
-        if self._any_residue_reference(n.id):
+        if self._any_residue_reference(persisted_id(n)):
             return
-        if (n.type, n.predicate) in self.compiled.plans and self._has_incoming_direct_edge(n.id):
+        if (n.type, n.predicate) in self.compiled.plans and self._has_incoming_direct_edge(persisted_id(n)):
             return
         n.implicit = True
         self.session.add(n)
@@ -1141,7 +1142,7 @@ class DeltaProcessor:
             # storage family: reverse concretes on the leaf node (closure includes
             # members flowing through userset nodes and processor-written derived edges)
             leaf_node = self._node(spec.predicate, object_type, obj_name)
-            return [] if leaf_node is None else self._incoming_concretes(leaf_node.id)
+            return [] if leaf_node is None else self._incoming_concretes(persisted_id(leaf_node))
         if spec.kind == 'derived-userset':
             # storage family: edge-justified incoming concretes on the leaf node, PLUS
             # -- for each stored userset X granted on this leaf ([T#P], P derived) --
@@ -1153,15 +1154,15 @@ class DeltaProcessor:
             leaf_node = self._node(spec.predicate, object_type, obj_name)
             out: dict[int, Node] = {}
             if leaf_node is not None:
-                for n in self._incoming_concretes(leaf_node.id):
-                    out[n.id] = n
+                for n in self._incoming_concretes(persisted_id(leaf_node)):
+                    out[persisted_id(n)] = n
             tree_node = self._find_leaf_node(spec)
             for x in self.stored_userset_subjects(object_type, obj_name, spec.predicate,
                                                   tree_node.subject_type,
                                                   tree_node.subject_predicate):
                 for n in self._ttu_target_upos_nodes([(tree_node.subject_type, x)],
                                                      tree_node.subject_predicate):
-                    out[n.id] = n
+                    out[persisted_id(n)] = n
             return list(out.values())
         if spec.kind == 'derived-computed':
             # edge-justified incoming concretes of the aliased relation's public node,
@@ -1173,25 +1174,25 @@ class DeltaProcessor:
             d_node = self._node(spec.predicate, object_type, obj_name)
             out = {}
             if d_node is not None:
-                for n in self._incoming_concretes(d_node.id):
-                    out[n.id] = n
+                for n in self._incoming_concretes(persisted_id(d_node)):
+                    out[persisted_id(n)] = n
             for n in self._ttu_target_upos_nodes([(object_type, obj_name)], spec.predicate):
-                out[n.id] = n
+                out[persisted_id(n)] = n
             return list(out.values())
         if spec.kind == 'derived-ttu':
             node = self._find_leaf_node(spec)
-            out: dict[int, Node] = {}
+            out = {}
             parents = self.tupleset_parents(object_type, obj_name,
                                             node.tupleset_rel, node.parent_types)
             for (pt, pn) in parents:
                 p_node = self._node(node.target_rel, pt, pn)
                 if p_node is not None:
-                    for n in self._incoming_concretes(p_node.id):
-                        out[n.id] = n
+                    for n in self._incoming_concretes(persisted_id(p_node)):
+                        out[persisted_id(n)] = n
             # userset members of tainted targets are edge-free (P4): lift them from
             # the parents' residue upos, or the dependent never sees them (X4b)
             for n in self._ttu_target_upos_nodes(parents, node.target_rel):
-                out[n.id] = n
+                out[persisted_id(n)] = n
             return list(out.values())
         raise TypeError(f'unknown leaf kind {spec.kind!r}')
 
@@ -1222,8 +1223,8 @@ class DeltaProcessor:
         # would dangle that id -- the recording reconcile collects it once the reference
         # is dropped).
         if (node.reference_count == 0
-                and self._residue_row(node.id) is None
-                and not self._residue_references(node.id)):
+                and self._residue_row(persisted_id(node)) is None
+                and not self._residue_references(persisted_id(node))):
             entity = (node.type, node.name)
             self.idx._evict_node(node)          # N15: evict before delete
             self.session.delete(node)
@@ -1253,7 +1254,7 @@ class DeltaProcessor:
         # cached snapshot must never survive the mutation.
         if self.widx._residue_cache is not None:
             self.widx._residue_cache.pop((object_type, rel, obj_name), None)
-        row = self._residue_row(node.id)
+        row = self._residue_row(persisted_id(node))
         empty = not stars and not neg and not upos
         if row is None:
             if empty:
@@ -1274,7 +1275,7 @@ class DeltaProcessor:
         # indexes: this is the ONLY live-path writer of Residue, so it is the only
         # place the index can go stale. (The early return above is safe -- no row
         # existed and none was written, so there is nothing to index.)
-        self._sync_residue_refs(node.id, set() if empty else (neg | upos))
+        self._sync_residue_refs(persisted_id(node), set() if empty else (neg | upos))
         self._bumped.append((object_type, rel, obj_name))
 
     def _sync_residue_refs(self, object_node_id: int, subjects: set[int]) -> None:
@@ -1313,7 +1314,8 @@ class DeltaProcessor:
 
         def subject(key: Key, s: SubjectKey) -> None:
             if keys.get(key, set()) is not None:
-                keys.setdefault(key, set()).add(s)
+                # non-None: the guard above just read a set (or nothing) at ``key``
+                cast('set[SubjectKey]', keys.setdefault(key, set())).add(s)
 
         # P6: P2's closure expansion emits O(ancestors x descendants) outbox rows,
         # and the pre-coalescing loop redid the per-row work (a subject_node SELECT,
@@ -1412,7 +1414,7 @@ class DeltaProcessor:
                                                       create=False))
                         if n is not None]
                 for src in srcs:
-                    for oid in self.idx.lookup_reachable(src.id):
+                    for oid in self.idx.lookup_reachable(persisted_id(src)):
                         o2 = self.session.get(Node, oid)
                         if o2 is not None and (o2.type, o2.predicate) == (dep_t, edge.tupleset_rel):
                             full((dep_t, dep_r, o2.name))
@@ -1430,7 +1432,7 @@ class DeltaProcessor:
                 ent = self._node('...', source[0], obj_name)
                 if ent is None:
                     continue
-                for oid in self.idx.lookup_reachable(ent.id):
+                for oid in self.idx.lookup_reachable(persisted_id(ent)):
                     o = self.session.get(Node, oid)
                     if o is not None and (o.type, o.predicate) == (dep_t, edge.tupleset_rel):
                         full((dep_t, dep_r, o.name))
@@ -1439,7 +1441,7 @@ class DeltaProcessor:
                 us_node = self._node(source[1], source[0], obj_name)
                 if us_node is None:
                     continue
-                for oid in self.idx.lookup_reachable(us_node.id):
+                for oid in self.idx.lookup_reachable(persisted_id(us_node)):
                     o = self.session.get(Node, oid)
                     if o is not None and (o.type, o.predicate) == (dep_t, edge.leaf):
                         full((dep_t, dep_r, o.name))
@@ -1505,13 +1507,13 @@ class DeltaProcessor:
 
         for _ in range(rounds):
             rows = outbox_rows(self.session, self.store_id, frontier_start)
-            frontier_start = max((r.id for r in rows), default=frontier_start)
+            frontier_start = max((persisted_id(r) for r in rows), default=frontier_start)
 
             keys = self._map_deltas_to_keys(rows)
             bumped, self._bumped = self._bumped, []
             for (b_type, b_rel, b_name) in bumped:
                 self._fan_out((b_type, b_rel), b_name,
-                              keys, lambda k: keys.__setitem__(k, None))
+                              keys, lambda k, keys=keys: keys.__setitem__(k, None))
             self._tier_schedule(keys)
 
             if not keys:
@@ -1572,17 +1574,17 @@ class DeltaProcessor:
         if not leftover:
             return
 
-        settle_start = max((r.id for r in rows), default=frontier_start)
-        keys = tuple(sorted(leftover))
+        settle_start = max((persisted_id(r) for r in rows), default=frontier_start)
+        settle_keys = tuple(sorted(leftover))
         # Full-object reconcile even for subject-scoped leftovers: it recomputes
         # neg/upos wholesale, so it is the strictly stronger fixpoint question.
-        changed = tuple(k for k in keys if self.reconcile(*k))
-        self._settle = SettlePass(keys=keys, changed=changed)
+        changed = tuple(k for k in settle_keys if self.reconcile(*k))
+        self._settle = SettlePass(keys=settle_keys, changed=changed)
         if changed:
             raise InvariantViolation(
                 f'cascade failed to quiesce after {rounds} strata rounds; the settle '
                 f'pass CHANGED derived state at {list(changed)} -- those keys were '
-                f'genuinely stale (leftover keys: {list(keys)})')
+                f'genuinely stale (leftover keys: {list(settle_keys)})')
 
         self.session.flush()
         tail = self._map_deltas_to_keys(
@@ -1598,7 +1600,7 @@ class DeltaProcessor:
             # itself write and emit. A witness for this arm is a bug to understand.
             raise InvariantViolation(
                 f'cascade failed to quiesce after {rounds} strata rounds; the settle '
-                f'pass was a fixpoint at {list(keys)} but still emitted deltas mapping '
+                f'pass was a fixpoint at {list(settle_keys)} but still emitted deltas mapping '
                 f'to {sorted(tail)}')
 
     # ------------------------------------------------------------------ #

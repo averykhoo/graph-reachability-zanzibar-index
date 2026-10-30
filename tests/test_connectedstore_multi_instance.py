@@ -477,7 +477,7 @@ def test_concurrent_multi_instance_writers_converge(tmp_path):
 
     errors: list = []
     threads = [threading.Thread(target=worker, args=(cs, ops, errors))
-               for cs, ops in zip(stores, (ops_a, ops_b))]
+               for cs, ops in zip(stores, (ops_a, ops_b), strict=True)]
     for t in threads:
         t.start()
     for t in threads:
@@ -501,7 +501,7 @@ def test_concurrent_multi_instance_writers_converge(tmp_path):
             assert twin.check(*q) == exp, q
 
     # every fresh multi-instance evaluator catches up and agrees with the oracle
-    for db in ('mi1.db', 'mi2.db'):
+    for _db in ('mi1.db', 'mi2.db'):
         with Session(engine) as si:
             inst = TupleSource(si, 's')
             assert inst.evaluator_lag() == 0

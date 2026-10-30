@@ -6,8 +6,13 @@ and back-compat consumers drain a cursor range to a list with ``drain_deltas``.
 """
 # Provenance (moved out of the docstring, TK123 item 14): boolean spec §4/§5.1.
 
-from sqlalchemy import delete
+from typing import Any, cast
+
+from sqlalchemy import CursorResult, delete
 from sqlmodel import Session, col, select
+
+from zanzibar.schema import validate_store_id
+from zanzibar.schema.argcheck import require_int, require_session
 
 from .models import DeltaOutbox, PermissionDelta
 
@@ -28,7 +33,7 @@ def outbox_rows(session: Session, store_id: str, after_id: int = 0) -> list[Delt
     return list(session.exec(
         select(DeltaOutbox)
         .where(DeltaOutbox.store_id == store_id)
-        .where(DeltaOutbox.id > after_id)
+        .where(col(DeltaOutbox.id) > after_id)
         .order_by(col(DeltaOutbox.id))
     ).all())
 
@@ -68,6 +73,9 @@ def prune_outbox(session: Session, store_id: str, before_watermark: int) -> int:
     """
     # Provenance (moved out of the docstring, TK123 item 14): zero-trust review ZT-P1-8,
     # retention.
+    require_session('prune_outbox', session)       # TK179: before any statement
+    validate_store_id(store_id)
+    require_int('prune_outbox', 'before_watermark', before_watermark)
     if before_watermark < 0:
         raise ValueError(
             f'before_watermark must be a non-negative outbox cursor, got {before_watermark}')
@@ -76,11 +84,12 @@ def prune_outbox(session: Session, store_id: str, before_watermark: int) -> int:
     cutoff = min(before_watermark, head - 1)
     if cutoff <= 0:
         return 0
-    result = session.execute(
+    # A DML statement executes to a CursorResult (the stub types it as Result).
+    result = cast('CursorResult[Any]', session.execute(
         delete(DeltaOutbox)
-        .where(DeltaOutbox.store_id == store_id)
-        .where(DeltaOutbox.id <= cutoff)
-        .execution_options(synchronize_session=False))
+        .where(col(DeltaOutbox.store_id) == store_id)
+        .where(col(DeltaOutbox.id) <= cutoff)
+        .execution_options(synchronize_session=False)))
     return result.rowcount
 
 

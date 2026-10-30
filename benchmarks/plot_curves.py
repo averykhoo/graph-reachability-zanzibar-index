@@ -38,14 +38,14 @@ def load() -> list[dict]:
 def main() -> None:
     rows = load()
     fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-    for ax, (title, field, _is_time) in zip(axes.flat, PANELS):
+    for ax, (title, field, _is_time) in zip(axes.flat, PANELS, strict=True):
         # set-engine lines (roaring solid, py dashed), one per (impl, workload)
         for impl, style in [('set:roaring', '-'), ('set:py', '--')]:
             for wl, color in WL_COLOR.items():
                 pts = sorted([(r['tuples'], r[field]) for r in rows
                               if r['impl'] == impl and r['workload'] == wl and r.get(field)])
                 if len(pts) >= 2:
-                    xs, ys = zip(*pts)
+                    xs, ys = zip(*pts, strict=True)
                     ax.plot(xs, ys, style, color=color, marker='o', ms=4,
                             label=f'{impl.split(":")[1]} {wl}')
         # graph index: isolated markers
@@ -53,7 +53,7 @@ def main() -> None:
             pts = [(r['tuples'], r[field]) for r in rows
                    if r['impl'] == 'graph' and r['workload'] == wl and r.get(field)]
             if pts:
-                xs, ys = zip(*pts)
+                xs, ys = zip(*pts, strict=True)
                 ax.plot(xs, ys, '^', color=color, ms=9, mec='black', mew=0.6,
                         label=f'graph {wl}')
         ax.set_xscale('log'); ax.set_yscale('log')

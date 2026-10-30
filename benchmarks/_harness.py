@@ -13,7 +13,6 @@ responsibility (no RNG in measured paths); this module only times what it's give
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
 from sqlmodel import Session, SQLModel, create_engine
 

@@ -15,11 +15,49 @@ may break the API. The newest version heading must equal `zanzibar.__version__`
 - `ops=` on `Store` and `SetEngine` refuses anything but `PySets` / `RoaringSets` with a
   `TypeError` naming them; `ops="pysets"` used to fail later with
   `'str' object has no attribute 'new'` (TK176).
+- Every public argument of `Store`, `TupleSource`, `SetEngine`, `parse_openfga_schema`,
+  `build_index`, `rebuild_index`, `save_schema`, `open_set_engine` and `prune_outbox` is
+  type-checked before any SQL runs (TK179). A wrong type is a `TypeError` naming the
+  argument; a write's identifier stays an `AdmissionRejected`, as documented, now raised
+  before the store lock. Changes a caller may notice:
+  - A read (`check`, `lookup`, `lookup_reverse`, `expand`) with a part that is not a
+    string -- `check("user:a", None, "doc:1")`, a relation of `7` -- raises `TypeError`.
+    It used to answer `False` (or reach the database). Names that do not exist still
+    match nothing, and `None` as a read's subject predicate still means the bare subject.
+  - `bulk=` (`Store.adopt`, `build_index`, `rebuild_index`) and `enable_boolean=`
+    (`parse_openfga_schema`) take only `True` / `False`.
+  - `object_wildcard_shapes` must be a collection of `(type, relation)` string pairs; a
+    bare string such as `"folder"` is refused.
+  - `build_index` / `rebuild_index` treat only `index_store_id=None` as "the source id";
+    `""`, `0` and `False` are refused like any other bad store id.
+  - A non-`Session` passed as `session` is a `TypeError` instead of an `AttributeError`.
+  - `Store.result_keys` / `excluded_keys` (and the `SetEngine` pair) refuse anything but
+    a lookup result.
+
+### Changed
+- A refused tuple is quoted the way you wrote it, `robot:r viewer doc:1` or
+  `group:eng#member viewer doc:1`, on both backends (TK177). Messages used to show
+  `doc:1#viewer@robot:r#...` or `robot:r#... viewer doc:1`.
+- The cycle refusal ("would create a cycle in the userset membership topology") now says
+  what is wrong and what to do: the object would end up inside itself, so leave the tuple
+  out or remove the one that closes the loop (TK177).
 
 ### Documentation
 - Every docs page that opens a SQLite file deletes it first, so running a page twice gives
   the same output (TK176).
 - The 0.1.1 note on self-parent tuples now says when one is accepted (TK176).
+- "Writes are strict, reads are lenient" (tuple strings reference) says that a read's
+  wrong-TYPED part is a `TypeError` (TK179).
+
+### Development
+- The gate runs ruff (correctness rules) and mypy over the library, at pinned versions
+  (`pip install -r requirements.txt`, or the `lint` extra), and every finding is fixed
+  (TK182). The five plan-leaf `zip()` pairings in the graph index and the lookup filter's are now
+  `strict=True`; nothing else changes at runtime.
+- The release smoke test covers two `Store` instances and a second process on one store,
+  the self-parent case, and the `sync=` / `ops=` refusals; the docs pages run twice and in
+  one shared folder (TK181). The hypothesis campaign draws self-referencing tuples and
+  schemas often (TK180).
 
 ## [0.1.1] - 2026-10-30
 

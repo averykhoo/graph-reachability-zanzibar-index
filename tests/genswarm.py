@@ -326,7 +326,7 @@ def features(schema_text: str, owc=frozenset()) -> set[str]:
         return f
     if len(compiled.strata) > 1:
         f.add('schema:multi-stratum')
-    for (otype, rel), body in ast.items():
+    for (otype, _rel), body in ast.items():
         for node in _walk(body):
             if isinstance(node, TTU):
                 ts_key = (otype, node.tupleset_rel)

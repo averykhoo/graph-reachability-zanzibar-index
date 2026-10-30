@@ -288,7 +288,7 @@ def test_advance_index_batch_rollback_is_order_independent(case, stored, refused
         try:
             cursor = ensure_cursor(session, 'ix', 'src')
 
-            def log(raw):
+            def log(raw, session=session):
                 session.add(TupleLog(store_id='src', op='ADD', subject_predicate=raw[0],
                                        subject_type=raw[1], subject_name=raw[2],
                                        relation=raw[3], object_type=raw[4],

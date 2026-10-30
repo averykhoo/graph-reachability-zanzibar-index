@@ -13,13 +13,15 @@ from __future__ import annotations
 import json
 import secrets
 from collections import defaultdict
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from itertools import chain
 from types import EllipsisType
+from typing import Any, cast
 
 from sqlalchemy import column as _sa_column, inspect as _sa_inspect
 from sqlalchemy import select as _sa_select, table as _sa_table
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from zanzibar.schema import (
     AdmissionRejected,
@@ -29,11 +31,11 @@ from zanzibar.schema import (
     Entity,
     RelationalTriple,
     norm_pred as _norm_pred,
-    parse_schema_ast,
     derive_schema_info,
     schema_filters,
     compile_ruleset,
     validate_store_id,
+    RuleSet,
     validate_write_identifiers,
     UnsupportedByGraphIndex,
     Direct,
@@ -43,21 +45,27 @@ from zanzibar.schema import (
     Intersection,
     Exclusion,
 )
-from zanzibar.schema.syntax import (declared_relations, explain_difference,
+from zanzibar.schema.syntax import (DeclaredRelations, declared_relations, explain_difference,
                                     first_schema_difference,
-                                    no_restriction_message)
+                                    no_restriction_message, tuple_text)
 from zanzibar.schema.parser import _parse_schema_ast_checked
-from zanzibar.schema.tuplestr import shape_filter
+from zanzibar.schema.tuplestr import (_LOOKUP_LONG, _REVERSE_LONG, _TUPLE_LONG, require_parts,
+                                     shape_filter)
 from zanzibar.schema.compiler import _validate_object_wildcard_shapes
 from zanzibar.schema.errors import (PersistedSchemaRefused, SchemaMismatch,
                                     ShapeNoLongerAccepted, ZanzibarError,
                                     reject_ellipsis_predicate)
 from .setops import SetOps, DEFAULT_SETOPS, require_setops
+from zanzibar.schema.argcheck import (require_instance, require_optional_str, require_session,
+                                      require_shapes)
 from .models import RelationTuple
 from . import memberset as ms
 from .memberset import MemberSet
 
 NodeKey = tuple[str, str, str]      # (type, name, predicate) flow-graph node
+# A position-tagged flow key: a concrete NodeKey, or a star's 4-tuple
+# ``(type, '*', pred, 'any'|'all')`` (see ``SetEngine._fk_subject``).
+FlowKey = tuple[str, str, str] | tuple[str, str, str, str]
 
 
 class UnloggedWriteRefused(ZanzibarError, RuntimeError):
@@ -472,8 +480,8 @@ class Interner:
         self.id_of: dict[tuple[str, str, str], int] = {}      # surrogate key -> in-use internal id
         self.key_of: dict[int, tuple[str, str, str]] = {}     # internal id -> surrogate key
         self.refcount: dict[int, int] = {}                    # internal id -> # referencing tuples
-        self.ids_of_type: dict[str, object] = defaultdict(ops.new)          # concrete entities (pred '...')
-        self.ids_of_shape: dict[tuple[str, str], object] = defaultdict(ops.new)  # concrete usersets
+        self.ids_of_type: dict[str, Any] = defaultdict(ops.new)          # concrete entities (pred '...')
+        self.ids_of_shape: dict[tuple[str, str], Any] = defaultdict(ops.new)  # concrete usersets
         self._free: list[int] = []                            # recyclable internal ids
         self._next: int = 0                                   # next fresh internal id
         # identity of THIS id map: new per Interner, so a rebuild(), another engine
@@ -543,8 +551,8 @@ class NodeSets:
     (potentially huge populations) are only ever combined by C-level bulk ops.
     """
     # Provenance (moved out of the docstring, TK123 item 14): spec §5.
-    entities: object      # subject ids with predicate '...' (concrete entities + bare-star sentinels)
-    usersets: object      # subject ids with predicate != '...' (concrete usersets + userset-star sentinels)
+    entities: Any         # subject ids with predicate '...' (concrete entities + bare-star sentinels)
+    usersets: Any         # subject ids with predicate != '...' (concrete usersets + userset-star sentinels)
 
 
 class SetEngine:
@@ -572,6 +580,11 @@ class SetEngine:
         raises ``TypeError``."""
         validate_store_id(store_id)  # TK127 follow-up: before any statement
         require_setops(ops)          # TK176 (0.1.1 install trial F10)
+        require_session('SetEngine', session)                                  # TK179
+        require_optional_str('SetEngine', 'schema', schema)
+        object_wildcard_shapes = require_shapes('SetEngine', object_wildcard_shapes)
+        require_instance('SetEngine', 'ruleset', ruleset, RuleSet, optional=True,
+                         what='None or the RuleSet compiled from this schema')
         if schema is None:
             # TK123 item 9: the schema is optional when the store has a SchemaRecord.
             record = _schema_record_row(session, store_id)
@@ -607,7 +620,7 @@ class SetEngine:
         # (``_governance_probed_txn``), and never again once latched, so the governed
         # sync write path pays nothing.
         self.log_governed = False
-        self._governance_probed_txn = None
+        self._governance_probed_txn: object | None = None    # identity memo only
         try:
             self.ast, self._declared_types = _parse_schema_ast_checked(schema)
             # TK147: the ``object_wildcard_shapes`` argument is checked on every open, the
@@ -619,7 +632,7 @@ class SetEngine:
         except ShapeNoLongerAccepted:
             _refuse_persisted_shape(session, store_id)
             raise
-        self._declared = None      # admission-message facts, built on the first refusal
+        self._declared: DeclaredRelations | None = None  # admission-message facts, built on the first refusal
         # P9: the per-Direct-node restriction key set is fully determined by the
         # (frozen, lifetime-stable) AST node -- cache it once instead of rebuilding
         # the comprehension on every direct_leaf / direct_expand call. Keyed by
@@ -758,7 +771,7 @@ class SetEngine:
     def _reset_state(self) -> None:
         self.interner = Interner(self.ops)
         self.node_sets: dict[int, NodeSets] = {}       # object id -> NodeSets
-        self.member_of: dict[int, object] = {}         # subject id -> object ids it appears in
+        self.member_of: dict[int, Any] = {}         # subject id -> object ids it appears in
         # Write-time cycle-detection index over the graph backend's DERIVED edges
         # (union schemas only). NOT read state -- reads never consult it.
         # N10: built LAZILY (``_ensure_flow_graph``) on the first flow-graph touch,
@@ -768,8 +781,8 @@ class SetEngine:
         # pays nothing for state only writes consult. ``_flow_built`` gates both the
         # incremental maintenance in ``_apply_add`` / ``_apply_remove`` and the
         # one-shot build.
-        self._flow_adj: dict[NodeKey, set[NodeKey]] = {}
-        self._edge_count: dict[tuple[NodeKey, NodeKey], int] = {}
+        self._flow_adj: dict[FlowKey, set[FlowKey]] = {}
+        self._edge_count: dict[tuple[FlowKey, FlowKey], int] = {}
         self._flow_built: bool = False
         # Bridge-aware flow graph: concrete-shape index for w_all OUT-bridges only.
         # ``_shape_nodes[(type, pred)]`` = set of concrete flow-keys of that shape
@@ -778,14 +791,15 @@ class SetEngine:
         # added on the first incident edge and dropped on the last). Populated only
         # when ``_maintain_shape_index`` (object wildcards declared).
         self._shape_nodes: dict[tuple[str, str], set[NodeKey]] = {}
-        self._flow_node_refs: dict[NodeKey, int] = {}
+        self._flow_node_refs: dict[FlowKey, int] = {}
 
     def rebuild(self) -> None:
         """Replay the RelationTuple table into fresh in-memory state."""
         # Provenance (moved out of the docstring, TK123 item 14): spec §3, §6.5.
         self._reset_state()
         rows = self.session.exec(
-            select(RelationTuple).where(RelationTuple.store_id == self.store_id).order_by(RelationTuple.id)
+            select(RelationTuple).where(RelationTuple.store_id == self.store_id)
+            .order_by(col(RelationTuple.id))
         ).all()
         for row in rows:
             self._apply_add(row.subject_predicate, row.subject_type, row.subject_name,
@@ -832,6 +846,7 @@ class SetEngine:
 
         Refused with ``UnloggedWriteRefused`` on a log-governed store: write through
         ``TupleSource.add`` there instead."""
+        require_parts('add_tuple', _TUPLE_LONG, (subject_predicate, subject_type, subject_name, relation, object_type, object_name))  # TK179: a wrong type is a TypeError
         # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-8a.
         # Provenance (moved out of the docstring, TK123 item 14): §6.1.
         s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
@@ -876,6 +891,7 @@ class SetEngine:
         Refused with ``UnloggedWriteRefused`` on a log-governed store.
         This is the fail-OPEN half of that refusal: an unlogged REMOVE leaves the
         grant materialized in the graph index, which keeps answering ALLOW."""
+        require_parts('remove_tuple', _TUPLE_LONG, (subject_predicate, subject_type, subject_name, relation, object_type, object_name))  # TK179: a wrong type is a TypeError
         # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-8a.
         s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
         reject_ellipsis_predicate(subject_predicate, 'remove_tuple', write=True)  # TK123 item 9
@@ -1052,14 +1068,16 @@ class SetEngine:
         for dep in self._object_deps.get((o_type, relation), ()):
             did = self.interner.get(o_type, o_name, dep)
             if self.interner.release(o_type, o_name, dep) is not None:
-                self.node_sets.pop(did, None)
-                self.member_of.pop(did, None)
+                # cast: release() freed it, so get() above found it interned
+                self.node_sets.pop(cast(int, did), None)
+                self.member_of.pop(cast(int, did), None)
         if s_pred == '...' and s_name != '*':
             for tgt in self._chain_targets.get((o_type, relation), ()):
                 tid = self.interner.get(s_type, s_name, tgt)
                 if self.interner.release(s_type, s_name, tgt) is not None:
-                    self.node_sets.pop(tid, None)
-                    self.member_of.pop(tid, None)
+                    # cast: release() freed it, so get() above found it interned
+                    self.node_sets.pop(cast(int, tid), None)
+                    self.member_of.pop(cast(int, tid), None)
         # Release interner references; a freed (recycled) id must not carry residual state.
         if self.interner.release(s_type, s_name, s_pred) is not None:
             self.node_sets.pop(subject_id, None)
@@ -1128,22 +1146,22 @@ class SetEngine:
     # flow-keys are 4-tuples ``(type, '*', pred, 'any'|'all')``.
 
     @staticmethod
-    def _fk_subject(node: NodeKey) -> NodeKey:
+    def _fk_subject(node: NodeKey) -> FlowKey:
         t, n, p = node
         return (t, '*', p, 'any') if n == '*' else node
 
     @staticmethod
-    def _fk_object(node: NodeKey) -> NodeKey:
+    def _fk_object(node: NodeKey) -> FlowKey:
         t, n, p = node
         return (t, '*', p, 'all') if n == '*' else node
 
-    def _flow_pair(self, u: NodeKey, v: NodeKey) -> tuple[NodeKey, NodeKey]:
+    def _flow_pair(self, u: NodeKey, v: NodeKey) -> tuple[FlowKey, FlowKey]:
         """Map a raw derived (subject, object) node pair to its position-tagged flow
         keys. Used at every site that feeds the flow graph (stored edges AND the
         tentative edges ``_would_cycle`` hands ``_flow_reaches``) so tagging is uniform."""
         return (self._fk_subject(u), self._fk_object(v))
 
-    def _shape_node_ref(self, key: NodeKey, delta: int) -> None:
+    def _shape_node_ref(self, key: FlowKey, delta: int) -> None:
         """Reference-count a concrete flow node in the shape->concrete index (OUT-bridge
         support only). Star keys (4-tuples) are ignored -- only concretes are OUT-bridge
         targets. Added on the first incident edge, dropped on the last."""
@@ -1164,7 +1182,7 @@ class SetEngine:
                 t, _n, p = key
                 self._shape_nodes.setdefault((t, p), set()).add(key)
 
-    def _flow_add_edge(self, u: NodeKey, v: NodeKey) -> None:
+    def _flow_add_edge(self, u: FlowKey, v: FlowKey) -> None:
         self._ensure_flow_graph()
         c = self._edge_count.get((u, v), 0)
         self._edge_count[(u, v)] = c + 1
@@ -1174,7 +1192,7 @@ class SetEngine:
                 self._shape_node_ref(u, +1)
                 self._shape_node_ref(v, +1)
 
-    def _flow_remove_edge(self, u: NodeKey, v: NodeKey) -> None:
+    def _flow_remove_edge(self, u: FlowKey, v: FlowKey) -> None:
         self._ensure_flow_graph()
         c = self._edge_count.get((u, v), 0)
         if c <= 1:
@@ -1188,7 +1206,7 @@ class SetEngine:
         else:
             self._edge_count[(u, v)] = c - 1
 
-    def _flow_reaches(self, src: NodeKey, dst: NodeKey, extra: list[tuple[NodeKey, NodeKey]]) -> bool:
+    def _flow_reaches(self, src: FlowKey, dst: FlowKey, extra: list[tuple[FlowKey, FlowKey]]) -> bool:
         """Is dst reachable from src in the flow graph plus `extra` (tentative) edges?
 
         BRIDGE-AWARE: the graph index materializes wildcard bridge edges the stored
@@ -1223,7 +1241,7 @@ class SetEngine:
         bridged_in = self.schema_info.bridged_in_shapes
         bridged_out = self.schema_info.bridged_out_shapes
         crossable = self.schema_info.crossable_shapes
-        seen: set[NodeKey] = set()
+        seen: set[FlowKey] = set()
         stack = [src]
         while stack:
             node = stack.pop()
@@ -1243,6 +1261,7 @@ class SetEngine:
                 # w_all(T, p): OUT-bridge to every concrete (T, x, p) sibling present as
                 # a flow node or as a tentative-edge endpoint.
                 t, _s, p, _v = node
+                ck: FlowKey
                 for ck in self._shape_nodes.get((t, p), ()):
                     stack.append(ck)
                 for (a, b) in extra:
@@ -1318,15 +1337,19 @@ class SetEngine:
             if self._declared is None:
                 self._declared = declared_relations(self.ast, self._declared_types)
             raise AdmissionRejected(no_restriction_message(
-                self._declared, f"{s_type}:{s_name}#{s_pred} {relation} {o_type}:{o_name}",
+                self._declared, tuple_text(s_pred, s_type, s_name, relation, o_type, o_name),
                 o_type, relation))
 
         # (3) cycle rejection (§6.2): reject usersets whose membership would loop, matching
         #     the graph backend's cycle detection. Side-effect free -- uses existing ids only.
         if self._would_cycle(s_pred, s_type, s_name, relation, o_type, pairs):
+            # TK177: name the way out, not only the cycle.
             raise AdmissionRejected(
-                f"tuple {s_type}:{s_name}#{s_pred} {relation} {o_type}:{o_name} would create a "
-                f"cycle in the userset membership topology")
+                f"tuple {tuple_text(s_pred, s_type, s_name, relation, o_type, o_name)} would "
+                f"create a cycle in the userset membership topology: with it, "
+                f"{o_type}:{o_name} would end up inside itself (a group in its own members, "
+                f"or an object that is its own ancestor through a recursive 'from'). "
+                f"Instead, leave this tuple out, or remove the tuple that closes the loop")
 
     def _would_cycle(self, s_pred, s_type, s_name, relation, o_type, pairs) -> bool:
         # A schema the graph REFUSES (decision-15 scope, cyclic derived dependencies) has
@@ -1443,6 +1466,7 @@ class SetEngine:
 
         Evaluated on demand over the stored tuples, ``and`` / ``but not`` included. It
         reads the engine's in-memory state only and issues no database query."""
+        require_parts('check', _TUPLE_LONG, (subject_predicate, subject_type, subject_name, relation, object_type, object_name))  # TK179: a wrong type is a TypeError
         s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
         reject_ellipsis_predicate(subject_predicate, 'check', write=False)  # TK123 item 9
         s_pred = _norm_pred(subject_predicate)
@@ -1463,7 +1487,7 @@ class SetEngine:
         # stack, so a 2,000-long userset chain evaluates instead of raising
         # RecursionError.
 
-        def sat(ot: str, on: str, rel: str) -> bool:
+        def sat(ot: str, on: str, rel: str) -> Generator[Any, Any, bool]:
             key = (ot, on, rel)
             cached = memo.get(key)
             if cached is not None:
@@ -1494,7 +1518,7 @@ class SetEngine:
                 low[0] = min(outer_low, my_low)
             return result
 
-        def sat_expr(expr, ot: str, on: str, rel: str) -> bool:
+        def sat_expr(expr, ot: str, on: str, rel: str) -> Generator[Any, Any, bool]:
             if isinstance(expr, Union):
                 # any(...) over the children, in order, short-circuiting on True
                 for c in expr.children:
@@ -1519,7 +1543,7 @@ class SetEngine:
                 return (yield ttu_leaf(expr.target_rel, expr.tupleset_rel, ot, on))
             raise TypeError(f'unknown AST node {expr!r}')
 
-        def direct_leaf(direct, ot: str, on: str, rel: str) -> bool:
+        def direct_leaf(direct, ot: str, on: str, rel: str) -> Generator[Any, Any, bool]:
             restr = self._restrictions_of(direct)
             nodes = [self.node_sets[i] for i in self._object_ids(ot, on, rel) if i in self.node_sets]
             if not nodes:
@@ -1567,7 +1591,7 @@ class SetEngine:
                 return True
             return (yield member_via_usersets(nodes, restr))
 
-        def member_via_usersets(nodes, restr) -> bool:
+        def member_via_usersets(nodes, restr) -> Generator[Any, Any, bool]:
             # iterate only usersets (small, topology-shaped -- the §5 performance invariant)
             for ns in nodes:
                 for uid in ns.usersets:
@@ -1586,7 +1610,8 @@ class SetEngine:
                                 return True
             return False
 
-        def ttu_leaf(target_rel: str, tupleset_rel: str, ot: str, on: str) -> bool:
+        def ttu_leaf(target_rel: str, tupleset_rel: str, ot: str,
+                     on: str) -> Generator[Any, Any, bool]:
             nodes = [self.node_sets[i] for i in self._object_ids(ot, on, tupleset_rel)
                      if i in self.node_sets]
             for ns in nodes:
@@ -1624,6 +1649,8 @@ class SetEngine:
         shapes in ``stars`` (never enumerated). Never interns on read. The ids in the
         returned ``MemberSet`` are internal interner handles with no staleness check;
         callers wanting keys use ``lookup_reverse`` + ``result_keys`` / ``excluded_keys``."""
+        if memo is None:   # TK179: the top-level call only, not each recursion
+            require_parts('expand', ('relation', 'o_type', 'o_name'), (relation, o_type, o_name))
         # Provenance (moved out of the docstring, TK123 item 14): §6.3.
         if memo is None:
             memo = {}
@@ -1640,7 +1667,7 @@ class SetEngine:
         # in ``check`` (same statements, same order, same memo/cycle handling) --
         # ``lookup_reverse`` over a deep userset chain no longer raises RecursionError.
 
-        def do(ot: str, on: str, rel: str) -> MemberSet:
+        def do(ot: str, on: str, rel: str) -> Generator[Any, Any, MemberSet]:
             key = (ot, on, rel)
             cached = memo.get(key)
             if cached is not None:
@@ -1666,7 +1693,8 @@ class SetEngine:
                 low[0] = min(outer_low, my_low)
             return r
 
-        def do_expr(expr, ot, on, rel) -> MemberSet:
+        def do_expr(expr, ot, on, rel) -> Generator[Any, Any, MemberSet]:
+            acc: MemberSet | None
             if isinstance(expr, Union):
                 acc = ms.empty(ops)
                 for c in expr.children:
@@ -1690,7 +1718,7 @@ class SetEngine:
                 return (yield ttu_expand(expr.target_rel, expr.tupleset_rel, ot, on))
             raise TypeError(f'unknown AST node {expr!r}')
 
-        def direct_expand(direct, ot, on, rel) -> MemberSet:
+        def direct_expand(direct, ot, on, rel) -> Generator[Any, Any, MemberSet]:
             restr = self._restrictions_of(direct)
             nodes = [self.node_sets[i] for i in self._object_ids(ot, on, rel) if i in self.node_sets]
             pos = ops.new()
@@ -1727,7 +1755,7 @@ class SetEngine:
             local = MemberSet(ops.freeze(pos), frozenset(stars), ops.freeze())
             return ms.union(local, acc, ops, pop)
 
-        def ttu_expand(target, tupleset, ot, on) -> MemberSet:
+        def ttu_expand(target, tupleset, ot, on) -> Generator[Any, Any, MemberSet]:
             nodes = [self.node_sets[i] for i in self._object_ids(ot, on, tupleset)
                      if i in self.node_sets]
             acc = ms.empty(ops)
@@ -1819,6 +1847,7 @@ class SetEngine:
         '...')`` marker with mallory's id excluded (before 0.0.5, ``neg`` was dropped
         and the result read as "every user"). ``pos`` and ``neg`` are disjoint by
         construction, so the subtraction is unambiguous."""
+        require_parts('lookup_reverse', _REVERSE_LONG, (relation, object_type, object_name))  # TK179: a wrong type is a TypeError
         # Provenance (moved out of the docstring, TK123 item 14): TK139.
         # Provenance (moved out of the docstring, TK123 item 14): §6.4.
         o_type, o_name = object_type, object_name  # TK123 item 7
@@ -1878,6 +1907,7 @@ class SetEngine:
         a ``user:*`` grant and ``mallory`` banned, ``lookup_reverse`` is the
         ``('user', '...')`` marker with mallory excluded, and ``result_keys`` alone is
         ``set()``."""
+        require_instance('SetEngine.result_keys', 'res', res, SetLookupResult, what="lookup() or lookup_reverse()'s result")  # TK179
         # Provenance (moved out of the docstring, TK123 item 14): TK139 review,
         # ``docs/tk139-lookup-reverse-exclusions-2026-10-13.md``.
         return self._translate(res, res.node_ids, 'node_ids') | set(res.implicit_keys)
@@ -1887,6 +1917,7 @@ class SetEngine:
         keys: the portable form of "every subject of a marker's shape EXCEPT these".
         The companion of ``result_keys``; a caller expanding ``res.markers`` must
         subtract these."""
+        require_instance('SetEngine.excluded_keys', 'res', res, SetLookupResult, what="lookup() or lookup_reverse()'s result")  # TK179
         # Provenance (moved out of the docstring, TK123 item 14): TK139.
         return (self._translate(res, res.excluded_node_ids, 'excluded_node_ids')
                 | set(res.implicit_excluded_keys))
@@ -2005,6 +2036,7 @@ class SetEngine:
         type", each with the objects it excludes (under ``but not`` / ``and``). The
         cost is proportional to what the subject can reach, not to the store size;
         every result is confirmed by ``check``, so the answer is exact."""
+        require_parts('lookup', _LOOKUP_LONG, (subject_predicate, subject_type, subject_name))  # TK179: a wrong type is a TypeError
         # Implementation notes (moved out of the docstring, TK123 item 14 / A40):
         # The dual of ``expand``: a reverse BFS over membership edges from the subject
         # (seeded by its direct memberships, propagated by ``_reverse_neighbors``'s

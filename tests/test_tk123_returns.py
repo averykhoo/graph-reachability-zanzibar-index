@@ -92,8 +92,8 @@ def _walk(schema, object_wc, pool, seed, steps, stats):
                          lambda t, r: (t, r))):
                     _assert_covers(f'{side} lookup{subj}', res, keys(res), excl(res),
                                    [((t, n, r), (*subj, r, t, n)) for (r, t, n) in objects],
-                                   lambda k: marker(k[0], k[2]), oracle, ast, stats,
-                                   sweep=lambda k: (*subj, k[2], k[0], k[1]))
+                                   lambda k, marker=marker: marker(k[0], k[2]), oracle, ast, stats,
+                                   sweep=lambda k, subj=subj: (*subj, k[2], k[0], k[1]))
             for obj in objects:
                 rel, o_type, o_name = obj
                 for side, res, keys, excl, marker in (
@@ -104,8 +104,9 @@ def _walk(schema, object_wc, pool, seed, steps, stats):
                     _assert_covers(f'{side} lookup_reverse{obj}', res, keys(res), excl(res),
                                    [((t, n, p), (p, t, n, rel, o_type, o_name))
                                     for (p, t, n) in subjects],
-                                   lambda k: marker(k[0], k[2]), oracle, None, stats,
-                                   sweep=lambda k: (k[2], k[0], k[1], rel, o_type, o_name))
+                                   lambda k, marker=marker: marker(k[0], k[2]), oracle, None, stats,
+                                   sweep=lambda k, rel=rel, o_type=o_type, o_name=o_name: (
+                                       k[2], k[0], k[1], rel, o_type, o_name))
 
         for _ in range(steps):
             cands = [r for r in pool if r not in present]

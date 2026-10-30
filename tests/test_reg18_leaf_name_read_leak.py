@@ -44,7 +44,6 @@ assertion over there (mirroring the G4 reverse assertion); this module keeps the
 deterministic minimal repro.
 """
 
-import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from zanzibar.store import Store

@@ -20,6 +20,8 @@ and admission cannot predict, so it escapes that promotion and propagates as its
 
 from __future__ import annotations
 
+from typing import cast
+
 from sqlmodel import Session, select
 
 from zanzibar.graphindex import WildcardIndex
@@ -68,7 +70,7 @@ def _attach_failing_row(exc: BaseException, row: TupleLog) -> None:
     # TK123 item 13: a stalled index used to report only the resource limit, with no
     # way to find the row to remove at the source.
     if getattr(exc, 'failing_log_row', None) is None:
-        exc.failing_log_row = (row.id, render_log_row(row))
+        exc.failing_log_row = (row.id, render_log_row(row))  # type: ignore[attr-defined]  # deliberate dynamic attribute, read back via getattr
         exc.add_note(f'zanzibar: the index apply step failed on log row {row.id}: '
                      f'{render_log_row(row)}')
 
@@ -195,8 +197,10 @@ def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
     widx.idx._lock_store()
     session.refresh(cursor)
 
-    if rows_hint and cursor.applied_log_id == rows_hint[0].id - 1 and all(
-            rows_hint[i].id == rows_hint[i - 1].id + 1 for i in range(1, len(rows_hint))):
+    # cast: persisted TupleLog rows always carry their primary key
+    if rows_hint and cursor.applied_log_id == cast(int, rows_hint[0].id) - 1 and all(
+            rows_hint[i].id == cast(int, rows_hint[i - 1].id) + 1
+            for i in range(1, len(rows_hint))):
         rows = rows_hint
     else:
         rows = log_rows(session, cursor.source_store_id, cursor.applied_log_id, limit=batch)
@@ -221,7 +225,7 @@ def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
                 _attach_failing_row(e, row)    # TK123 item 13
                 raise
         if proc is not None:
-            proc.run_cascade(wm)
+            proc.run_cascade(cast(int, wm))     # wm is set whenever proc is
     # ZT-P1-5: advance to the CONTIGUOUS head, never blindly to ``rows[-1].id``. The
     # rows above are a contiguous prefix of what this session could SEE, which is not
     # the same as a contiguous prefix of the LOG. On a real MVCC server the two come
@@ -236,7 +240,7 @@ def advance_index(session: Session, cursor: IndexCursor, widx: WildcardIndex,
     # (It does NOT rescue a snapshot-PINNED session: under REPEATABLE READ/SERIALIZABLE
     # the re-read is served from the same blind snapshot -- which is why those levels
     # are refused at construction rather than compensated for here.)
-    head = rows[-1].id
+    head = cast(int, rows[-1].id)        # a persisted row always carries its id
     gap = log_gap(session, cursor.source_store_id, cursor.applied_log_id, head,
                   [r.id for r in rows])
     if gap is not None:

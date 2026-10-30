@@ -19,7 +19,7 @@ from sqlmodel import select
 
 from zanzibar.graphindex import Edge
 from zanzibar.graphindex.invariants import InvariantViolation, check_invariants
-from zanzibar.schema import SchemaInfo, parse_openfga_schema
+from zanzibar.schema import parse_openfga_schema
 from tests.parity import ParityEngine
 from tests.scenarios import SCENARIOS
 from tests.test_wildcard_property import _candidate_raw_tuples, OBJECT_WC

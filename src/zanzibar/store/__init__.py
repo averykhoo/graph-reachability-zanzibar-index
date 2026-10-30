@@ -16,8 +16,8 @@ from .source import (ForeignToken, StaleRead, TupleSource, UnsafeIsolationLevel,
                      assert_read_isolation, log_gap, log_rows, log_watermark)
 from .apply import MissingDeltaProcessor, advance_index, ensure_cursor
 from .build import BuildReport, IndexExists, build_index, rebuild_index
-from ._store import (Store, ExpandResult, IndexStalled, LookupNotFresh, PARANOIA_ENV_VAR,
-                    UnloggedTuplesPresent)
+from ._store import Store, ExpandResult, IndexStalled, LookupNotFresh, UnloggedTuplesPresent
+from zanzibar.graphindex.invariants import PARANOIA_ENV_VAR
 # Imported here before `TK164` so a caller could catch what a ``Store`` raises from this
 # package; kept so those imports still resolve. The documented home is ``zanzibar``.
 from zanzibar.graphindex.core import WriteLockUnsafe

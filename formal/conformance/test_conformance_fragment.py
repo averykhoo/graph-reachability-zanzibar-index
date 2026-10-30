@@ -676,7 +676,7 @@ def test_lean_ttudirect_failures_are_refused_by_both_parsers(key):
         assert key not in _TTUDIRECT_WITNESSES, (
             f"[{key}] is a recorded ttuDirect witness but Lean says the field holds")
         return
-    for name, parse in (("production", prod_parse), ("oracle", oracle_parse)):
+    for _name, parse in (("production", prod_parse), ("oracle", oracle_parse)):
         with pytest.raises(ValueError, match=_TK106_REFUSAL):
             parse(schema_text)
 

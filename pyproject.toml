@@ -57,6 +57,10 @@ test = ["pytest", "hypothesis"]
 # The user-docs site (userdocs/, TK151). Also TEST dependencies: tests/test_userdocs_build.py
 # runs the strict Sphinx build inside the gate, so requirements.txt carries the same three.
 docs = ["sphinx>=8,<9", "myst-parser>=4,<5", "furo"]
+# The linter and type checker the gate runs (verify.sh lean, step 4h; TK182). Pinned EXACTLY:
+# a new release can add findings, and the gate must not change meaning on its own.
+# requirements.txt carries the same two pins.
+lint = ["ruff==0.17.3", "mypy==2.4.1"]
 
 [tool.setuptools.dynamic]
 # ONE copy of the version: src/zanzibar/__init__.py::__version__.
@@ -67,3 +71,26 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 zanzibar = ["py.typed"]
+
+# --- lint + type check (TK182; docs/tk182-lint-typecheck-plan-2026-10-30.md) ---------------
+# CORRECTNESS rules only, selected explicitly so a ruff upgrade cannot widen the gate on its
+# own: pyflakes (F), syntax errors (E9), bugbear (B), pylint errors (PLE). No style families
+# and no `ruff format`: churn for no correctness gain.
+[tool.ruff]
+target-version = "py313"
+extend-exclude = ["formal/lean", "formal/probes", "formal/history", "docs", ".scratch", ".gate-runs", "userdocs/_build"]
+# docs/ and formal/probes|history hold dated evidence scripts: frozen, never re-edited.
+
+[tool.ruff.lint]
+select = ["F", "E9", "B", "PLE"]
+
+[tool.ruff.lint.per-file-ignores]
+# Package __init__ files import names to RE-EXPORT them; that is their job.
+"**/__init__.py" = ["F401"]
+
+# mypy over the library only (tests, scripts and formal/ are outside the package).
+[tool.mypy]
+files = ["src/zanzibar"]
+python_version = "3.13"
+warn_unused_ignores = true
+warn_redundant_casts = true

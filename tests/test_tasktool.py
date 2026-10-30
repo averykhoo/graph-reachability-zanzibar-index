@@ -1943,7 +1943,7 @@ def tree_bytes(root):
     """Every file under `root`, by relative path, as bytes -- the whole fixture, note
     included, so that a refusal which "only" re-stamped a file is caught."""
     out = {}
-    for base, dirs, names in os.walk(root):
+    for base, _dirs, names in os.walk(root):
         for name in names:
             path = os.path.join(base, name)
             out[os.path.relpath(path, root)] = read(path)

@@ -41,18 +41,20 @@ rather than ``FOR UPDATE``, which pysqlite renders to nothing; see ``_lock_sourc
 
 from __future__ import annotations
 
+from zanzibar.schema.argcheck import require_instance, require_int, require_session
+
 from typing import overload
 
 from sqlalchemy import update
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from zanzibar.graphindex.core import is_sqlite, take_row_write_lock
-from zanzibar.schema import validate_store_id
+from zanzibar.schema import RuleSet, validate_store_id
 from zanzibar.schema.errors import ZanzibarError
 from zanzibar.schema.errors import reject_ellipsis_predicate
 from zanzibar.schema.tuplestr import tuple_args
 from zanzibar.setengine import SetEngine
-from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
+from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS, require_setops
 
 from .models import SchemaRecord, TupleLog
 from .schema_io import StoreNotFound, open_set_engine
@@ -225,9 +227,9 @@ def log_gap(session: Session, store_id: str, after_id: int, head_id: int,
         return None
     stmt = (select(TupleLog.id)
             .where(TupleLog.store_id == store_id)
-            .where(TupleLog.id > after_id)
-            .where(TupleLog.id <= head_id)
-            .order_by(TupleLog.id)                     # type: ignore[arg-type]
+            .where(col(TupleLog.id) > after_id)
+            .where(col(TupleLog.id) <= head_id)
+            .order_by(col(TupleLog.id))
             .with_for_update(read=True))
     seen = set(applied_ids)
     for row_id in session.exec(stmt).all():
@@ -241,7 +243,7 @@ def log_watermark(session: Session, store_id: str) -> int:
     row = session.exec(
         select(TupleLog.id)
         .where(TupleLog.store_id == store_id)
-        .order_by(TupleLog.id.desc())  # type: ignore[union-attr]
+        .order_by(col(TupleLog.id).desc())
         .limit(1)
     ).first()
     return row or 0
@@ -252,8 +254,8 @@ def log_rows(session: Session, store_id: str, after_id: int = 0,
     """Log rows with id > after_id, in cursor order (optionally capped for batching)."""
     stmt = (select(TupleLog)
             .where(TupleLog.store_id == store_id)
-            .where(TupleLog.id > after_id)
-            .order_by(TupleLog.id))  # type: ignore[arg-type]
+            .where(col(TupleLog.id) > after_id)
+            .order_by(col(TupleLog.id)))
     if limit is not None:
         stmt = stmt.limit(limit)
     return list(session.exec(stmt).all())
@@ -328,6 +330,7 @@ def _require_clean_session(session: Session, surface: str) -> None:
     of raw SQL, or a flushed object) is invisible to it."""
     # TK123 item 10: Store did not check at all, so a caller's pending row rode along
     # into the store's commit (or was dropped by its rollback).
+    require_session(surface, session)  # TK179 G5: a non-Session was an AttributeError
     if session.new or session.dirty or session.deleted:
         raise ValueError(
             f'{surface} owns the transaction (commit on success, rollback on '
@@ -350,6 +353,10 @@ class TupleSource:
         # touching ``Store``. Cheap and idempotent: a no-op on SQLite, and
         # ``Store`` calling it too costs one extra dialect check.
         validate_store_id(store_id)  # TK127 follow-up: before any statement
+        require_session('TupleSource', session)     # TK179: before any statement
+        require_setops(ops)
+        require_instance('TupleSource', 'ruleset', ruleset, RuleSet, optional=True,
+                         what='None or the RuleSet compiled from this schema')
         assert_read_isolation(session)
         self.session = session
         self.store_id = store_id
@@ -394,7 +401,7 @@ class TupleSource:
         # cursor, replica tailers, ``at_least`` tokens, ``lag()``) would ever notice.
         # ``add``/``remove`` below go through the ``_*_direct`` bodies instead, and
         # append the log row themselves.
-        self._engine.log_governed = True
+        self.engine.log_governed = True
         # The row flushed by the most recent ``_append``, until ``pop_pending_rows``
         # drains it (perf P12b). Under the sync schedule the caller drains this
         # immediately after each write and hands it to ``advance_index`` as a
@@ -409,7 +416,7 @@ class TupleSource:
         # retried transaction. Deliberately NOT set by ``_lock_source_shared``: a
         # FOR SHARE lock does not satisfy a later ``_lock_source``, which needs
         # FOR UPDATE.
-        self._locked_txn = None
+        self._locked_txn: tuple | None = None
         # TK158: what the most recent ``add`` / ``remove`` did to the in-memory engine,
         # recorded after the engine mutation and before the log append, so
         # ``undo_last_admission`` can reverse exactly that one tuple instead of
@@ -469,7 +476,7 @@ class TupleSource:
             # SQLite arm: same no-op UPDATE ``_lock_source`` uses (the store's schema
             # row is write-once, so re-writing ``created_at`` with its own value
             # changes nothing; the point is the RESERVED lock).
-            update(SchemaRecord).where(SchemaRecord.store_id == self.store_id)
+            update(SchemaRecord).where(col(SchemaRecord.store_id) == self.store_id)
             .values(created_at=SchemaRecord.created_at),
         )
 
@@ -581,7 +588,7 @@ class TupleSource:
             # re-writing ``created_at`` with its own value changes nothing; the point
             # is the RESERVED lock the statement takes. (``schema_text`` is deliberately
             # not the column touched -- no need to rewrite a large value per write.)
-            update(SchemaRecord).where(SchemaRecord.store_id == self.store_id)
+            update(SchemaRecord).where(col(SchemaRecord.store_id) == self.store_id)
             .values(created_at=SchemaRecord.created_at),
         )
         # Capture AFTER the select: the lock SELECT itself may have autobegun the
@@ -626,8 +633,8 @@ class TupleSource:
         # earns the bypass, in this same transaction.
         self._last_admission = None
         prior_watermark = self.evaluator_watermark
-        if not self._engine._add_tuple_direct(s_pred, s_type, s_name,
-                                              relation, o_type, o_name):
+        if not self.engine._add_tuple_direct(s_pred, s_type, s_name,
+                                             relation, o_type, o_name):
             # duplicate: idempotent no-op, no log row; the current watermark
             # trivially satisfies the token contract
             return log_watermark(self.session, self.store_id)
@@ -657,8 +664,8 @@ class TupleSource:
         # ``_remove_tuple_direct``: see the note in ``add`` (ZT-P1-8a).
         self._last_admission = None
         prior_watermark = self.evaluator_watermark
-        self._engine._remove_tuple_direct(s_pred, s_type, s_name,
-                                          relation, o_type, o_name)
+        self.engine._remove_tuple_direct(s_pred, s_type, s_name,
+                                         relation, o_type, o_name)
         self._last_admission = ('REMOVE', s_pred, s_type, s_name, relation, o_type, o_name,
                                 prior_watermark)
         token = self._append('REMOVE', s_pred, s_type, s_name, relation, o_type, o_name)
@@ -767,6 +774,7 @@ class TupleSource:
         ``apply_logged``'s ``RuntimeError`` propagates: a presence mismatch during
         trusted replay means the watermark is corrupt, and the loud failure is the
         point -- recovery is ``refresh_evaluator()``."""
+        require_int('catch_up_evaluator', 'batch', batch, minimum=1, optional=True)  # TK179
         # Provenance (moved out of the docstring, TK123 item 14): blind-audit X2.
         total = 0
         while True:
@@ -791,7 +799,7 @@ class TupleSource:
             select(func.count())
             .select_from(TupleLog)
             .where(TupleLog.store_id == self.store_id)
-            .where(TupleLog.id > self.evaluator_watermark)
+            .where(col(TupleLog.id) > self.evaluator_watermark)
         ).one()
 
     def undo_last_admission(self) -> None:

@@ -7,6 +7,10 @@ hypothesis
 sphinx>=8,<9
 myst-parser>=4,<5
 furo
+# The linter and type checker the gate runs (verify.sh lean, step 4h; TK182). Same EXACT pins
+# as pyproject.toml's `lint` extra -- scripts/lint_gate.py refuses any other version.
+ruff==0.17.3
+mypy==2.4.1
 
 # PostgreSQL driver -- needed ONLY for the opt-in server leg of the gate
 # (tests/test_postgres_ha.py, plus the DSN re-runs of tests/test_concurrency.py and the

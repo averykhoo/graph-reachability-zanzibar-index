@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import inspect
 
-from .errors import ZanzibarError
+from .argcheck import require_str
+from .errors import ZanzibarError, validate_write_identifiers
 
 __all__ = ['MalformedTupleString', 'parse_user', 'parse_object',
            'tuple_args', 'lookup_args', 'lookup_reverse_args', 'shape_filter']
@@ -86,6 +87,7 @@ def _signature(names: tuple[str, ...]) -> inspect.Signature:
                               for n in names])
 
 
+
 _TUPLE_LONG = ('subject_predicate', 'subject_type', 'subject_name',
                'relation', 'object_type', 'object_name')
 _TUPLE_SHORT = ('user', 'relation', 'object')
@@ -141,32 +143,59 @@ def _bind(method: str, args: tuple, kwargs: dict,
     return is_short, tuple(bound.arguments[n] for n in names)
 
 
+_WRITES = frozenset({'add', 'remove', 'add_tuple', 'remove_tuple'})
+
+
+def require_parts(method: str, names: tuple[str, ...], values: tuple) -> None:
+    """The identifier parts of a call, checked before anything reads the database.
+
+    A WRITE gets the full write validation (``validate_write_identifiers``): a non-``str``
+    or out-of-charset part is ``AdmissionRejected``, as it always was, only earlier. A READ
+    stays lenient about VALUES (a name that cannot exist matches nothing) but not about
+    TYPES: a part that is not a ``str`` is a ``TypeError``. ``None`` as a read's subject
+    predicate keeps its documented meaning, the bare subject; an ``Ellipsis`` predicate
+    gets its own refusal further on."""
+    # TK179 G1/G2: a wrong-typed relation or six-part field used to read as "no access"
+    # (check -> False) or reach SQLite, and writes refused it only after taking locks.
+    if method in _WRITES and names == _TUPLE_LONG:
+        validate_write_identifiers(*values)
+        return
+    for name, value in zip(names, values, strict=True):
+        if name == 'subject_predicate' and (value is None or value is Ellipsis):
+            continue
+        require_str(method, name, value)
+
+
 def tuple_args(method: str, args: tuple, kwargs: dict) -> tuple:
     """``add_tuple`` / ``remove_tuple`` / ``check`` arguments in either form, as the six
     parts ``(subject_predicate, subject_type, subject_name, relation, object_type,
     object_name)``."""
     is_short, values = _bind(method, args, kwargs, _TUPLE_LONG, _TUPLE_SHORT)
-    if not is_short:
-        return values
-    user, relation, obj = values
-    return (*parse_user(user), relation, *parse_object(obj))
+    if is_short:
+        user, relation, obj = values
+        values = (*parse_user(user), relation, *parse_object(obj))
+    require_parts(method, _TUPLE_LONG, values)
+    return values
 
 
 def lookup_args(method: str, args: tuple, kwargs: dict) -> tuple:
     """``lookup`` arguments (``user`` or the three subject parts) as
     ``(subject_predicate, subject_type, subject_name)``."""
     is_short, values = _bind(method, args, kwargs, _LOOKUP_LONG, _LOOKUP_SHORT)
-    return parse_user(values[0]) if is_short else values
+    values = parse_user(values[0]) if is_short else values
+    require_parts(method, _LOOKUP_LONG, values)
+    return values
 
 
 def lookup_reverse_args(method: str, args: tuple, kwargs: dict) -> tuple:
     """``lookup_reverse`` arguments (``relation, object`` or ``relation, object_type,
     object_name``) as ``(relation, object_type, object_name)``."""
     is_short, values = _bind(method, args, kwargs, _REVERSE_LONG, _REVERSE_SHORT)
-    if not is_short:
-        return values
-    relation, obj = values
-    return (relation, *parse_object(obj))
+    if is_short:
+        relation, obj = values
+        values = (relation, *parse_object(obj))
+    require_parts(method, _REVERSE_LONG, values)
+    return values
 
 
 def shape_filter(method: str, entity_type, predicate,
@@ -180,7 +209,7 @@ def shape_filter(method: str, entity_type, predicate,
     the argument's name in ``names`` (the caller's own keywords)."""
     # Provenance: TK156 (docs/tk156-lookup-filter-2026-10-19.md); ``names`` from the
     # TK156 review, so a Store-level refusal names the keyword the caller passed.
-    for name, value in zip(names, (entity_type, predicate)):
+    for name, value in zip(names, (entity_type, predicate), strict=True):
         if value is not None and not isinstance(value, str):
             hint = ''
             if value is Ellipsis and name == names[1]:

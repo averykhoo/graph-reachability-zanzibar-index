@@ -42,7 +42,6 @@ from zanzibar.setengine import SetEngine
 from zanzibar.setengine.models import RelationTuple
 from zanzibar.store import (SchemaMismatch, StaleRead, Store, StoreNotFound,
                             TablesNotCreated, TupleSource, build_index, rebuild_index)
-from zanzibar.store.models import TupleLog
 
 SCHEMA = '''model
   schema 1.1

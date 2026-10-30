@@ -155,13 +155,13 @@ def run_point(args) -> dict:
             row = dict(query=label)
             widx._reflexive_reads = True
             row['on_ms'], row['on_reps'], res = timed(
-                lambda: getattr(cs, meth)(*qargs), args.budget, args.max_reps)
+                lambda meth=meth, qargs=qargs: getattr(cs, meth)(*qargs), args.budget, args.max_reps)
             widx._reflexive_reads = False
             row['off_ms'], row['off_reps'], res_off = timed(
-                lambda: getattr(cs, meth)(*qargs), args.budget, args.max_reps)
+                lambda meth=meth, qargs=qargs: getattr(cs, meth)(*qargs), args.budget, args.max_reps)
             widx._reflexive_reads = True
             row['set_ms'], row['set_reps'], sres = timed(
-                lambda: getattr(se, meth)(*qargs), args.budget, args.max_reps)
+                lambda meth=meth, qargs=qargs: getattr(se, meth)(*qargs), args.budget, args.max_reps)
             g_keys = set(cs.result_keys(res)) | {('marker',) + m for m in res.markers}
             g_off = set(cs.result_keys(res_off)) | {('marker',) + m for m in res_off.markers}
             s_keys = set(se.result_keys(sres)) | {('marker',) + m for m in sres.markers}

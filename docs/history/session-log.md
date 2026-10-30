@@ -33,11 +33,11 @@ from here.
 
 ---
 
-## 2026-10-30b — 0.1.1 RELEASED (`TK173`/`TK174`/`TK175` closed); trial BROKEN `TK176` fixed; 0.1.2 awaits the tag
+## 2026-10-30b — 0.1.1 RELEASED; `TK176`-`TK182` done (strict args, ruff+mypy, stranger tests); 0.1.2 awaits tag
 
-rows: TK173 (closed), TK174 (closed), TK175 (new, closed), TK176 (new, closed), TK177 (new, LATER), TK178 (new, NOW)
+rows: TK173 (closed), TK174 (closed), TK175 (new, closed), TK176 (new, closed), TK177 (new, NEXT), TK178 (new, NOW), TK179 / TK180 / TK181 / TK182 (new, closed), TK177 (closed)
 
-`task lint: clean (13 checks, 296 task file(s) parsed), 27 warning(s)`
+`task lint: clean (13 checks, 300 task file(s) parsed), 26 warning(s)`
 
 `read: board + note`
 
@@ -81,6 +81,34 @@ rows: TK173 (closed), TK174 (closed), TK175 (new, closed), TK176 (new, closed), 
   self-parent note) as `TK176`, pinned by `tests/test_tk176_open_arg_types.py` (3 sabotages
   red), under CHANGELOG `[Unreleased]`. F21 (message notation) filed as `TK177`. `TK178` (NOW)
   = cut 0.1.2: the user's word covered 0.1.1 only, so it is NOT tagged.
+- **User asked why the suite missed it, then: "improve testing before releasing 0.1.2".**
+  Not the install (every trial BROKEN reproduced on the checkout); the suite covers valid
+  inputs densely and wrong-typed ones only where someone wrote a check, and runs one
+  `Store` per store and each docs page once. Measured and DECIDED (plan
+  [`docs/tk179-strict-public-args-plan-2026-10-30.md`](../tk179-strict-public-args-plan-2026-10-30.md)):
+  explicit validators + a census test that is red on any unclassified public parameter,
+  not a type-check decorator (bind 3.5 us = 0.6% of a ~595 us check, so latency is not the
+  reason; the annotations do not encode the contract and the hot methods are `*args`).
+  Found en route: `check("user:a", None, "doc:1")` silently returns False. Filed `TK179`
+  (census + validators), `TK180` (hypothesis self-reference bias), `TK181` (multi-instance
+  smoke, docs pages run twice / in pairs); `TK177` promoted; `TK178` depends on all four.
+- **User: "including lint (ruff?) and mypy (why not pyrefly) ... get that all done before
+  0.1.2".** Measured four tools (`docs/tk182-lint-typecheck-plan-2026-10-30.md`): mypy and
+  pyrefly find the same order of problems; pyrefly's speed does not matter at 35 files, mypy
+  is the typing-spec reference, so mypy. Then six agents in parallel on disjoint files
+  (mypy-A/B/C, ruff-rest, tk180, tk181), the session on TK179/TK177. Everything closed:
+  * `TK182`: ruff + mypy pinned, `verify.sh lean` step 4h via `scripts/lint_gate.py`; all
+    findings fixed behaviour-preserving; 69 anchored bodies re-reviewed, pin regenerated.
+  * `TK179`: census of every public parameter (`tests/test_tk179_public_arg_census.py`, 681
+    tests; unlisted parameter = red). First run: 82/391 wrong-typed probes accepted silently.
+    Decided: writes keep `AdmissionRejected`, earlier; reads `TypeError`, except the
+    DOCUMENTED `None` read predicate, which my first cut broke and TK181's new docs runner
+    caught. Only `index_store_id=None` means "in place" now.
+  * `TK177` messages, `TK180` hypothesis self-references (finds TK175 on every seed tried),
+    `TK181` multi-instance smoke + docs pages run twice / shared
+    (`docs/tk180-tk181-stranger-tests-2026-10-30.md`).
+  * Lesson for the next measurement: mypy's output line count is not its error count
+    (notes) -- my "174" was 19.
 
 Still owed: nothing.
 

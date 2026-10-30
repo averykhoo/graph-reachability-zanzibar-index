@@ -54,7 +54,7 @@ from zanzibar.setengine.models import RelationTuple
 from zanzibar.schema import (Entity, PathCountExceeded, RelationalTriple, RuleSet,
                                norm_pred)
 
-from .bulk_backfill import _BulkBackfill
+from .bulk_backfill import _BulkBackfill, _Residue
 from .invariants import InvariantViolation
 from .models import DeltaOutbox, Edge, Node, ResidueRef, Residue
 
@@ -158,10 +158,11 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
     # rows, same ``.order_by(RelationTuple.id)`` order as the incremental reference path.
     m: dict[tuple[NodeKey, NodeKey], int] = defaultdict(int)
     row_stream = session.exec(
-        select(RelationTuple.subject_predicate, RelationTuple.subject_type, RelationTuple.subject_name,
+        # sqlmodel's select() overload stubs stop at four columns; six is valid at runtime
+        select(RelationTuple.subject_predicate, RelationTuple.subject_type, RelationTuple.subject_name,  # type: ignore[call-overload]
                RelationTuple.relation, RelationTuple.object_type, RelationTuple.object_name)
         .where(RelationTuple.store_id == source_store_id)
-        .order_by(RelationTuple.id)  # type: ignore[arg-type]
+        .order_by(RelationTuple.id)
         .execution_options(yield_per=_ROW_STREAM_BATCH)
     )
     for (subject_predicate, subject_type, subject_name,
@@ -245,7 +246,7 @@ def bulk_build(session: Session, source_store_id: str, index_store_id: str,
     compiled = ruleset.compiled
     derived_pairs: set[tuple[NodeKey, NodeKey]] = set()
     explicit: set[NodeKey] = set()
-    residues: dict[tuple[str, str, str], object] = {}
+    residues: dict[tuple[str, str, str], _Residue] = {}
     if compiled is not None and compiled.plans:
         bf = _BulkBackfill(m, nodes, schema_info, compiled)
         bf.run()

@@ -27,12 +27,11 @@ import os
 from typing import NamedTuple
 
 import pytest
-from hypothesis import HealthCheck, Phase, assume, example, given, settings, strategies as st
-from hypothesis.stateful import RuleBasedStateMachine, initialize, invariant, rule
+from hypothesis import HealthCheck, Phase, assume, given, settings, strategies as st
+from hypothesis.stateful import RuleBasedStateMachine, initialize, rule
 
 from zanzibar.schema import AdmissionRejected
 from zanzibar.graphindex.invariants import snapshot_rows
-from zanzibar.graphindex.outbox import outbox_watermark
 from zanzibar.graphindex.processor import DeltaProcessor
 from zanzibar.graphindex.wildcard import WildcardIndex
 from zanzibar.schema import (Computed, CyclicDerivedDependency, Direct,
@@ -40,8 +39,8 @@ from zanzibar.schema import (Computed, CyclicDerivedDependency, Direct,
                                Intersection, Restriction, TTU, Union,
                                UnsupportedByGraphIndex,
                                parse_openfga_schema, parse_schema_ast,
-                               unparse_schema_ast, wildcard_userset_restriction_shapes)
-from zanzibar.setengine import ALL_SETOPS, SetEngine
+                               unparse_schema_ast)
+from zanzibar.setengine import SetEngine
 from tests.parity import ParityEngine, _fresh_session
 from tests.test_processor import build
 
@@ -236,7 +235,8 @@ def _restriction_types(expr) -> frozenset[str]:
 
 
 @st.composite
-def schema_asts(draw, allow_usersets: bool = True, tupleset_kind: str | None = None):
+def schema_asts(draw, allow_usersets: bool = True, tupleset_kind: str | None = None,
+                self_ref_motif: bool | None = None):
     """Relations on ``doc`` in topo order (stratifiable), each referencing only earlier
     relations.
 
@@ -270,18 +270,77 @@ def schema_asts(draw, allow_usersets: bool = True, tupleset_kind: str | None = N
     The PDerivedUserset reconcile WRITE path (upos / ``_find_leaf_node``) is additionally
     covered deterministically by ``test_pderived_userset_add_remove_deterministic_pin``.
     ``allow_usersets`` remains a knob (default ON) so a future novel divergence can re-exclude
-    the narrowest class if ever needed."""
-    return _schema_ast(_HypothesisChoices(draw), allow_usersets, tupleset_kind)
+    the narrowest class if ever needed.
+
+    ``self_ref_motif`` (TK180, 2026-10-30): ``None`` (the default HERE) DRAWS whether the
+    schema carries the self-reference motif -- see ``_SELF_REF_MOTIF_KINDS``."""
+    return _schema_ast(_HypothesisChoices(draw), allow_usersets, tupleset_kind, self_ref_motif)
 
 
-def _schema_ast(ch, allow_usersets: bool = True, tupleset_kind: str | None = None):
+# --- TK180: the self-reference motif ----------------------------------------------- #
+# TK175 (`docs/tk175-self-parent-node-recreate-2026-10-30.md`) needed a tupleset that
+# admits its OWN type (``parent: [doc, ...]`` on ``doc``, so ``doc:d1 parent doc:d1`` is
+# writable), a boolean operator AROUND a ``from`` (``r1: r0 but not (r0 from parent)``) and
+# a second ``from`` over that boolean (``r2: r1 from parent``). The plain generator CAN draw
+# it, but only as the product of several 1-in-5 picks, and the gate met it once, by luck.
+# The motif appends three relations after 0..2 ordinary ones -- so a motif schema stays
+# inside the ordinary 2..5-relation budget (3..5): a BOOLEAN ``m`` (``and`` / ``but not``
+# over ordinary leaves), a boolean around a ``from`` of ``ref`` (``m`` itself 2 times in
+# 3, else an earlier relation), and a ``from`` over that. Measured 2026-10-30 (probes in
+# the TK180 report): the crash needs ``ref`` TAINTED (``r0: [user]`` instead of
+# ``[user] and [user]`` does not reproduce) and the outer relation a PLAIN ``from``
+# (``(r1 from parent) but not r0`` does not either), hence the fresh boolean and the
+# 2-in-3 weight on the plain ``from``. The tupleset is drawn from the bodies that admit a CONCRETE ``doc``
+# and no star (a star tupleset over a derived TTU target is the decision-15 scope drop,
+# which would filter the motif out of every graph-only property).
+_SELF_REF_MOTIF_TUPLESETS = ('plain', 'multitype', 'union')
+_SELF_REF_MOTIF_KINDS = ('but-not-from', 'but-not-from', 'but-not-from',
+                         'from-but-not', 'and-from', 'or-from')
+
+
+def _self_ref_motif(ch, names: list[str], leaf):
+    """``(m, boolean-around-a-from, from-over-it)``; ``leaf()`` draws an ordinary leaf
+    over ``names`` (the generator's own ``expr`` at full depth)."""
+    m = Intersection((leaf(), leaf())) if ch.intrange(0, 1) == 0 else Exclusion(leaf(), leaf())
+    m_name = f'r{len(names)}'
+    # ``ch.one`` over a weighted tuple, preferred value FIRST: hypothesis draws the first
+    # element of a ``sampled_from`` (and an integer's low end) as its "simplest" value, so
+    # an ``intrange(0, 2) > 0`` weight would invert under hypothesis while holding under
+    # the seeded sweeps.
+    ref = m_name if (not names or ch.one(('m', 'm', 'earlier')) == 'm') else ch.one(names)
+    plain, ttu = Computed(ref), TTU(ref, 'parent')
+    kind = ch.one(_SELF_REF_MOTIF_KINDS)
+    if kind == 'but-not-from':        # TK175's shape: the node is COLLECTED on a self-parent
+        a = Exclusion(plain, ttu)
+    elif kind == 'from-but-not':
+        a = Exclusion(ttu, Direct((Restriction('user', '...', False),)))
+    elif kind == 'and-from':
+        a = Intersection((plain, ttu))
+    else:
+        a = Union((Direct((Restriction('user', '...', False),)), ttu))
+    nxt = f'r{len(names) + 1}'
+    b = TTU(nxt, 'parent') if ch.one(('from', 'from', 'from-but-not')) == 'from' else Exclusion(
+        TTU(nxt, 'parent'), Computed(ref))
+    return m, a, b
+
+
+def _schema_ast(ch, allow_usersets: bool = True, tupleset_kind: str | None = None,
+                self_ref_motif: bool | None = False):
     """The generator BODY, written against the ``_Choices`` interface (see there for why).
     ``schema_asts`` is the hypothesis-driven wrapper; the coverage/rate sweeps below drive
-    this same function with a seeded RNG."""
-    n = ch.intrange(2, 5)
+    this same function with a seeded RNG.
+
+    ``self_ref_motif`` (TK180): ``False`` -- the default HERE, so a caller elsewhere that
+    seeds this body (``tests/test_lookup_oracle.py``, ``tests/test_tk116_*``) sees the
+    pre-TK180 stream byte-for-byte -- never plants it; ``True`` always does; ``None`` draws
+    it with probability 1/3 (what ``schema_asts`` and this module's sweeps use)."""
+    if self_ref_motif is None:
+        self_ref_motif = ch.intrange(0, 2) == 0
+    n = ch.intrange(0, 2) if self_ref_motif else ch.intrange(2, 5)
     names = [f'r{i}' for i in range(n)]
     if tupleset_kind is None:
-        tupleset_kind = ch.one(_TUPLESET_KINDS)
+        tupleset_kind = ch.one(_SELF_REF_MOTIF_TUPLESETS if self_ref_motif
+                               else _TUPLESET_KINDS)
     ast = {('doc', 'parent'): _TUPLESET_BODIES[tupleset_kind]}
 
     def expr(i: int, depth: int):
@@ -314,6 +373,10 @@ def _schema_ast(ch, allow_usersets: bool = True, tupleset_kind: str | None = Non
 
     for i, name in enumerate(names):
         ast[('doc', name)] = expr(i, 0)
+    if self_ref_motif:
+        m, a, b = _self_ref_motif(ch, names, lambda: expr(n, 2))
+        names += [f'r{n}', f'r{n + 1}', f'r{n + 2}']
+        ast[('doc', names[-3])], ast[('doc', names[-2])], ast[('doc', names[-1])] = m, a, b
     if 'folder' in _restriction_types(ast[('doc', 'parent')]):
         # A `folder`-typed tupleset parent is only DRIVEN if `folder` declares the
         # relation a TTU reads off it: `r0 from parent` over `folder:f1 parent doc:d1`
@@ -361,6 +424,27 @@ def _op_pool(ast):
                     for on in TYPE_NAMES[otype]:
                         out.append((r.predicate, r.type, sn, rel, otype, on))
     return sorted(set(out))
+
+
+def _self_refs(pool):
+    """The SELF-REFERENCES of a pool: tuples whose subject entity IS their object entity
+    (same type and name), e.g. the self-parent ``doc:d1 parent doc:d1`` or the userset
+    ``doc:d1#r0 r1 doc:d1``. TK180."""
+    return [raw for raw in pool if (raw[1], raw[2]) == (raw[4], raw[5])]
+
+
+def pool_ops(pool):
+    """One op drawn from ``pool``, with the pool's self-references OVERSAMPLED (TK180).
+
+    A plain ``sampled_from(pool)`` draws ``doc:d1 parent doc:d1`` about once per pool
+    size (dozens), so TK175 -- which needs a member tuple FIRST and the self-parent AFTER
+    it -- met the gate once, by luck. Half the draws come from the self-references here;
+    the other branch is the whole pool, so nothing the old strategy could draw is lost.
+    The pool branch is listed first, so a shrink still heads toward ordinary tuples."""
+    refs = _self_refs(pool)
+    if not refs:
+        return st.sampled_from(pool)
+    return st.one_of(st.sampled_from(pool), st.sampled_from(refs))
 
 
 def _grid(ast):
@@ -668,7 +752,7 @@ def _sweep_schema_asts(n=_SWEEP_N, seeds=_SWEEP_SEEDS):
     for s in seeds:
         rng = random.Random(s)
         for _ in range(n):
-            yield _schema_ast(_RandomChoices(rng))
+            yield _schema_ast(_RandomChoices(rng), self_ref_motif=None)
 
 
 def test_schema_asts_draws_the_whole_tupleset_grammar():
@@ -861,6 +945,57 @@ def test_schema_asts_draws_the_tk126_cell():
         f'(floor {_TK126_NEW_FLOOR}); the campaign no longer draws the shape TK126 serves')
 
 
+def _is_tk175_shape(ast) -> bool:
+    """True when ``ast`` carries TK175's shape: a tupleset admitting ``doc`` itself (so a
+    self-parent is writable), a relation ``a: ref but not (ref from parent)`` with ``ref``
+    TAINTED, and a plain ``a from parent`` over it. Detector for the TK180 floor below."""
+    from zanzibar.schema import compute_taint
+    if 'doc' not in _restriction_types(ast[('doc', 'parent')]):
+        return False
+    tainted = compute_taint(ast)
+    for (otype, rel), e in ast.items():
+        if (otype == 'doc' and isinstance(e, Exclusion) and isinstance(e.base, Computed)
+                and e.subtract == TTU(e.base.relation, 'parent')
+                and ('doc', e.base.relation) in tainted
+                and TTU(rel, 'parent') in ast.values()):
+            return True
+    return False
+
+
+# Provenance (2026-10-30, TK180). Before the self-reference motif the deterministic sweep
+# drew 0 of 180 schemas with TK175's shape (``_is_tk175_shape``), and the gate met TK175
+# once, on a lucky draw. Measured after: 13 of 180. Floor 6, set below the measurement
+# like the floors above. The same sweep, re-measured: 157/180 = 87 % four-way (floor 60 %),
+# 16 TK126-new (floor 5), every tupleset body drawn (plain 35, union 36, multitype 36,
+# folder-only 25, wildcard 26, multitype-wildcard 22).
+_TK175_SHAPE_FLOOR = 6
+
+
+def test_schema_asts_draws_the_self_reference_motif():
+    """The generated-schema campaign DRAWS TK175's shape (TK180), so the ParityMachine,
+    the graph-only properties and the multi-seed fuzz sweep meet self-references on a
+    boolean-around-a-``from`` schema routinely instead of by luck.
+
+    Detector control: ``tests/test_tk175_self_parent_node_recreate.py::SCHEMA`` is
+    flagged, and the same schema with ``r0: [user]`` (untainted ``ref``) is not -- both
+    asserted below.
+
+    SABOTAGE (2026-10-30): ``self_ref_motif=None`` -> ``False`` in ``_sweep_schema_asts``
+    (the sweep measures the pre-TK180 distribution again), ``1 failed, 4 passed``::
+
+        AssertionError: only 0/180 generated schemas carry the TK175 self-reference
+        shape (floor 6); the campaign no longer draws it
+    """
+    from tests.test_tk175_self_parent_node_recreate import SCHEMA
+    assert _is_tk175_shape(parse_schema_ast(SCHEMA))
+    assert not _is_tk175_shape(parse_schema_ast(
+        SCHEMA.replace('define r0: [user] and [user]', 'define r0: [user]')))
+    hits = sum(_is_tk175_shape(ast) for ast in _sweep_schema_asts())
+    assert hits >= _TK175_SHAPE_FLOOR, (
+        f'only {hits}/{_SWEEP_N * len(_SWEEP_SEEDS)} generated schemas carry the TK175 '
+        f'self-reference shape (floor {_TK175_SHAPE_FLOOR}); the campaign no longer draws it')
+
+
 # ---------------------------------------------------------------------------
 # Parser round-trip on generated schemas
 # ---------------------------------------------------------------------------
@@ -969,7 +1104,7 @@ def test_add_then_remove_restores_row_multiset(ast, data):
     assume(pool)
     schema = unparse_schema_ast(ast)
     session, widx, proc, write = _build_in_fragment(schema)
-    base = data.draw(st.lists(st.sampled_from(pool), max_size=5, unique=True))
+    base = data.draw(st.lists(pool_ops(pool), max_size=5, unique=True))
     applied = []
     for raw in base:
         try:
@@ -977,8 +1112,79 @@ def test_add_then_remove_restores_row_multiset(ast, data):
             applied.append(raw)
         except AdmissionRejected:
             session.rollback()
-    extra = data.draw(st.sampled_from(pool))
+    extra = data.draw(pool_ops(pool))
     assume(extra not in applied)
+
+    before = _state(session, widx)
+    try:
+        write('add', extra)
+    except AdmissionRejected:
+        session.rollback()
+        assume(False)                      # rejected op: nothing to round-trip
+    write('remove', extra)
+    assert _state(session, widx) == before
+    proc.audit_fixpoint()
+    session.close()
+
+
+@given(ast=schema_asts(self_ref_motif=True), data=st.data())
+def test_self_reference_add_then_remove_restores_row_multiset(ast, data):
+    """TK180: add-then-remove of a SELF-REFERENCE (subject entity == object entity, e.g.
+    ``doc:d1 parent doc:d1``) over a state already holding tuples on that same object,
+    on a schema carrying the self-reference motif (a tupleset admitting its own type, a
+    boolean around a ``from``, and a ``from`` over that boolean -- ``_self_ref_motif``).
+    ``test_add_then_remove_restores_row_multiset`` covers the same property over the
+    whole distribution; this one spends its budget where TK175 lived.
+
+    PROOF (2026-10-30, ``ci`` profile, the TK175 guard ``if self.session.deleted:
+    self.session.flush()`` in ``src/zanzibar/graphindex/core.py::ReachabilityIndex.node``
+    removed on disk and restored byte-for-byte by a script, sha256 checked), this test
+    alone, ``-k self_reference_add_then_remove``:
+
+    * guard present, ``--hypothesis-seed=1`` / ``2`` / ``3``: ``1 passed, 33 deselected``
+      (1.85s / 2.37s / 2.24s);
+    * guard removed, ``--hypothesis-seed=1`` .. ``6``: ``1 failed, 33 deselected`` every
+      time (3.6s - 6.7s), each with::
+
+        sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) UNIQUE constraint failed:
+        zanzibar_node.store_id, zanzibar_node.predicate, zanzibar_node.type,
+        zanzibar_node.name, zanzibar_node.wildcard
+        [parameters: ('test', 'r1', 'doc', 'd1', '', 0, 0)]
+
+      shrunk (seed 1) to TK175's own schema -- ``parent: [doc]``, ``r0: [user] and
+      [user]``, ``r1: r0 but not (r0 from parent)``, ``r2: r1 from parent`` -- with
+      ``Draw 1: ('...', 'doc', 'd1', 'parent', 'doc', 'd1')`` and both ``r0`` grants on
+      ``doc:d1`` kept.
+
+    Before TK180 neither this test nor the motif existed, and the pool bias alone (no
+    motif) found TK175 on 1 of seeds 1-6 across the four graph-only/stateful properties
+    (in-memory sabotage, exploration). Two traps met on the way, both fixed above: an
+    ``intrange(0, 2) > 0`` weight and a keep-on-``True`` boolean INVERT under hypothesis
+    (its simplest value is the low end / ``False``); with them the drafts crashed in ~5-13 %
+    of examples (probe, 200 examples) and found TK175 on only 4 of seeds 1-8.
+    """
+    pool = _op_pool(ast)
+    refs = _self_refs(pool)
+    assume(refs)
+    schema = unparse_schema_ast(ast)
+    session, widx, proc, write = _build_in_fragment(schema)
+    extra = data.draw(st.sampled_from(refs))
+    # The grants on the self-reference's OWN object, each kept or not: TK175 needed a
+    # member there FIRST (so the boolean's node exists), which the self-reference then
+    # collects and re-interns. A ``lists(sampled_from(pool))`` base names the one grant
+    # on the one relation the motif reads in ~1 example of 20 (measured below).
+    grants = [raw for raw in pool if raw[4:] == extra[4:] and raw[1] == 'user']
+    base = [raw for raw in grants if not data.draw(st.booleans())]   # simplest = keep
+    base += data.draw(st.lists(pool_ops(pool), max_size=3, unique=True))
+    applied = []
+    for raw in base:
+        if raw == extra:
+            continue
+        try:
+            write('add', raw)
+            applied.append(raw)
+        except AdmissionRejected:
+            session.rollback()
 
     before = _state(session, widx)
     try:
@@ -996,7 +1202,7 @@ def test_add_then_remove_restores_row_multiset(ast, data):
 def test_permutation_invariance(ast, data):
     pool = _op_pool(ast)
     assume(pool)
-    ops = data.draw(st.lists(st.sampled_from(pool), min_size=2, max_size=6, unique=True))
+    ops = data.draw(st.lists(pool_ops(pool), min_size=2, max_size=6, unique=True))
     perm = data.draw(st.permutations(ops))
     schema = unparse_schema_ast(ast)
 
@@ -1030,7 +1236,7 @@ def test_cascade_replay_from_zero(ast, data):
     equals the live store that cascaded after every op (§9 replay)."""
     pool = _op_pool(ast)
     assume(pool)
-    ops = data.draw(st.lists(st.sampled_from(pool), min_size=1, max_size=6, unique=True))
+    ops = data.draw(st.lists(pool_ops(pool), min_size=1, max_size=6, unique=True))
     schema = unparse_schema_ast(ast)
 
     live_session, live_widx, live_proc, live_write = _build_in_fragment(schema)
@@ -1371,7 +1577,7 @@ class ParityMachine(RuleBasedStateMachine):
     def add(self, data):
         if not self.pool:
             return
-        raw = data.draw(st.sampled_from(self.pool))
+        raw = data.draw(pool_ops(self.pool))
         if self.pe.add_tuple(*raw):
             self.live.append(raw)
 

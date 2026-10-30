@@ -406,7 +406,7 @@ def test_generated_refused_schemas_run_the_set_only_lookup_gate():
         removes = []
         gate = _run_gate(
             schema, frozenset(), pool, seed, walk_steps=8, allow_graph_absent=True,
-            on_apply=lambda op, raw, ok: removes.append(ok) if op == 'remove' else None)
+            on_apply=lambda op, raw, ok, removes=removes: removes.append(ok) if op == 'remove' else None)
         assert any(removes), f'seed {seed}: the walk accepted no remove'
         set_reverse_neg += gate.set_reverse_neg
         ran += 1

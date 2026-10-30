@@ -216,7 +216,7 @@ def test_the_scanner_sees_what_it_claims_to():
     n_raise = sum(1 for _p, _r, t in _modules() for n in ast.walk(t) if isinstance(n, ast.Raise))
     assert n_raise > 200, n_raise
     n_docs = 0
-    for _p, rel, tree in _modules():
+    for _p, _rel, tree in _modules():
         for node in tree.body:
             if isinstance(node, ast.ClassDef) and not node.name.startswith('_') and ast.get_docstring(node):
                 n_docs += 1

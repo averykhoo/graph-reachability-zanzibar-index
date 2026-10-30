@@ -554,7 +554,7 @@ def _assert_r4bf_features(name: str, compiled, nodes: dict, edges: dict,
                           if implicit is False and rc == 0 and k not in edge_keys}
     recorded_in_residue: set = set()
     have_upos = False
-    for obj_key, (stars, neg, upos, version) in residues.items():
+    for _obj_key, (_stars, neg, upos, _version) in residues.items():
         recorded_in_residue |= set(neg) | set(upos)
         if upos:
             have_upos = True

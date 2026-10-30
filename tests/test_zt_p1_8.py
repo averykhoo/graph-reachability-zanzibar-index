@@ -32,7 +32,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, func, select
 
 import zanzibar.store.source as source_mod
-from zanzibar.store import Store, LookupNotFresh, TupleLog, TupleSource
+from zanzibar.store import Store, LookupNotFresh, TupleLog
 from zanzibar.store.source import SNAPSHOT_ATTEMPTS
 from zanzibar.graphindex.models import Node
 from zanzibar.setengine import SetEngine, RelationTuple, UnloggedWriteRefused

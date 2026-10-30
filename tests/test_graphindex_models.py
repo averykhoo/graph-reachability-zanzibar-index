@@ -1,7 +1,5 @@
-import pytest
 from sqlmodel import Session, create_engine, SQLModel
 from zanzibar.graphindex.models import IndexStore, Node, PermissionDelta
-from types import EllipsisType
 
 def test_permission_delta_fields():
     delta = PermissionDelta(store_id="s1", subject_id=1, object_id=2, action="ADDED")

@@ -24,7 +24,7 @@ from __future__ import annotations
 from typing import NamedTuple
 
 from sqlalchemy import delete
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from zanzibar.graphindex import Edge, Node, WildcardIndex
 from zanzibar.graphindex.bulk_build import bulk_build
@@ -39,6 +39,17 @@ from .apply import ensure_cursor, _norm
 from .models import IndexCursor
 from .schema_io import _persisted_schema_parse, ensure_schema, load_schema, open_graph_index
 from .source import _require_clean_session, log_watermark
+from zanzibar.schema import validate_store_id
+from zanzibar.schema.argcheck import require_bool, require_session
+
+
+def _check_build_args(method: str, session, source_store_id, index_store_id, bulk) -> None:
+    """The arguments of ``build_index`` / ``rebuild_index``, before any statement (TK179)."""
+    require_session(method, session)
+    validate_store_id(source_store_id)
+    if index_store_id is not None:     # only None means "the source id": '' or 0 is refused
+        validate_store_id(index_store_id)
+    require_bool(method, 'bulk', bulk)
 
 
 class IndexExists(ZanzibarError, ValueError):
@@ -95,6 +106,8 @@ class BuildReport(_BuildFields):
     # Provenance (moved out of the docstring, TK123 item 14): `docs/tk91-tk80-removal-
     # coverage-2026-09-20.md`; ``formal/conformance/backends.py::bulk_build_drive``.
 
+    constructor: str      # set in __new__ (an instance attribute, not a tuple field)
+
     def __new__(cls, cursor: IndexCursor, widx: WildcardIndex,
                 ruleset: RuleSet, constructor: str) -> 'BuildReport':
         if constructor not in ('bulk', 'incremental'):
@@ -140,6 +153,7 @@ def build_index(session: Session, source_store_id: str, *,
     """
     # Provenance (moved out of the docstring, TK123 item 14): P13.
     # Provenance (moved out of the docstring, TK123 item 14): ``tests/test_bulk_build.py``.
+    _check_build_args('build_index', session, source_store_id, index_store_id, bulk)
     index_store_id = index_store_id or source_store_id
 
     _require_clean_session(session, 'build_index')
@@ -224,6 +238,7 @@ def rebuild_index(session: Session, source_store_id: str, *,
     # Provenance (moved out of the docstring, TK123 item 14): procedure and decision:
     # docs/tk121-stall-recovery-2026-10-04.md.
     # Provenance (moved out of the docstring, TK123 item 14): TK121.
+    _check_build_args('rebuild_index', session, source_store_id, index_store_id, bulk)
     index_store_id = index_store_id or source_store_id
     _require_clean_session(session, 'rebuild_index')
 
@@ -252,7 +267,7 @@ def rebuild_index(session: Session, source_store_id: str, *,
         # would name a node id the rebuild may hand to a DIFFERENT node -- the ZT-P0-1
         # escalation class -- which is why this is not a hand procedure.
         for model in (Edge, ResidueRef, Residue, Node):
-            session.execute(delete(model).where(model.store_id == index_store_id))
+            session.execute(delete(model).where(col(model.store_id) == index_store_id))
         session.flush()
 
         constructor = _materialise(session, source_store_id, index_store_id, widx,

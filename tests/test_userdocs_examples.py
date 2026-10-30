@@ -42,6 +42,26 @@ Sabotage evidence (2026-10-20, TK151 scaffold), each applied alone and reverted:
             the example runner collected nothing (did the fence parser break?)
          -> 1 error during collection
     Restored: 6 passed.
+
+TK181 (2026-10-30): a page that leaves a file in its directory runs TWICE there, and the
+second run must pass and print what the first printed; the pages that touch files also
+run one after another in ONE shared directory. Cost on a loaded machine: 32.6s -> 60.6s
+for this module (every page twice + every page shared measured 110s, hence the filters;
+``_TOUCHES_FILES`` is held to the observed leftovers by ``test_page_examples_run``).
+Sabotage evidence, each applied alone, page restored byte-for-byte (``cmp``):
+
+    T1 ``how-to/stall-recovery.md``: its ``Path("stall.db").unlink(missing_ok=True)`` deleted:
+         AssertionError: how-to/stall-recovery.md examples failed (SECOND run in the same
+         directory): ... how-to/stall-recovery.md:78: printed 1, but the page says # -> 27
+    T2 the same page, unlink deleted AND ``sqlite:///stall.db`` -> ``sqlite:///fanout.db``
+       (an earlier page's file):
+         AssertionError: 1 page(s) failed in a shared directory:
+           how-to/stall-recovery.md examples failed (shared directory): ... SchemaMismatch
+         -> test_all_pages_in_one_shared_directory: 1 failed
+    T3 ``explanation/consistency.md`` unlink deleted: GREEN, correctly -- the page reopens
+       the same store and re-adds a present tuple (writes nothing), so it prints the same.
+    Instrument mutants on test_the_run_twice_check_really_fires, each RED (1 failed):
+       the stdout comparison off; the ``_TOUCHES_FILES`` guard off; never re-running.
 """
 
 from __future__ import annotations
@@ -201,13 +221,74 @@ if _all_pages() and not PAGES:
                        "example runner collected nothing (did the fence parser break?)")
 
 
+def _page_script(page: str) -> str:
+    return rewrite(parse_blocks((USERDOCS / page).read_text(encoding="utf-8"), page))[0]
+
+
+def _page_failure(page: str, r: subprocess.CompletedProcess, run: str) -> str | None:
+    """None if the page ran green, else a message naming the page and the run."""
+    lines = r.stdout.strip().splitlines()
+    if r.returncode != 0 or not lines or lines[-1] != SENTINEL:
+        return f"{page} examples failed ({run}):\n{r.stdout}\n{r.stderr}"
+    return None
+
+
+def _leftovers(cwd: Path) -> list[str]:
+    return sorted(p.name for p in cwd.iterdir() if p.name != "userdocs_page.py")
+
+
+# A page whose text matches this may touch files in its working directory; only those
+# pages run in test_all_pages_in_one_shared_directory. test_page_examples_run keeps it
+# honest: a page that LEAVES a file behind but does not match is red there.
+_TOUCHES_FILES = re.compile(r"sqlite:///|open\(|write_text|write_bytes|\.db\b")
+
+
 @pytest.mark.parametrize("page", PAGES, ids=PAGES)
 def test_page_examples_run(page, tmp_path):
-    blocks = parse_blocks((USERDOCS / page).read_text(encoding="utf-8"), page)
-    script, _ = rewrite(blocks)
-    r = run_script(script, tmp_path)
-    assert r.returncode == 0, f"{page} examples failed:\n{r.stdout}\n{r.stderr}"
-    assert r.stdout.strip().splitlines()[-1] == SENTINEL, r.stdout
+    """TK181: a page that leaves a file behind runs TWICE in the same directory; the second
+    run must pass and print exactly what the first printed (every ``# ->`` value included).
+    A stranger re-runs a page in the folder they ran it in, and a page that does not delete
+    the database file it left behind then prints something else or crashes (0.1.0 trial
+    F22, 0.1.1 trial F5). A page that leaves the directory as it found it would re-run the
+    same script on the same inputs, so it runs once (that halves the added cost)."""
+    text = (USERDOCS / page).read_text(encoding="utf-8")
+    assert (msg := _twice_failure(page, text, _page_script(page), tmp_path)) is None, msg
+
+
+def _twice_failure(page: str, text: str, script: str, cwd: Path) -> str | None:
+    """Run ``script`` in ``cwd``; if it left a file there, run it again and compare."""
+    first = run_script(script, cwd)
+    if (msg := _page_failure(page, first, "first run")) is not None:
+        return msg
+    left = _leftovers(cwd)
+    if not left:
+        return None
+    if not _TOUCHES_FILES.search(text):
+        return (f"{page} leaves {left} in its directory but does not match _TOUCHES_FILES, "
+                f"so test_all_pages_in_one_shared_directory skips it; widen the pattern")
+    again = run_script(script, cwd)
+    if (msg := _page_failure(page, again, "SECOND run in the same directory")) is not None:
+        return msg
+    if again.stdout != first.stdout:
+        return (f"{page}: a second run in the same directory printed something else\n"
+                f"--- first run:\n{first.stdout}\n--- second run:\n{again.stdout}")
+    return None
+
+
+def test_all_pages_in_one_shared_directory(tmp_path):
+    """TK181: every page that touches files, one after another, in ONE directory (a reader
+    working through the docs in one folder). Pages share database file names, so a page that
+    assumes a fresh folder breaks on a file an EARLIER page left behind. A page that touches
+    no file can neither leave one nor trip over one, so it is not run here."""
+    pages = [p for p in PAGES if _TOUCHES_FILES.search((USERDOCS / p).read_text(encoding="utf-8"))]
+    assert len(pages) >= 2, f"the shared-directory run selected {pages}; the filter broke"
+    failures = []
+    for page in pages:
+        msg = _page_failure(page, run_script(_page_script(page), tmp_path), "shared directory")
+        if msg is not None:
+            failures.append(msg)
+    assert not failures, (f"{len(failures)} page(s) failed in a shared directory:\n"
+                          + "\n".join(failures))
 
 
 def test_required_pages_are_executed():
@@ -276,3 +357,27 @@ def test_the_parser_refuses_fences_that_would_not_run():
     blocks = parse_blocks("```python\n# not run: needs PostgreSQL\nraise SystemExit(1)\n```\n", "s.md")
     assert blocks[0].not_run_reason == "needs PostgreSQL"
     assert "SystemExit" not in rewrite(blocks)[0]
+
+
+_SYNTH_DRIFTS = ('```python\nfrom pathlib import Path\np = Path("n.db")\n'
+                 'p.write_text((p.read_text() if p.exists() else "") + "x")\nprint(len(p.read_text()))\n```\n')
+_SYNTH_RESETS = _SYNTH_DRIFTS.replace('p = Path("n.db")\n',
+                                      'p = Path("n.db")\np.unlink(missing_ok=True)\n')
+assert _SYNTH_RESETS != _SYNTH_DRIFTS
+_SYNTH_HIDDEN = '```python\nimport os\nos.mkdir("d")\nprint(1)\n```\n'
+
+
+def test_the_run_twice_check_really_fires(tmp_path):
+    """TK181: the instrument behind test_page_examples_run, on synthetic pages: a page whose
+    output drifts with the file it leaves is red, the same page deleting its file first is
+    green, and a page that leaves a file without matching _TOUCHES_FILES is red."""
+    def twice(name, text):
+        cwd = tmp_path / name
+        cwd.mkdir()
+        return _twice_failure(f"{name}.md", text, rewrite(parse_blocks(text, f"{name}.md"))[0], cwd)
+
+    drift = twice("drifts", _SYNTH_DRIFTS)
+    assert drift is not None and "printed something else" in drift, drift
+    assert twice("resets", _SYNTH_RESETS) is None
+    hidden = twice("hidden", _SYNTH_HIDDEN)
+    assert hidden is not None and "widen the pattern" in hidden, hidden

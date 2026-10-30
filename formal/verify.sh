@@ -698,7 +698,7 @@ MIN_CONF_ALL=1246
 #   1749 vs `pytest tests/ -q --collect-only` -> 2283, i.e. 534 tests of headroom (the
 #   2026-10-12/13 sessions' tests/ additions, not broken down per file). Do not hand-
 #   raise it any more; LOWERING stays a deliberate hand edit, followed by --generate.
-MIN_TESTS_ALL=3143
+MIN_TESTS_ALL=3830
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -1254,6 +1254,15 @@ run_lean() {
   # -------------------------------------------------------------------------- #
   echo "--- [4g/7] task tree lint (scripts/task.py lint) ---"
   ( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/task.py" lint )        || { echo "FAIL: task tree lint (see above)"; exit 1; }
+
+  # -------------------------------------------------------------------------- #
+  # 4h  lint + type check (TK182, docs/tk182-lint-typecheck-plan-2026-10-30.md):
+  #     ruff (correctness rules, pyproject [tool.ruff.lint]) over the repo and mypy over
+  #     src/zanzibar, at the versions pinned EXACTLY in pyproject's `lint` extra.
+  #     scripts/lint_gate.py refuses a missing tool or another version -- never a skip.
+  # -------------------------------------------------------------------------- #
+  echo "--- [4h/7] lint + type check (scripts/lint_gate.py: ruff, mypy) ---"
+  ( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/lint_gate.py" )        || { echo "FAIL: lint + type check (see above)"; exit 1; }
 
   echo "=== lean phase (steps 1-4) PASSED (holes=$SORRIES, audits=$OBSERVED_AUDITS, pinned=$PINNED_AUDITS) ==="
 }

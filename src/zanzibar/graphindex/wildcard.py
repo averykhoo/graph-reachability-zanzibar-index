@@ -17,12 +17,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from types import EllipsisType
+from typing import TYPE_CHECKING
 
 from sqlalchemy import tuple_
-from sqlmodel import select
+from sqlmodel import col, select
 
 from .cascade_mark import note_write as _note_cascade_owed
-from .core import ReachabilityIndex, _ThreadFlag
+from .core import ReachabilityIndex, _ThreadFlag, persisted_id
 from .invariants import InvariantViolation
 from .models import Edge, Node, ResidueRef, Residue
 from zanzibar.schema.tuplestr import shape_filter
@@ -30,6 +31,9 @@ from zanzibar.schema import (AdmissionRejected, SchemaInfo,
                                norm_pred as _norm_pred,
                                validate_node_identifiers,
                                validate_write_identifiers)
+
+if TYPE_CHECKING:   # processor imports this module at module level
+    from .processor import DeltaProcessor
 
 
 @dataclass
@@ -160,7 +164,7 @@ class WildcardIndex:
         # The processor the derived read evaluates plans through (C5): the first
         # ``DeltaProcessor`` built over this facade registers itself; otherwise one is
         # built on first need from ``SchemaInfo.compiled``.
-        self._self_read_proc = None
+        self._self_read_proc: DeltaProcessor | None = None
 
     @property
     def processor_writes(self) -> bool:
@@ -370,10 +374,10 @@ class WildcardIndex:
             if w_all is None:
                 continue
             if not (subject.id == w_any.id
-                    or self.idx.check_reachable_by_id(w_any.id, subject.id)):
+                    or self.idx.check_reachable_by_id(persisted_id(w_any), persisted_id(subject))):
                 continue
             if not (obj.id == w_all.id
-                    or self.idx.check_reachable_by_id(obj.id, w_all.id)):
+                    or self.idx.check_reachable_by_id(persisted_id(obj), persisted_id(w_all))):
                 continue
             # AdmissionRejected: a cycle refusal, same class and same rule as the
             # length-1 case above and as the set engine's userset-topology refusal.
@@ -419,13 +423,13 @@ class WildcardIndex:
         if shape in self.schema_info.bridged_in_shapes:
             w_any = self.idx.node(node.predicate, node.type, '*', create_if_missing=True,
                                   implicit=True, wildcard='any')
-            if not self.idx.direct_edge_exists_by_id(node.id, w_any.id):
-                self.idx.add_edge_by_id(node.id, w_any.id)          # concrete -> w_any (bridge)
+            if not self.idx.direct_edge_exists_by_id(persisted_id(node), persisted_id(w_any)):
+                self.idx.add_edge_by_id(persisted_id(node), persisted_id(w_any))          # concrete -> w_any (bridge)
         if shape in self.schema_info.bridged_out_shapes:
             w_all = self.idx.node(node.predicate, node.type, '*', create_if_missing=True,
                                   implicit=True, wildcard='all')
-            if not self.idx.direct_edge_exists_by_id(w_all.id, node.id):
-                self.idx.add_edge_by_id(w_all.id, node.id)          # w_all -> concrete (bridge)
+            if not self.idx.direct_edge_exists_by_id(persisted_id(w_all), persisted_id(node)):
+                self.idx.add_edge_by_id(persisted_id(w_all), persisted_id(node))          # w_all -> concrete (bridge)
 
     def _ensure_entity_middles(self, entity_type: str, name: str) -> None:
         """Intern the crossing middle ``(T, x, p)`` -- with both bridges -- for every
@@ -491,7 +495,7 @@ class WildcardIndex:
             return
         for n in self._entity_nodes(entity_type, name):
             if self._is_bridge_middle(n):
-                self._strip_bridges(n.id, (n.type, n.predicate))
+                self._strip_bridges(persisted_id(n), (n.type, n.predicate))
 
     def _strip_bridges(self, node_id: int, shape: tuple[str, str]) -> None:
         """Remove a concrete node's bridge edges (in, then out), tolerating the
@@ -499,15 +503,15 @@ class WildcardIndex:
         entity_type, predicate = shape
         if shape in self.schema_info.bridged_in_shapes:
             w_any = self._w_node(entity_type, predicate, 'any', create=False)
-            if w_any is not None and self.idx.direct_edge_exists_by_id(node_id, w_any.id):
-                self.idx.remove_edge_by_id(node_id, w_any.id)
+            if w_any is not None and self.idx.direct_edge_exists_by_id(node_id, persisted_id(w_any)):
+                self.idx.remove_edge_by_id(node_id, persisted_id(w_any))
         # re-fetch: the first removal may already have collected the node
         if self._node_by_id(node_id) is None:
             return
         if shape in self.schema_info.bridged_out_shapes:
             w_all = self._w_node(entity_type, predicate, 'all', create=False)
-            if w_all is not None and self.idx.direct_edge_exists_by_id(w_all.id, node_id):
-                self.idx.remove_edge_by_id(w_all.id, node_id)
+            if w_all is not None and self.idx.direct_edge_exists_by_id(persisted_id(w_all), node_id):
+                self.idx.remove_edge_by_id(persisted_id(w_all), node_id)
 
     def _maybe_remove_bridges(self, node: Node) -> None:
         """If a concrete node's only remaining edges are its bridges, strip them so the
@@ -518,7 +522,7 @@ class WildcardIndex:
         degree = self._bridge_degree(shape)
         if degree == 0:
             return
-        fresh = self._node_by_id(node.id)
+        fresh = self._node_by_id(persisted_id(node))
         if fresh is None:
             return                                                  # already collected
         if not (fresh.implicit and fresh.reference_count == degree):
@@ -532,7 +536,7 @@ class WildcardIndex:
             # (``_entity_has_witness`` ignores bridge-only middles, ``fresh``
             # included, so a witness here means some OTHER real node of the entity.)
             return
-        self._strip_bridges(fresh.id, shape)
+        self._strip_bridges(persisted_id(fresh), shape)
 
     def _node_by_id(self, node_id: int) -> Node | None:
         return self.idx.session.exec(
@@ -560,7 +564,7 @@ class WildcardIndex:
             select(Edge.subject_id, Edge.object_id)
             .where(Edge.store_id == self.idx.store_id)
             .where((Edge.subject_id == node_id) | (Edge.object_id == node_id))
-            .where(Edge.direct_edge_count > 0)  # type: ignore[arg-type]
+            .where(Edge.direct_edge_count > 0)
         ).all()
         other_ids = {s if o == node_id else o for (s, o) in pairs} - {node_id}
         nodes = self.idx._load_nodes(other_ids)
@@ -589,8 +593,8 @@ class WildcardIndex:
             w_any = self.idx.node(predicate, entity_type, '*', create_if_missing=True,
                                   implicit=True, wildcard='any')
             for c in concretes:
-                if not self.idx.direct_edge_exists_by_id(c.id, w_any.id):
-                    self.idx.add_edge_by_id(c.id, w_any.id)
+                if not self.idx.direct_edge_exists_by_id(persisted_id(c), persisted_id(w_any)):
+                    self.idx.add_edge_by_id(persisted_id(c), persisted_id(w_any))
         for shape in self.schema_info.bridged_out_shapes:
             entity_type, predicate = shape
             concretes = self._concrete_nodes_of_shape(entity_type, predicate)
@@ -599,8 +603,8 @@ class WildcardIndex:
             w_all = self.idx.node(predicate, entity_type, '*', create_if_missing=True,
                                   implicit=True, wildcard='all')
             for c in concretes:
-                if not self.idx.direct_edge_exists_by_id(w_all.id, c.id):
-                    self.idx.add_edge_by_id(w_all.id, c.id)
+                if not self.idx.direct_edge_exists_by_id(persisted_id(w_all), persisted_id(c)):
+                    self.idx.add_edge_by_id(persisted_id(w_all), persisted_id(c))
         # I14: the crossing middles track ENTITY existence -- after the bridge loops
         # above (so ``reference_count == bridge degree`` again means "bridges only"
         # and ``_is_bridge_middle`` classifies correctly on a half-migrated store),
@@ -685,7 +689,7 @@ class WildcardIndex:
 
         self.idx._writing_derived = self._derived_write_ctx(relation, o_type)
         try:
-            self.idx.add_edge_by_id(subject.id, obj.id)
+            self.idx.add_edge_by_id(persisted_id(subject), persisted_id(obj))
         except AdmissionRejected as e:
             # Narrowed from `except ValueError` (ZT-P4-7): the only thing this handler
             # ever meant to re-dress is the core's CYCLE REFUSAL, which is now typed.
@@ -736,7 +740,7 @@ class WildcardIndex:
 
         _note_cascade_owed(self, 'remove_tuple',   # TK3: before the first mutation
                            derived_write=self._derived_write_ctx(relation, o_type))
-        self.idx.remove_edge_by_id(subject.id, obj.id)
+        self.idx.remove_edge_by_id(persisted_id(subject), persisted_id(obj))
 
         # GC bridges for concrete endpoints whose only remaining edges are their bridges.
         self._maybe_remove_bridges(subject)
@@ -794,7 +798,7 @@ class WildcardIndex:
         # A check after the strip can be reached too late. Nothing has been written
         # yet either (the store lock plus two reads), so the transaction is clean on
         # rollback -- I12 rejection cleanliness.
-        if self._residue_records_node(node.id):
+        if self._residue_records_node(persisted_id(node)):
             raise AdmissionRejected(
                 "node is recorded by a derived relation's residue and cannot be "
                 "removed directly (remove the tuples that record it -- the cascade "
@@ -829,7 +833,7 @@ class WildcardIndex:
                            derived_write=self._derived_write_ctx(pred, entity_type))
         neighbour_entities: set[tuple[str, str]] = set()
         if node.wildcard == '':
-            node_id = node.id
+            node_id = persisted_id(node)
             # I14: capture the CONCRETE neighbour entities BEFORE the core removal
             # retires their edges -- removing this node may leave a neighbour entity
             # witness-less (its node implicit-GC'd by the neighbour-debit machinery,
@@ -974,8 +978,8 @@ class WildcardIndex:
         row = self.idx.session.exec(
             select(Edge.id)
             .where(Edge.store_id == self.idx.store_id)
-            .where(tuple_(Edge.subject_id, Edge.object_id).in_(keys))
-            .where(Edge.indirect_edge_count > 0)  # type: ignore[arg-type]
+            .where(tuple_(col(Edge.subject_id), col(Edge.object_id)).in_(keys))
+            .where(Edge.indirect_edge_count > 0)
             .limit(1)
         ).first()
         return row is not None
@@ -1103,7 +1107,7 @@ class WildcardIndex:
         # probe 1 only: the derived edge (public family)
         obj = self._get_concrete(relation, o_type, o_name)
         if subj is not None and obj is not None \
-                and self.idx.check_reachable_by_id(subj.id, obj.id):
+                and self.idx.check_reachable_by_id(persisted_id(subj), persisted_id(obj)):
             return True
 
         # residue: star coverage minus neg; a ghost subject has no node and thus
@@ -1277,7 +1281,7 @@ class WildcardIndex:
     def _entity_names(self, entity_type: str) -> list[str]:
         """Names of the concrete entities of a type the index holds a node for."""
         rows = self.idx.session.exec(
-            select(Node.name).where(Node.store_id == self.idx.store_id)   # type: ignore[arg-type]
+            select(Node.name).where(Node.store_id == self.idx.store_id)
             .where(Node.type == entity_type).where(Node.wildcard == '')
         ).all()
         return sorted({n for n in rows if n != '*'})
@@ -1304,7 +1308,6 @@ class WildcardIndex:
                                      result: LookupResult) -> None:
         shape = (s_type, s_pred)
         s_node = None if s_name == '*' else self._get_concrete(s_pred, s_type, s_name)
-        concrete = s_node is not None
         rows = self.idx.session.exec(
             select(Residue).where(Residue.store_id == self.idx.store_id)
         ).all()
@@ -1316,11 +1319,11 @@ class WildcardIndex:
             # a single ``in`` probe, and ``upos`` decodes only when its branch is hit.
             covered = want in json.loads(row.stars)
             if covered:
-                if concrete and s_node.id in json.loads(row.neg) \
+                if s_node is not None and s_node.id in json.loads(row.neg) \
                         and s_node.id not in json.loads(row.upos):
                     continue
                 result.node_ids.add(row.object_node_id)
-            elif concrete and s_node.id in json.loads(row.upos):
+            elif s_node is not None and s_node.id in json.loads(row.upos):
                 result.node_ids.add(row.object_node_id)     # edge-free userset membership
 
     def lookup_reverse(self, relation: str, object_type: str, object_name: str) -> LookupResult:
@@ -1385,9 +1388,9 @@ class WildcardIndex:
         targets: list[tuple[str, str, str]] = []
         if o_name != '*':
             targets.append((o_type, o_name, relation))
-        for n in self.idx._load_nodes(rev_ids).values():
-            if n.wildcard == '' and n.predicate != '...':
-                targets.append((n.type, n.name, n.predicate))
+        for rn in self.idx._load_nodes(rev_ids).values():
+            if rn.wildcard == '' and rn.predicate != '...':
+                targets.append((rn.type, rn.name, rn.predicate))
         for (t, n, r1) in targets:
             for p in self._sub_index.get((t, r1), ()):
                 out.add((t, n, p))
@@ -1428,7 +1431,7 @@ class WildcardIndex:
         plan = proc.compiled.plans[(o_type, relation)]
         tainted = proc.compiled.tainted
         out: set[tuple[str, str, str]] = {(o_type, o_name, relation)}
-        for spec, node in zip(plan.leaves, plan.leaf_nodes):
+        for spec, node in zip(plan.leaves, plan.leaf_nodes, strict=True):
             if spec.kind == 'closure':
                 out |= self._untainted_reverse_userset_keys(spec.predicate, o_type, o_name)
             elif spec.kind == 'derived-computed':
@@ -1456,9 +1459,9 @@ class WildcardIndex:
         moved between ``node_ids`` / ``implicit_keys`` (member) and the marker exclusions
         ``excluded_node_ids`` / ``implicit_excluded_keys`` (covered but refused)."""
         cands = self._derived_reverse_candidates(relation, o_type, o_name)
-        for n in self.idx._load_nodes(result.node_ids | result.excluded_node_ids).values():
-            if n.wildcard == '' and n.predicate != '...':
-                cands.add((n.type, n.name, n.predicate))
+        for rn in self.idx._load_nodes(result.node_ids | result.excluded_node_ids).values():
+            if rn.wildcard == '' and rn.predicate != '...':
+                cands.add((rn.type, rn.name, rn.predicate))
         markers_any = {(t, p) for (t, p, v) in result.markers if v == 'any'}
         want = sorted(cands)
         ids = self.idx.resolve_node_ids([(p, t, n, '') for (t, n, p) in want])
@@ -1491,12 +1494,12 @@ class WildcardIndex:
     def _collect_reachable(self, node: Node | None, result: LookupResult) -> None:
         if node is None:
             return
-        self._classify_ids(self.idx.lookup_reachable(node.id), result)
+        self._classify_ids(self.idx.lookup_reachable(persisted_id(node)), result)
 
     def _collect_reverse(self, node: Node | None, result: LookupResult) -> None:
         if node is None:
             return
-        self._classify_ids(self.idx.lookup_reverse(node.id), result)
+        self._classify_ids(self.idx.lookup_reverse(persisted_id(node)), result)
 
     def _classify_ids(self, node_ids, result: LookupResult) -> None:
         """Classify a whole reachable/reverse id set concrete-vs-wildcard (perf N6).

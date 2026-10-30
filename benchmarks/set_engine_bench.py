@@ -134,7 +134,7 @@ def run(ops_list: list[SetOps], depth: int, chains: int, pop: int, blocked: int,
     print(header)
     for ops in ops_list:
         se = build_deep_set(ops, depth, chains)
-        rate, el, _ = timed(lambda i: se.check('...', 'user', f'u{i % chains}', 'member',
+        rate, el, _ = timed(lambda i, se=se: se.check('...', 'user', f'u{i % chains}', 'member',
                                                'group', f'g{i % chains}_{depth}'), checks)
         rss = peak_rss_mb()
         print(f'{"deep check":<22}{ops.name:<10}{rate:>14,.0f}{el:>14.3f}'
@@ -176,7 +176,7 @@ def run(ops_list: list[SetOps], depth: int, chains: int, pop: int, blocked: int,
     print(header)
     for ops in ops_list:
         se = build_wide(ops, pop, blocked)
-        rate, el, _ = timed(lambda i: se.expand('viewer', 'doc', 'd'), max(1, checks // 100))
+        rate, el, _ = timed(lambda i, se=se: se.expand('viewer', 'doc', 'd'), max(1, checks // 100))
         rss = peak_rss_mb()
         print(f'{"wide expand":<22}{ops.name:<10}{rate:>14,.1f}{el:>14.3f}'
               f'{(f"{rss:.0f}" if rss else "n/a"):>14}')
@@ -188,7 +188,7 @@ def run(ops_list: list[SetOps], depth: int, chains: int, pop: int, blocked: int,
     for ops in ops_list:
         se = build_wide(ops, pop, blocked)
         m = se.expand('viewer', 'doc', 'd')                    # one expand, reused
-        rate, el, _ = timed(lambda i: m.contains_entity(i % max(1, pop), 'user'), checks)
+        rate, el, _ = timed(lambda i, m=m: m.contains_entity(i % max(1, pop), 'user'), checks)
         rss = peak_rss_mb()
         print(f'{"batch membership":<22}{ops.name:<10}{rate:>14,.0f}{el:>14.3f}'
               f'{(f"{rss:.0f}" if rss else "n/a"):>14}')

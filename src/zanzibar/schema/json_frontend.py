@@ -252,6 +252,7 @@ def _validate_json_round_trip(ast: SchemaAST) -> None:
     declared type), so no known JSON input reaches either branch below. The guard stays as
     defence in depth for the class; its branches are pinned by direct calls in
     `tests/test_tk137_openfga_dsl_refusals.py`."""
+    problem: str | None
     try:
         back = parse_schema_ast(unparse_schema_ast(ast))
     except (ValueError, TypeError) as e:

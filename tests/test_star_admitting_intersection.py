@@ -279,7 +279,7 @@ def test_the_two_fixtures_differ_by_exactly_the_star():
     a = _load(CONTROL).replace('\r\n', '\n').splitlines()
     b = _load(STARRED).replace('\r\n', '\n').splitlines()
     assert len(a) == len(b), f'the fixtures differ in line count: {len(a)} vs {len(b)}'
-    diff = [(i, x, y) for i, (x, y) in enumerate(zip(a, b), 1) if x != y]
+    diff = [(i, x, y) for i, (x, y) in enumerate(zip(a, b, strict=True), 1) if x != y]
     assert diff == [(21, '    define assigned: [user]',
                      '    define assigned: [user, user:*]')], (
         f'the pair is no longer one token apart: {diff}')

@@ -14,13 +14,15 @@ from __future__ import annotations
 
 import contextlib
 import json
+from typing import cast
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from zanzibar.graphindex import ReachabilityIndex, IndexStore, WildcardIndex
 from zanzibar.setengine import SetEngine
-from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS
-from zanzibar.schema import RuleSet, parse_openfga_schema, parse_schema_ast, validate_store_id
+from zanzibar.setengine.setops import SetOps, DEFAULT_SETOPS, require_setops
+from zanzibar.schema.argcheck import require_instance, require_session, require_shapes, require_str
+from zanzibar.schema import RuleSet, SchemaInfo, parse_openfga_schema, parse_schema_ast, validate_store_id
 from zanzibar.schema.syntax import explain_difference, first_schema_difference
 from zanzibar.schema.parser import _parse_schema_ast_checked
 from zanzibar.schema.compiler import _validate_object_wildcard_shapes
@@ -151,6 +153,9 @@ def save_schema(session: Session, store_id: str, schema_text: str,
     """
     # Provenance (moved out of the docstring, TK123 item 14): spec §2.1.
     validate_store_id(store_id)  # TK127 follow-up: the one SchemaRecord insert
+    require_session('save_schema', session)                 # TK179
+    require_str('save_schema', 'schema_text', schema_text)  # TK179 G7
+    object_wildcard_shapes = require_shapes('save_schema', object_wildcard_shapes)
     existing = session.get(SchemaRecord, store_id)
     if existing is not None:
         _verify_same_schema(existing, schema_text, object_wildcard_shapes)
@@ -209,7 +214,9 @@ def _verify_same_schema(row: SchemaRecord, schema_text: str,
     version refuses -- its text, or (TK147) its object-wildcard shapes -- raises
     ``PersistedSchemaRefused`` FIRST, whatever was passed (one type for one cause)."""
     store_id = row.store_id
-    object_wildcard_shapes = frozenset(tuple(s) for s in object_wildcard_shapes)
+    # cast: normalises list-shaped pairs (e.g. JSON-decoded) back to the declared tuples
+    object_wildcard_shapes = cast('frozenset[tuple[str, str]]',
+                                  frozenset(tuple(s) for s in object_wildcard_shapes))
     stored_shapes = frozenset(tuple(s) for s in json.loads(row.object_wildcard_shapes))
     with _persisted_schema_parse(store_id):
         stored_ast, stored_declared = _parse_schema_ast_checked(row.schema_text)
@@ -266,6 +273,11 @@ def open_set_engine(session: Session, store_id: str, *,
     ``PersistedSchemaRefused`` when this version refuses the saved schema. ``ruleset``
     skips recompiling a schema the caller already compiled (it must be that schema's).
     Public since 0.1.0."""
+    validate_store_id(store_id)  # TK179 G6/G8: refuse before load_schema's statement
+    require_session('open_set_engine', session)
+    require_setops(ops)
+    require_instance('open_set_engine', 'ruleset', ruleset, RuleSet, optional=True,
+                     what="None or the RuleSet compiled from this store's schema")
     schema_text, shapes = load_schema(session, store_id)
     with _persisted_schema_parse(store_id):
         return SetEngine(session, store_id, schema_text,
@@ -286,4 +298,5 @@ def open_graph_index(session: Session, store_id: str,
         session.add(IndexStore(id=store_id))
         session.flush()
     idx = ReachabilityIndex(session, store_id=store_id)
-    return WildcardIndex(idx, ruleset.schema_info), ruleset
+    # cast: a compiled RuleSet (parse_openfga_schema) always carries its SchemaInfo
+    return WildcardIndex(idx, cast(SchemaInfo, ruleset.schema_info)), ruleset

@@ -125,8 +125,10 @@ def test_bad_store_id_is_refused_before_any_state(tmp_path, entry, label):
 @pytest.mark.parametrize('label', sorted(k for k, v in BAD.items() if v))
 def test_build_index_refuses_a_bad_index_store_id(tmp_path, label):
     """``build_index`` reaches ``ReachabilityIndex`` / ``save_schema`` with the index id.
-    Falsy values are excluded: ``index_store_id or source_store_id`` documents them as
-    "index in place", which is a legitimate call."""
+    Falsy values are excluded here. Before TK179 ``index_store_id or source_store_id``
+    turned them into "index in place"; since then only ``None`` means that, and ``''`` /
+    ``0`` / ``False`` are refused like any other bad id
+    (``tests/test_tk179_public_arg_census.py``)."""
     engine = _engine(tmp_path)
     with Session(engine) as s:
         Store(s, 'src', schema=SCHEMA, sync=False).add_tuple(

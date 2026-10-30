@@ -4,6 +4,8 @@ Part of `zanzibar.schema`.
 """
 # Provenance (moved out of the docstring, TK123 item 14): split out of the single-file module
 # by TK120 (2026-10-06).
+from typing import cast
+
 from .errors import IDENTIFIER_CHARSET, SchemaError, ShapeNoLongerAccepted, is_valid_identifier
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _RESERVED, _directs_only, _iter_directs, _iter_ttus, _render_restriction
 from .rules import parse_relation_rule
@@ -151,7 +153,8 @@ class _RelationParser:
         return self._parse_leaf()
 
     def _parse_leaf(self) -> Expr:
-        kind, text = self._peek()
+        kind, opt_text = self._peek()
+        text = cast(str, opt_text)       # only read under a non-None kind, which carries text
         if kind == 'bracket':
             self.pos += 1
             _reject_conditional_restriction(self.relation, text)
@@ -170,7 +173,7 @@ class _RelationParser:
                 if k3 != 'word' or t3 in _RESERVED:
                     raise SchemaError(f"relation {self.relation!r}: expected a relation after 'from'")
                 self.pos += 1
-                return TTU(target_rel=text, tupleset_rel=t3)
+                return TTU(target_rel=text, tupleset_rel=cast(str, t3))  # 'word' has text
             return Computed(text)
         raise SchemaError(f"relation {self.relation!r}: unexpected end of expression")
 
@@ -528,7 +531,7 @@ def _validate_ast_references(ast: SchemaAST) -> None:
     for (object_type, relation), expr in ast.items():
         where = f'{object_type}#{relation}'
 
-        def walk(e: Expr) -> None:
+        def walk(e: Expr, where: str = where) -> None:
             if isinstance(e, Direct):
                 for r in e.restrictions:
                     check_name(r.predicate, where)
@@ -781,7 +784,7 @@ def _validate_stratified_negation(ast: SchemaAST) -> None:
     for (object_type, relation), expr in ast.items():
         out = edges[(object_type, relation)]
 
-        def walk(e: Expr, neg: bool) -> None:
+        def walk(e: Expr, neg: bool, out: list = out, object_type: str = object_type) -> None:
             if isinstance(e, Direct):
                 for r in e.restrictions:
                     if r.predicate != '...':
@@ -839,7 +842,7 @@ def _validate_stratified_negation(ast: SchemaAST) -> None:
                 path = [src]
                 k = src
                 while k != dst:
-                    k = parent[k]
+                    k = cast('tuple[str, str]', parent[k])   # None only at dst
                     path.append(k)
                 cycle = [src] + path[::-1]
                 raise SchemaError(

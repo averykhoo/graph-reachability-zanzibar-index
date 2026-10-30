@@ -6,12 +6,35 @@ Part of `zanzibar.schema`.
 # by TK120 (2026-10-06).
 from dataclasses import replace
 import os
+from typing import cast
 import warnings
+from .argcheck import require_bool, require_shapes, require_str
 from .errors import DoublyBridgedShapeError, ShapeNoLongerAccepted, UnsupportedByGraphIndex
 from .syntax import Computed, Direct, Exclusion, Expr, Intersection, Restriction, SchemaAST, TTU, Union, _directs_only, _iter_directs, _iter_ttus, declared_relations
-from .rules import Filter, Rule, RuleSet, SchemaInfo, _restriction_pattern, _rewrite_rule, norm_pred
-from .parser import _parse_schema_ast_checked, parse_schema_ast
+from .rules import Filter, RelationalTriplePattern, Rule, RuleSet, SchemaInfo, _restriction_pattern, _rewrite_rule, norm_pred
+from .parser import _parse_schema_ast_checked
 from .boolean import _member_types, compile_boolean_schema, compute_taint
+
+
+def _reject_non_pair_shapes(object_wildcard_shapes) -> None:
+    """The part of ``_validate_object_wildcard_shapes`` that needs no schema: every entry is
+    a ``(type, relation)`` pair of strings. Also run before any statement by
+    ``argcheck.require_shapes`` (TK179), so a malformed entry is refused up front."""
+    for shape in sorted(object_wildcard_shapes, key=repr):
+        if not (isinstance(shape, tuple) and len(shape) == 2
+                and all(isinstance(part, str) for part in shape)):
+            # REFUSED SHAPE (TK147): an object_wildcard_shapes entry that is not a pair of
+            # strings (``'doc:viewer'``, ``('doc',)``, ``('doc', 'viewer', 'x')``).
+            # WHY: a 2-character string unpacked silently into a (type, relation) pair and a
+            # longer one crashed deep in the compiler; neither is what the caller meant.
+            # INSTEAD: ``object_wildcard_shapes={('doc', 'viewer')}`` -- a set of
+            # ``(object_type, relation)`` tuples (no DSL text: the shape is not DSL).
+            raise ShapeNoLongerAccepted(
+                f"object_wildcard_shapes entry {shape!r} is not a (type, relation) pair of "
+                f"strings",
+                "write each entry as a (type, relation) tuple such as ('doc', 'viewer'), "
+                "naming a declared relation, or drop it",
+                accepted_through='0.0.5', refused_since='0.1.0')
 
 
 def _validate_object_wildcard_shapes(
@@ -39,21 +62,8 @@ def _validate_object_wildcard_shapes(
     types = (frozenset(t for t, _ in ast) | frozenset(declared_types)
              | frozenset(r.type for expr in ast.values() for d in _iter_directs(expr)
                          for r in d.restrictions))
+    _reject_non_pair_shapes(object_wildcard_shapes)
     for shape in sorted(object_wildcard_shapes, key=repr):
-        if not (isinstance(shape, tuple) and len(shape) == 2
-                and all(isinstance(part, str) for part in shape)):
-            # REFUSED SHAPE (TK147): an object_wildcard_shapes entry that is not a pair of
-            # strings (``'doc:viewer'``, ``('doc',)``, ``('doc', 'viewer', 'x')``).
-            # WHY: a 2-character string unpacked silently into a (type, relation) pair and a
-            # longer one crashed deep in the compiler; neither is what the caller meant.
-            # INSTEAD: ``object_wildcard_shapes={('doc', 'viewer')}`` -- a set of
-            # ``(object_type, relation)`` tuples (no DSL text: the shape is not DSL).
-            raise ShapeNoLongerAccepted(
-                f"object_wildcard_shapes entry {shape!r} is not a (type, relation) pair of "
-                f"strings",
-                f"write each entry as a (type, relation) tuple such as ('doc', 'viewer'), "
-                f"naming a declared relation, or drop it",
-                accepted_through='0.0.5', refused_since='0.1.0')
         t, r = shape
         if t not in types:
             # REFUSED SHAPE (TK147): an object_wildcard_shapes entry naming an undeclared
@@ -513,7 +523,8 @@ def _node_removal_fence(rules_and_filters: list, schema_info: SchemaInfo) -> Sch
                 (need(p.subject_type, 'filter subject_type'), norm_pred(p.subject_predicate)))
     for rf in rules_and_filters:
         if isinstance(rf, Rule):
-            i, th = rf.if_pattern, rf.then_pattern
+            # cast: every Rule the compiler emits has a then_pattern (rules._rewrite_rule)
+            i, th = rf.if_pattern, cast(RelationalTriplePattern, rf.then_pattern)
             src = (need(i.object_type, 'rule object_type'), need(i.relation, 'rule relation'))
             unsafe.add(src)
             unsafe.add((need(th.object_type, 'rule target object_type'),
@@ -547,7 +558,7 @@ def _expand_object_wildcard_shapes(rules_and_filters: list,
                 dst = (dst_type, rf.then_pattern.relation)
                 if dst_type is not None and rf.then_pattern.relation is not None \
                         and dst not in shapes:
-                    shapes.add(dst)
+                    shapes.add((dst_type, rf.then_pattern.relation))   # == dst, narrowed
                     changed = True
     if shapes == set(schema_info.object_wildcard_shapes):
         return schema_info
@@ -799,6 +810,9 @@ def parse_openfga_schema(
     # Provenance (moved out of the docstring, TK123 item 14): the P7 matrix flip.
     # Provenance (moved out of the docstring, TK123 item 14): spec §2.1/§2.3; boolean spec
     # §3/§5.
+    require_str('parse_openfga_schema', 'schema', schema)  # TK179 G7
+    object_wildcard_shapes = require_shapes('parse_openfga_schema', object_wildcard_shapes)
+    require_bool('parse_openfga_schema', 'enable_boolean', enable_boolean)  # TK179 G3
     ast, declared_types = _parse_schema_ast_checked(schema)
     schema_info = derive_schema_info(ast, object_wildcard_shapes,
                                      declared_types=declared_types)

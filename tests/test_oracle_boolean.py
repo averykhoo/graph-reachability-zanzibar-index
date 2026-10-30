@@ -7,7 +7,7 @@ schema + tuples), never by an implementation. Covers De Morgan scenarios over th
 the §3 semantics table (including star-inside-exclusion, spec §7.2).
 """
 
-from tests.oracle import Oracle, OracleTuple, t
+from tests.oracle import Oracle, t
 
 
 # ---------------------------------------------------------------------------

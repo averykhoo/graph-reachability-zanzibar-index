@@ -484,7 +484,7 @@ def backends_work() -> Fig:
     stacks = []
     for cx in (124, 578):
         boxes = [f.box(Box(cx, 92 + 40 * i, name, w=186)) for i, name in enumerate(CHAIN)]
-        for a, b in zip(boxes, boxes[1:]):
+        for a, b in zip(boxes, boxes[1:], strict=False):  # adjacent pairs: truncation intended
             f.arrow(a.bottom, b.top, colour="muted")
         stacks.append(boxes)
     left, right = stacks

@@ -336,3 +336,6 @@ system-prompt.txt
 
 # Local user-docs builds (TK151): `python -m sphinx ... userdocs userdocs/_build`.
 userdocs/_build/
+
+# ruff (TK182)
+.ruff_cache/
