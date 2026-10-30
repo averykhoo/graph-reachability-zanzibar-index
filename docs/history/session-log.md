@@ -33,6 +33,32 @@ from here.
 
 ---
 
+## 2026-10-30c — 0.1.2 cut prepared (version, CHANGELOG, release notes); pushed for CI; tag awaits the user
+
+rows: TK178 (comment)
+
+`task lint: clean (13 checks, 300 task file(s) parsed), 26 warning(s)`
+
+`read: board + note`
+
+`asked: none`
+
+- **User: "Check if everything is ready for 0.1.2"**, then **"Okay do all that"** = bump,
+  gate, commit, push, CI gate + 6-seed `fuzz.yml` + publish dry run. It is NOT the word to
+  tag `v0.1.2`; ask again once CI is green.
+- Readiness check found: all `TK178` deps closed, gate covered on `d8d5672`, but that commit
+  was local only (never on CI, so the TK182 ruff/mypy step had never run on Linux) and the
+  version was still 0.1.1.
+- `__version__` 0.1.2; `CHANGELOG.md` `## [0.1.2] - 2026-10-30` plus an intro line;
+  `userdocs/reference/changelog.md` 0.1.2 entry, which calls out the one change a caller will
+  notice: a read with a non-string part is a `TypeError`, not `False`.
+- Release steps after the push (CI verdicts, tag, PyPI, trial) go on the `TK178` log.
+
+Still owed: the `v0.1.2` tag on the user's word, then babysit, PyPI-live check, install trial
+(`TK178`).
+
+---
+
 ## 2026-10-30b — 0.1.1 RELEASED; `TK176`-`TK182` done (strict args, ruff+mypy, stranger tests); 0.1.2 awaits tag
 
 rows: TK173 (closed), TK174 (closed), TK175 (new, closed), TK176 (new, closed), TK177 (new, NEXT), TK178 (new, NOW), TK179 / TK180 / TK181 / TK182 (new, closed), TK177 (closed)

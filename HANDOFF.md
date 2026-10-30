@@ -13,6 +13,7 @@ task, then re-rank once at write-back (`task.py promote <id> <pri> --session <ke
 
 ## Banner
 
+> 2026-10-30c -- **0.1.2 cut prepared** (`__version__` 0.1.2, CHANGELOG `[0.1.2] - 2026-10-30`, userdocs release notes) and pushed for CI. `TK178` (NOW): tag `v0.1.2` ONLY on the user's word, then babysit, PyPI, install trial.
 > 2026-10-30b -- **0.1.1 released** (tag `v0.1.1` on `047bc0b`, on PyPI; `TK174` closed): `TK172` lag fix, all five `TK173` doc gaps, and the gate-found `TK175` self-parent crash. The 0.1.1 install trial found one BROKEN, `TK176` (`Store(sync=None)` silently async): **fixed on master under `[Unreleased]`, not released**. Before 0.1.2 (user): strict public args `TK179`, ruff+mypy in the gate `TK182`, messages `TK177`, stranger tests `TK180`/`TK181` -- all CLOSED. `TK178` (NOW) = cut 0.1.2 and tag on the user's word.
 > 2026-10-30 -- **0.1.0 released** (tag `v0.1.0` on `556011e`, on PyPI; `TK171` closed). The pre-tag publish dry run caught a broken wheel smoke step (fixed + pinned). The install trial found one low-severity bug, `TK172` (`Store.lag()` stale across instances): **fixed on master under `[Unreleased]`, not yet released**. `TK174` (NOW) = cut 0.1.1 and tag on the user's word. Doc gaps: `TK173`.
 > 2026-10-28 -- **`TK163` and `TK169` closed and folded into 0.1.0 (user: "nice to have" before the tag)**. A post-commit `InvariantViolation` now reaches the caller as itself and the `Store` stays usable; public docstrings are leak-free and guarded (`tests/test_tk169_public_docstrings.py`).

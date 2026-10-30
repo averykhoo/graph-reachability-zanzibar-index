@@ -6,7 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
-## [Unreleased]
+## [0.1.2] - 2026-10-30
+
+The fix from the 0.1.1 fresh-user install trial, plus argument checking on every public
+call. No permission answer changes for a well-typed call; a wrongly typed one is now a
+`TypeError` (see below).
 
 ### Fixed
 - `Store(sync=...)` and `Store.adopt(sync=...)` take only `True` or `False` (TK176). Any

@@ -18,7 +18,7 @@ database stack only when first touched, so a schema-only user never pays for it.
 """
 from typing import TYPE_CHECKING
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 # name -> the module that defines it. Resolved on first attribute access (PEP 562).
 _LAZY = {

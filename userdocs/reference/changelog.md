@@ -5,6 +5,26 @@ reworded message and every fixed edge case, is the project's
 [CHANGELOG.md](https://github.com/averykhoo/graph-reachability-zanzibar-index/blob/master/CHANGELOG.md).
 Read it before you upgrade: any 0.x release may change the API, including a patch release.
 
+## 0.1.2 (2026-10-30)
+
+The fix from the 0.1.1 install trial, plus argument checking on every public call. No
+permission answer changes for a well-typed call.
+
+- `sync=` on {py:class}`zanzibar.Store` takes only `True` or `False`. `sync=None` or
+  `sync=0` used to give async mode without a word; any other value is now a `TypeError`.
+  `ops=` takes only `PySets` or `RoaringSets`, and says so.
+- Every public argument is type-checked before any SQL runs, and a wrong type is a
+  `TypeError` naming the argument. A write's bad identifier is still an
+  {py:exc}`zanzibar.AdmissionRejected`. **A read with a part that is not a string**, such
+  as `check("user:a", None, "doc:1")`, now raises `TypeError` where it used to answer
+  `False`; `None` as a read's subject predicate still means the bare subject. `bulk=` and
+  `enable_boolean=` take only `True` / `False`, and `object_wildcard_shapes` must be
+  `(type, relation)` pairs.
+- A refused tuple is quoted the way you wrote it (`robot:r viewer doc:1`), and the cycle
+  refusal says how to get out of it.
+- Each docs page deletes its SQLite file first, so running a page twice gives the same
+  output.
+
 ## 0.1.1 (2026-10-30)
 
 Fixes from the 0.1.0 install trial and one crash found in testing; no permission answer

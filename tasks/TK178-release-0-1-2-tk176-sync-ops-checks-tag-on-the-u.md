@@ -11,8 +11,8 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-10-30b
-moved: 2026-10-30b
-updated: 2026-10-30b
+moved: 2026-10-30c
+updated: 2026-10-30c
 closed:
 ---
 
@@ -31,3 +31,7 @@ At the cut: __version__ 0.1.2, rename CHANGELOG `## [Unreleased]` to `## [0.1.2]
 User 2026-10-30b: improve testing before 0.1.2. Release blocked on TK177, TK179, TK180, TK181 (deps); TK176 (sync=/ops= fix) is already closed on master. Plan: docs/tk179-strict-public-args-plan-2026-10-30.md.
 
 All deps closed (TK177, TK179, TK180, TK181, TK182) on 2026-10-30b; 0.1.2 content is under CHANGELOG [Unreleased]. Next: full gate + fuzz, commit, push, publish dry run, then ASK the user for the v0.1.2 tag.
+
+### 2026-10-30c
+
+Cut prepared (user 2026-10-30c: "do all that" = bump, gate, commit, push, CI gate + 6-seed fuzz + publish dry run; NOT the tag). __version__ 0.1.2; CHANGELOG `## [0.1.2] - 2026-10-30` with an intro line; userdocs/reference/changelog.md 0.1.2 entry. Next: once CI is green on the pushed commit, ASK the user for the v0.1.2 tag; then babysit through upload, PyPI JSON 200, install trial + installed_smoke.py.
