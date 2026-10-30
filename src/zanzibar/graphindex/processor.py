@@ -1254,13 +1254,14 @@ class DeltaProcessor:
         # cached snapshot must never survive the mutation.
         if self.widx._residue_cache is not None:
             self.widx._residue_cache.pop((object_type, rel, obj_name), None)
-        row = self._residue_row(persisted_id(node))
+        node_id = persisted_id(node)
+        row = self._residue_row(node_id)
         empty = not stars and not neg and not upos
         if row is None:
             if empty:
                 return
             self.session.add(Residue(
-                store_id=self.store_id, object_node_id=node.id, relation=rel,
+                store_id=self.store_id, object_node_id=node_id, relation=rel,
                 stars=json.dumps(sorted([list(s) for s in stars])),
                 neg=json.dumps(sorted(neg)), upos=json.dumps(sorted(upos)), version=1))
         elif empty:

@@ -35,9 +35,9 @@ from here.
 
 ## 2026-10-30c — 0.1.2 cut prepared (version, CHANGELOG, release notes); pushed for CI; tag awaits the user
 
-rows: TK178 (comment)
+rows: TK178 (comment), TK183 (new, LATER)
 
-`task lint: clean (13 checks, 300 task file(s) parsed), 26 warning(s)`
+`task lint: clean (13 checks, 301 task file(s) parsed), 27 warning(s)`
 
 `read: board + note`
 
@@ -53,6 +53,16 @@ rows: TK178 (comment)
   `userdocs/reference/changelog.md` 0.1.2 entry, which calls out the one change a caller will
   notice: a read with a non-string part is a `TypeError`, not `False`.
 - Release steps after the push (CI verdicts, tag, PyPI, trial) go on the `TK178` log.
+- **CI was red on `540bb50` although the local gate was green**: `lean` step 4h, mypy,
+  `processor.py:1263` (`Residue(object_node_id=node.id)`, `int | None`). mypy is pinned
+  (2.4.1 both sides), but the libraries it reads types from are not: CI got sqlmodel 0.0.48 /
+  SQLAlchemy 2.1.6 / pydantic 2.14.2, the local env has 0.0.39 / 2.0.51 / 2.13.4. Reproduced
+  first-hand in a throwaway venv with the CI versions, fixed with `persisted_id(node)` (a
+  cast, no runtime change), clean under both. The anchor pin for
+  `DeltaProcessor._store_residue` was regenerated after re-reading its four
+  `CORRESPONDENCE.md` rows (ordering, `_bumped`, I7, offline build: all unaffected). The
+  standing gap (local 4h green does not promise CI 4h green) is `TK183`. Fuzz (6 seeds) and
+  docs were green on `540bb50`; the publish dry run failed only on the same lean step.
 
 Still owed: the `v0.1.2` tag on the user's word, then babysit, PyPI-live check, install trial
 (`TK178`).

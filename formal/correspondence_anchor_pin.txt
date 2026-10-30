@@ -378,7 +378,7 @@ src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile	py:function	aba3
 src/zanzibar/graphindex/processor.py::DeltaProcessor._reconcile_subject	py:function	b545484421524ca8
 src/zanzibar/graphindex/processor.py::DeltaProcessor._residue_references	py:function	b3e145a8d2e5c06a
 src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade	py:function	82159c07161e2585
-src/zanzibar/graphindex/processor.py::DeltaProcessor._store_residue	py:function	731bad6dccb1b8aa
+src/zanzibar/graphindex/processor.py::DeltaProcessor._store_residue	py:function	5bd120039f3c4fd3
 src/zanzibar/graphindex/processor.py::DeltaProcessor._stored_cache_scope	py:function	29eb947949d50a66
 src/zanzibar/graphindex/processor.py::DeltaProcessor._stored_tupleset_subjects	py:function	96bc099ae6e6375f
 src/zanzibar/graphindex/processor.py::DeltaProcessor._sync_residue_refs	py:function	e41fb2f60f9658fa
