@@ -33,6 +33,38 @@ from here.
 
 ---
 
+## 2026-11-01 — 0.1.2 RELEASED (`TK178` closed); install trial 0 BROKEN / 8 CONFUSING; `TK184`, `TK185` filed
+
+rows: TK178 (closed), TK184 (new, LATER), TK185 (new, NOW)
+
+`task lint: clean (13 checks, 303 task file(s) parsed), 29 warning(s)`
+
+`read: board + note`
+
+`asked: none`
+
+- **User: "Yes tag and yes push the tag and yes publish. And remember to install and test
+  after."** That is the word for `v0.1.2`. The first tag attempt (2026-10-30c) was refused by
+  the harness permission check and nothing was created; this retry ran with the user's explicit
+  go-ahead.
+- `origin/master` re-checked at `b743587` (nothing ahead), annotated tag `v0.1.2` on
+  `b743587`, pushed by name. Publish run 41222226556 (push, `v0.1.2`) success through upload;
+  docs 41222226687 deployed; PyPI 0.1.2 JSON 200 with wheel + sdist, all first-hand. CI watched
+  by a babysitter agent.
+- Install trial: [`docs/pypi-trial-0.1.2-2026-11-01.md`](../pypi-trial-0.1.2-2026-11-01.md),
+  0 BROKEN / 8 CONFUSING / 21 WORKS, smoke 103/0, every 0.1.2 claim held. The trial agent was
+  refused a `Write` of its report, so the session persisted it on receipt. C1 / C4 / C5 / C8
+  re-run FIRST-HAND against `src/`, all reproduced. **C5 is the notable one:** `check(*key,
+  ...)` with a `result_keys` key (`(type, name, predicate)`) silently answers False because the
+  six-part call wants the predicate first. Filed `TK184` (C4, raw `unhashable type: 'list'` for
+  list-of-lists shapes) and `TK185` (C5 plus the wording/consistency items); `TK185` promoted to
+  NOW as the one row an unassigned session should pick up.
+- The trial env `zanzibar-index-pypi-trial` is gone (`conda env list`, envs dir: 0 matches).
+
+Still owed: none.
+
+---
+
 ## 2026-10-30c — 0.1.2 cut prepared (version, CHANGELOG, release notes); pushed for CI; tag awaits the user
 
 rows: TK178 (comment), TK183 (new, LATER)
