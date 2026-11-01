@@ -35,9 +35,9 @@ from here.
 
 ## 2026-11-01 — 0.1.2 RELEASED (`TK178` closed); install trial 0 BROKEN / 8 CONFUSING; `TK184`, `TK185` filed
 
-rows: TK178 (closed), TK184 (new, LATER), TK185 (new, NOW)
+rows: TK178 (closed), TK184 (new, closed: folded into TK185), TK185 (new, NOW), TK183 (closed: folded into TK185)
 
-`task lint: clean (13 checks, 303 task file(s) parsed), 29 warning(s)`
+`task lint: clean (13 checks, 303 task file(s) parsed), 26 warning(s)`
 
 `read: board + note`
 
@@ -60,6 +60,15 @@ rows: TK178 (closed), TK184 (new, LATER), TK185 (new, NOW)
   list-of-lists shapes) and `TK185` (C5 plus the wording/consistency items); `TK185` promoted to
   NOW as the one row an unassigned session should pick up.
 - The trial env `zanzibar-index-pypi-trial` is gone (`conda env list`, envs dir: 0 matches).
+- **User decided the trial follow-ups (2026-11-01): "Okay to all your recommendations, put them
+  all in a task up next".** And on C5 / C7: "An undeclared relation type - seems reasonable to
+  error or warn loudly?" -> **a READ naming an undeclared type or relation becomes an ERROR**
+  (not a warning: a warning still returns the silent False); unknown names still match
+  nothing. This reverses the documented "reads are lenient" rule for types and relations.
+  The whole 0.1.3 batch is one row, `TK185` (NOW, size L), with the decided plan as its
+  2026-11-01 Log entry: C4 / C3 / C6 code fixes, the read refusal (design points and the
+  test-grid trap listed), C1 / C8 / C2 wording, docstrings, and the `TK183` lint-version print.
+  `TK184` and `TK183` closed as folded in.
 
 Still owed: none.
 

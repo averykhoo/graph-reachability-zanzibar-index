@@ -11,9 +11,9 @@ labels: [infra]
 source: hand
 source_hash:
 created: 2026-10-30c
-moved: 2026-10-30c
-updated: 2026-10-30c
-closed:
+moved: 2026-11-01
+updated: 2026-11-01
+closed: 2026-11-01
 ---
 
 Found 2026-10-30c while preparing 0.1.2. The local gate was green on `540bb50`, but CI's `verify.sh lean` step 4h failed:
@@ -25,3 +25,7 @@ Cause (first-hand, reproduced in a throwaway venv): `scripts/lint_gate.py` pins 
 The finding was fixed in the 0.1.2 cut (`persisted_id(node)`, no runtime change). What stays open: a green LOCAL lint step does not promise a green CI lint step. CI catching dependency drift is by design (CLAUDE.md: CI installs newest, local pinned), so this may be "document it" rather than "pin it". Decide between: (a) document in docs/gate-runbook.md that 4h depends on library versions; (b) have lint_gate.py print the sqlmodel/SQLAlchemy/pydantic versions it ran with, so a CI/local disagreement is readable from the log; (c) pin those libraries for the lint step only. Do not pin them for the test run: that would hide exactly the drift CI is for.
 
 ## Log
+
+### 2026-11-01
+
+Folded into TK185 item 8 (user 2026-11-01). Decided: lint_gate.py prints the library versions mypy ran with; do not pin them for the test run.
