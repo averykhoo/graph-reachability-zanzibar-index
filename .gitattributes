@@ -12,3 +12,17 @@
 # to give. Pin the bytes instead of teaching the writer about platforms.
 tasks/**            text eol=lf
 scripts/task.py     text eol=lf
+
+# The record engine's files (context-engine, adopted 2026-11-03, context-engine CE-167). The engine
+# writes LF and lint compares its kit copies (the contract, the runbooks) with the engine's own byte
+# for byte, so a CRLF checkout would turn them red; tasks/ is already pinned above.
+context.toml        text eol=lf
+docs/framework/**   text eol=lf
+docs/runbooks/**    text eol=lf
+docs/ledger/**      text eol=lf
+docs/decisions/**   text eol=lf
+docs/stories/**     text eol=lf
+docs/working/**     text eol=lf
+docs/evidence/**    text eol=lf
+docs/charter.md     text eol=lf
+docs/criteria.md    text eol=lf

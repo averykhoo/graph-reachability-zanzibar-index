@@ -339,3 +339,5 @@ userdocs/_build/
 
 # ruff (TK182)
 .ruff_cache/
+# the record engine's own env (context-engine CE-167), never this repo's
+.context-engine/

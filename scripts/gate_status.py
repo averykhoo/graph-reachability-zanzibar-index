@@ -235,12 +235,25 @@ def phase_scope(phase: str) -> str:
 CODE_SCOPE_MD_KEEP = (b"tasks/", b"HANDOFF.md", b"PYPI_README.md", b"CHANGELOG.md",
                       b"formal/CORRESPONDENCE.md", b"userdocs/")
 
+# The record engine's own files (context-engine, adopted 2026-11-03, context-engine CE-167):
+# `context.toml` is its config and `docs/ledger/` holds its session ledger and op log, which
+# EVERY engine write appends to. No collected test reads either (both are new, and nothing
+# under tests/ or formal/conformance/ names them), so like markdown they move `t2a` (`lean`)
+# but not `t2c`: an engine write does not stale the nine pytest tiles. Exact name and
+# directory prefix, so `tests/context.toml` or `docs/ledgers.toml` stay code. Pinned both ways
+# by tests/test_gate_status.py::test_engine_writes_do_not_move_the_code_scoped_id and
+# ::test_engine_named_files_elsewhere_stay_in_the_code_scope.
+ENGINE_PROSE_FILES = (b"context.toml",)
+ENGINE_PROSE_DIRS = (b"docs/ledger/",)
+
 
 def _in_scope(rel: bytes, scope: str) -> bool:
     if scope == SCOPE_ALL:
         return True
     p = rel.replace(b"\\", b"/")
     if p.startswith(b"benchmarks/"):
+        return False
+    if p in ENGINE_PROSE_FILES or p.startswith(ENGINE_PROSE_DIRS):
         return False
     if p.endswith(b".md") and not p.startswith(CODE_SCOPE_MD_KEEP):
         return False

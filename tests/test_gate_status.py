@@ -721,3 +721,31 @@ def test_every_md_a_test_module_names_from_the_repo_root_is_in_the_code_scope() 
                 f"cover: add it to scripts/gate_status.py::CODE_SCOPE_MD_KEEP (and re-do "
                 f"the survey there), or stop reading the live file")
     assert seen >= 2, f"the survey found only {seen} root-relative .md read(s); it went blind"
+
+
+# --------------------------------------------------------------------------- #
+# The record engine's files are prose to the tiles (context-engine CE-167, 2026-11-03).
+# Written as a PAIR like the exclusions above: the exclusion, and its control.
+# SABOTAGE (run by the CE-167 import script, each restored): drop the exclusion -> the first
+# test red; widen it to any `context.toml` or any `docs/ledger*` -> the control red.
+# --------------------------------------------------------------------------- #
+def test_engine_writes_do_not_move_the_code_scoped_id(repo: Path) -> None:
+    """`context.toml` and `docs/ledger/` (the engine's op log) change on engine writes only."""
+    (repo / "docs" / "ledger").mkdir(parents=True)
+    (repo / "context.toml").write_bytes(b"[engine]\n")
+    (repo / "docs" / "ledger" / "ops.jsonl").write_bytes(b'{"op": "new"}\n')
+    before_all, before_code = _id(repo), _code_id(repo)
+    (repo / "context.toml").write_bytes(b"[engine]\ncommit = 'off'\n")
+    (repo / "docs" / "ledger" / "ops.jsonl").write_bytes(b'{"op": "new"}\n{"op": "set"}\n')
+    assert _id(repo) != before_all, "the ALL scope (lean) must still see an engine write"
+    assert _code_id(repo) == before_code
+
+
+def test_engine_named_files_elsewhere_stay_in_the_code_scope(repo: Path) -> None:
+    """The control: only the ROOT `context.toml` and the `docs/ledger/` directory are excluded."""
+    for rel in ("tests/context.toml", "docs/ledgers.toml", "docs/x.jsonl", "src/docs/ledger/x.py"):
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_bytes(b"x = 1\n")
+        before = _code_id(repo)
+        (repo / rel).write_bytes(b"x = 2\n")
+        assert _code_id(repo) != before, f"{rel} must stay inside the code scope"
