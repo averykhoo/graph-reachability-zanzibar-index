@@ -698,7 +698,7 @@ MIN_CONF_ALL=1246
 #   1749 vs `pytest tests/ -q --collect-only` -> 2283, i.e. 534 tests of headroom (the
 #   2026-10-12/13 sessions' tests/ additions, not broken down per file). Do not hand-
 #   raise it any more; LOWERING stays a deliberate hand edit, followed by --generate.
-MIN_TESTS_ALL=3832
+MIN_TESTS_ALL=3841
 
 # XFAIL BUDGET for `tests/` (and ONLY for `tests/`).
 #
@@ -1252,8 +1252,13 @@ run_lean() {
   # rc=0, so the red is attributable to the sabotage and not to a tree that was
   # already dirty.
   # -------------------------------------------------------------------------- #
-  echo "--- [4g/7] task tree lint (scripts/task.py lint) ---"
-  ( cd "$REPO_ROOT" && "$PY" "$REPO_ROOT/scripts/task.py" lint )        || { echo "FAIL: task tree lint (see above)"; exit 1; }
+  # RETIRED 2026-11-03 (context-engine CE-167). The record engine owns tasks/ since its adoption:
+  # its records are not task.py's format, and task.py refuses a tree with the engine's config
+  # beside it (scripts/task.py::refuse_engine_tree). The tree's lint is now `context-engine lint`
+  # (schema, ids, aliases, the NOW/NEXT caps, deps), the gate's last step (CLAUDE.md § Gate); it
+  # is not run here because CI does not install the engine. The step keeps its number so the
+  # records above still read; task.py's own tests still run in the tiles.
+  echo "--- [4g/7] task tree lint: RETIRED 2026-11-03 (the record engine's lint, CLAUDE.md § Gate) ---"
 
   # -------------------------------------------------------------------------- #
   # 4h  lint + type check (TK182, docs/tk182-lint-typecheck-plan-2026-10-30.md):

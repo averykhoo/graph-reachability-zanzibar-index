@@ -10,6 +10,12 @@ Designed 2026-08-16 in [`history/handoff-redesign-2026-08.md`](history/handoff-r
 which was executed in full and frozen the same day. Where that plan and this file disagree,
 this file wins: it is the living contract, that is the plan which produced it.
 
+**2026-11-03 (context-engine CE-167): the record engine took over the board, the session ledger
+and the end-of-session write-back.** Where this file describes `scripts/task.py`, the
+`tasks/closed/` tree, entries in `docs/history/session-log.md` or the §7 Rhythm, the engine's
+procedures win (`docs/runbooks/procedures.md`: session start, clean close). The rest (liveness,
+banners, signals, stable keys, where things live) stands.
+
 ## 1. One home per statement
 
 The single rule the rest of this file elaborates: **every statement has exactly one

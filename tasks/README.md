@@ -1,3 +1,11 @@
+---
+type: Readme
+---
+
+FROZEN 2026-11-03 (context-engine CE-167): the task.py tree this file describes is retired. tasks/ holds
+the record engine's records (`context-engine task list`); this file is kept because docs and history
+link here.
+
 # `tasks/` — the priority tree
 
 **LIVING.** Rules that outlive any one session. **This tree is the sole authority on

@@ -147,7 +147,7 @@ def test_the_byte_cap_covers_the_root_note_and_rides_the_gated_check():
     assert HL.CHECKS[0] is HL.check_ceilings
     verify = (REPO_ROOT / "formal" / "verify.sh").read_text(encoding="utf-8")
     assert '"$REPO_ROOT/scripts/handoff_lint.py"' in verify
-    assert '"$REPO_ROOT/scripts/task.py" lint' in verify
+    assert 'task tree lint: RETIRED' in verify  # 4g retired 2026-11-03 (context-engine CE-167)
 
 
 # --- the per-line banner width cap (task.py::BANNER_MAX_WIDTH, lint check 12) -------------

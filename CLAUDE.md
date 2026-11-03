@@ -14,8 +14,8 @@ pointer. Case histories go to the session log, detail to its home doc (`docs/REA
 - **The user does not read or write Lean proofs and is not going to.** All key architectural
   decisions — in `formal/` and in the Python — are DELEGATED to the model. Do not hand a
   Lean-shaped choice back to the user ("narrow the predicate or add a lemma?"); decide it,
-  record the decision and its reasoning on the task row (`task.py comment <id> --session
-  <key>`), and move on. Ask the user only about goals and priorities, never about proof
+  record the decision and its reasoning on the task row (`context-engine task comment <id>`,
+  or a PROVISIONAL decision record), and move on. Ask the user only about goals and priorities, never about proof
   mechanics.
 - **The primary consideration is EQUIVALENCE: the graph index must give the same answers as
   the set engine** (the oracle is the referee for both). Every decision is weighed as
@@ -32,36 +32,28 @@ pointer. Case histories go to the session log, detail to its home doc (`docs/REA
   reasoning, then acts. This applies whatever model the session itself runs on.
 
 ## Start here (every session)
-- **Start with `python scripts/task.py board`** — the session-start view, a QUERY over the
-  file-per-task tree in `tasks/` (bounded by `task.py::BOARD_MAX_LINES`; never restate it).
-  It opens with the `## Banner` of [`HANDOFF.md`](HANDOFF.md), a **one-hop note** (banner,
-  still-owed, where to go next; no row table, no item blocks; capped by
-  `handoff_lint.py::MAX_LINES` / `MAX_BYTES`). `show <id>` is the per-item read (Log newest
-  first), `ready` lists unblocked work, `list` is capped and says so. At session end write
-  back via the Rhythm in [`docs/README.md`](docs/README.md) §7.
+- **Start with `context-engine orient`** (the `SessionStart` hook prints it), then `context-engine
+  session start`, in the order `docs/runbooks/procedures.md` § Session start gives. The board is
+  the engine's: one record per item in `tasks/` (`TK-n`, owner questions `ASK-n`), read with
+  `context-engine task list` and `task show <id>`. [`HANDOFF.md`](HANDOFF.md) is a **one-hop
+  note** (the engine's banner, facts, where to go next; capped by `handoff_lint.py::MAX_LINES`
+  / `MAX_BYTES`). End with the engine's clean close (procedures § Clean close).
 - **The current goal (user, 2026-09-22c): make the assurance surface honest and legible, not
   wider**; perf is deprioritized. Why: `docs/architecture/decision-log.md` § "The project goal".
-- **The tree is the SOLE authority on open work** since the 2026-09-06 cutover (spec
-  [`docs/tree-sole-authority-spec-2026-08-29.md`](docs/tree-sole-authority-spec-2026-08-29.md)
-  and trial verdict [`docs/tasktool-trial-protocol.md`](docs/tasktool-trial-protocol.md), both
-  FROZEN). Old runbooks mislead: `tasks/BANNER.md` is a tombstone (lint check 12 fails if it
-  reappears), `task.py sync` / `ack` REFUSE and name their replacement, lint check 13 is
-  retired and its number never reused, `source_hash` is frozen
-  ([`docs/tasktool-spec.md`](docs/tasktool-spec.md) "The retired verbs").
-  * **Every re-rank, close, and progress note goes through an op with `--session <key>`**
-    — `promote` / `touch` / `close -m` / `set <id> brief` / `comment <id> -m` — never a
-    hand edit of a task file's frontmatter. Schema and op contract: `docs/tasktool-spec.md`.
-    The tool is pinned by `tests/test_tasktool.py`, inside the gate.
-  * **Close the loop in your session-log entry with two literal lines** (enforced:
-    `handoff_lint.py::check_session_receipt` makes `lean` RED without them): the output of
-    `python scripts/task.py lint`, and `read: board only` / `read: board + note` / `read: show <id>` — an honest
-    self-report of what you actually read to start work. **A third line is conditional**
-    (`TK96`): while any open `ASK-*` row sits at `NEXT` (or `NOW`), raise each with the user
-    in chat and write `asked: ASK-<n>[, ASK-<m>]` naming all of them — `asked: none` is red
-    then (`python scripts/task.py asks` lists them).
-  * ⚠ **A `close -m` / `comment -m` message with backticks inside DOUBLE quotes is
-    command-substituted by the shell** — the backticked text vanishes silently. Use single
-    quotes, or a heredoc, or a file.
+- **The engine's board is the SOLE authority on open work** since the 2026-11-03 adoption
+  (context-engine CE-167). `scripts/task.py` and its tree format are RETIRED: each task.py record
+  became an engine record in place, body byte for byte, its old id an alias (map:
+  [`docs/evidence/board-import-idmap-2026-11-03.md`](docs/evidence/board-import-idmap-2026-11-03.md)).
+  `task.py` refuses an engine tree; `tests/test_tasktool.py` still pins it on fixtures and on the
+  corpus as of `4826a01`. Its spec and trial docs are history.
+  * **Every re-rank, close and progress note goes through an engine op** (`task promote` /
+    `task touch` / `task close` / `task set` / `task comment`), never a hand edit of a task
+    file's frontmatter (the contract's § Rules).
+  * The pre-engine ledger [`docs/history/session-log.md`](docs/history/session-log.md) is
+    FROZEN at its 2026-11-01 entry, and its `read:` / `asked:` receipt lines with it; the
+    engine's ledger is `docs/ledger/session-log.md`, written by `session close`.
+  * ⚠ **A message with backticks inside DOUBLE quotes is command-substituted by the shell**
+    — the backticked text vanishes silently. Use single quotes, `--file`, or a heredoc.
 - **SCOUTING IS A DELIVERABLE, NOT A BYPRODUCT** (user instruction 2026-09-13g). Measuring
   the tree (cone counts, call-site censuses, symbol/line maps, go/no-go adjudications) is the
   expensive half of an `L`-sized item; a session that measures and only *acts* makes the
@@ -76,7 +68,7 @@ pointer. Case histories go to the session log, detail to its home doc (`docs/REA
     items *in place*, not in a footnote.
   * **Cite `file::symbol`, and date any line number** (line numbers rot within a session).
   * **The task row is the index, the doc is the body.** Close with
-    `task.py comment <id> --session <key>` naming the file, what LANDED, what BUILDS, what is
+    `context-engine task comment <id>` naming the file, what LANDED, what BUILDS, what is
     RED, and the single next action. `show <id>` alone must be enough to resume.
   * **This applies to a session that runs out of room, too**: write the state down before
     clearing context or stopping mid-item.

@@ -1201,9 +1201,11 @@ class Store(object):
         while True:
             candidate = os.path.join(cur, 'tasks', 'config.json')
             if os.path.exists(candidate):
+                refuse_engine_tree(cur)
                 return Store(os.path.join(cur, 'tasks'))
             if os.path.basename(cur) == 'tasks' and \
                     os.path.exists(os.path.join(cur, 'config.json')):
+                refuse_engine_tree(os.path.dirname(cur))
                 return Store(cur)
             parent = os.path.dirname(cur)
             if parent == cur:
@@ -1393,6 +1395,24 @@ def stale_threshold(stale_days):
 
 
 # --- Graph helpers --------------------------------------------------------------------
+
+ENGINE_CONFIG = 'context.toml'
+
+
+def refuse_engine_tree(root):
+    """RETIRED 2026-11-03 (context-engine CE-167): the record engine owns this repo's tasks/.
+
+    Its records are not this tool's format (`type:`, `state:`, `aliases:` keys, `TK-185` ids),
+    so every op here would misread them and every write would corrupt one. The engine's config
+    beside tasks/ is the mark. A tree without one (every fixture in tests/test_tasktool.py, and
+    the corpus as of 4826a01 its live-corpus tests rebuild from git) is still served.
+    """
+    if os.path.exists(os.path.join(root, ENGINE_CONFIG)):
+        raise Refused('tasks/ under %s belongs to the record engine since 2026-11-03 '
+                      '(context-engine CE-167): use `context-engine task list` and '
+                      '`context-engine task show <id>` (CLAUDE.md "The record engine"). '
+                      'Nothing was read or written.' % root)
+
 
 def find_cycle(edges, start):
     """A path from ``start`` back to ``start``, or None. Depth-first, iterative.

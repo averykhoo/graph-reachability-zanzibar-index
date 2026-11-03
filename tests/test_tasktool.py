@@ -449,22 +449,50 @@ def sync_tree(name, board=SYNC_BOARD):
     return root
 
 
+# The corpus task.py last owned. The record engine took tasks/ over on 2026-11-03 (context-engine
+# CE-167): its records are not task.py's format and task.py refuses that tree, so the live-corpus
+# tests read the tree and its note as they stood at the last commit before the adoption, from git
+# (raw blobs, no line-ending filter). A checkout without that commit (a shallow clone) FAILS here,
+# never skips; gate.yml fetches full history.
+LEGACY_CORPUS_REV = '4826a0151b59a390157208c2ba5bd50c7a479c64'
+_LEGACY = []
+
+
+def _legacy_corpus():
+    """{repo-relative path: bytes} of tasks/ and HANDOFF.md at LEGACY_CORPUS_REV, read once."""
+    if not _LEGACY:
+        ls = subprocess.run(['git', '-C', LIVE_TREE, 'ls-tree', '-r', '-z', LEGACY_CORPUS_REV,
+                             '--', 'tasks', 'HANDOFF.md'], capture_output=True, check=True).stdout
+        entries = [e.split(b'\t', 1) for e in ls.split(b'\0') if e]
+        shas = [meta.split()[2] for meta, _ in entries]
+        out = subprocess.run(['git', '-C', LIVE_TREE, 'cat-file', '--batch'],
+                             input=b'\n'.join(shas) + b'\n', capture_output=True, check=True).stdout
+        blobs, i = {}, 0
+        for (_, path), sha in zip(entries, shas, strict=True):
+            nl = out.index(b'\n', i)
+            head = out[i:nl].split()
+            assert head[0] == sha and head[1] == b'blob', head
+            size = int(head[2])
+            blobs[path.decode('utf-8')] = out[nl + 1:nl + 1 + size]
+            i = nl + 1 + size + 1
+        assert len(blobs) > 300 and 'HANDOFF.md' in blobs, sorted(blobs)[:5]
+        _LEGACY.append(blobs)
+    return _LEGACY[0]
+
+
 def live_copy(name):
-    """A throwaway copy of the LIVE `tasks/` corpus. The original is never touched."""
-    src = os.path.join(LIVE_TREE, 'tasks')
-    assert os.path.isdir(src), (
-        'the live corpus %s is missing. This is NOT a skip: a control that silently '
-        'skips is this repo\'s house failure mode, and a live-corpus sabotage against no '
-        'corpus proves nothing.' % src)
+    """A throwaway copy of the `tasks/` corpus task.py last owned (LEGACY_CORPUS_REV), with that
+    day's note as its banner. Nothing in the repo is read or touched but git's objects."""
     root = os.path.join(TMP, name)
     if os.path.isdir(root):
         shutil.rmtree(root)
     os.makedirs(root)
-    shutil.copytree(src, os.path.join(root, 'tasks'))
-    # The live banner lives in the live note since the cutover; a copy of the corpus
-    # without it would refuse `board` and fail check 12 for a reason that is not the
-    # test's. (`scripts/gate_status.py::CODE_SCOPE_MD_KEEP` lists HANDOFF.md for this.)
-    shutil.copy2(os.path.join(LIVE_TREE, 'HANDOFF.md'), banner_path(root))
+    for rel, data in _legacy_corpus().items():
+        dest = banner_path(root) if rel == 'HANDOFF.md' else os.path.join(root, *rel.split('/'))
+        if not os.path.isdir(os.path.dirname(dest)):
+            os.makedirs(os.path.dirname(dest))
+        with io.open(dest, 'wb') as fh:
+            fh.write(data)
     return root
 
 
@@ -1840,9 +1868,10 @@ def test_shipped_config_is_measured_not_an_example():
     against this file rather than against the probe. A sabotage record must not re-arm the
     thing it documents; describe an unresolvable token, never spell one.
     """
-    tasks = os.path.join(LIVE_TREE, 'tasks')
-    assert os.path.isdir(tasks), (
-        'the live corpus %s is missing. This is a FAILURE, never a skip.' % tasks)
+    # The corpus is the one task.py last owned (LEGACY_CORPUS_REV): the record engine owns
+    # tasks/ since 2026-11-03 (context-engine CE-167). The token scan below stays LIVE.
+    legacy = live_copy('shipped_config')
+    tasks = os.path.join(legacy, 'tasks')
     cfg = json.loads(read(os.path.join(tasks, 'config.json')).decode('utf-8'))
 
     on_disk = sum(TM.disk_md_count(tasks))
@@ -1860,7 +1889,7 @@ def test_shipped_config_is_measured_not_an_example():
     # TOOL rather than from filenames -- ids legitimately contain hyphens (`ZT-P0-1`,
     # `R6-3`), so `name.split('-')[0]` yields a prefix, not an id, and silently collapses
     # the census from 152 to 89. `list` is a read op; the live corpus is not written to.
-    rc, rows, err = rj(LIVE_TREE, 'list', '--all', '--limit', '0')
+    rc, rows, err = rj(legacy, 'list', '--all', '--limit', '0')
     assert rc == 0, err
     known = set(row['id'] for row in rows)
     for line in read(os.path.join(tasks, 'retired-ids.txt')).decode('utf-8').split('\n'):
@@ -1879,7 +1908,7 @@ def test_shipped_config_is_measured_not_an_example():
         dirs[:] = [d for d in dirs
                    if d not in ('.git', '__pycache__', '.gate-runs', '.scratch',
                                 '.lake', '.idea', '.pytest_cache', '.hypothesis',
-                                'tasks')]
+                                'tasks', '.context-engine', '.context')]
         for name in names:
             if os.path.splitext(name)[1].lower() not in ('.py', '.md', '.lean', '.txt'):
                 continue
@@ -4396,3 +4425,25 @@ def test_sabotage_ask_age_from_moved():
         "    created = task.moved or ''\n    if not SESSION_KEY.match(created):",
         test_asks_lists_open_asks_oldest_first_with_age_and_blockers)
     assert 'NEXT    0 days' in message, message
+
+
+# --- RETIRED on the record engine's tree (context-engine CE-167, 2026-11-03) -------------
+# The engine owns this repo's tasks/ and its records are not task.py's format, so task.py
+# refuses a tree with the engine's config (`context.toml`) beside it, before reading anything.
+# SABOTAGE (run by the CE-167 import script, restored byte for byte): `refuse_engine_tree`
+# made a no-op -> test_an_engine_tree_is_refused_before_anything_is_read red.
+def test_an_engine_tree_is_refused_before_anything_is_read():
+    root = fresh('engine_tree')
+    write(os.path.join(root, 'context.toml'), '[engine]\n')
+    before = tree_bytes(root)
+    rc, out, err = run(root, 'counts')
+    assert rc == 2, (rc, out, err)
+    assert 'belongs to the record engine' in err, err
+    assert tree_bytes(root) == before
+
+
+def test_a_tree_without_the_engine_config_is_still_served():
+    """The control: the same fixture without `context.toml` is served as before."""
+    root = fresh('engine_tree_control')
+    rc, out, err = run(root, 'counts')
+    assert rc == 0, (rc, out, err)

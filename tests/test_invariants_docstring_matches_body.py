@@ -203,7 +203,8 @@ def test_every_schema_backed_check_invariants_call_passes_schema_info():
     import ast
     import pathlib
 
-    skip = {'.scratch', '.gate-runs', '.git', '.claude', '.lake', 'build', '.venv', '__pycache__'}
+    skip = {'.scratch', '.gate-runs', '.git', '.claude', '.lake', 'build', '.venv', '__pycache__',
+            '.context-engine', '.context'}  # the record engine's own env and lock dir (context-engine CE-167)
     root = pathlib.Path(__file__).resolve().parents[1]
     total = 0
     bare: dict = {}

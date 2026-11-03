@@ -1,5 +1,9 @@
 # session-log.md — the append-only root session ledger
 
+**FROZEN 2026-11-03 (context-engine CE-167): no entries after 2026-11-01.** The session ledger is
+now [`docs/ledger/session-log.md`](../ledger/session-log.md), written by `context-engine session
+close`. This file and its entry keys stay as citation targets; the rules below say how it was kept.
+
 **LIVING — append-only.** This file lives under `docs/history/` for filing reasons
 only; it is *not* frozen provenance, and the frozen-banner rule does not apply to it
 (`scripts/handoff_lint.py` excepts it by name). It is the root analogue of

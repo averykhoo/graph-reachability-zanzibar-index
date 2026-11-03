@@ -207,7 +207,8 @@ MAX_LINES = {
 #               Landed + 10%, the same rule as its MAX_LINES entry.
 MAX_BYTES = {
     'HANDOFF.md': 5000,
-    'CLAUDE.md': 32500,
+    'CLAUDE.md': 33500,  # raised from 32500 on 2026-11-03 (context-engine CE-167): the engine's kit
+                        # block, § Gate and § The record engine are new rules; 32872 B then
     'formal/HANDOFF.md': 21600,
 }
 
@@ -384,6 +385,34 @@ _ROWS_LINE = re.compile(r'^rows:\s*(.+)$')
 _ROW_ID = re.compile(r'\b(ZT-[A-Z0-9]+(?:-[A-Z0-9]+)*|[A-Z]{1,3}\d+(?:-\d+)?|[A-Z]{1,3}-\d+)\b')
 
 
+# The record engine owns tasks/ since 2026-11-03 (context-engine CE-167; CLAUDE.md "The record
+# engine"). Its records differ from task.py's in two ways the tree readers below must see: a
+# record names its task.py id in `aliases:` (`TK185` on `TK-185`), so a ledger that cites the old
+# id still resolves; and a closed record stays in tasks/ with `state: closed` instead of moving to
+# tasks/closed/, so "top level" no longer means "open". Pinned by tests/test_ce167_engine_tree.py.
+_ALIASES_LINE = re.compile(r'^aliases:\s*\[(.*)\]\s*$')
+_STATE_CLOSED = re.compile(r'^state:\s*closed\s*$')
+
+
+def _frontmatter_head(path):
+    """A task file's frontmatter lines (between its `---` fences), or its first 20 lines when it
+    has none: the window these readers used before the engine's longer frontmatter."""
+    with io.open(path, encoding='utf-8') as fh:
+        lines = fh.read().split('\n')
+    if lines and lines[0] == '---' and '---' in lines[1:]:
+        return lines[1:lines.index('---', 1)]
+    return lines[:20]
+
+
+def _aliases(line):
+    m = _ALIASES_LINE.match(line)
+    return [a.strip().strip('\'"') for a in m.group(1).split(',') if a.strip()] if m else []
+
+
+def _closed_record(head):
+    return any(_STATE_CLOSED.match(ln) for ln in head)
+
+
 def _tree_ids():
     """Every id the task tree knows -- open, closed, and retired -- or None if no tree.
 
@@ -408,11 +437,10 @@ def _tree_ids():
         for name in sorted(os.listdir(d)):
             if not name.endswith('.md') or (top and name in TASKS_NON_TASK_MD):
                 continue
-            with io.open(os.path.join(d, name), encoding='utf-8') as fh:
-                for ln in fh.read().split('\n')[:20]:
-                    if ln.startswith('id:'):
-                        out.add(ln[3:].strip())
-                        break
+            for ln in _frontmatter_head(os.path.join(d, name)):
+                if ln.startswith('id:'):
+                    out.add(ln[3:].strip())
+                out.update(_aliases(ln))
     retired = os.path.join(root, 'retired-ids.txt')
     if os.path.exists(retired):
         with io.open(retired, encoding='utf-8') as fh:
@@ -506,11 +534,13 @@ def _tree_open_pris():
     for name in sorted(os.listdir(root)):
         if not name.endswith('.md') or name in TASKS_NON_TASK_MD:
             continue
-        with io.open(os.path.join(root, name), encoding='utf-8') as fh:
-            for ln in fh.read().split('\n')[:20]:
-                if ln.startswith('pri:'):
-                    out.append((ln[4:].strip().upper(), name))
-                    break
+        head = _frontmatter_head(os.path.join(root, name))
+        if _closed_record(head):
+            continue
+        for ln in head:
+            if ln.startswith('pri:'):
+                out.append((ln[4:].strip().upper(), name))
+                break
     return out
 
 
@@ -1060,8 +1090,9 @@ def _tree_next_asks():
     for name in sorted(os.listdir(root)):
         if not name.endswith('.md') or name in TASKS_NON_TASK_MD:
             continue
-        with io.open(os.path.join(root, name), encoding='utf-8') as fh:
-            head = fh.read().split('\n')[:20]
+        head = _frontmatter_head(os.path.join(root, name))
+        if _closed_record(head):
+            continue
         fm = dict((ln.split(':', 1)[0], ln.split(':', 1)[1].strip())
                   for ln in head if ln.startswith(('id:', 'pri:')))
         if _ASK_ID.match(fm.get('id', '')) and fm.get('pri', '').upper() in _ASK_NAG_PRIS:
@@ -1379,7 +1410,8 @@ def _count_scan_files():
         for name in sorted(os.listdir(full)):
             if not name.endswith('.md'):
                 continue
-            if d == TASKS_DIR and name in TASKS_NON_TASK_MD:
+            if d == TASKS_DIR and (name in TASKS_NON_TASK_MD or
+                                   _closed_record(_frontmatter_head(os.path.join(full, name)))):
                 continue
             out.append('%s/%s' % (d, name))
     return out
