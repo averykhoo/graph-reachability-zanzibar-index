@@ -1,5 +1,9 @@
 # Decision log
 
+FROZEN 2026-11-03 (session 2026-11-03a): each `##` section below is imported as a decision record
+(`DEC-1`..`DEC-9`, docs/decisions/; context-engine CE-167); never appended to again. New decisions are
+engine records (`context-engine record new decision`).
+
 Load-bearing decisions with their rejected alternatives, compressed from the three
 specs (`docs/specs/`). Dated *implementation* divergences live in
 `docs/spec-deviations.md`; this file is the "why is it like this at all" record.

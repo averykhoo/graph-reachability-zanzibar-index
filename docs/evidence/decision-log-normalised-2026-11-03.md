@@ -1,0 +1,306 @@
+# Decision log (normalised for the import)
+
+FROZEN 2026-11-03 (session 2026-11-03a): the copy of `docs/architecture/decision-log.md` at `4826a01` that the import read (context-engine CE-167), one entry per `##` section; never edited.
+
+## Entries
+
+### DEC-1 -- Graph index *(unrecorded, the log names no one; the date of the commit that wrote the heading (git blame), 2026-07-07)*
+
+* **Path-counted closure rows** over interval/2-hop/PLL labelings and per-object
+  bitmaps: labelings have non-constant queries and degrade under deletion; bitmap
+  bits can't be ref-counted for exact removal. Under OMv-style lower bounds nothing
+  gets both fast updates and fast queries — the query-optimal corner is chosen
+  deliberately; multiplicative path counting is what makes removal exact.
+* **Cycle rejection is a counting necessity**, not a policy: a cycle means infinite
+  path multiplicity. Hence also: self-referential wildcard tuples rejected (the
+  bridge+grant pair closes a loop), while object-star self-containment is fine
+  (subject-role and object-role are different nodes; entity nodes have in-degree 0).
+* **Split wildcard nodes** (`w_any`/`w_all`, never bridged to each other) over a
+  single `*` node: prevents the instance leak (being an instance ≠ receiving what is
+  distributed to instances). Interior wildcard hops are materialised as bridges so
+  check stays ≤4 probes; only query-endpoint hops stay virtual.
+* **Store-granularity writer lock** (`_lock_store`) over per-edge locking: the
+  affected closure region is discovered while walking, so piecemeal locking in graph
+  order invites deadlocks; one logical write already touches many rows.
+
+### DEC-2 -- Set engine *(unrecorded, the log names no one; the date of the commit that wrote the heading (git blame), 2026-07-07)*
+
+* **Raw tuples (`RelationTuple`) are the ground truth**; all set state is in-memory,
+  rebuilt by replay on open. Bitmap snapshot persistence rejected (opaque, duplicates
+  state).
+* **Reference-counted interner with recycled int32 ids**: `(type, name, predicate)`
+  is the stable surrogate; memory tracks live entities, not lifetime. Never
+  `isinstance`-check the underlying set type — everything goes through the `SetOps`
+  seam (roaring/pyset must be indistinguishable; the matrix runs both).
+* **`MemberSet (pos, stars, neg)`** carries the pinned star×boolean table:
+  stars fold ∪=`|`, ∩=`&`, ∖=`-`; `pos` wins over `neg`; concrete-only exclusions
+  never defeat star queries.
+
+### DEC-3 -- Boolean relations in the graph index (the IVM build) *(unrecorded, the log names no one; the date of the commit that wrote the heading (git blame), 2026-07-07)*
+
+* **Materialisation as ordinary edges in the SAME closure** over check-time
+  expression evaluation: check-time eval can't support anything *downstream* of a
+  boolean (TTU over a boolean viewer, userset restrictions, nested booleans).
+  Materialised derived edges re-enter the closure and emit their own deltas, which
+  drive the next stratum. Strata are logical, never physical — one store, one
+  transaction.
+* **Taint propagates** (a pure union over a boolean relation is derived): star-covered
+  members have no edges, so compiling it normally would silently drop them.
+* **Symbolic state is a per-object residue row** (`stars`, `neg`, `upos`) — not
+  derived w-edges (splits one relation's symbolic state across two writers +
+  bridge-GC interactions), not extensional star expansion (unbounded, ghost-wrong,
+  and cycle-creating for self-including universals).
+* **Deltas are invalidation signals, never state transfers**; reconciliation is
+  recompute-from-committed-state, idempotent. The §5.4 rule is load-bearing: a
+  symbolic delta must reconcile the concrete edge-holders on that object, not just
+  the residue (blocked:`[user:*]` arriving produces no concrete delta for bob, yet
+  must revoke his edge).
+* **Canonical representation**: star-covered members hold no edges (residue answers);
+  uncovered bare-entity members hold an edge iff true; **userset members never hold
+  edges** — a derived edge from a userset node would leak through the closure past
+  each member's own pointwise exclusion, so true userset memberships live in the
+  residue's `upos` (pos-without-transitivity; blind-audit P4/D2). Required for
+  permutation invariance and the "star-only members: zero edges" space rule.
+* **Synchronous v1, in-transaction outbox cascade**; no SAVEPOINTs (a failed
+  reconcile must abort the whole write; SAVEPOINT-per-delta is the future async
+  worker's tool, noted with the pysqlite transaction-boundary caveat).
+* **Stratification is mandatory**; recursion through a boolean relation is a compile
+  error. Termination of the cascade follows from idempotent reconciliation; the
+  quiescence assert enforces it.
+* **Namespacing lives in the predicate name** (`<relation>.<index>`, `.` reserved in
+  declarations); classification is the compiled namespace map keyed
+  `(object_type, predicate)` — no `family` column (a drift surface duplicating
+  name-derivable information).
+* **TTU parents = stored tupleset tuples** (oracle-pinned Zanzibar semantics).
+  Storage leaves are split from rule-routed leaves so "stored tuples of a derived
+  relation" is a well-defined edge set. This is also why decision 15's rejection of
+  derived-tupleset TTUs could be lifted (the frozen acceptance event required it):
+  parents are data-bounded stored tuples, not an object-star-shaped computed set.
+* **Raw-tuple set semantics at the API boundary** (duplicate add = no-op) while the
+  core stays ref-counted: two *different* raw tuples may rewrite to the same derived
+  edge, so counts are load-bearing internally — but Zanzibar raw tuples are a set.
+* **Scope hooks, not features**: object wildcards on derived relations and wildcard
+  usersets over derived relations both need symbolic composition through residues
+  (a symmetric subject-keyed residue) — loud compile errors until someone builds it.
+
+### DEC-4 -- The connected store (round 2) *(unrecorded, the log names no one; the date of the commit that wrote the heading (git blame), 2026-07-07)*
+
+* **Source-of-truth / materialized-view split** (Zanzibar/Leopard): tuples live in
+  `RelationTuple` + a permanent log; the graph index is downstream and owns nothing.
+  "Reconstruct tuples from the index" was rejected — likely possible in principle
+  (topo-order peeling with path-count subtraction) but it's the whole forward engine
+  reimplemented in reverse, kept bug-for-bug in sync forever, to recover data one
+  table keeps losslessly.
+* **Schemas are static, write-once, stored as SOURCE** (`SchemaRecord`); compiled
+  artifacts are cache (closures can't be persisted; stored compiled state is a
+  drift surface — the `family`-column argument again). A new schema = a new
+  store/index built from the tuples; no versioning, no migration.
+* **The tuple log is permanent** (audit + replay + token domain; human-scale
+  volume); bootstrap-from-snapshot keeps builds independent of log length, so
+  compaction stays a hook.
+* **One apply step, two schedules**: sync = the async worker inlined into the write
+  transaction. The coupling is a temporary *schedule*, not temporary machinery.
+* **Validity at admission** keeps the log replayable: the write path enforces full
+  parity (incl. graph-cycle rejection via the set engine's flow graph), so an
+  apply-time rejection is a corruption signal — no dead-letter mechanism.
+* **Exactly-once by transactionality**: applied rows + cursor advance commit
+  together; the applier locks the index store before reading the cursor
+  (lost-update prevention).
+* **Freshness tokens are log ids** (zookie-lite): index serves iff cursor ≥ token,
+  else the set engine answers fresh — Leopard's timestamp merge simplified to a
+  fallback. (Round 3 makes the fallback O(delta) and honors `at_least` on
+  `TupleSource.check` too.)
+
+### DEC-5 -- The connected store (round 3 — multi-instance / HA) *(unrecorded, the log names no one; the date of the commit that wrote the heading (git blame), 2026-07-23)*
+
+* **Multi-instance set engines via log tailing, not gossip.** Several
+  `TupleSource`/`ConnectedStore` instances (one `Session` each) share a store; each
+  set engine is instance-local in-memory, resynced by tailing `TupleLog`
+  (`SetEngine.apply_logged` per committed row — the O(delta) analog of `rebuild()`,
+  which is O(store)). The DB log is the *only* inter-instance channel — instance
+  gossip was rejected as a second, redundant consistency surface. Consequence:
+  every instance's state is the fold of an exact log *prefix* (prefix consistency —
+  instances differ only in recency, never sideways); un-tokened replica reads are
+  bounded-stale by tail cadence; read-your-writes/causal reads reuse the existing
+  log-id token on `at_least` (now honored on `TupleSource.check`, not only
+  `ConnectedStore.check`).
+* **Log ids REMAIN the token** — no snowflake/ULID/lamport clock. Store-local
+  autoincrement log ids already totally-order a store's history and are the cursor
+  domain; a global clock buys nothing until *cross-store* tokens are in scope (they
+  are not — X6). The round-1 brainstorm's timestamp menu is closed.
+* **Source-lock write discipline** (`_lock_source`: `FOR UPDATE` on the `SchemaRecord`
+  row) over lock-free admission: a write is a check-then-act against instance-local
+  memory (duplicate / remove-existence / cycle parity), sound only if no other
+  instance can commit between the catch-up and this write's commit. Taking the lock
+  → `catch_up_evaluator` → validate → append in one transaction serializes writers
+  at store granularity. **This also closes a latent pre-existing hazard**: the log
+  append used to flush its autoincrement id *before* any lock, so concurrent writers
+  on PostgreSQL could commit log ids out of order and a tailer (or `advance_index`'s
+  cursor) could permanently skip a row. Ids now commit in id order per store.
+  Lock-ordering invariant: source lock (`SchemaRecord`) before graph store lock
+  (`Store`) — one global order, deadlock-free.
+* **Correctness over per-write cost** in the degenerate single-writer case: the lock
+  never contends and catch-up is one empty indexed SELECT, so the cost is one
+  `FOR UPDATE` SELECT (no-op-rendered on SQLite) + one empty log SELECT per write —
+  accepted deliberately rather than branching the write path on a deployment
+  assumption.
+* **`at_least` is check-only — lookup/reverse-lookup/expand deliberately excluded**
+  (not "can't", "didn't": the token mechanics are the same five lines). Three costs
+  `check` doesn't have, plus a structural point:
+
+  > **REVISED 2026-07-27 (`ZT-P1-8b`).** "Excluded" was the wrong shape of answer.
+  > Taking no token at all meant a revoked principal stayed ENUMERABLE with no API to
+  > demand otherwise — and list-objects / list-users is precisely what a revocation UI
+  > reads, so the surface that most needs freshness was the one that could not ask for
+  > it. `lookup` / `lookup_reverse` now ACCEPT `at_least`, run the same first two rungs
+  > as `check` (in-memory cursor, then a cursor refresh), and raise `LookupNotFresh`
+  > when the index still lags. What stays excluded is the third rung, the set-engine
+  > FALLBACK, and reason 1 below is why — with one addition the original entry missed:
+  > in the stale-index case the graph `Node` rows for the un-applied tuples do not
+  > exist yet, so even a key-translation bridge is impossible in principle, not merely
+  > expensive. `excluded_node_ids` (the derived `neg` channel) has no set-engine
+  > counterpart either. The prerequisite in reason 1 is unchanged and still unbuilt.
+  > *(2026-10-13, TK139: that `neg` clause was wrong -- the set engine's `expand.neg`
+  > is the counterpart, and `SetEngine.lookup_reverse` now fills `excluded_node_ids`
+  > from it; it is still in the set engine's own id domain, so reason 1 stands.)*
+  > Untokened calls are byte-identical to before. **Refusing a demand you cannot meet
+  > is not the same as not offering one.**
+  1. *Result domain.* `check` returns a bool, so the freshness fallback (graph when
+     fresh, set engine when lagging) is invisible. The lookup surfaces return ids —
+     graph node ids (DB rows) vs set-engine interner ids (instance-local, recycled)
+     — so a fallback silently switches the id domain of the same call depending on
+     index lag. Prerequisite: redefine the public lookup contract in the portable
+     `(type, name, predicate)` key + marker domain for BOTH backends
+     (`SetEngine.result_keys` is that form; the graph side needs the twin), a
+     breaking/versioned API change in its own right.
+  2. *Perf cliff.* Graph lookup is probes over the materialized closure — the point
+     of that backend; the set engine's is a check-verified reverse walk (correct,
+     oracle-pinned, expensive). A tokened `check` fallback costs one pointwise
+     evaluation; a tokened lookup fallback silently turns a hot enumeration into a
+     full reverse walk whenever the worker lags. That degradation should be a
+     visible, chosen behavior, not an implicit one.
+  3. *Test surface.* `tests/test_lookup_oracle.py` is the strictest gate in the
+     repo (the X1–X4 history); a lagging-index fallback leg doubles its matrix
+     (fresh vs lagging × backends × token boundaries) — a deliberate follow-up
+     arc, not a rider.
+  Structurally: a lagging reader cannot make the index fresh itself
+  (`advance_index` is the writer/worker's job — store lock, closure mutation), so
+  the set-engine fallback is the only non-blocking option, which is exactly where
+  costs 1–2 bite. **Shape of the future work**: unify the lookup result contract on
+  keys/markers → add the same `at_least` plumbing as `check` → extend the lookup
+  oracle gate with a lagging-index leg (mostly test-writing).
+  ⚠ **None of that arc is built, and the id that filed it is CLOSED** — `ZT-P1-8b`
+  closed 2026-07-29 having landed the accept-and-raise half only. So the ledger
+  answers *"is `at_least` done?"* wrongly: the closed record covers less than its
+  filed scope, and this bullet's arrow-chain is the part still outstanding. Read the
+  chain above, not the id's status.
+* **Out of scope** (this round): snapshot / "at exactly" reads (only `at_least`
+  lower-bounding); cross-store tokens (X6 — store-local); instance gossip (the DB
+  log is the channel); schema-version skew (schemas are write-once — a new schema
+  is a new store). **Sharing tuples or state ACROSS stores** is out too, and stays
+  out until a design says what it means for three per-store things: `TupleLog`
+  (`store_id`-scoped, and every read filters on it), the watermark/cursor domain
+  (`source.py::log_watermark` is per store; `IndexCursor` is unique per index
+  store), and `_lock_store`'s store-granularity serialization. ⚠ Log **ids are
+  globally monotonic across stores** even though scoping is per-store, which is why
+  `lag()` counts rows instead of subtracting ids — a sharing design that assumes
+  per-store id density breaks on exactly that.
+* **One write path per store id (TK140, 2026-10-13d).** The `SchemaRecord` row is the
+  governance marker: a `SetEngine` on an id that has one is log-governed (its direct
+  writes raise `UnloggedWriteRefused`; reads stay legal), probed at construction and once
+  per transaction before a standalone write. It was not made a construction-time refusal,
+  because reads through a second engine are legitimate. And a `ConnectedStore` will not be
+  born (create its cursor) over `RelationTuple` rows the log does not account for
+  (`UnloggedTuplesPresent`); the adoption path is `save_schema` + `build_index`. The
+  concurrent case (a standalone write racing an uncommitted bootstrap under READ
+  COMMITTED) is a documented residual. A standalone engine has no lock surface, and
+  giving it one was not worth it for two write paths misused on one id.
+  `docs/tk140-one-write-path-per-store-2026-10-13.md`.
+
+### DEC-6 -- Reads are lenient — a cross-backend contract, not a per-backend default *(unrecorded, the log names no one; the date of the commit that wrote the heading (git blame), 2026-08-29)*
+
+* **An undeclared `(type, relation)` reads as constantly false on every surface, and
+  never raises.** Enforced in three independent places, deliberately: the graph index
+  denies rather than raising (`src/zanzibar/graphindex/wildcard.py::WildcardIndex.check`, whose
+  docstring gives the reason — writes are already fenced by `RuleSet.apply` /
+  `SetEngine.add_tuple`, so a read has nothing to protect); the set engine returns
+  `False` on a missing AST entry (`src/zanzibar/setengine/engine.py::SetEngine.check`); and the
+  oracle does the same by the same construct (`tests/oracle.py::Oracle.check.sat`),
+  which is what lets it stay an independent reference. Writes are the strict side —
+  `validate_write_identifiers` polices the charset there.
+* **Rejected: schema type checking that makes a non-match an ERROR.** The open
+  question (*should every relation resolve to a single type, or should we duck-type?*)
+  is real, but it is not an additive validation: raising on a non-match **changes the
+  read contract on all three surfaces at once**, and the oracle's copy would have to
+  change separately or the independence contract breaks. Adjudicate any such proposal
+  against this bullet first; the leniency is load-bearing, not an omission.
+* ⚠ **Do not read this as the other "lenient" in this file.** `lenient ∀⇒∃` in the
+  non-goals below is the wildcard vacuity mode and is unrelated to read leniency.
+
+### DEC-7 -- Wildcards beyond OpenFGA, and the registry idiom (user decisions, `ASK-2`) *(owner, the heading says it records a user decision; the date of the commit that wrote the heading (git blame), 2026-09-29)*
+
+* **The three wildcard extensions stay** (2026-09-26): wildcard usersets
+  (`[group:*#member]`), star tuplesets (a stored `doc:d1#parent@folder:*` walked by
+  `x from parent`) and object wildcards (`object_wildcard_shapes`). Both backends
+  implement them and the differential matrix pins their agreement, but the headline
+  theorems exclude them (`W4Fragment.wsBare` / `.bareStar` / `.ttuStarFree`), so
+  `src/zanzibar/schema/compiler.py::UnprovenExtensionWarning` tells callers. A bare `[T:*]` is
+  stock OpenFGA and is not an extension.
+* **`*` is the supported way to say "every X"; the OpenFGA registry idiom is not**
+  (2026-09-29). Rejected alternative: a registry / organization object that every X is
+  linked to by one bookkeeping tuple (`group_registry:all#member@group:g#member`,
+  `folder:f#org@folder_org:all`). It is plain tuples, so nothing refuses it and it
+  evaluates; "not supported" means the repo does not offer it as a substitute for `*` and
+  promises nothing about the two agreeing. Why rejected: it is a `*` the application
+  maintains by hand. Every new X needs a registration write, and a missed one is silently
+  wrong — fail-closed on a grant, **fail-open under `but not`** (a ban routed through the
+  registry misses every unregistered group's members). A `*` covers objects that do not
+  exist yet with no write, and cannot drift. The rewrite would sit inside the proven
+  fragment, but its equivalence to `*` would then rest on an application invariant
+  nothing checks — the proof gap moves out of sight rather than closing. Its one real
+  advantage is portability to stock OpenFGA. REASONED, not probed: that each rewrite
+  gives the same `check` answers as its `*` form once registration is complete (the
+  `expand` / `lookup` output shapes differ regardless).
+
+### DEC-8 -- The project goal: honest, legible assurance, not wider (user decision, 2026-09-22c) *(owner, the heading says it records a user decision; the date in the heading, 2026-09-22)*
+
+* **The goal.** The user asked for a goal rather than a task ("not like what task to do,
+  but what goal to achieve - correctness, perf, etc") and, after three read-only censuses
+  (perf / equivalence / formal), chose: **make the assurance surface honest and legible,
+  not wider.** The deciding measurement: ~12.5k lines of product code inside ~115k lines
+  of tests and Lean (2026-09-22c), and neither assurance system could state which inputs
+  it covers. Evidence: [`goal-census-2026-09-22.md`](../goal-census-2026-09-22.md) §6;
+  the choice is recorded on `TK94` (closed, note 2026-09-22c) and in the session log's
+  2026-09-22c entry. Recorded here 2026-10-07d, when the banner that had carried it was
+  pruned (`TK130`); it had no live home of this kind before.
+* **Corollary: stop widening the Lean fragment.** The census's move 2 under this goal:
+  land the T2a chain (`P4` → `P5`, + `P14`; all three closed), declare it the formal
+  milestone, and rank the rest (`P15`, `P16`, `P25` option 2, `DW-1`) as assurance work
+  against product risk, not as "the rest of the proof".
+* **Rejected: perf as the goal.** There is no performance target (an exhaustive grep,
+  2026-09-22c), so a perf win cannot be shown to be worth anything outside the repo. Not
+  abandoned: when perf reopens, its first move is `TK34` (the regression canary), not an
+  `R6-N` row. Reasoning: `python scripts/task.py show R6`, note 2026-09-22c.
+* **Rejected: a wider fragment.** More proven shapes would widen a surface that still
+  could not say what it covers; legibility first.
+
+### DEC-9 -- Non-goals (documented hooks only) *(unrecorded, the log names no one; the date of the commit that wrote the heading (git blame), 2026-07-07)*
+
+Async outbox workers; exposing derived-relation deltas to external consumers;
+cross-query caching; snapshot ("at exactly") reads and cross-store zookies (the
+zookie-lite log-id token and multi-instance catch-up ARE built — see round 3);
+automatic outbox pruning; residue GC beyond empty-row deletion; lenient ∀⇒∃; a
+`family` metadata column; Rete-style general incremental matching; 64-bit id space;
+query-time node interning.
+
+**Rejected outright, with no hook — OpenFGA conditions.** Listed apart because the
+heading above promises hooks, and this one has none: `src/zanzibar/schema/` raises on
+a conditional type at parse time. The reason has never been written down and is not a
+matter of effort. **Conditions are evaluated at CHECK time; the graph index
+materializes the closure at WRITE time** — that is the whole basis of its O(1)
+`check` — so a condition depending on request context cannot be folded into a
+materialized closure at all. That makes "should we support conditions" a question
+about **which backend could host them**, not a feature to schedule: the set engine
+evaluates per call and memoizes nothing across queries, so it is the only plausible
+home, and supporting them on one backend would break the identical-semantics contract
+the two backends exist to hold. Anyone reopening this starts there, not at the parser.
