@@ -147,6 +147,26 @@ machine-wide file lacks it: the user's preference was **stated 2026-08-28**, and
 - ⚠ **One file per agent** — two writers on one filename is the fixed-log-path footgun one
   level up.
 
+## Gate
+`bash formal/verify.sh <phase>` for each phase, one per command (§ Running things), then
+`context-engine lint`, from the repo root. `python scripts/gate_status.py` says which phases are
+green on this tree. The engine's own `[gate]` is off (`context.toml`), so `context-engine commit`
+does not check the gate: ask `gate_status.py` first.
+
+## The record engine (`context-engine`, adopted 2026-11-03)
+- `context-engine` means `.context-engine/env/python.exe -m context_engine` from the repo root,
+  with `CE_ACTOR=claude-code/<model-id>` and `CE_SESSION=<key>` set in every command. The env is
+  the engine's own, gitignored, never this repo's; on a fresh checkout or worktree rebuild it:
+  `conda create -y -p .context-engine/env python=3.12`, then `.context-engine/env/python.exe -m pip
+  install "context-engine @ git+https://github.com/averykhoo/context-engine@309641bd84837277ef9ddc7251b851a4e815dbe5"`.
+- Ids: tasks `TK-n` (the old `TK185` is `TK-185`; the other series took new numbers, each old id
+  an alias that `task show` and `why` resolve), owner questions `ASK-n`, decisions `DEC-n`,
+  stories `US-n`, goals `G-n`. Never reuse or renumber one; history keeps the old ids.
+- `context.toml` and `docs/ledger/` are prose to `scripts/gate_status.py` (they move `t2a`, not
+  `t2c`); an engine write to `tasks/` or `HANDOFF.md` still stales the tiles.
+- Where this file and the contract differ, this file wins: `claude-fable-5` subagents stay
+  allowed for executive decisions (§ Who decides).
+
 ## Running things
 - Conda env named after the folder, `graph-reachability-zanzibar-index`, under
   `C:/Users/user/anaconda3/envs/`. `verify.sh` resolves the interpreter itself (`resolve_py`);
@@ -174,7 +194,7 @@ machine-wide file lacks it: the user's preference was **stated 2026-08-28**, and
   exit code, and zero `skipped`/`xpassed`/`deselected`; `xfailed` is zero for conformance and
   budgeted for `tests/` (`MAX_TESTS_XFAILED`). `lean` also pins the audited theorem NAMES,
   the headline theorem STATEMENTS, every `CORRESPONDENCE.md` anchor, and runs
-  `handoff_lint.py` and `task.py lint`. **Push only after every phase is green** (+ a fuzz
+  `handoff_lint.py`. **Push only after every phase is green** (+ a fuzz
   sweep for an algorithm change). Each run appends to the gitignored `.gate-runs/ledger.tsv`;
   `python scripts/gate_status.py` reports which phases are green **on the current tree**.
   Details and sabotage evidence: [`docs/gate-runbook.md`](docs/gate-runbook.md) §4.
@@ -377,7 +397,7 @@ Module map and pointers: `docs/architecture/overview.md`.
   split from rule-routed leaves on DERIVED relations, where a Direct arm's stored tuples must
   not mix with computed state.
 - **Status lines inside `docs/history/` and `formal/history/` are FROZEN as-of-then.** Read
-  them for METHOD, never for state; state lives in the tree (`task.py show <id>`) and in
+  them for METHOD, never for state; state lives on the board (`context-engine task show <id>`) and in
   `formal/HANDOFF.md`.
 - **Perf work & the Lean model.** The Lean proofs (`formal/`) verify *algorithm-twins* of
   the Python (`formal/CORRESPONDENCE.md` is the model↔code map). A behavior-preserving
@@ -388,3 +408,15 @@ Module map and pointers: `docs/architecture/overview.md`.
   model drift unrecorded (§8). `verify.sh lean` resolves every `file::symbol` anchor in
   `CORRESPONDENCE.md`, so renaming a modelled function fails the gate until the map is
   updated — but that only proves the pointers resolve, not that the claims are true.
+
+<!-- context-engine kit 0.5 begin -->
+framework: 0.5
+
+This repo runs the context-engineering framework through `context-engine`. Its rules are the file
+imported on the next line, which the framework owns: an upgrade replaces it whole, so it is never
+edited here, and this repo's own rules go in this file, outside these markers. If those rules are
+not in your context, read that file; if it is missing, run the engine's lint
+(`<engine-python> -m context_engine lint`), which names the fix.
+
+@docs/framework/contract.md
+<!-- context-engine kit 0.5 end -->

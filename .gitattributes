@@ -26,3 +26,6 @@ docs/working/**     text eol=lf
 docs/evidence/**    text eol=lf
 docs/charter.md     text eol=lf
 docs/criteria.md    text eol=lf
+
+# context-engine: two branches' op lines merge line by line (FRAMEWORK §5.5 rule 4)
+docs/ledger/ops.jsonl merge=union
