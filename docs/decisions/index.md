@@ -22,3 +22,4 @@ Generated from each decision's frontmatter by `context-engine decision index`; n
 
 - [DEC-10](DEC-10-zanzibar-adopts-the-contract-s-coordinator.md): Zanzibar adopts the contract's coordinator (delegation) rule *(owner, 2026-11-04)*
 - [DEC-11](DEC-11-add-an-engine-install-and-lint-job-to-zanzibar.md): Add an engine-install-and-lint job to zanzibar's CI, as its own change *(owner, 2026-11-04)*
+- [DEC-12](DEC-12-zanzibar-s-charter-goals-and-first-stories-come.md): Zanzibar's charter goals and first stories come in the owner's words, eventually *(owner, 2026-11-04)*
