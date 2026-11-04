@@ -122,10 +122,12 @@ pointer. Case histories go to the session log, detail to its home doc (`docs/REA
     a run's tail (a multi-module `N passed` is not one module's count).
 
 ## Delegation — the repo-specific half
-**The rule itself lives in `~/.claude/CLAUDE.md` § Delegation and is NOT restated here**
-(deduplicated 2026-09-20e, user instruction). Its provenance in this repo, kept because the
-machine-wide file lacks it: the user's preference was **stated 2026-08-28**, and the
-`ultracode` / `Workflow` standing approval is **2026-09-20d**. Only what is true HERE follows.
+**The rule is the contract's coordinator rule** (`docs/framework/contract.md` § Rules: the
+top-level session coordinates and gives every task, even one, to its own subagent; user,
+2026-11-04, DEC-13). It replaces the session-does-the-work reading of `~/.claude/CLAUDE.md`
+§ Delegation, which still says how to delegate and persist. Provenance kept from before: the
+preference was **stated 2026-08-28**, the `ultracode` / `Workflow` standing approval is
+**2026-09-20d**. Only what is true HERE follows.
 
 - **Sizing claims in this repo have come in LOW, repeatedly**, so the `file::symbol` rule is
   not optional (`P3`'s re-verified "~123 sites / 7 files" was live ~136 / 8 on 2026-08-28).
