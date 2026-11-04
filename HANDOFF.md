@@ -10,14 +10,14 @@ conventions in [`docs/README.md`](docs/README.md). The pre-engine note, with its
 **A user-assigned task overrides the ranking.** Do not re-rank at session start: work the task,
 then re-rank once at the close (`context-engine task promote <id> <pri>`).
 
-## Banner (2026-11-03a)
+## Banner (2026-11-04a)
 
-- The record engine (context-engine @ 309641b) is adopted on branch `ce-cutover` (off `4826a01`): the board,
-  the decisions and the session ledger go through `context-engine`. Not merged, not pushed, no tag.
-- Board: each task.py record is an engine record (`TK185` is `TK-185`; P, R6, ZT and the rest took
-  `TK-186` up; old ids are aliases). NOW: TK-185, the decided 0.1.3 batch; tag 0.1.3 only on the user's word.
-- Owed to the owner: the call on merging `ce-cutover`, the go to push (the gate first, then a CI watcher),
-  and the charter and criteria (templates unfilled).
+- The record engine (context-engine @ 309641b) is live on `master`: `ce-cutover` was merged and pushed
+  (`3e63fd7`, CI green, no tag) and its worktree and branch removed (2026-11-04a). 0.1.2 stays the newest release.
+- Sessions here now follow the contract's coordinator rule: the top session delegates every task (DEC-13).
+- Board: NOW TK-185, the decided 0.1.3 batch (tag 0.1.3 only on the user's word); NEXT is empty, so a rerank is due.
+  New: TK-301 (LATER, an engine lint job in CI, DEC-14) and TK-302 (SOMEDAY, charter goals and stories in the
+  owner's words, DEC-15). The 2026-11-04a record commits are local, not pushed.
 
 ## Facts
 
