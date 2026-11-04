@@ -15,3 +15,9 @@ Generated from each decision's frontmatter by `context-engine decision index`; n
 - [DEC-7](DEC-7-wildcards-beyond-openfga-and-the-registry-idiom.md): Wildcards beyond OpenFGA, and the registry idiom (user decisions, `ASK-2`) *(owner, 2026-09-29)*
 - [DEC-8](DEC-8-the-project-goal-honest-legible-assurance-not.md): The project goal: honest, legible assurance, not wider (user decision, 2026-09-22c) *(owner, 2026-09-22)*
 - [DEC-9](DEC-9-non-goals-documented-hooks-only.md): Non-goals (documented hooks only) *(unrecorded, 2026-07-07)*
+
+## PROVISIONAL
+
+### untagged
+
+- [DEC-10](DEC-10-zanzibar-adopts-the-contract-s-coordinator.md): Zanzibar adopts the contract's coordinator (delegation) rule *(owner, 2026-11-04)*
