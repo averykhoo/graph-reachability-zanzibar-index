@@ -4,9 +4,33 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
-## 2026-11-16a · kind: open
+## 2026-11-16a · kind: close
 
-- **opened:** 2026-11-16T02:35:59+08:00 by claude-code/claude-opus-5-5
+- **rows:** DEC-13..15 (ACCEPTED by decision accept --owners, the 0.6 upgrade step); no board item
+  (the work is context-engine CE-235)
+- **receipts:**
+  - guards: lean PASSED (holes=0, audits=745, pinned=745) on this tree; conf-tile 1-5/5 (249 passed
+    each) and tests-tile 1-4/4 (961, 960, 960, 960 passed) cover it (gate_status.py: the ten-phase
+    gate is COVERED); lint clean
+  - read: orient; CLAUDE.md (Start here, Gate, record engine, Running things); HANDOFF.md; kit
+    README § Upgrade
+  - housekeeping: hk run close: 0 writes, 0 op log lines
+  - banner: set
+  - pushed: ebfe7d2: the 2026-11-04a record commits, pushed 2026-11-05 with no session open; whether
+    the gate ran first is not recorded (gate_status shows the tiles green on 2026-11-04)
+- **summary** (the owner digest):
+  - Engine upgraded 309641b -> 989982a (framework 0.5 -> 0.6) per kit README § Upgrade: contract,
+    kit block, runbooks, ACCEPTED enum, Unverified hazards route; the owner's DEC-13..15 marked
+    ACCEPTED (ebf71d8).
+  - README cites no record id and is listed under [guards] reader_docs, so G-D13 guards it
+    (f3e1037), for context-engine CE-235.
+  - Sabotage: TK-120 put back in README.md prose -> G-D13 red, restored -> clean.
+  - Banner cut to its durable lines, as the 0.6 engine requires (board and push lines are orient's
+    now); this stales the t2c tiles, re-run after the close.
+  - Old engine env kept at .context-engine/env-309641b (gitignored) for the owner to delete.
+- **Still owed:**
+  - Push master (ebf71d8, f3e1037 and records), on the owner's go, with a CI watcher
+  - Delete .context-engine/env-309641b (the 0.5 engine env) once nothing names it
 - **start head:** ebfe7d2b23aacd95841c9d27678a4ef35a46fad4
 
 ---

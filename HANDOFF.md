@@ -10,14 +10,12 @@ conventions in [`docs/README.md`](docs/README.md). The pre-engine note, with its
 **A user-assigned task overrides the ranking.** Do not re-rank at session start: work the task,
 then re-rank once at the close (`context-engine task promote <id> <pri>`).
 
-## Banner (2026-11-04a)
+## Banner (2026-11-16a)
 
-- The record engine (context-engine @ 309641b) is live on `master`: `ce-cutover` was merged and pushed
-  (`3e63fd7`, CI green, no tag) and its worktree and branch removed (2026-11-04a). 0.1.2 stays the newest release.
-- Sessions here now follow the contract's coordinator rule: the top session delegates every task (DEC-13).
-- Board: NOW TK-185, the decided 0.1.3 batch (tag 0.1.3 only on the user's word); NEXT is empty, so a rerank is due.
-  New: TK-301 (LATER, an engine lint job in CI, DEC-14) and TK-302 (SOMEDAY, charter goals and stories in the
-  owner's words, DEC-15). The 2026-11-04a record commits are local, not pushed.
+- The record engine is context-engine @ 989982a (framework 0.6 since 2026-11-16a; was 309641b), rebuilt in
+  `.context-engine/env` from CLAUDE.md's install line; it has been live on `master` since the 2026-11-04a cutover.
+- Sessions here follow the contract's coordinator rule: the top session delegates every task (DEC-13).
+- 0.1.2 is the newest release; a tag is a release, so tag 0.1.3 only on the user's word.
 
 ## Facts
 
