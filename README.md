@@ -669,13 +669,13 @@ lenient ∀⇒∃; 64-bit id space; any query-time node interning.
 
 # TODO
 
-> Live/open tracking now lives in the task tree (`python scripts/task.py board`;
+> Live/open tracking now lives on the board (`context-engine task list`;
 > [`HANDOFF.md`](HANDOFF.md) is the one-hop note) — ranked tasks, not a narrative status
 > file; the list below is the
 > record of what shipped (struck = done) plus a few deliberately-deferred items.
 
 * ~~re-introduce invariant checks for the index v3, and think of more checks~~
-  v4 has I1–I13 + paranoia mode now (`src/zanzibar/graphindex/invariants.py`); v1-v3 were deleted in TK120 (git history keeps them)
+  v4 has I1–I13 + paranoia mode now (`src/zanzibar/graphindex/invariants.py`); v1-v3 were deleted when the code was re-laid-out without version suffixes (git history keeps them)
 * ~~re-introduce randomized testing for v3~~ superseded by the validation matrix,
   the ParityEngine walks, and the hypothesis campaign (`tests/test_hypothesis.py`)
 * ~~support tracking user-triples and rule-triples in the index~~ resolved by
