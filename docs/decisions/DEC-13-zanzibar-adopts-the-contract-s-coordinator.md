@@ -3,7 +3,7 @@ type: Decision
 id: DEC-13
 title: Zanzibar adopts the contract's coordinator (delegation) rule
 actor: owner
-decision_status: PROVISIONAL
+decision_status: ACCEPTED
 decided: 2026-11-04
 session: 2026-11-04a
 body_sha: sha256:8c5722352a5680c085b553dddbdd0085757e1af09bb13465e749171146153b45

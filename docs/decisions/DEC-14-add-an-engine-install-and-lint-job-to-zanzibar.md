@@ -3,7 +3,7 @@ type: Decision
 id: DEC-14
 title: Add an engine-install-and-lint job to zanzibar's CI, as its own change
 actor: owner
-decision_status: PROVISIONAL
+decision_status: ACCEPTED
 tasks: [TK-301]
 decided: 2026-11-04
 session: 2026-11-04a

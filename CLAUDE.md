@@ -152,7 +152,7 @@ does not check the gate: ask `gate_status.py` first.
   with `CE_ACTOR=claude-code/<model-id>` and `CE_SESSION=<key>` set in every command. The env is
   the engine's own, gitignored, never this repo's; on a fresh checkout or worktree rebuild it:
   `conda create -y -p .context-engine/env python=3.12`, then `.context-engine/env/python.exe -m pip
-  install "context-engine @ git+https://github.com/averykhoo/context-engine@309641bd84837277ef9ddc7251b851a4e815dbe5"`.
+  install "context-engine @ git+https://github.com/averykhoo/context-engine@989982a953c47b849d1397e0d385602c477ed86c"`.
 - Ids: tasks `TK-n` (the old `TK185` is `TK-185`; the other series took new numbers, each old id
   an alias that `task show` and `why` resolve), owner questions `ASK-n`, decisions `DEC-n`,
   stories `US-n`, goals `G-n`. Never reuse or renumber one; history keeps the old ids.
@@ -403,8 +403,8 @@ Module map and pointers: `docs/architecture/overview.md`.
   `CORRESPONDENCE.md`, so renaming a modelled function fails the gate until the map is
   updated — but that only proves the pointers resolve, not that the claims are true.
 
-<!-- context-engine kit 0.5 begin -->
-framework: 0.5
+<!-- context-engine kit 0.6 begin -->
+framework: 0.6
 
 This repo runs the context-engineering framework through `context-engine`. Its rules are the file
 imported on the next line, which the framework owns: an upgrade replaces it whole, so it is never
@@ -413,4 +413,4 @@ not in your context, read that file; if it is missing, run the engine's lint
 (`<engine-python> -m context_engine lint`), which names the fix.
 
 @docs/framework/contract.md
-<!-- context-engine kit 0.5 end -->
+<!-- context-engine kit 0.6 end -->

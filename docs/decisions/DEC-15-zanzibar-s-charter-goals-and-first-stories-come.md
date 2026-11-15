@@ -3,7 +3,7 @@ type: Decision
 id: DEC-15
 title: Zanzibar's charter goals and first stories come in the owner's words, eventually
 actor: owner
-decision_status: PROVISIONAL
+decision_status: ACCEPTED
 tasks: [TK-302]
 decided: 2026-11-04
 session: 2026-11-04a
