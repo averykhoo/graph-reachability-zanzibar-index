@@ -476,6 +476,13 @@ time there were seven — the `ZT-P3-5` shape, in the file a session reads to ru
   now needs `lean` green before push. Documented here 2026-09-08 — the step landed in
   `formal/verify.sh` a session earlier and this runbook was not updated, which is why the
   bullet above it said "three".
+- **4h LINT + TYPE CHECK** (`TK182`) — `python scripts/lint_gate.py`: ruff and mypy at the
+  versions pinned in `pyproject.toml`'s `lint` extra. Its first line,
+  `type-check environment: Python ..., mypy ..., sqlmodel ..., SQLAlchemy ..., pydantic ...`
+  (`scripts/lint_gate.py::environment_line`, `TK185`), names what mypy ran against. Those
+  libraries are unpinned on purpose, and CI installs the newest, so a **local-green / CI-red
+  mypy split means library drift, not a flaky gate**: compare that line in the two logs, fix
+  the code for the newer stubs (the 0.1.2 cycle, `b743587`), never pin the library to hide it.
 
 #### What step 2 scans now (`formal/conformance/sorry_scan.py`)
 The hole scan is no longer just `\b(?:sorry|admit)\b` over `formal/lean/ZanzibarProofs`:

@@ -57,3 +57,20 @@ Promoted to NOW at the 0.1.2 write-back (TK178 closed): C5 is the one trial find
 7. **Docs gaps.** Docstrings for `SchemaInfo.bridged_in_shapes` / `bridged_out_shapes`, `Entity.wildcard`, `CompiledBooleans.derived_families` / `leaf_families`, `Node.predicate_or_ellipsis` (`tests/test_tk169_public_docstrings.py` may be the place to pin). `userdocs/how-to/test-permissions` says it needs `pip install pytest`.
 8. **TK183 (folded), gate.** `scripts/lint_gate.py` prints the sqlmodel / SQLAlchemy / pydantic versions it ran mypy with, so a local-green / CI-red split is readable from the log. Do NOT pin those libraries for the test run (CI's newest-deps install is how drift is caught). Optionally a line in `docs/gate-runbook.md`.
 9. Full gate (+ fuzz sweep: item 4 changes read behaviour), commit, push, publish dry run; then ASK for the `v0.1.3` tag; babysit, PyPI, install trial + `installed_smoke.py` (the smoke script should gain the item-4 refusal).
+- 2026-11-20a (claude-code/claude-opus-5-5): 2026-11-20 (session 2026-11-20a), progress. The plan doc is `docs/tk185-0.1.3-batch-2026-11-20.md`.
+  
+  Landed, uncommitted:
+  - Steps 1 (C4), 2 (C3), 3 (C6), 7 (docstrings, pytest note) and 8 (lint_gate prints the library versions).
+  - Their pins are `tests/test_tk185_small_fixes.py`, `tests/test_tk169_public_docstrings.py` and `tests/test_tk185_lint_gate_versions.py`.
+  - They were re-run first-hand: 55 passed. One independent sabotage of C3 went red as expected.
+  
+  Step 4 design is DEC-16 (PROVISIONAL), and an agent is implementing it.
+  
+  Red right now:
+  - `tests/test_claim_rot_gate.py`. The C6 decorator moved the content pins of `SetEngine.check` / `expand` / `lookup_reverse`. They get regenerated once, deliberately, after the step-4 validator lands.
+  
+  Next:
+  - Step 4 lands.
+  - Then docs (steps 5 and 6, and the step-4 prose), the CHANGELOG and the 0.1.3 bump.
+  - Then the session records, the ten gate phases, the fuzz sweep and commits.
+- 2026-11-20a (claude-code/claude-opus-5-5): 2026-11-20 (session 2026-11-20a): steps 1-8 LANDED, plus the 0.1.3 bump and the CHANGELOG. Body: docs/tk185-0.1.3-batch-2026-11-20.md (as built, the empirical trap census, the sabotage lines, the residuals). Step-4 design: DEC-16, PROVISIONAL. BUILDS: before the gate, every targeted pin green (first-hand re-runs plus two first-hand sabotages); agent D full runs: conformance 1246 passed, tests/ 3961 passed with 1 red (gate-scope README), fixed. RED: none known. NEXT: the ten gate phases plus lint plus the fuzz sweep, then commits by path (verdicts in the commit messages); then push, the publish dry run, and ASK for the v0.1.3 tag. Residuals to file at the close: D03 half closed (lookup_reverse/expand still list a userset through an undeclared TTU target, which check refuses); ensure_schema skips require_shapes on an existing row; C6 param-name cosmetics.

@@ -4,7 +4,9 @@
 
 Runs ``ruff check`` (rules: ``pyproject.toml`` ``[tool.ruff.lint]``) over the repo and
 ``mypy`` (``[tool.mypy]``, the library under ``src/zanzibar``), with the interpreter that runs
-this script. Exit 0 only when both report nothing.
+this script. Exit 0 only when both report nothing. Its first line names the Python and the
+mypy / sqlmodel / SQLAlchemy / pydantic versions in play (``environment_line``, TK185), so a
+local-green / CI-red split is readable from the two logs.
 
 The tool versions are pinned EXACTLY in ONE place, ``pyproject.toml``'s ``lint`` extra
 (``requirements.txt`` carries the same pins so CI installs them). This script reads the pins
@@ -35,6 +37,25 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 TOOLS = ('ruff', 'mypy')
+# The libraries whose type stubs mypy reads, deliberately NOT pinned for the test run (CI's
+# newest-deps install is how drift is caught), so the gate prints them instead (TK185, from
+# TK183: the 0.1.2 cycle's mypy went red only on CI, 540bb50, fixed in b743587).
+TYPED_DEPS = ('mypy', 'sqlmodel', 'SQLAlchemy', 'pydantic')
+
+
+def environment_line() -> str:
+    """The one line naming the interpreter and library versions mypy runs against.
+
+    mypy runs as ``sys.executable -m mypy`` (``main``), so this process's distributions ARE
+    the ones mypy sees. A missing distribution reads ``not installed``, never an exception.
+    """
+    parts = [f'Python {sys.version.split()[0]}']
+    for dist in TYPED_DEPS:
+        try:
+            parts.append(f'{dist} {importlib.metadata.version(dist)}')
+        except importlib.metadata.PackageNotFoundError:
+            parts.append(f'{dist} not installed')
+    return '  type-check environment: ' + ', '.join(parts)
 
 
 def pinned_versions(pyproject: Path = REPO / 'pyproject.toml') -> dict[str, str]:
@@ -68,6 +89,7 @@ def check_installed(pins: dict[str, str]) -> list[str]:
 
 
 def main() -> int:
+    print(environment_line(), flush=True)
     pins = pinned_versions()
     problems = check_installed(pins)
     if problems:
