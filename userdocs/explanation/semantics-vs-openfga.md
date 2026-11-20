@@ -178,8 +178,9 @@ introduced; before 0.1.0 this library answered these checks the other way (see
 [Upgrade from 0.0.x to 0.1](../how-to/upgrade-0.1.md)).
 
 **The difference** is a `from` whose tupleset allows a type that does not declare the
-target relation. The userset still counts as a member of itself here, where OpenFGA
-refuses the question:
+target relation. A `check` on such a userset is refused here, as in OpenFGA, because the
+subject names a relation its type does not declare. But the userset still counts as a
+member of itself, so the list calls show it:
 
 ```python
 s = new_store("""
@@ -196,12 +197,15 @@ type doc
     define x: viewer from parent
 """)
 s.add_tuple("team:1", "parent", "doc:1")
-print(s.check("team:1#viewer", "x", "doc:1"))            # -> True
+print(refused(lambda: s.check("team:1#viewer", "x", "doc:1")))   # -> 'UndeclaredTypeOrRelation'
+print(sorted(s.result_keys(s.lookup_reverse("x", "doc:1"))))   # -> [('doc', '1', 'x'), ('team', '1', 'viewer')]
 ```
 
-`team` has no `viewer` relation, yet `team:1#viewer` counts as an `x` of `doc:1` here,
-through the self-membership rule. OpenFGA rejects this query with a validation error
-(`relation 'team#viewer' not found`). OpenFGA has also announced that models whose
+`team` has no `viewer` relation, yet `team:1#viewer` is listed as an `x` of `doc:1` here,
+through the self-membership rule; `expand("x", "doc:1")` lists it too. OpenFGA rejects
+the check with a validation error (`relation 'team#viewer' not found`), and this library
+refuses it with {py:exc}`zanzibar.UndeclaredTypeOrRelation`, so this is a key a list call
+returns that `check` will not take back. OpenFGA has also announced that models whose
 tupleset types lack the target relation will stop building at all, with no date set as of
 October 2026.
 
@@ -289,15 +293,20 @@ applies only on the object you ask about, not on every folder above it.
 OpenFGA accepts such models today, but has announced that models with recursion through
 `and` or `but not` will stop building.
 
-## Writes are strict, reads are lenient
+## Undeclared types and relations are refused; unknown names are not
 
 A write is checked against the schema: an undeclared type or relation, a subject the
 relation's restriction does not admit, or a malformed name is refused with
-{py:exc}`zanzibar.AdmissionRejected`, and the message says what was wrong. A read with the
-same mistake does not raise. It answers `False`. The leniency covers names and declared
-relations only: a string that is not of the form `type:name`, `type:name#relation` or
-`type:*` (such as `useralice`, `user:`, `group:g#b:c`, or an object `doc:1#viewer`)
-raises {py:exc}`zanzibar.MalformedTupleString` on reads and writes alike.
+{py:exc}`zanzibar.AdmissionRejected`, and the message says what was wrong. A read that
+names an undeclared type or relation is refused too, with
+{py:exc}`zanzibar.UndeclaredTypeOrRelation`, and the same message. As in OpenFGA, a check
+on an undeclared relation is an error. A string that is not of the form `type:name`,
+`type:name#relation` or `type:*` (such as `useralice`, `user:`, `group:g#b:c`, or an
+object `doc:1#viewer`) raises {py:exc}`zanzibar.MalformedTupleString` on reads and writes
+alike.
+
+A read does not check names. An object or subject no tuple mentions, such as `doc:999`,
+matches nothing, and `check` answers `False`.
 
 ```python
 s = new_store("""
@@ -309,17 +318,19 @@ type doc
     define viewer: [user]
 """)
 print(refused(lambda: s.add_tuple("user:alice", "vewer", "doc:1")))   # -> 'AdmissionRejected'
-print(s.check("user:alice", "vewer", "doc:1"))           # -> False
+print(refused(lambda: s.check("user:alice", "vewer", "doc:1")))   # -> 'UndeclaredTypeOrRelation'
+print(s.check("user:alice", "viewer", "doc:999"))        # -> False
 print(refused(lambda: s.check("useralice", "viewer", "doc:1")))   # -> 'MalformedTupleString'
 ```
 
-So a typo in a relation name in your application code reads as "denied". That is the
-safe direction for an access check, but it is silent; test your call sites. OpenFGA returns
-an error for a check on an undeclared relation instead.
-
-**Why.** A bad write would put data into the store that no query could ever reach, and the
-mistake would only show up later. A read changes nothing, and answering `False` keeps a
-check usable as a plain boolean everywhere.
+**Why.** The types and relations are fixed by the schema, so a read that names one the
+schema lacks is a mistake in the calling code, and answering `False` would let a typo in a
+relation name read as "denied", silently. An object with no tuples is not a mistake: it
+may simply not have been shared with anyone yet. A bad write is refused for a further
+reason: it would put data into the store that no query could ever reach, and the mistake
+would only show up later.
+[What a read checks](../reference/tuple-strings.md#what-a-read-checks) lists exactly what
+a read refuses.
 
 Names are restricted on writes to the characters `A-Z a-z 0-9 _ . / @ + = -`, 1 to 256 of
 them (see [Tuple strings and identifiers](../reference/tuple-strings.md)). Declared names
@@ -416,11 +427,11 @@ on both backends at once so that they never disagree.
 | tupleset with a computed arm or a userset restriction | refused | refused, with the rewrite in the message |
 | tupleset that is a union of direct blocks, or includes `T:*` | refused | accepted |
 | userset `T:o#r` as a member of `T:o#r` | implicit | implicit, the same way |
-| `from` whose tupleset type lacks the target relation | validation error | answers through self-membership |
+| `from` whose tupleset type lacks the target relation | validation error | `check` refused; `lookup_reverse` and `expand` list the userset through self-membership |
 | check with subject `user:*` under `but not` | announced: an error | the wildcard subject's own answer |
 | cyclic tuple data | (not compared) | refused (`AdmissionRejected`) |
 | recursion through `and` / `but not` | accepted (announced: will be refused) | refused by `Store` |
-| check naming an undeclared relation | error | `False` |
+| check naming an undeclared type or relation | error | error (`UndeclaredTypeOrRelation`) |
 | a few looser spellings (see the schema language reference) | not in the grammar | accepted |
 | a trailing comment on a `model`, `schema` or `relations` line | refused | refused |
 | wildcard usersets, star tuplesets, wildcard objects | not available | available, with a warning |

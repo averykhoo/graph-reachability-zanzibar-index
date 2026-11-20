@@ -5,6 +5,32 @@ reworded message and every fixed edge case, is the project's
 [CHANGELOG.md](https://github.com/averykhoo/graph-reachability-zanzibar-index/blob/master/CHANGELOG.md).
 Read it before you upgrade: any 0.x release may change the API, including a patch release.
 
+## 0.1.3 (2026-11-20)
+
+The fixes from the 0.1.2 install trial, and one behaviour change: a read that names a type
+or relation the schema does not declare is now an error. No answer changes for a read that
+names only declared types and relations.
+
+- **A read that names an undeclared type or relation raises**
+  {py:exc}`zanzibar.UndeclaredTypeOrRelation`, a `ValueError`, where 0.1.2 answered `False`
+  or an empty result. That covers `check`, `lookup`, `lookup_reverse` and `expand` on a
+  {py:class}`~zanzibar.Store` or a set engine, their type and relation filters, a typo such
+  as `check("user:a", "veiwer", "doc:1")`, and a subject relation its type does not declare.
+  A result key passed back as `check(*key, ...)` is refused too, and the message shows the
+  call that was meant. Names are not checked: `doc:999` still answers `False`. A test that
+  reads undeclared names and expects `False` now gets the refusal. See
+  [What a read checks](tuple-strings.md#what-a-read-checks).
+- `object_wildcard_shapes` accepts a 2-item list such as `["folder", "viewer"]` as a pair,
+  as a JSON-loaded configuration gives; any other entry that cannot be a set member is a
+  `TypeError` naming the argument and the entry. A refused entry's message ends with the
+  rewrite.
+- The set engine's `check`, `lookup`, `lookup_reverse`, `expand`, `add_tuple` and
+  `remove_tuple`, called with the wrong number of arguments, say which form they take
+  instead of giving Python's "missing 3 required positional arguments".
+- Docs: what `None` means as the subject predicate in each call, and the order of a result
+  key, are on the [tuple strings](tuple-strings.md) page; the 0.1.2 note below names the two
+  cases that stay `AdmissionRejected`; "Test your permission model" says it needs pytest.
+
 ## 0.1.2 (2026-10-30)
 
 The fix from the 0.1.1 install trial, plus argument checking on every public call. No
@@ -14,12 +40,17 @@ permission answer changes for a well-typed call.
   `sync=0` used to give async mode without a word; any other value is now a `TypeError`.
   `ops=` takes only `PySets` or `RoaringSets`, and says so.
 - Every public argument is type-checked before any SQL runs, and a wrong type is a
-  `TypeError` naming the argument. A write's bad identifier is still an
-  {py:exc}`zanzibar.AdmissionRejected`. **A read with a part that is not a string**, such
-  as `check("user:a", None, "doc:1")`, now raises `TypeError` where it used to answer
-  `False`; `None` as a read's subject predicate still means the bare subject. `bulk=` and
-  `enable_boolean=` take only `True` / `False`, and `object_wildcard_shapes` must be
-  `(type, relation)` pairs.
+  `TypeError` naming the argument, with two exceptions that stay
+  {py:exc}`zanzibar.AdmissionRejected`, as in 0.1.0. One is a write's identifier: the
+  relation, and every one of the six parts in the parts form, so
+  `add_tuple("user:a", None, "doc:1")` is refused like any other bad identifier (a
+  non-string user or object string is still a `TypeError`). The other is a store id, so
+  `Store(session, 123, ...)` is refused the same way. **A read with a part that is not a
+  string**, such as `check("user:a", None, "doc:1")`, now raises `TypeError` where it used
+  to answer `False`; `None` as a read's subject predicate still means the bare subject
+  ([`None` as the subject predicate](tuple-strings.md#none-as-the-subject-predicate) gives
+  its meaning in each call). `bulk=` and `enable_boolean=` take only `True` / `False`, and
+  `object_wildcard_shapes` must be `(type, relation)` pairs.
 - A refused tuple is quoted the way you wrote it (`robot:r viewer doc:1`), and the cycle
   refusal says how to get out of it.
 - Each docs page deletes its SQLite file first, so running a page twice gives the same

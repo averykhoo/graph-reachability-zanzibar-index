@@ -76,7 +76,40 @@ print(allowed)  # -> True
 | `"group:*#member"` | `("member", "group", "*")` | the members of every `group` (needs `group:*#member`, an extension) |
 
 The predicate `"..."` means "the subject itself, not a relation of it". In the string
-form it is written by leaving `#relation` off; `"user:alice#..."` is refused.
+form it is written by leaving `#relation` off; `"user:alice#..."` is refused. What `None`
+means in the predicate's place depends on the call; see
+[`None` as the subject predicate](#none-as-the-subject-predicate).
+
+### Result keys are in a different order
+
+{py:meth}`Store.result_keys <zanzibar.Store.result_keys>`,
+{py:meth}`Store.excluded_keys <zanzibar.Store.excluded_keys>` and
+{py:meth}`Store.expand <zanzibar.Store.expand>` give each subject or object as a key
+`(type, name, predicate)`, such as `("user", "alice", "...")`. The parts form takes the
+same three values in another order, `(subject_predicate, subject_type, subject_name)`. So
+a key cannot be passed back with `*key`: `check(*key, "viewer", "doc", "1")` puts `"user"`
+in the predicate's place and `"alice"` in the type's. Unpack it by name instead:
+
+```python
+key = ("user", "alice", "...")  # a result key: (type, name, predicate)
+key_type, key_name, key_predicate = key
+print(store.check(key_predicate, key_type, key_name, "viewer", "doc", "1"))  # -> True
+```
+
+The misordered call names an undeclared subject type (`alice`), so it is refused rather
+than answered, and the message shows the call that was meant; see
+[What a read checks](#what-a-read-checks).
+
+```python
+from zanzibar import UndeclaredTypeOrRelation
+
+try:
+    store.check(*key, "viewer", "doc", "1")
+    message = None
+except UndeclaredTypeOrRelation as err:
+    message = str(err)
+print(message)  # -> "check() names an undeclared subject type 'alice': type 'alice' is not declared in the schema. A result key is (type, name, predicate); check takes (subject_predicate, subject_type, subject_name, relation, object_type, object_name): write check('...', 'user', 'alice', 'viewer', 'doc', '1')"
+```
 
 ## Object strings
 
@@ -108,8 +141,9 @@ Its message names the expected form.
 Splitting only checks the shape. Whether the parts are valid identifiers, and whether
 the schema admits the tuple, is checked afterwards; see the next section. So a relation
 part with another character outside the allowed set, such as `"group:eng#b c"`, is not
-malformed: a read with it answers `False`, and a write is refused with
-{py:exc}`zanzibar.AdmissionRejected`.
+malformed: a write with it is refused with {py:exc}`zanzibar.AdmissionRejected`, and a
+read with it is refused with {py:exc}`zanzibar.UndeclaredTypeOrRelation`, because no type
+declares a relation `b c`.
 
 ```python
 from zanzibar import MalformedTupleString
@@ -164,19 +198,36 @@ Declared names follow the same rules, with one more: a **relation** name may not
 `.`, which is reserved for relations the compiler generates. A type name may contain `.`.
 See [Schema language](schema-language.md#relations).
 
-### Writes are strict, reads are lenient
+### What a write checks
 
-- A **write** (`add_tuple`, `remove_tuple`) with an invalid identifier, or one naming an
-  undeclared type or relation, raises {py:exc}`zanzibar.AdmissionRejected`, a
-  `ValueError`. So does a subject the relation's type restrictions do not admit, and
-  removing a tuple that is not stored. On a write the subject predicate must be a string;
-  `None` is refused.
-- A **read** (`check`, `lookup`, `lookup_reverse`, `expand`) does not validate
-  identifier VALUES. A name that cannot exist, or an undeclared type or relation, matches
-  nothing: `check` returns `False` with no error, so a typo in a relation name reads as
-  "denied". A part that is not a string at all (`None`, a number, bytes) is a mistake,
-  not a name, and raises `TypeError`. The one exception: on a read, `None` as the subject
-  predicate means the bare subject, like `"..."`.
+A **write** (`add_tuple`, `remove_tuple`) with an invalid identifier, or one naming an
+undeclared type or relation, raises {py:exc}`zanzibar.AdmissionRejected`, a `ValueError`.
+So does a subject the relation's type restrictions do not admit, and removing a tuple that
+is not stored. On a write every identifier must be a string: a relation or a part that is
+not one, `None` included, is refused with `AdmissionRejected` too, like any other invalid
+identifier. A user or object string that is not a `str` is a `TypeError`.
+
+### What a read checks
+
+A **read** (`check`, `lookup`, `lookup_reverse`, `expand`) checks the types and relations
+it names, but not the names:
+
+- A **type or relation** the schema does not declare raises
+  {py:exc}`zanzibar.UndeclaredTypeOrRelation`, a `ValueError`, before anything is
+  answered. That covers the object's type, the relation on it, the subject's type, the
+  relation of a userset subject (`group:eng#nosuch`), and the type and relation filters of
+  `lookup` and `lookup_reverse`. The message is the one a write with the same mistake
+  gets, so a typo in a relation name is reported, not read as "denied".
+- A **name** is not checked. An object or subject that no tuple mentions (`doc:999`), a
+  wildcard name (`user:*`), or a name a write would refuse (`user:al ice`) matches
+  nothing, and `check` answers `False`. Asking about an object that does not exist yet is
+  normal.
+- A part that is not a string at all (`None`, a number, bytes) is a mistake, not a name,
+  and raises `TypeError`, with one exception: `None` as the subject predicate, described
+  in the next section.
+
+{py:class}`zanzibar.Store`, {py:class}`zanzibar.store.TupleSource` and
+{py:class}`zanzibar.setengine.SetEngine` all refuse the same calls with the same message.
 
 ```python
 from zanzibar import AdmissionRejected
@@ -187,15 +238,51 @@ except AdmissionRejected as err:
     print(isinstance(err, ValueError))  # -> True
 
 print(store.check("user:al ice", "viewer", "doc:1"))  # -> False
+print(store.check("user:alice", "viewer", "doc:999"))  # -> False
 try:
     store.add_tuple("group:eng#member x", "viewer", "doc:1")  # a space in the relation part
     refused = False
 except AdmissionRejected:
     refused = True
 print(refused)  # -> True
-print(store.check("group:eng#member x", "viewer", "doc:1"))  # -> False
-print(store.check("user:alice", "veiwer", "doc:1"))  # -> False
+
+try:
+    store.check("user:alice", "veiwer", "doc:1")
+    message = None
+except UndeclaredTypeOrRelation as err:
+    message = str(err)
+    print(isinstance(err, ValueError))  # -> True
+print(message)  # -> "check() names an undeclared relation doc#veiwer: type 'doc' declares no relation 'veiwer'; did you mean 'viewer'?"
+try:
+    store.check("group:eng#member x", "viewer", "doc:1")
+    message = None
+except UndeclaredTypeOrRelation as err:
+    message = str(err)
+print(message)  # -> "check() names an undeclared subject relation group#member x: type 'group' declares no relation 'member x'; did you mean 'member'?"
+```
+
+### `None` as the subject predicate
+
+`None` in the subject predicate's place means a different thing in each of three places:
+
+| Where | `None` means |
+|---|---|
+| a read's subject: `check`, `lookup` | the bare subject, the same as `"..."` |
+| a write's subject: `add_tuple`, `remove_tuple` | nothing: it is refused with {py:exc}`zanzibar.AdmissionRejected`; write `"..."` |
+| the `subject_predicate=` filter of `lookup_reverse` | no filter, the default: bare subjects and usersets both come back; pass `"..."` to keep only bare subjects |
+
+```python
 print(store.check(None, "user", "alice", "viewer", "doc", "1"))  # -> True
+try:
+    store.add_tuple(None, "user", "dave", "viewer", "doc", "1")
+    refused = False
+except AdmissionRejected:
+    refused = True
+print(refused)  # -> True
+everyone = store.lookup_reverse("viewer", "doc:1", subject_predicate=None)
+print(sorted(store.result_keys(everyone)))  # -> [('doc', '1', 'viewer'), ('group', 'eng', 'member'), ('user', 'alice', '...')]
+bare = store.lookup_reverse("viewer", "doc:1", subject_predicate="...")
+print(sorted(store.result_keys(bare)))  # -> [('user', 'alice', '...')]
 session.close()
 ```
 

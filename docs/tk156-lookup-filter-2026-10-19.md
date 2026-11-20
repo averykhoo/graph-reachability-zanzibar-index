@@ -12,6 +12,19 @@ agent `TK156/implement` (workflow minion).
 
 ## Corrections
 
+- **2026-11-20 (agent E for `TK-185`; READ against DEC-16 and RUN against the source tree).**
+  D4 below ("lenient, like every read ... an undeclared filter value yields an empty result")
+  and the closing "Open" paragraph are superseded. The cross-surface decision that paragraph
+  left open was made by the owner on 2026-11-01 and carried out by `TK-185` step 4
+  (`docs/decisions/DEC-16-tk-185-step-4-reads-refuse-an-undeclared-type.md`): since 0.1.3 a
+  `lookup` / `lookup_reverse` filter on `Store`, and `SetEngine.filter_result`, that names an
+  undeclared type or relation raises `UndeclaredTypeOrRelation` (a `ValueError`), as do
+  `check` / `lookup` / `expand` naming one. Example, RUN 2026-11-20:
+  `store.lookup("user:alice", object_type="invoice")` -> "lookup(): object_type='invoice'
+  names an undeclared type: type 'invoice' is not declared in the schema". `None` is still no
+  filter, `"..."` is still the bare-subject filter on `lookup_reverse`, and a non-`str` value
+  is still a `TypeError`. `WildcardIndex.filter_result` stays lenient (empty result; per
+  agent D's control in `tests/test_tk156_lookup_filter.py`, not re-run by agent E).
 - **2026-10-19 (review + fix pass, agents `TK156/review*` and `TK156/fix`; transcribed by the
   records agent, REASONED from their reports).** BLOCKING, fixed: the first landing cited
   `TK156` in three public docstrings (`WildcardIndex.filter_result`,

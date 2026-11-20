@@ -67,6 +67,8 @@ request.
 - {py:exc}`zanzibar.AdmissionRejected`: a write was refused, for example because the tuple
   names a relation the schema does not declare, would create a cycle, or removes a tuple
   that is not stored.
+- {py:exc}`zanzibar.UndeclaredTypeOrRelation`: a read named a type or relation the schema
+  does not declare, often a typo.
 - {py:exc}`zanzibar.MalformedTupleString`: a `"type:name"` or `"type:name#relation"`
   argument does not have that shape.
 
@@ -84,12 +86,26 @@ except AdmissionRejected as error:
     print(str(error).startswith("non-existent tuple cannot be removed"))  # -> True
 ```
 
-Reads are lenient where writes are strict: a `check` that names an undeclared relation
-returns `False` instead of raising. So a typo in a relation name reads as "denied":
+A read is checked the same way for types and relations: a `check`, `lookup`,
+`lookup_reverse` or `expand` that names a type or relation the schema does not declare
+raises {py:exc}`zanzibar.UndeclaredTypeOrRelation`, a `ValueError`, so a typo in a relation
+name is reported rather than read as "denied". Names are not checked: a `check` about an
+object no tuple mentions answers `False`.
 
 ```python
-print(store.check("user:alice", "veiwer", "doc:1"))  # -> False
+from zanzibar import UndeclaredTypeOrRelation
+
+try:
+    store.check("user:alice", "veiwer", "doc:1")       # a typo for "viewer"
+    caught = None
+except UndeclaredTypeOrRelation as error:
+    caught = type(error).__name__
+print(caught)  # -> 'UndeclaredTypeOrRelation'
+print(store.check("user:alice", "viewer", "doc:999"))  # -> False
 ```
+
+[What a read checks](../reference/tuple-strings.md#what-a-read-checks) lists exactly what a
+read refuses.
 
 ### Resource limits: change the write, or the limit
 

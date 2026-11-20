@@ -232,8 +232,14 @@ def phase_scope(phase: str) -> str:
 # the literal-path survey test cannot see; so a userdocs-only edit could redden a tests
 # tile at a COVERED status since TK151 landed (2026-10-20b). Found only when
 # test_tk123_pypi_page.py started naming `userdocs/reference/exceptions.md` literally.
+#
+# `README.md` (the repo root's only; a prefix match, so `docs/README.md` stays excluded)
+# joined 2026-11-20 (TK185): tests/test_tk185_docs.py scans it for the retired "reads are
+# lenient" claim, so a README-only edit can redden a tests tile. Found by
+# tests/test_gate_status.py's literal survey, red on arrival as designed:
+# "tests/test_tk185_docs.py reads README.md, which t2c does not cover".
 CODE_SCOPE_MD_KEEP = (b"tasks/", b"HANDOFF.md", b"PYPI_README.md", b"CHANGELOG.md",
-                      b"formal/CORRESPONDENCE.md", b"userdocs/")
+                      b"formal/CORRESPONDENCE.md", b"userdocs/", b"README.md")
 
 # The record engine's own files (context-engine, adopted 2026-11-03, context-engine CE-167):
 # `context.toml` is its config and `docs/ledger/` holds its session ledger and op log, which

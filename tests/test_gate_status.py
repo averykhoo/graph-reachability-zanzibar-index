@@ -673,9 +673,15 @@ def test_green_phases_matches_each_row_against_its_own_scope(repo: Path) -> None
 # And the survey's regex, fed the line the TK131 module carried for one day,
 # `(REPO_ROOT / 'CLAUDE.md').read_text(...)` (double-quoted there; single-quoted here so
 # this module's own survey does not read its comment), resolves `CLAUDE.md` -> red.
+# TK185 (2026-11-20): the root `README.md` moved from EXCLUDED to KEPT, because
+# tests/test_tk185_docs.py reads it; `docs/README.md` takes its place as the excluded
+# neighbour (the keep entry is a prefix match on the repo-relative path).
+# SABOTAGE 2026-11-20: drop b"README.md" from CODE_SCOPE_MD_KEEP -> `2 failed, 27 passed`:
+#   "README.md is read by a collected test; t2c must move" (the pair test) and
+#   "tests/test_tk185_docs.py reads README.md, which t2c does not cover" (the survey).
 _KEPT_MD = ("tasks/T1-x.md", "HANDOFF.md", "PYPI_README.md", "CHANGELOG.md",
-            "formal/CORRESPONDENCE.md")
-_EXCLUDED_MD = ("docs/notes.md", "formal/HANDOFF.md", "CLAUDE.md", "README.md")
+            "formal/CORRESPONDENCE.md", "README.md")
+_EXCLUDED_MD = ("docs/notes.md", "formal/HANDOFF.md", "CLAUDE.md", "docs/README.md")
 
 
 def test_markdown_a_collected_test_reads_moves_the_code_scoped_id(repo: Path) -> None:

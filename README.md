@@ -534,7 +534,9 @@ are constrained on every write — in *both* backends — to a strict, delimiter
 `[A-Za-z0-9_./@+=-]` (1–256 chars; a name may also be the wildcard `*`, a subject
 predicate the bare `...` or `Ellipsis`). Every field of a write must be a `str`: `None`,
 numbers and `bytes` are refused with `AdmissionRejected` in every field, the subject
-predicate included (reads stay lenient and still treat a `None` predicate as `...`).
+predicate included. Reads do not validate identifier values (a name no tuple uses matches
+nothing, and a `None` subject predicate means `...`), but a read on a `Store` or
+`SetEngine` that names an undeclared type or relation raises `UndeclaredTypeOrRelation`.
 A store id must be a `str` with a non-whitespace character, refused with
 `AdmissionRejected` at construction otherwise; it is the caller's key, so the charset
 above does not apply to it (`tenant:acme` is fine).

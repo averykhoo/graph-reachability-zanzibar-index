@@ -23,6 +23,12 @@ or `"..."` for a bare subject such as a user: `("user", "alice", "...")` is the 
 `user:alice`, `("group", "eng", "member")` is the userset `group:eng#member`, and
 `("doc", "d1", "viewer")` is "viewer of `doc:d1`".
 
+A key's order is not the order of the six-part call, which starts with the predicate:
+`(subject_predicate, subject_type, subject_name, ...)`. To ask `check` about a key, unpack
+it by name, as in `key_type, key_name, key_predicate = key`; passing `*key` straight in is
+refused. See
+[Result keys are in a different order](../reference/tuple-strings.md#result-keys-are-in-a-different-order).
+
 ## The example store
 
 The examples on this page share one store. `doc:d1` is shared with the `eng` group, whose
@@ -110,11 +116,20 @@ mallory = store.lookup("user:mallory", object_type="doc", relation="viewer")
 print(store.result_keys(mallory))  # -> set()
 ```
 
-A filter that names a type or relation the schema does not declare matches nothing (it is
-not an error), the same way `check` answers `False` for an undeclared name:
+A filter that names a type or relation the schema does not declare is refused with
+{py:exc}`zanzibar.UndeclaredTypeOrRelation`, the same way `check` refuses an undeclared
+type or relation. A subject that no tuple mentions is not an error; it reaches nothing:
 
 ```python
-print(store.result_keys(store.lookup("user:alice", object_type="invoice")))  # -> set()
+from zanzibar import UndeclaredTypeOrRelation
+
+try:
+    store.lookup("user:alice", object_type="invoice")   # the schema has no type invoice
+    message = None
+except UndeclaredTypeOrRelation as err:
+    message = str(err)
+print(message)  # -> "lookup(): object_type='invoice' names an undeclared type: type 'invoice' is not declared in the schema"
+print(store.result_keys(store.lookup("user:nobody", object_type="folder")))  # -> set()
 ```
 
 ## List who can access an object

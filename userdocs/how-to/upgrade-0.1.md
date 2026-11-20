@@ -119,7 +119,9 @@ A `Store` (and a `TupleSource`) also accepts the OpenFGA tuple form now, which i
   `BuildReport` named tuple, which still unpacks as `cursor, widx, ruleset = ...`.
 - The Python `Ellipsis` (`...` without quotes) is refused as a subject predicate. The bare
   subject is the string `"..."`. Writes raise {py:exc}`zanzibar.AdmissionRejected` and
-  reads raise `TypeError`. `None` still means a bare subject on a read.
+  reads raise `TypeError`. `None` still means a bare subject on a read; see
+  [`None` as the subject predicate](../reference/tuple-strings.md#none-as-the-subject-predicate)
+  for what it means in each call.
 - `at_least` must be `None` or an `int` that is 0 or more. `True` and negative numbers are
   refused (`TypeError` / `ValueError`).
 

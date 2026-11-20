@@ -4,6 +4,13 @@ A schema is code, so test it like code: open a store in memory, write the tuples
 needs, and assert the answers. An in-memory SQLite database (`sqlite://`) is created
 fresh for every test, so tests do not share state and need no clean-up.
 
+The examples use [pytest](https://docs.pytest.org/). It is not a dependency of
+`zanzibar-index`, so install it yourself:
+
+```text
+pip install pytest
+```
+
 Put a fixture and your tests in a test file, for example `test_permissions.py`:
 
 ```python

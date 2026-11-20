@@ -47,7 +47,8 @@ becomes an internal relation of its own. For
 ordinary paths in the closure, maintained as on the previous page: a tuple written as
 `viewer` is stored on the internal relation that holds it, and `banned` tuples feed the
 other one. Internal names contain a `.`, which is why a relation name in a schema may not.
-They are not part of the readable surface: a check against `viewer.0` answers `False`.
+They are not part of the readable surface: the schema does not declare them, so a check
+against `viewer.0` is refused with {py:exc}`zanzibar.UndeclaredTypeOrRelation`.
 
 What remains is to keep the members of the public `viewer` relation up to date as the
 operands change.

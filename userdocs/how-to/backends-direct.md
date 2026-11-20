@@ -86,6 +86,11 @@ users = sorted(k for k in se.result_keys(viewers) if k[0] == "user")
 print(users)  # -> [('user', 'alice', '...')]
 ```
 
+A key is `(type, name, predicate)`, which is not the order `check` takes its subject in
+(`subject_predicate, subject_type, subject_name`); unpack it by name before passing it
+back. See
+[Result keys are in a different order](../reference/tuple-strings.md#result-keys-are-in-a-different-order).
+
 Translate a result straight away. After a later write that removes a tuple, after a
 `rebuild()`, or on another engine instance, `result_keys` refuses an older result with
 {py:exc}`zanzibar.StaleLookupIds` rather than risk naming the wrong entity. Run the lookup

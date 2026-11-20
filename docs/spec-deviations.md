@@ -29,6 +29,36 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-11-20 — `TK-185` step 4: a read naming an undeclared type or relation is refused (DEC-16)
+
+**What changed.** The owner decided on 2026-11-01 that a READ naming an undeclared type or
+relation is an error. Since 0.1.3, `Store.check` / `lookup` / `lookup_reverse` / `expand` and
+`SetEngine.check` / `lookup` / `lookup_reverse` / `expand` / `filter_result` raise
+`UndeclaredTypeOrRelation` (a `ValueError`) for an undeclared object type, a relation the
+object type does not declare, an undeclared subject type, a subject relation its type does
+not declare, and a lookup filter naming any of these; one validator,
+`src/zanzibar/schema/readcheck.py`, runs on both backends against the set engine's
+`DeclaredRelations` before any answer is computed. A NAME is never checked (`doc:999`,
+`user:*` still match nothing). `WildcardIndex` read directly stays lenient (DEC-16 §5).
+Design: `docs/decisions/DEC-16-tk-185-step-4-reads-refuse-an-undeclared-type.md`; map:
+`docs/tk185-0.1.3-batch-2026-11-20.md` step 4.
+
+**What this refutes in earlier entries (their bodies stay as of their dates):**
+- `## 2026-10-17b`: the two kept OpenFGA differences `A14` (an undeclared relation answers
+  False) and `D03` (the `ttu_leaf` disjunct answers True for `team:1#viewer`) are closed as
+  CHECK differences: both checks are refused, as OpenFGA's `validation_error`, and
+  `tests/test_tk138_userset_self_relation.py::REPO_EXCEPTIONS` is now empty (READ first-hand,
+  2026-11-20). The inline note in that entry has the detail, including what still differs
+  (`lookup_reverse` / `expand` still list `team:1#viewer`).
+- `## 2026-08-21b` (`BL-2`): its adjudicated semantics, "DENY -- return `False`/empty, do not
+  raise ... keeps reads lenient", now holds for `WildcardIndex` only. On `Store` and
+  `SetEngine`, a read of a compiled leaf name such as `viewer.0` is an undeclared relation and
+  raises `UndeclaredTypeOrRelation` (RUN by agent E, 2026-11-20:
+  `check("user:alice", "viewer.0", "doc:1")` -> "check() names an undeclared relation
+  doc#viewer.0: type 'doc' declares no relation 'viewer.0'; did you mean 'viewer'?"). The
+  graph's leaf fence that entry added is unchanged and still needed: it guards
+  `WildcardIndex`, which `Store` calls only after the refusal (REASONED from DEC-16 §4).
+
 ## 2026-10-17b — `TK144`: a userset IS a member of itself, as in OpenFGA (TK138 landing 2)
 
 **What changed.** The rule the `## 2026-10-14 — TK138` entry describes is now applied in all
@@ -63,6 +93,25 @@ undeclared on one of the tupleset's types still answers True through the `ttu_le
 from-chain disjunct (sub-decision D4, challenge C3, row `D03`). Unchanged: bare and
 `user:*` subjects, userset-star subjects (D1), and the write refusal of the exact self
 tuple (both refuse it; this repo as a cycle, OpenFGA as implicit, C6).
+
+> **2026-11-20: `A14` and `D03` CLOSED as check divergences, as of 0.1.3** (`TK-185` step 4,
+> decision `DEC-16`; the owner's decision of 2026-11-01 that a read naming an undeclared type
+> or relation is an error). `Store` and `SetEngine` reads now raise
+> `UndeclaredTypeOrRelation` (a `ValueError`) where OpenFGA answers `validation_error`:
+> `A14` (`check doc:1#nosuchrel nosuchrel doc:1`, an undeclared relation) and `D03`
+> (`check team:1#viewer x doc:1`, a subject relation `team` does not declare) are both
+> refused. The "lenient reads" sentence above is true only as of 2026-10-17. **Still
+> different, RUN by agent E 2026-11-20 on the D03 model:** the `ttu_leaf` disjunct is not
+> removed, so `lookup_reverse("x", "doc:1")` and `expand("x", "doc:1")` still list
+> `('team', '1', 'viewer')`, a key `check` now refuses to take back. Pinned by the executed
+> example in `userdocs/explanation/semantics-vs-openfga.md` ("The difference"). The
+> `REPO_EXCEPTIONS` pin in `tests/test_tk138_userset_self_relation.py` (still `A14: F`,
+> `D03: T` when this note was written) moves with the code change, not with this note.
+> `WildcardIndex` read directly stays lenient (DEC-16 §5). The body above is as of
+> 2026-10-17.
+>
+> **Later 2026-11-20:** `REPO_EXCEPTIONS` is now empty (`{}`), with a comment naming both
+> rows (READ first-hand by agent E). See `## 2026-11-20` at the top of this file.
 **Lean.** The spec is `Spec/SelfRelation.lean::semR` (the disjunct form, D2), with T0a
 (`semR_fuel_stable`; C7 settled: the same `fuelBound`), T1 (`setEngine_correctR`), T2b and
 the T3/T6 family over the reflexive reads (`GraphIndex/SelfRead.lean::graph_correctR` and
@@ -790,6 +839,11 @@ raise. Rationale: it agrees with the set engine, the oracle, and the `foo.bar` c
 keeps reads lenient per the documented contract (*"an out-of-charset name just never
 matches"*). Raising would be a caller-visible behaviour change and would itself diverge from
 the oracle, which returns `False`.
+
+> **2026-11-20:** this DENY now holds for `WildcardIndex` only. Since 0.1.3 (`TK-185` step 4,
+> DEC-16), `Store` and `SetEngine` refuse a read of a leaf name such as `viewer.0` with
+> `UndeclaredTypeOrRelation`, by the owner's decision of 2026-11-01. See `## 2026-11-20` at
+> the top of this file. The body of this entry is as of 2026-08-21.
 
 **Blast radius, measured before the fix.** 1,728 target-position leaf-name comparisons over
 the 9 tainted `tests/fga_schemas/` fixtures plus the repro control → **201 divergences,
