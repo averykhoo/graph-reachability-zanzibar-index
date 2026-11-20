@@ -10,7 +10,7 @@ source: session 2026-11-20a
 created: 2026-11-20
 moved: 2026-11-20a
 updated: 2026-11-20a
-last_asked:
+last_asked: 2026-11-20a
 ---
 
 **Question:** Merge TK-67 (the FoldAdmits "lockstep" correction) into TK-277 as a trap?

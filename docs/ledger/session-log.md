@@ -4,11 +4,45 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
-## 2026-11-20a · kind: open
+## 2026-11-20a · kind: close
 
-- **opened:** 2026-11-20T14:16:54+08:00 by claude-code/claude-opus-5-5
-- **start head:** fae13a2656170ad8b1936edea0256f49f0117409
 - **tasks:** TK-185
+- **rows:** TK-185 (closed, cd48245); TK-303 (new, NEXT); TK-304 (new, NEXT); TK-305 (new, LATER);
+  TK-306 (new, LATER); TK-307 (new, LATER); TK-275 (promoted NOW); TK-146, TK-148, TK-288 (promoted
+  NEXT); 13 perf/parked rows to SOMEDAY (0c76fd7); ASK-4..8 (new, raised); DEC-16 (PROVISIONAL)
+- **receipts:**
+  - guards: ten-phase gate at d2effc4 (2026-11-20): lean PASSED; conformance 1246 passed
+    (250+249+249+249+249); tests 3962 passed (991+991+990+990); gate_status COVERED there; fuzz 5
+    modules x 6 seeds green. After the records-only commits cd48245/0c76fd7 gate_status says NOT
+    covered on the current tree (records stale the tiles). lint: clean
+  - read: orient; task show TK-185; docs/runbooks/procedures.md (session start, intake, clean close,
+    rerank, housekeeping); docs/charter.md
+  - asked: ASK-4, ASK-5, ASK-6, ASK-7, ASK-8
+  - housekeeping: hk run close: 0 writes, 0 op log lines
+  - banner: kept 2026-11-16a
+  - pushed: fae13a2: the 2026-11-16a close and banner records (with ebf71d8, f3e1037) pushed while
+    no session was open; whether the gate ran first is not recorded
+- **summary** (the owner digest):
+  - TK-185 done: reads refuse an undeclared type/relation identically on Store and SetEngine
+    (DEC-16, PROVISIONAL), C3/C4/C6 fixes, docs C1/C2/C8, docstrings, lint_gate prints type-check
+    versions; 0.1.3 bumped (3b5ea66, 0d5bf34, d2effc4).
+  - Independent verifier: SHIP WITH NOTES; equivalence probe 0 answer differences over 4 read paths;
+    sabotages re-run red then green; residuals RISK-1..3 (D03 list-vs-check gap is TK-304).
+  - Push of efc8de3..d2effc4 was refused by the harness permission classifier; nothing pushed, no
+    tag. Release steps are TK-303 (NEXT).
+  - Sprint rerank (verified by a second agent): NOW TK-275; NEXT TK-303, TK-304, TK-288, TK-146,
+    TK-148; 10 perf rows + TK-277/243/255 to SOMEDAY (TK-277 owed piece split as TK-306). Agent
+    calls, PROVISIONAL.
+  - Owner questions raised: ASK-4 retire TK-264, ASK-5 retire TK-36, ASK-6 merge TK-67 into TK-277,
+    ASK-7 retire TK-243, ASK-8 retire TK-255.
+- **Still owed:**
+  - Push master (efc8de3..HEAD) on the owner's go, after re-running the gate on the current tree,
+    with a CI watcher (TK-303)
+  - Publish dry run, then the v0.1.3 tag on the owner's word, then the install trial +
+    installed_smoke.py (TK-303)
+  - Answers to ASK-4..8; review DEC-16 and the rerank moves (accept or overturn)
+  - Delete .context-engine/env-309641b (the 0.5 engine env) once nothing names it
+- **start head:** fae13a2656170ad8b1936edea0256f49f0117409
 
 ---
 

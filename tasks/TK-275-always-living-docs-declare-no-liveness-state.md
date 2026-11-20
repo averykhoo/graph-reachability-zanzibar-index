@@ -6,7 +6,7 @@ title: always-living docs declare no liveness state; enumeration+method now in d
 brief:
 pri: NOW
 state: open
-size: S
+size: M
 deps: []
 related: []
 parent:

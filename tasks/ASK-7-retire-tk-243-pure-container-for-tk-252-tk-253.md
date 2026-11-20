@@ -10,7 +10,7 @@ source: session 2026-11-20a
 created: 2026-11-20
 moved: 2026-11-20a
 updated: 2026-11-20a
-last_asked:
+last_asked: 2026-11-20a
 ---
 
 **Question:** Retire TK-243 (the container grouping TK-252 and TK-253), or close it when TK-252 closes?
