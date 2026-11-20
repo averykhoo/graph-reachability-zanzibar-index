@@ -5,7 +5,7 @@ aliases: [TK185]
 title: '0.1.3 batch: reads refuse undeclared type/relation, trial fixes C3-C8, mypy drift'
 brief: 'DECIDED plan on the row (Log 2026-11-01): C4/C3/C6 code, reads ERROR on undeclared type/relation (C5+C7), wording, TK183'
 pri: NOW
-state: open
+state: closed
 size: L
 deps: []
 related: [TK179, TK178, TK184]
@@ -17,6 +17,9 @@ created: 2026-11-01
 taskpy_moved: '2026-11-01'
 taskpy_updated: '2026-11-01'
 updated: 2026-11-20a
+status: deprecated
+closed: 2026-11-20a
+moved: 2026-11-20a
 ---
 
 From the 0.1.2 fresh-user install trial (`docs/pypi-trial-0.1.2-2026-11-01.md`): 0 BROKEN, 8 CONFUSING / DOC GAP. C4 is its own row. This row holds the rest. Each needs a decision: fix the behaviour or fix the wording. Equivalence is unaffected; no wrong permission answer was found.
@@ -74,3 +77,5 @@ Promoted to NOW at the 0.1.2 write-back (TK178 closed): C5 is the one trial find
   - Then docs (steps 5 and 6, and the step-4 prose), the CHANGELOG and the 0.1.3 bump.
   - Then the session records, the ten gate phases, the fuzz sweep and commits.
 - 2026-11-20a (claude-code/claude-opus-5-5): 2026-11-20 (session 2026-11-20a): steps 1-8 LANDED, plus the 0.1.3 bump and the CHANGELOG. Body: docs/tk185-0.1.3-batch-2026-11-20.md (as built, the empirical trap census, the sabotage lines, the residuals). Step-4 design: DEC-16, PROVISIONAL. BUILDS: before the gate, every targeted pin green (first-hand re-runs plus two first-hand sabotages); agent D full runs: conformance 1246 passed, tests/ 3961 passed with 1 red (gate-scope README), fixed. RED: none known. NEXT: the ten gate phases plus lint plus the fuzz sweep, then commits by path (verdicts in the commit messages); then push, the publish dry run, and ASK for the v0.1.3 tag. Residuals to file at the close: D03 half closed (lookup_reverse/expand still list a userset through an undeclared TTU target, which check refuses); ensure_schema skips require_shapes on an existing row; C6 param-name cosmetics.
+- 2026-11-20a (claude-code/claude-opus-5-5): closed: steps 1-8 and the local half of step 9 landed in 3b5ea66, 0d5bf34, d2effc4 (DEC-16 PROVISIONAL, efc8de3); gate ten phases PASSED, gate_status COVERED, lint clean, fuzz 5 modules x 6 seeds green (2026-11-20); independent verifier SHIP WITH NOTES (equivalence probe: 0 permission-answer differences across Store sync / stalled / lagging / SetEngine; re-ran sabotages A/B/C red then green); the release remainder is TK-303
+  residual risk: RISK-1, RISK-2, RISK-3
