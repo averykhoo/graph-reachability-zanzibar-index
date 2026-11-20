@@ -4,7 +4,7 @@ id: TK-236
 aliases: [R6-11]
 title: residue cache is torn down between every reconcile_subject of a cascade (~4x/reconcile)
 brief:
-pri: LATER
+pri: SOMEDAY
 state: open
 size: S
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: 2026-09-22b
 taskpy_updated: 2026-09-22b
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 `src/zanzibar/graphindex/processor.py::DeltaProcessor._run_cascade`
@@ -76,3 +78,4 @@ The figure is the mechanism, not a win: ~4.6x, re-measured; the raw 8x is a cPro
 `@contextmanager` artifact and the halving lives in `benchmarks/profile_r6.py::_ctxmgr_entries`.
 
 Full audit: docs/r6-sizing-census-2026-09-22.md
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. Perf work: docs/architecture/decision-log.md, section The project goal, 'Rejected: perf as the goal'; the goal is an honest, legible assurance surface (user 2026-09-22c). When perf reopens, its first move is TK-34.

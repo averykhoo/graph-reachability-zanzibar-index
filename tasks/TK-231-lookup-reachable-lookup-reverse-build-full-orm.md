@@ -4,7 +4,7 @@ id: TK-231
 aliases: [R6-5]
 title: lookup_reachable/lookup_reverse build full ORM rows to read 3-4 columns (32.7%)
 brief:
-pri: LATER
+pri: SOMEDAY
 state: open
 size: '?'
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: 2026-09-22b
 taskpy_updated: 2026-09-22b
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 `src/zanzibar/graphindex/core.py::ReachabilityIndex.lookup_reachable`
@@ -82,3 +84,4 @@ BE ADDED; the row's "52%" is also `22.6 + 29.6` where the 29.6 `_classify_ids` c
 Full audit: docs/r6-sizing-census-2026-09-22.md
 
 Path correction, same session: the probe cited in the 2026-09-22b entry above now lives in the TRACKED tree at benchmarks/probe_r6_instance_by_class.py. It was first cited at a gitignored .scratch/ path, which would have rotted the citation and lost the instrument -- the measurement is evidence, so the instrument belongs in the tree. Re-run from the repo root; output is byte-identical (6,000 Residue / 16,410 Node+Edge, deduped total 22,410 reconciling to the profile line).
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. Perf work: docs/architecture/decision-log.md, section The project goal, 'Rejected: perf as the goal'; the goal is an honest, legible assurance surface (user 2026-09-22c). When perf reopens, its first move is TK-34.

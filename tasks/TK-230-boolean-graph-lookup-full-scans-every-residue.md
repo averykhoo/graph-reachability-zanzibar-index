@@ -4,7 +4,7 @@ id: TK-230
 aliases: [R6-4]
 title: boolean graph lookup full-scans every residue row and JSON-decodes per row (30.1%)
 brief:
-pri: LATER
+pri: SOMEDAY
 state: open
 size: L
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: '2026-10-26'
 taskpy_updated: '2026-10-26'
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 `src/zanzibar/graphindex/wildcard.py::WildcardIndex._collect_residue_memberships`
@@ -90,3 +92,4 @@ Path correction, same session: the probe cited in the 2026-09-22b entry above no
 ### 2026-10-26
 
 Measured incidentally by TK162 (docs/tk162-self-lookup-cost-2026-10-26.md, "A side finding"): on a schema with two but-not relations, a plain-user graph lookup (user:u0, no TK144 pass) took 5 ms at 1k tuples, 26 ms at 10k, ~200 ms at 100k; the same lookup on the same data with but-not read as or took 5.5 ms at 100k. Linear growth matches WildcardIndex._collect_residue_memberships loading and JSON-decoding every Residue row per lookup (REASONED; not profiled). Raw: benchmarks/results/tk162-self-lookup-2026-10-26.jsonl. Not acted on: perf deprioritized.
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. Perf work: docs/architecture/decision-log.md, section The project goal, 'Rejected: perf as the goal'; the goal is an honest, legible assurance surface (user 2026-09-22c). When perf reopens, its first move is TK-34.

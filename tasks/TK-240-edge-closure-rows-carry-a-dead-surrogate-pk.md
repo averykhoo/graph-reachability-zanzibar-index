@@ -4,7 +4,7 @@ id: TK-240
 aliases: [R6-18]
 title: Edge closure rows carry a dead surrogate PK plus store_id (53.1% smaller without)
 brief:
-pri: LATER
+pri: SOMEDAY
 state: open
 size: M
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: 2026-09-22b
 taskpy_updated: 2026-09-22b
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 `src/zanzibar/graphindex/models.py::Edge.id`
@@ -77,3 +79,4 @@ cascade read path" trap binds it DIRECTLY. P6 is parked at LATER, so dormant, no
 Keep store-id interning OUT of scope -- it is a separate, much larger item.
 
 Full audit: docs/r6-sizing-census-2026-09-22.md
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. Perf work: docs/architecture/decision-log.md, section The project goal, 'Rejected: perf as the goal'; the goal is an honest, legible assurance surface (user 2026-09-22c). When perf reopens, its first move is TK-34.

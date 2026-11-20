@@ -4,7 +4,7 @@ id: TK-275
 aliases: [HS-5]
 title: always-living docs declare no liveness state; enumeration+method now in docs/README.md sec 2
 brief:
-pri: LATER
+pri: NOW
 state: open
 size: S
 deps: []
@@ -17,6 +17,8 @@ created: 2026-08-20
 taskpy_created: 2026-08-20b
 taskpy_moved: 2026-10-13d
 taskpy_updated: 2026-10-13d
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one in the first lines. **The count is method-sensitive and does NOT live here — it lives in `TK49`.**
@@ -69,3 +71,5 @@ Bumped NOW -> NEXT by the user (2026-10-13c): TK141 (verify.sh start banner) goe
 ### 2026-10-13d
 
 Sprint re-rank 2026-10-13d (user decision in chat): NEXT -> LATER, top of LATER. TK142 (an assurance hole: the broad lookup gates stay green under the TK139 regression) took NOW, and NEXT is full (TK138, TK123, TK137, TK132, TK119). Pick this up first when a NEXT slot frees.
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> NOW. HONEST (make the assurance surface honest and legible): ACTIVE-PLAN docs whose rows are closed. The owner's 2026-10-13d order: 'Pick this up first when a NEXT slot frees'.
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a, scope at NOW: (1) freeze the 12 list-(c) ACTIVE-PLAN docs whose rows are closed (tk106, tk108, tk126, tk70, tk73, tk78, tk83, tk87, tk89, tk91, tk92, tk93; re-verified still ACTIVE-PLAN with closed rows on 2026-11-20 by the re-rank verifier); (2) add a handoff_lint RED check on an ACTIVE-PLAN doc whose row id is closed, keyed on the engine's closed state (state: closed in tasks/, or the ids), NOT on tasks/closed/, which no longer exists since the engine adoption; (3) sabotage it and record the literal output. Parts (a) and (d) are deferred to TK-307 (LATER). SIZE: M, not S (the frontmatter's S is stale, per this row's own 2026-10-13 log).

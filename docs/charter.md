@@ -17,3 +17,7 @@ below, so give every goal one (`G-1`, `G-2`, ...) and never renumber them.
 ## Mandates
 
 - *(the owner's standing rules, each with where it is recorded)*
+
+## Next milestone
+
+Last rerank: 2026-11-20a

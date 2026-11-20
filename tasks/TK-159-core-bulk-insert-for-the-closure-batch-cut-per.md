@@ -4,7 +4,7 @@ id: TK-159
 aliases: [TK159]
 title: Core bulk insert for the closure batch (cut per-row time and RAM of an admitted write)
 brief: Replace one ORM Edge per pair in _add_indirect_edges_batch_unsafe with a Core bulk insert, as bulk_build does
-pri: LATER
+pri: SOMEDAY
 state: open
 size: M
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-10-16
 taskpy_moved: '2026-10-16'
 taskpy_updated: '2026-10-16'
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 Filed 2026-10-16 from TK150 (proposed text in `docs/closure-fanout-cost-2026-10-14.md` § Correction 2026-10-16 (e) item 2, verbatim below).
@@ -36,3 +38,5 @@ Acceptance: same answers (matrix, conformance), and `fanout_cost_bench` at 10,00
 - `docs/closure-fanout-cost-2026-10-14.md` sec 3a (where the time goes) and § Correction 2026-10-16
 
 ## Log
+
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. Perf work: docs/architecture/decision-log.md, section The project goal, 'Rejected: perf as the goal'; the goal is an honest, legible assurance surface (user 2026-09-22c). When perf reopens, its first move is TK-34.

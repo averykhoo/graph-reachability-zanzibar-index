@@ -4,7 +4,7 @@ id: TK-288
 aliases: [P21]
 title: a fourth zcli mode so a fragment predicate can be DIFFERENTIALLY checked, not mirrored
 brief: zcli has 3 modes and no channel for a Prop; a 4th makes the mirror a real differential
-pri: LATER
+pri: NEXT
 state: open
 size: M
 deps: []
@@ -17,6 +17,8 @@ created: 2026-08-31
 taskpy_created: 2026-08-31b
 taskpy_moved: '2026-10-14'
 taskpy_updated: '2026-10-14'
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 `formal/conformance/test_leaf_namespace_correspondence.py` checks that no schema Python
@@ -76,3 +78,4 @@ Sprint re-rank 2026-10-13d (user-approved in chat): stays LATER, first in line a
 ### 2026-10-14
 
 From TK119 (closed 2026-10-14, commit e3581aa; challenge X8 in docs/tk119-leaf-rules-differential-2026-10-14.md). zcli now has a "leaf-rules" mode (formal/lean/ZanzibarProofs/Cli.lean::leafRulesJson) that prints schemaRewrites S and leafRewrites S as JSON, differentially checked against compile_ruleset by formal/conformance/test_conformance_leaf_rules.py. That is the channel this row wants for NoLeafSubjects over schemaRewritesL: the predicate can be evaluated on the emitted rules instead of mirrored. Left for this row on purpose (its Traps): the "exactly three modes" wording in the test_leaf_namespace_correspondence.py follow-up; do not call the mirror machine-checked until this row makes it so.
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> NEXT. HONEST: replace a hand mirror of a Lean predicate with a differential check. The owner's 2026-10-13d order put it second, 'first in line after HS-5 when a NEXT slot frees' (HS-5 is TK-275, now NOW). Size disputed: frontmatter M, the 2026-10-04g sweep says S (UNVERIFIED).

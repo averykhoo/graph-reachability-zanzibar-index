@@ -4,7 +4,7 @@ id: TK-238
 aliases: [R6-16]
 title: every closure flip writes an outbox row even with no boolean consumer (1.00 row/edge)
 brief: CO-DESIGN TRIPLE with R6-7 + R6-8, ~16 symbols over 3 modules; may SIMPLIFY the Lean model
-pri: LATER
+pri: SOMEDAY
 state: open
 size: L
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: 2026-09-22b
 taskpy_updated: 2026-09-22b
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 `src/zanzibar/graphindex/core.py::ReachabilityIndex._add_db_edges_unsafe`
@@ -91,3 +93,4 @@ one session, or take none of them." `invariants.py::ParanoiaGuard.before_commit`
 consumer makes the verifier silently vacuous.
 
 Full audit: docs/r6-sizing-census-2026-09-22.md
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. Perf work: docs/architecture/decision-log.md, section The project goal, 'Rejected: perf as the goal'; the goal is an honest, legible assurance surface (user 2026-09-22c). When perf reopens, its first move is TK-34.

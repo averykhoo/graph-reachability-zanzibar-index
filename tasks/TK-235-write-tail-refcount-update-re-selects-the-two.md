@@ -4,7 +4,7 @@ id: TK-235
 aliases: [R6-9]
 title: write-tail refcount update re-SELECTs the two nodes already in node_map (4.51/write)
 brief:
-pri: LATER
+pri: SOMEDAY
 state: open
 size: S
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: 2026-09-22b
 taskpy_updated: 2026-09-22b
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 `src/zanzibar/graphindex/core.py::ReachabilityIndex._add_direct_edge_unsafe_impl`
@@ -65,3 +67,4 @@ round's FOURTH instrument correction. Do not let a session claim the win off the
 (mechanical census this session), so no Lean work is owed.
 
 Full audit: docs/r6-sizing-census-2026-09-22.md
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. Perf work: docs/architecture/decision-log.md, section The project goal, 'Rejected: perf as the goal'; the goal is an honest, legible assurance surface (user 2026-09-22c). When perf reopens, its first move is TK-34.

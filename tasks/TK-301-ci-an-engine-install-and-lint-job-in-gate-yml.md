@@ -9,7 +9,7 @@ deps: []
 source: session 2026-11-04a
 created: 2026-11-04
 moved: 2026-11-04a
-updated: 2026-11-04a
+updated: 2026-11-20a
 ---
 
 Add an engine-install-and-lint job to zanzibar's CI (`.github/workflows/gate.yml`), as its own change. Decided by the owner: DEC-14 (answering context-engine `ASK-30`, "30 ok").
@@ -30,3 +30,5 @@ Since the 2026-11-03 adoption (context-engine CE-167), `context-engine lint` che
 - `docs/framework/contract.md` § Gate
 
 ## Log
+
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a (stays LATER, near the top): the engine ref this body pins, 309641bd, is stale; CLAUDE.md now names 989982a953c47b849d1397e0d385602c477ed86c. Use the CLAUDE.md ref at pickup.

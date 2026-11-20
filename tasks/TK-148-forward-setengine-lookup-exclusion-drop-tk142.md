@@ -4,7 +4,7 @@ id: TK-148
 aliases: [TK148]
 title: Forward SetEngine.lookup exclusion drop (TK142 F1) is caught only by scripted pins
 brief: no broad gate reaches a forward lookup with excluded_node_ids; _Gate.set_forward_excl counts it, asserts nothing
-pri: LATER
+pri: NEXT
 state: open
 size: S
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-10-14
 taskpy_moved: '2026-10-14'
 taskpy_updated: '2026-10-14'
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 Residual of TK142 (challenge C4, `docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md`), not closed by the TK142 build (worktree-wf_9a094007-20b-11 @69080d4, tests only).
@@ -41,3 +43,5 @@ Done when: a broad seeded walk goes RED under F1 (observed output in its docstri
 - `tests/test_lookup_oracle.py` (_Gate, _run_gate).
 
 ## Log
+
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> NEXT. EQUIV + HONEST: a forward SetEngine.lookup exclusion drop (mutant F1) stays green in every broad gate; only scripted pins catch it. Fix: a seeded broad walk plus a tripwire, sabotaged.

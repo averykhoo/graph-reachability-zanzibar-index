@@ -4,7 +4,7 @@ id: TK-277
 aliases: [P6]
 title: ttuStarFree (ii) -- bridge on the LEAF-routed write path; P3 LANDED 2026-09-05b, collision gone
 brief: 'PARKED 2026-09-15d by user decision; green + fully scouted, stops before step 1; owed: a CORRESPONDENCE sec 7 entry'
-pri: LATER
+pri: SOMEDAY
 state: open
 size: L
 deps: []
@@ -17,6 +17,8 @@ created: 2026-08-20
 taskpy_created: 2026-08-20b
 taskpy_moved: 2026-09-17c
 taskpy_updated: '2026-09-22'
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 Materialise the in-bridge on the rule-routed write path so the widened star-freeness
@@ -2124,3 +2126,4 @@ the scouting doc were correct throughout; only the note was wrong.
 The resume point is UNCHANGED and remains this row's `2026-09-15d` entry:
 `docs/p6-step4prime-scout-2026-09-15.md` sec "Ordered sub-steps for 4'", step 1. `P6` stays
 `LATER` -- parked 2026-09-15d by user decision, which this session did not touch.
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. It widens W4Fragment (ttuStarFree part iv), against the goal 'honest and legible, not wider'; the owner parked it 2026-09-15d. Its owed small HONEST piece, a CORRESPONDENCE section 7 entry declaring the un-widened ttuStarFree a standing model-scope limit, is split out as TK-306 (LATER).

@@ -4,7 +4,7 @@ id: TK-284
 aliases: [R6]
 title: perf round 6 -- R6-10 (2.54x) and R6-6 landed; counts derived from the children, never typed here
 brief: Batch THROUGH the N15 cache (R6-6 is the pattern); NOT parallel-safe with P6 on the cascade read path
-pri: LATER
+pri: SOMEDAY
 state: open
 size: L
 deps: []
@@ -16,6 +16,8 @@ source_hash: b895d453a044
 created: 2026-08-21
 taskpy_moved: 2026-09-22c
 taskpy_updated: 2026-09-22c
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 **`R6-10` landed 2026-08-20b** (both steps): `−60.7%` incremental boolean write wall,
@@ -199,3 +201,4 @@ Standing state if it reopens: the two unimpeached large measured wins are R6-4 a
 of the ten open children had their prose corrected 2026-09-22b for describing a surface the code
 does not have, and three more had headline figures downgraded, overlapped or reclassified as
 ceilings -- that, rather than the percentages, is the diminishing-return signal.
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. Perf work: docs/architecture/decision-log.md, section The project goal, 'Rejected: perf as the goal'; the goal is an honest, legible assurance surface (user 2026-09-22c). When perf reopens, its first move is TK-34.

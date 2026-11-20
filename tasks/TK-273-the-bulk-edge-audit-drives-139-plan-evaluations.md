@@ -4,7 +4,7 @@ id: TK-273
 aliases: [R6-19]
 title: the bulk edge audit drives ~139 plan evaluations per object reconcile (2.0% self)
 brief:
-pri: LATER
+pri: SOMEDAY
 state: open
 size: '?'
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-18
 taskpy_moved: 2026-09-22b
 taskpy_updated: 2026-09-22b
+moved: 2026-11-20a
+updated: 2026-11-20a
 ---
 
 `src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._reconcile_subject_edge`
@@ -127,3 +129,4 @@ NET: step (1) discharged, step (3)'s cross-call form refuted, and the item now h
 basis it has never had since it was self-filed in 2026-08-18. Remaining scope is narrower and
 better defined: an intra-reconcile memo worth <= 27.9% of evaluations, owing the interleaved-write
 argument. Still do step (2) -- the hoist -- with the soundness note above, not as a free win.
+- 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. Perf work: docs/architecture/decision-log.md, section The project goal, 'Rejected: perf as the goal'; the goal is an honest, legible assurance surface (user 2026-09-22c). When perf reopens, its first move is TK-34.
