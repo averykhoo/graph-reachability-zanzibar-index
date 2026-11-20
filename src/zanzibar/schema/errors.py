@@ -170,6 +170,48 @@ class ClosureFanoutExceeded(IndexResourceLimit):
     # Provenance (moved out of the docstring, TK123 item 14): ZT-P1-6a.
 
 
+class UndeclaredTypeOrRelation(ZanzibarError, ValueError):
+    """A read named a type, relation or subject relation the schema does not declare.
+
+    Raised by ``Store.check`` / ``lookup`` / ``lookup_reverse`` / ``expand`` and by the
+    set engine's ``check`` / ``lookup`` / ``lookup_reverse`` / ``expand`` /
+    ``filter_result``, before anything is read: ``check("user:alice", "vewer",
+    "doc:1")`` says ``type 'doc' declares no relation 'vewer'; did you mean 'viewer'?``,
+    the same words a write with that mistake is refused with. Before 0.1.3 such a read
+    answered ``False`` (or an empty result), so a typo read as "denied".
+
+    Checked: the subject's type, and its relation when it is a userset
+    (``group:eng#member``); the object's type and the relation on it (a type with no
+    relations, such as ``type user``, cannot be a read's object); a lookup's
+    ``object_type`` / ``relation`` and ``subject_type`` / ``subject_predicate`` filters.
+    Not checked: NAMES. An unknown object or subject name (``doc:999``) is not an
+    error and matches nothing, and the wildcard names ``user:*`` and ``folder:*`` are
+    names too. A subject predicate of ``None`` or ``"..."`` is the bare subject.
+
+    A lookup result key is ``(type, name, predicate)``, but ``check`` takes the subject as
+    ``(subject_predicate, subject_type, subject_name)``, so ``check(*key, ...)`` puts the
+    type where the predicate goes. When the refused subject looks like that, the message
+    says so and ends with the corrected call.
+
+    Attributes: ``method`` (``'check'``, ``'lookup'``, ``'lookup_reverse'``,
+    ``'expand'`` or ``'filter_result'``), ``role`` (``'subject'``, ``'object'`` or
+    ``'filter'``), ``type_name`` (the type the refusal is about, or ``None`` for a
+    relation filter given without a type) and ``relation`` (the relation, or ``None``
+    when the refused name is a type).
+    """
+    # Provenance: TK185 step 4 (C5 + C7), decision DEC-16, owner decision 2026-11-01. The
+    # validator is ``schema/readcheck.py``; the graph index (``WildcardIndex``) stays
+    # lenient, and ``Store`` refuses before it is reached.
+
+    def __init__(self, message: str, *, method: str, role: str, type_name: str | None,
+                 relation: str | None = None):
+        super().__init__(message)
+        self.method = method
+        self.role = role
+        self.type_name = type_name
+        self.relation = relation
+
+
 def is_valid_identifier(value) -> bool:
     """Strict charset membership ONLY. ``'*'`` (the wildcard name) is outside the
     charset, so this returns False for it; ``'...'`` (the bare subject predicate) is
@@ -355,7 +397,9 @@ class ShapeNoLongerAccepted(SchemaError):
     top level with every other exception.
 
     ``instead`` (a ``str``) is the meaning-preserving rewrite, in words a user can act on,
-    for example ``"change the line to 'schema 1.1'"``; the message ends with it too.
+    for example ``"change the line to 'schema 1.1'"``. The message ends with the rewrite
+    too: an ``object_wildcard_shapes`` refusal ends with ``". To rewrite: "`` and
+    ``instead``, a schema-text refusal with the same advice in its own words.
     ``accepted_through`` is the last version that accepted the shape (``'0.0.4'`` for the
     header-line, ``but not`` and restriction shapes, ``'0.0.5'`` for an
     ``object_wildcard_shapes`` entry) and ``refused_since`` the first that refuses it;
@@ -370,9 +414,16 @@ class ShapeNoLongerAccepted(SchemaError):
     # entry naming an undeclared type or relation was accepted through 0.0.5, so a store
     # saved by 0.0.5 can hold one, and "saved by 0.0.4 or earlier" would be false for it.
 
+    # TK185 (C3, 0.1.2 install trial): the object_wildcard_shapes refusals had the rewrite
+    # only in ``instead``. Their raise sites pass ``rewrite_in_message=True``, which appends
+    # it. The parser's sites do not: each message already ends with its rewrite in words of
+    # its own (and userdocs/how-to/errors.md prints one verbatim). ``_reason`` is the message
+    # without the appended rewrite, so ``PersistedSchemaRefused`` does not quote it twice.
+
     def __init__(self, message: str, instead: str, *, accepted_through: str = '0.0.4',
-                 refused_since: str = '0.0.5'):
-        super().__init__(message)
+                 refused_since: str = '0.0.5', rewrite_in_message: bool = False):
+        super().__init__(f'{message}. To rewrite: {instead}' if rewrite_in_message else message)
+        self._reason = message
         self.instead = instead
         self.accepted_through = accepted_through
         self.refused_since = refused_since
@@ -413,6 +464,7 @@ class PersistedSchemaRefused(ZanzibarError, ValueError):
         super().__init__(
             f"store {store_id!r}: its persisted schema was saved by zanzibar-index "
             f"{refusal.accepted_through} or earlier using a shape this version refuses: "
-            f"{refusal}. To rewrite: {refusal.instead}. Schemas are write-once, so the "
+            f"{getattr(refusal, '_reason', refusal)}. To rewrite: {refusal.instead}. "
+            f"Schemas are write-once, so the "
             f"rewritten schema needs a NEW store id, with this store's tuples written again "
             f"(see the {refusal.refused_since} changelog).")

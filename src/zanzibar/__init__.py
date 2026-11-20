@@ -18,7 +18,7 @@ database stack only when first touched, so a schema-only user never pays for it.
 """
 from typing import TYPE_CHECKING
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 # name -> the module that defines it. Resolved on first attribute access (PEP 562).
 _LAZY = {
@@ -40,6 +40,7 @@ _LAZY = {
     'SchemaMismatch': 'zanzibar.schema.errors',
     'PersistedSchemaRefused': 'zanzibar.schema.errors',
     'MalformedTupleString': 'zanzibar.schema.tuplestr',
+    'UndeclaredTypeOrRelation': 'zanzibar.schema.errors',
     'UnprovenExtensionWarning': 'zanzibar.schema.compiler',
     # the backends
     'UnloggedWriteRefused': 'zanzibar.setengine.engine',
@@ -92,6 +93,7 @@ if TYPE_CHECKING:  # pragma: no cover -- for type checkers and IDEs only
                                         IndexResourceLimit, PathCountExceeded,
                                         PersistedSchemaRefused, SchemaError,
                                         SchemaMismatch, ShapeNoLongerAccepted,
+                                        UndeclaredTypeOrRelation,
                                         UnsupportedByGraphIndex, ZanzibarError)
     from zanzibar.schema.tuplestr import MalformedTupleString
     from zanzibar.setengine.engine import StaleLookupIds, UnloggedWriteRefused

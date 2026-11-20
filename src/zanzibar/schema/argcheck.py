@@ -64,14 +64,32 @@ def require_session(method: str, value: object) -> None:
 
 def require_shapes(method: str, value: object) -> frozenset:
     """``object_wildcard_shapes`` is a collection (of ``(type, relation)`` pairs), returned
-    as a frozenset. A bare string is refused: it iterates as characters. The ENTRIES are
-    checked by the schema compiler (``ShapeNoLongerAccepted`` naming the entry and what to
-    write instead): the pair shape here, before any statement; the declared-relation check
-    with the schema."""
+    as a frozenset of tuples. A bare string is refused: it iterates as characters. A
+    2-item list of strings is a pair too (a JSON-loaded config has lists, not tuples); any
+    other entry that cannot be a set member (a list of another length, a dict) is a
+    ``TypeError`` naming the entry. The other ENTRIES are checked by the schema compiler
+    (``ShapeNoLongerAccepted`` naming the entry and what to write instead): the pair shape
+    here, before any statement; the declared-relation check with the schema."""
     if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
         raise TypeError(f'{method}(): object_wildcard_shapes must be a set of (type, relation) '
                         f'pairs, e.g. {{("folder", "viewer")}}, not {_got(value)}')
-    shapes = frozenset(value)
+    entries = []
+    for entry in value:
+        # TK185 (C4, 0.1.2 install trial): [["folder", "viewer"]] crashed in frozenset()
+        # with Python's own "unhashable type: 'list'", which named neither the argument
+        # nor the entry.
+        if (isinstance(entry, list) and len(entry) == 2
+                and all(isinstance(part, str) for part in entry)):
+            entry = tuple(entry)
+        try:
+            hash(entry)
+        except TypeError:
+            raise TypeError(
+                f'{method}(): object_wildcard_shapes entry {entry!r} is not a (type, relation) '
+                f'pair of strings; write each entry as a tuple such as ("folder", "viewer") '
+                f'(a 2-item list of strings is accepted too)') from None
+        entries.append(entry)
+    shapes = frozenset(entries)
     from .compiler import _reject_non_pair_shapes   # lazy: compiler imports this module
     _reject_non_pair_shapes(shapes)
     return shapes

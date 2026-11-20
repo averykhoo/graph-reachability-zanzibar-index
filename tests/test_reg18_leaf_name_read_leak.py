@@ -27,6 +27,24 @@ keeps reads lenient per the documented contract ("an out-of-charset name just ne
 matches"). The lenient-read controls below pin the not-raise half so a future fix
 cannot swap the deny for an exception.
 
+TK185 step 4 (2026-11-20): the "never a raise" half was overruled by a later owner
+decision (2026-11-01, DEC-16): a READ naming an undeclared relation is an ERROR on the
+application surfaces. A leaf name (`viewer.0`), a junk dotted name (`foo.bar`) and a ghost
+leaf (`viewer.99`) are never declared, so ``Store`` and both set engines now RAISE
+``UndeclaredTypeOrRelation`` (one message across them) instead of answering False. The
+graph index (``WildcardIndex``) stays lenient by DEC-16 sec 5, so for IT the BL-2
+adjudication still holds word for word: DENY (False / empty), never a grant, never a
+raise -- and the fence that makes it so is still pinned here, beside the oracle (which
+stays lenient and answers False). The pins below are reworked accordingly: graph +
+oracle False (the fence), Store + set engines refuse (the decision). No pin was dropped;
+every anti-vacuity control is kept. Sabotage of the new refusal helper ``_refusal``,
+observed 2026-11-20 (module run, test file restored sha256-identical after each):
+  * it catches ``KeyError`` instead of ``UndeclaredTypeOrRelation``:
+    ``3 failed, 3 passed in 1.32s`` (``E   zanzibar.schema.errors.UndeclaredTypeOrRelation:
+    check() names an undeclared relation doc#viewer.0: type 'doc' declares no relation
+    'viewer.0'; did you mean 'viewer'?``);
+  * it pins ``role == 'subject'`` instead of ``'object'``: ``3 failed, 3 passed in 1.19s``.
+
 House rules honoured here:
   * every leaf name is DERIVED from ``compiled.leaf_families`` -- never hand-written
     (the pattern of test_admission_rejected.test_raw_write_to_a_leaf_predicate_...);
@@ -46,6 +64,7 @@ deterministic minimal repro.
 
 from sqlmodel import Session, SQLModel, create_engine
 
+from zanzibar import UndeclaredTypeOrRelation
 from zanzibar.store import Store
 from zanzibar.setengine import ALL_SETOPS
 from tests.oracle import Oracle, OracleTuple
@@ -78,6 +97,25 @@ def _node_exists(widx, pred, o_type, o_name):
         return True
     except KeyError:
         return False
+
+
+def _refusal(label, read, q):
+    """TK185 step 4 (2026-11-20, DEC-16): ``read(*q)`` must RAISE
+    ``UndeclaredTypeOrRelation`` -- an answer of any kind (False included, the pre-DEC-16
+    contract) fails. Returns the message so callers can pin it equal across surfaces."""
+    try:
+        got = read(*q)
+    except UndeclaredTypeOrRelation as e:
+        assert e.method == 'check' and e.role == 'object', (
+            f'{label} refused {q} for the wrong reason: method={e.method!r} '
+            f'role={e.role!r} ({e})')
+        assert (e.type_name, e.relation) == (q[4], q[3]), (
+            f'{label} refused {q} naming {(e.type_name, e.relation)}, not the queried '
+            f'relation {(q[4], q[3])}')
+        return str(e)
+    raise AssertionError(
+        f'{label} answered {got!r} to the undeclared read {q}; under DEC-16 it must '
+        f'raise UndeclaredTypeOrRelation')
 
 
 # --------------------------------------------------------------------------- #
@@ -149,7 +187,7 @@ def test_check_at_a_leaf_name_is_denied_despite_the_materialized_node():
 
 
 # --------------------------------------------------------------------------- #
-# 2. FULL LEAF-FAMILY PARITY: graph == both set engines == oracle == False
+# 2. FULL LEAF-FAMILY GRID: graph == oracle == False; set engines refuse
 # --------------------------------------------------------------------------- #
 
 def test_leaf_family_grid_is_unanimously_false_across_all_backends():
@@ -159,7 +197,13 @@ def test_leaf_family_grid_is_unanimously_false_across_all_backends():
     sentinel; objects include a live one and a ghost. Blast-radius measurement
     (2026-08-21, 1,728 target-position comparisons over 9 tainted fixtures): every
     divergence had signature oracle=False graph=True sets=[False,False], residual
-    under DENY = 0 -- so this parity pin reddens nothing but the leak itself."""
+    under DENY = 0 -- so this parity pin reddens nothing but the leak itself.
+
+    TK185 step 4 (2026-11-20, DEC-16): the name is kept for history; the pin is now
+    graph == oracle == False on every cell (the BL-2 fence, unchanged), while BOTH set
+    engines REFUSE every cell with ``UndeclaredTypeOrRelation`` and the same message
+    (a leaf name is never a declared relation). A set engine that answered False -- the
+    old contract -- fails here."""
     rs = parse_openfga_schema(SCHEMA)
     graph = _GraphSide(rs, paranoia=True)
     sets = [_SetSide(SCHEMA, frozenset(), ops) for ops in ALL_SETOPS]
@@ -185,6 +229,7 @@ def test_leaf_family_grid_is_unanimously_false_across_all_backends():
                 f'anti-vacuity: no ({o_type}, {leaf}, d1) node -- the grid below '
                 f'would be probing an empty store')
 
+        cells = 0
         for (o_type, leaf) in sorted(rs.compiled.leaf_families):
             for o_name in objects:
                 for (sp, s_type, s_name) in subjects:
@@ -192,12 +237,16 @@ def test_leaf_family_grid_is_unanimously_false_across_all_backends():
                     assert oracle.check(*q) is False, (
                         f'oracle unexpectedly grants leaf-name query {q} -- the '
                         f'expectation derivation itself is broken')
-                    answers = [('graph', graph.widx.check(*q))]
-                    answers += [(side.name, side.se.check(*q)) for side in sets]
-                    for backend, got in answers:
-                        assert got is False, (
-                            f'{backend} grants leaf-name query {q} '
-                            f'(oracle and every other backend: False)')
+                    # the lenient graph index: the BL-2 fence still DENIES
+                    assert graph.widx.check(*q) is False, (
+                        f'graph grants leaf-name query {q} (oracle: False)')
+                    # TK185 step 4 (DEC-16): every set engine REFUSES, one message
+                    messages = {_refusal(side.name, side.se.check, q) for side in sets}
+                    assert len(messages) == 1, (
+                        f'set engines refuse {q} differently: {messages}')
+                    cells += 1
+        # anti-vacuity: the loop ran over every leaf x object x subject cell
+        assert cells == len(rs.compiled.leaf_families) * len(objects) * len(subjects) > 0
     finally:
         graph.close()
         for side in sets:
@@ -205,7 +254,8 @@ def test_leaf_family_grid_is_unanimously_false_across_all_backends():
 
 
 # --------------------------------------------------------------------------- #
-# 3. LENIENT-READ CONTROLS: DENY means False, never a raise
+# 3. LENIENT-READ CONTROLS: DENY means False, never a raise -- on the GRAPH INDEX
+#    (TK185 step 4, 2026-11-20: Store and set engines now refuse, DEC-16)
 # --------------------------------------------------------------------------- #
 
 def test_junk_and_ghost_dotted_names_are_false_everywhere_and_raise_nothing():
@@ -222,7 +272,17 @@ def test_junk_and_ghost_dotted_names_are_false_everywhere_and_raise_nothing():
     Both must answer False on the graph, both set engines, the oracle AND the
     composed Store, with nothing raised (a raise fails the test naturally).
     NOTE these controls pass on the UNFIXED tree too -- they are the boundary of the
-    fix, pinned so the deny cannot overshoot into an exception or a KeyError."""
+    fix, pinned so the deny cannot overshoot into an exception or a KeyError.
+
+    TK185 step 4 (2026-11-20, DEC-16): the owner's later decision makes a read of an
+    undeclared relation an ERROR on the application surfaces, so the "nothing raised"
+    half now holds for the GRAPH INDEX and the ORACLE only (both still answer False,
+    and the graph's reverse enumeration is still empty). The composed ``Store`` and both
+    set engines must RAISE ``UndeclaredTypeOrRelation``, all three with ONE message (they
+    validate against the same declared relations, DEC-16 sec 4). The overshoot guard
+    survives where it still applies: the graph raising here (a blanket dot guard in
+    ``WildcardIndex``) fails, and so does a refusal of the wrong class (a KeyError) or
+    for the wrong name on the refusing surfaces."""
     leaves = _leaf_families()
     rs = parse_openfga_schema(SCHEMA)
     derived = sorted(rs.compiled.derived_families)
@@ -245,13 +305,19 @@ def test_junk_and_ghost_dotted_names_are_false_everywhere_and_raise_nothing():
             assert side.apply(('...', 'user', 'alice', 'editor', 'doc', 'd1'), 'add')
         oracle = Oracle(SCHEMA, [OracleTuple('...', 'user', 'alice',
                                              'editor', 'doc', 'd1')])
+        # control: the declared public name still answers on the refusing surfaces
+        assert cs.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True
+        for side in sets:
+            assert side.se.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True
         for name in ('foo.bar', ghost_leaf):
             q = ('...', 'user', 'alice', name, o_type, 'd1')
             assert widx.check(*q) is False
-            assert cs.check(*q) is False
             assert oracle.check(*q) is False
-            for side in sets:
-                assert side.se.check(*q) is False, f'{side.name} grants {q}'
+            # TK185 step 4 (DEC-16): Store + both set engines refuse, one message
+            messages = {_refusal('Store', cs.check, q)}
+            messages |= {_refusal(side.name, side.se.check, q) for side in sets}
+            assert len(messages) == 1, (
+                f'Store and set engines refuse {q} differently: {messages}')
             # the enumeration surfaces are equally lenient: empty, no raise
             res = widx.lookup_reverse(name, o_type, 'd1')
             assert (res.node_ids, res.markers, res.excluded_node_ids) \
@@ -271,7 +337,13 @@ def test_junk_and_ghost_dotted_names_are_false_everywhere_and_raise_nothing():
 def test_connectedstore_check_at_a_leaf_name_is_false():
     """The composed system serves reads from the same facade, so the leak reached
     Store.check verbatim. Same anti-vacuity discipline: the routed write's
-    leaf node must exist in the composed store before the denial means anything."""
+    leaf node must exist in the composed store before the denial means anything.
+
+    TK185 step 4 (2026-11-20, DEC-16): the name is kept for history. ``Store.check`` at
+    a leaf name now RAISES ``UndeclaredTypeOrRelation`` (refused before dispatch, so
+    nothing is read), and the store's own graph index ``cs.widx`` -- the facade Store
+    used to serve it from -- still answers False: the BL-2 fence stays pinned on the
+    composed store's index, beside the refusal."""
     engine = create_engine('sqlite:///:memory:')
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
@@ -286,9 +358,12 @@ def test_connectedstore_check_at_a_leaf_name_is_false():
 
         assert cs.check('...', 'user', 'alice', 'viewer', 'doc', 'd1') is True
         for (o_type, leaf) in leaves:
-            assert cs.check('...', 'user', 'alice', leaf, o_type, 'd1') is False, (
-                f'BL-2 through the composed surface: Store.check grants '
+            q = ('...', 'user', 'alice', leaf, o_type, 'd1')
+            assert cs.widx.check(*q) is False, (
+                f'BL-2 through the composed store: its graph index grants '
                 f'the leaf name {leaf!r}')
+            # TK185 step 4 (DEC-16): the composed read surface refuses the leaf name
+            _refusal('Store', cs.check, q)
     finally:
         session.close()
 

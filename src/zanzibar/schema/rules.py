@@ -25,6 +25,7 @@ class Entity:
 
     @property
     def wildcard(self):
+        """True when ``name`` is the wildcard sentinel ``'*'``."""
         return self.name == '*'
 
     def __str__(self):
@@ -256,6 +257,10 @@ class SchemaInfo:
 
     @property
     def bridged_in_shapes(self) -> frozenset[tuple[str, str]]:
+        """The subject-wildcard USERSET shapes ``(type, predicate)``, from ``[T:*#p]``
+        restrictions: each concrete ``T:x#p`` node gets a bridge into the ``T:*#p`` wildcard
+        node. A bare ``(T, '...')`` shape (plain ``[user:*]``) needs no bridge, so it is
+        left out."""
         # Shapes needing concrete->w_any bridges: subject-wildcard USERSET shapes only.
         # Bare shapes (T, '...') never need in-bridges -- nothing in this graph ever
         # points into a '...'-predicate node, so a bare-shape hop can only be the LEADING
@@ -265,6 +270,8 @@ class SchemaInfo:
 
     @property
     def bridged_out_shapes(self) -> frozenset[tuple[str, str]]:
+        """The object-wildcard shapes ``(type, relation)`` whose ``T:*`` node gets a bridge
+        out to every concrete object of the type: every ``object_wildcard_shapes`` entry."""
         # Shapes needing w_all->concrete bridges: all declared object-wildcard shapes.
         # (Sink-shape elision is a future optimization; be conservative now.)
         return self.object_wildcard_shapes

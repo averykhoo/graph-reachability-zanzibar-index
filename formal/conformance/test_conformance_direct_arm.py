@@ -37,7 +37,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from tests.oracle import Oracle, t as mk_tuple
 
-from formal.conformance.backends import graphindex_answers
+from formal.conformance.backends import checked_set_answers, graphindex_answers
 from formal.conformance.corpus import DIRECT_ARM_NAMES, SCHEMAS
 from formal.conformance.grid import (
     assert_grid_nonvacuous, queries_for, fmt_mismatches as _fmt)
@@ -53,8 +53,7 @@ def _setengine_answers(schema_text, tuples, queries, ops, object_wildcards=()):
     for tup in tuples:
         eng.add_tuple(tup.subject_predicate, tup.subject_type, tup.subject_name,
                       tup.relation, tup.object_type, tup.object_name)
-    return [bool(eng.check(sp, st, sn, rel, ot, on))
-            for (sp, st, sn, rel, ot, on) in queries]
+    return checked_set_answers(eng, schema_text, queries)   # TK185: refusals pinned
 
 
 def _three_way(schema_text, tuples, obj_wild, ops):

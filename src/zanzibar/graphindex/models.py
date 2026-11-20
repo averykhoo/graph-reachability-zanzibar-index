@@ -72,6 +72,8 @@ class Node(SQLModel, table=True):
 
     @property
     def predicate_or_ellipsis(self) -> str | EllipsisType:
+        """The node's predicate, with the bare-subject predicate ``'...'`` given as
+        ``Ellipsis``."""
         return Ellipsis if self.predicate == '...' else self.predicate
 
 

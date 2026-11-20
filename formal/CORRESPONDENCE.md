@@ -304,6 +304,18 @@ asserted an algorithm-twin relationship that **does not hold**:
   `check` is still the DFS, with one more disjunct in `sat` (the self hit). `expand` is
   still the shape twin up to its final top-level self-relation correction (the `expand.do`
   row above), and `lookup_reverse` renders the corrected `expand`.
+  **TK185 (2026-11-20, re-read; decision DEC-16 §6).** `SetEngine.check`, `expand` (its
+  top-level call only) and `lookup_reverse` gained two BOUNDARY preconditions, both outside
+  the modelled algorithm and both raised before any evaluation: an arity check (the
+  `src/zanzibar/setengine/engine.py::_long_form_only` decorator: a wrong argument count is a
+  `TypeError`) and the read refusal (`src/zanzibar/schema/readcheck.py::refuse_undeclared_subject`
+  and `::refuse_undeclared_object`: a read naming an undeclared type, relation or subject
+  relation raises `UndeclaredTypeOrRelation`). The modelled body after them is unchanged,
+  so every statement in this section still holds for every query the methods answer. The
+  models are answer-level over declared queries; the set engine now answers no undeclared
+  query at all, and the conformance harness records each such refusal, pinned, in
+  `formal/conformance/backends.py::checked_set_answers`. No Lean change. The three anchors'
+  content pins moved with these lines and were regenerated after this reading.
 
 So what T1 + the gates actually earn is: **answer-for-answer equality across an
 algorithm boundary, netted empirically.** The theorem says the *model's* answers

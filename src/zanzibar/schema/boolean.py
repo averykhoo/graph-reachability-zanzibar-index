@@ -294,10 +294,15 @@ class CompiledBooleans:
 
     @property
     def derived_families(self) -> frozenset[tuple[str, str]]:
+        """The ``(object_type, relation)`` keys of the derived relations: those defined
+        with ``and`` / ``but not``, directly or through another, whose edges the delta
+        processor writes."""
         return frozenset(k for k, v in self.namespace.items() if isinstance(v, DerivedFamily))
 
     @property
     def leaf_families(self) -> frozenset[tuple[str, str]]:
+        """The ``(object_type, leaf_predicate)`` keys of the leaf families: the compiled
+        ``<relation>.<index>`` predicates that hold a derived relation's operands."""
         return frozenset(k for k, v in self.namespace.items() if isinstance(v, LeafFamily))
 
 

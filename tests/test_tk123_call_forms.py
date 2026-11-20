@@ -50,7 +50,8 @@ from sqlmodel import Session, SQLModel, create_engine
 
 import zanzibar
 import zanzibar.setengine
-from zanzibar import MalformedTupleString, SchemaError, ZanzibarError
+from zanzibar import (MalformedTupleString, SchemaError, UndeclaredTypeOrRelation,
+                      ZanzibarError)
 from zanzibar.graphindex import WildcardIndex
 from zanzibar.schema import parse_openfga_schema, parse_schema_ast
 from zanzibar.schema.tuplestr import parse_object, parse_user
@@ -194,9 +195,35 @@ def _user_str(pred, typ, name):
     return f'{typ}:{name}' if pred == '...' else f'{typ}:{name}#{pred}'
 
 
+def _outcome(read, *args, **kwargs):
+    """``('answer', value)`` or ``('refused', message)`` for one read (TK185 step 4)."""
+    try:
+        return ('answer', read(*args, **kwargs))
+    except UndeclaredTypeOrRelation as e:
+        return ('refused', str(e))
+
+
 def test_string_form_equals_six_form_over_a_grid(engine):
     """Store A is written in the six-part form, store B in the string form; every check
-    agrees across the two stores AND across the two read forms, and lookups agree by key."""
+    agrees across the two stores AND across the two read forms, and lookups agree by key.
+
+    TK185 step 4 (2026-11-20, DEC-16): the grid crosses every relation with every object
+    type, so 4 of its 9 (relation, object) cells per subject name an undeclared relation
+    (``doc#member`` on two docs, ``group#viewer``, ``group#banned``), which used to read
+    False and now raise ``UndeclaredTypeOrRelation``. "Identical answers" now reads
+    "identical OUTCOMES": every form, on both stores and on ``TupleSource``, must give the
+    same answer or the same refusal message. Which cells must refuse is decided from the
+    AST here (a declared cell that refuses fails, an undeclared one that answers fails),
+    and the partition is pinned: 20 refused check cells, 25 answered. Sabotage, observed
+    2026-11-20 (``-k string_form_equals_six_form``, file restored sha256-identical):
+      * ``_outcome`` catches ``KeyError``: ``1 failed, 35 deselected`` (``E
+        zanzibar.schema.errors.UndeclaredTypeOrRelation: check() names an undeclared
+        relation group#viewer: type 'group' declares no relation 'viewer'; it declares
+        member``);
+      * every cell expected answered (the pre-DEC-16 contract): ``1 failed``,
+        ``AssertionError: (('...', 'user', 'alice'), 'viewer', ('group', 'eng'),
+        ('refused', "check() names an undeclared relation group#viewer: ..."))``."""
+    declared = set(parse_schema_ast(SCHEMA))
     writes = [(('...', 'user', 'alice'), 'member', ('group', 'eng')),
               (('member', 'group', 'eng'), 'viewer', ('doc', 'd1')),
               (('...', 'user', '*'), 'viewer', ('doc', 'd2')),
@@ -210,25 +237,46 @@ def test_string_form_equals_six_form_over_a_grid(engine):
             b.add_tuple(_user_str(*subj), rel, f'{obj[0]}:{obj[1]}')
         a.remove_tuple('...', 'user', 'bob', 'viewer', 'doc', 'd1')
         b.remove_tuple(user='user:bob', relation='viewer', object='doc:d1')
-        answers = 0
+        answers = refused = answered = 0
         for subj in _SUBJECTS:
             for rel in _RELATIONS:
                 for obj in _OBJECTS:
-                    six = a.check(*subj, rel, *obj)
-                    assert b.check(*subj, rel, *obj) is six, (subj, rel, obj)
+                    six = _outcome(a.check, *subj, rel, *obj)
                     s = (_user_str(*subj), rel, f'{obj[0]}:{obj[1]}')
-                    assert a.check(*s) is six and b.check(*s) is six, (subj, rel, obj)
-                    assert b.check(user=s[0], relation=rel, object=s[2]) is six
-                    assert b.source.check(*s) is b.source.check(*subj, rel, *obj)
-                    answers += six
+                    outcomes = {
+                        'b six': _outcome(b.check, *subj, rel, *obj),
+                        'a str': _outcome(a.check, *s),
+                        'b str': _outcome(b.check, *s),
+                        'b kw': _outcome(b.check, user=s[0], relation=rel, object=s[2]),
+                        'b.source str': _outcome(b.source.check, *s),
+                        'b.source six': _outcome(b.source.check, *subj, rel, *obj),
+                    }
+                    for form, got in outcomes.items():
+                        assert got == six, (form, subj, rel, obj, got, six)
+                    # TK185 step 4: refused exactly where the AST declares no relation
+                    expect = 'answer' if (obj[0], rel) in declared else 'refused'
+                    assert six[0] == expect, (subj, rel, obj, six)
+                    if expect == 'refused':
+                        refused += 1
+                    else:
+                        answered += 1
+                        assert six[1] in (True, False)
+                        answers += six[1]
             assert a.lookup(_user_str(*subj)) == a.lookup(*subj)
             assert a.lookup(user=_user_str(*subj)) == a.lookup(*subj)
         assert answers > 0                       # the grid is not vacuously all-False
+        assert (answered, refused) == (25, 20), (answered, refused)   # TK185 partition
+        reverse_refused = 0
         for rel in _RELATIONS:
             for obj in _OBJECTS:
                 o = f'{obj[0]}:{obj[1]}'
-                assert a.lookup_reverse(rel, o) == a.lookup_reverse(rel, *obj)
-                assert a.lookup_reverse(relation=rel, object=o) == a.lookup_reverse(rel, *obj)
+                six = _outcome(a.lookup_reverse, rel, *obj)
+                assert _outcome(a.lookup_reverse, rel, o) == six, (rel, obj)
+                assert _outcome(a.lookup_reverse, relation=rel, object=o) == six, (rel, obj)
+                expect = 'answer' if (obj[0], rel) in declared else 'refused'
+                assert six[0] == expect, (rel, obj, six)
+                reverse_refused += expect == 'refused'
+        assert reverse_refused == 4, reverse_refused
 
 
 def test_tuple_source_writes_in_the_string_form(engine):

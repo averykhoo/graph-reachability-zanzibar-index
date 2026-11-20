@@ -18,8 +18,10 @@ from types import EllipsisType
 
 from sqlmodel import Session, SQLModel, create_engine
 
+from zanzibar import UndeclaredTypeOrRelation
 from zanzibar.setengine import SetEngine
-from zanzibar.schema import AdmissionRejected
+from zanzibar.schema import AdmissionRejected, parse_schema_ast
+from zanzibar.schema.syntax import _iter_directs
 
 
 def _fresh_session() -> Session:
@@ -37,10 +39,39 @@ def setengine_answers(schema_text: str, tuples, queries,
     for tup in tuples:
         eng.add_tuple(tup.subject_predicate, tup.subject_type, tup.subject_name,
                       tup.relation, tup.object_type, tup.object_name)
-    return [
-        bool(eng.check(sp, st, sn, rel, ot, on))
-        for (sp, st, sn, rel, ot, on) in queries
-    ]
+    return checked_set_answers(eng, schema_text, queries)
+
+
+def checked_set_answers(eng, schema_text: str, queries) -> list[bool]:
+    """``eng.check`` per query, with the read refusal PINNED.
+
+    Since 0.1.3 (TK185 step 4, decision DEC-16; owner 2026-11-01) the set engine refuses a
+    read naming an undeclared type, relation or subject relation with
+    ``UndeclaredTypeOrRelation``. ``grid.py::grid`` asks such reads on purpose (stored
+    relations x ALL stored objects, the type-oblivious probes), and the Lean models, the
+    oracle and the lenient graph index still answer them. So, per query: the AST of the
+    schema (independently of the engine's validator) says whether the read is undeclared;
+    a refusal of a DECLARED read, or an answer to an UNDECLARED one, fails here; a refused
+    undeclared read is recorded as ``False`` (it reads no tuple: deny), so every other
+    side's answer on that cell is still compared -- a backend answering True there is red."""
+    ast = parse_schema_ast(schema_text)
+    types = {t for (t, _) in ast} | {r.type for e in ast.values() for d in _iter_directs(e)
+                                     for r in d.restrictions}
+    out = []
+    for q in queries:
+        sp, st, _, rel, ot, _ = q
+        undeclared = (st not in types or (ot, rel) not in ast
+                      or (sp not in (None, '...') and (st, sp) not in ast))
+        try:
+            answer = bool(eng.check(*q))
+        except UndeclaredTypeOrRelation:
+            assert undeclared, f'the set engine refused the DECLARED read {q}'
+            out.append(False)
+            continue
+        assert not undeclared, (f'the set engine answered {answer} to the undeclared read '
+                                f'{q}; it must raise UndeclaredTypeOrRelation')
+        out.append(answer)
+    return out
 
 
 def _norm(pred: str | EllipsisType) -> str:

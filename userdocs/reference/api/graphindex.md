@@ -85,7 +85,12 @@ subject such as a user, or the relation of a userset subject (`"member"` for
    .. py:method:: check(subject_predicate, subject_type, subject_name, relation, object_type, object_name) -> bool
 
       Is the subject related to the object? A relation name the schema does not declare
-      answers ``False``; it does not raise.
+      answers ``False``; it does not raise. The graph index does not check reads against
+      the schema: :py:class:`~zanzibar.Store` does, before it reaches the index, and
+      raises :py:exc:`~zanzibar.UndeclaredTypeOrRelation` for an undeclared type or
+      relation in ``check``, ``lookup``, ``lookup_reverse`` and ``expand``, as the set
+      engine does. ``lookup``, ``lookup_reverse`` and ``filter_result`` here answer an
+      undeclared name with an empty result.
 
    .. py:method:: lookup(subject_predicate, subject_type, subject_name) -> zanzibar.LookupResult
 

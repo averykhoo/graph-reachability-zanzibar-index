@@ -44,6 +44,8 @@ from zanzibar.schema import AdmissionRejected, IndexResourceLimit, validate_stor
 from zanzibar.schema.errors import ClosureFanoutExceeded
 from zanzibar.schema.errors import SchemaError, ZanzibarError, reject_ellipsis_predicate
 from zanzibar.schema.json_frontend import _reject_duplicate_json_keys, openfga_json_to_dsl
+from zanzibar.schema.readcheck import (refuse_undeclared_filter, refuse_undeclared_object,
+                                      refuse_undeclared_subject)
 from zanzibar.schema.tuplestr import lookup_args, lookup_reverse_args, shape_filter, tuple_args
 
 from zanzibar.setengine.models import RelationTuple
@@ -986,12 +988,23 @@ class Store:
         ``check("...", "user", "alice", "viewer", "doc", "d1")``.
 
         ``at_least`` (a token from a write) demands an answer that reflects the log
-        through that write; a lagging index then falls back to the set engine. A token
+        through that write; a lagging index then falls back to the set engine.
+
+        A type, relation or subject relation the schema does not declare (``"vewer"``,
+        ``"group:eng#nosuch"``) raises ``UndeclaredTypeOrRelation`` before anything is
+        read; an unknown NAME (``"doc:999"``) is not refused and answers ``False``. A token
         another store's write returned raises ``ForeignToken`` on every tokened read
         (``check``, ``lookup``, ``lookup_reverse``, ``expand``)."""
         (subject_predicate, s_type, s_name,
          relation, o_type, o_name) = tuple_args('check', args, kwargs)
         reject_ellipsis_predicate(subject_predicate, 'check', write=False)  # TK123 item 9
+        # TK185 step 4 (DEC-16): refuse an undeclared type / relation BEFORE the token,
+        # the freshness ladder and the backend choice, on the set engine's declared facts,
+        # so the graph path and the set-engine fallback refuse the same calls alike.
+        declared = self.source.engine._declared
+        refuse_undeclared_subject(declared, 'check', subject_predicate, s_type, s_name,
+                                  (relation, o_type, o_name))
+        refuse_undeclared_object(declared, 'check', o_type, relation)
         validate_token(at_least)                                            # TK123 item 11
         refuse_foreign_token(self.session, self.store_id, at_least)          # TK166
         if self._fresh_enough(at_least):
@@ -1042,8 +1055,9 @@ class Store:
 
         ``object_type`` / ``relation`` keep only the objects of that type and/or relation
         ("the documents alice can view": ``lookup("user:alice", object_type="doc",
-        relation="viewer")``), markers and exclusions included. A name the schema does not
-        declare matches nothing, as in ``check``.
+        relation="viewer")``), markers and exclusions included. A type or relation the
+        schema does not declare is refused with ``UndeclaredTypeOrRelation``, as in
+        ``check``; an unknown object NAME matches nothing.
 
         ``at_least`` demands the index reflect the log through that token. It is
         ENFORCED, not fulfilled by fallback: satisfied demands are served normally,
@@ -1054,6 +1068,10 @@ class Store:
         subject_predicate, s_type, s_name = lookup_args('lookup', args, kwargs)
         reject_ellipsis_predicate(subject_predicate, 'lookup', write=False)  # TK123 item 9
         shape_filter('lookup', object_type, relation, ('object_type', 'relation'))  # TK156
+        declared = self.source.engine._declared       # TK185 step 4: before freshness
+        refuse_undeclared_subject(declared, 'lookup', subject_predicate, s_type, s_name)
+        refuse_undeclared_filter(declared, 'lookup', 'object_type', object_type,
+                                 'relation', relation, bare=False)
         self._require_index_freshness(at_least, 'lookup')
         res = self.widx.lookup(subject_predicate, s_type, s_name)
         return self.widx.filter_result(res, object_type, relation)   # TK156
@@ -1078,8 +1096,9 @@ class Store:
         ``subject_type`` / ``subject_predicate`` keep only the subjects of that type
         and/or predicate, markers and exclusions included: ``subject_type="user",
         subject_predicate="..."`` keeps the users (``"..."`` is a bare subject), and
-        ``subject_predicate="member"`` keeps ``member`` usersets. A name the schema does
-        not declare matches nothing, as in ``check``.
+        ``subject_predicate="member"`` keeps ``member`` usersets. A type or relation the
+        schema does not declare is refused with ``UndeclaredTypeOrRelation``, as in
+        ``check``.
 
         To list the USERS allowed, take the keys of type ``user`` (a granted group's
         members are already listed one by one, refused ones left out) plus each ``user``
@@ -1089,6 +1108,10 @@ class Store:
         relation, o_type, o_name = lookup_reverse_args('lookup_reverse', args, kwargs)
         shape_filter('lookup_reverse', subject_type, subject_predicate,       # TK156
                      ('subject_type', 'subject_predicate'))
+        declared = self.source.engine._declared       # TK185 step 4: before freshness
+        refuse_undeclared_object(declared, 'lookup_reverse', o_type, relation)
+        refuse_undeclared_filter(declared, 'lookup_reverse', 'subject_type', subject_type,
+                                 'subject_predicate', subject_predicate, bare=True)
         self._require_index_freshness(at_least, 'lookup_reverse')
         res = self.widx.lookup_reverse(relation, o_type, o_name)
         return self.widx.filter_result(res, subject_type, subject_predicate)   # TK156
@@ -1113,6 +1136,8 @@ class Store:
         that write; if this session's snapshot does not contain it yet, ``StaleRead`` is
         raised -- call ``refresh()`` and retry."""
         relation, o_type, o_name = lookup_reverse_args('expand', args, kwargs)
+        # TK185 step 4: before the token and the catch-up
+        refuse_undeclared_object(self.source.engine._declared, 'expand', o_type, relation)
         validate_token(at_least)
         refuse_foreign_token(self.session, self.store_id, at_least)          # TK166
         # TK155 (docs/tk155-store-expand-2026-10-19.md D2): the set-engine rung of

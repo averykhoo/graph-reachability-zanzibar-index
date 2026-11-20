@@ -30,6 +30,7 @@ Exception
 │   ├── UnsupportedByGraphIndex      [ValueError]
 │   │   └── DoublyBridgedShapeError
 │   ├── MalformedTupleString         [ValueError]
+│   ├── UndeclaredTypeOrRelation     [ValueError]
 │   ├── AdmissionRejected            [ValueError]
 │   │   └── IndexResourceLimit
 │   │       ├── ClosureFanoutExceeded
@@ -91,7 +92,8 @@ print(issubclass(zanzibar.UnprovenExtensionWarning, UserWarning))  # -> True
 | {py:exc}`~zanzibar.UnsupportedByGraphIndex` | the graph index cannot represent a schema construct: a wildcard feature (a `[T:*#p]` restriction, a star tupleset or an `object_wildcard_shapes` entry) that reaches a relation using `and` / `but not` (for example `[group:*#member]` where `member` is `[user] but not banned`), or `and` / `but not` when the rule set is compiled with `enable_boolean=False`. Raised by `parse_openfga_schema` and `Store`; a standalone `SetEngine` accepts these schemas. A {py:exc}`ValueError`, not a {py:exc}`~zanzibar.SchemaError`. |
 | {py:exc}`~zanzibar.DoublyBridgedShapeError` | a shape is both a wildcard-userset shape and an object-wildcard shape. Both backends refuse it. |
 | {py:exc}`~zanzibar.MalformedTupleString` | a `"type:name"` / `"type:name#relation"` argument cannot be split into its parts, such as `"alice"`, `"user:a:b"` or `"group:g#b:c"`. Raised on reads and writes alike. |
-| {py:exc}`~zanzibar.AdmissionRejected` | a write is refused: an undeclared type or relation, a subject the type restriction does not admit, an identifier outside `A-Za-z0-9_./@+=-` or longer than 256 characters, a cycle (a group inside itself, a folder that is its own ancestor), or removing a tuple that is not stored. The store is unchanged. A read is not refused this way: a `check` naming an undeclared relation answers `False`. |
+| {py:exc}`~zanzibar.UndeclaredTypeOrRelation` | a read (`check`, `lookup`, `lookup_reverse`, `expand`, or the set engine's `filter_result`) names a type, a relation or a subject relation the schema does not declare, such as `check("user:alice", "vewer", "doc:1")`. An unknown object or subject name is not refused. Raised since 0.1.3. |
+| {py:exc}`~zanzibar.AdmissionRejected` | a write is refused: an undeclared type or relation, a subject the type restriction does not admit, an identifier outside `A-Za-z0-9_./@+=-` or longer than 256 characters, a cycle (a group inside itself, a folder that is its own ancestor), or removing a tuple that is not stored. The store is unchanged. A read naming an undeclared type or relation raises {py:exc}`~zanzibar.UndeclaredTypeOrRelation` instead. |
 | {py:exc}`~zanzibar.IndexResourceLimit` | never raised itself: the common base of the two refusals below, which depend on how large the index's closure has grown rather than on the tuple and the schema. Catch it to handle both. |
 | {py:exc}`~zanzibar.ClosureFanoutExceeded` | a synchronous write would add more rows to the index than the fan-out cap allows. Nothing is written. See [Cap write fan-out](../how-to/fanout-cap.md). |
 | {py:exc}`~zanzibar.PathCountExceeded` | a write would push a stored path count past the 32-bit integer limit (about 2.1 billion; not configurable). On a synchronous write the write is refused and nothing is written. With `sync=False` the write is accepted into the log; `catch_up()` then raises this and the index stalls (see {py:exc}`~zanzibar.IndexStalled`). While that row waits, writes through a `sync=True` instance raise it too; see [A pending row can block every synchronous write](../how-to/fanout-cap.md#a-pending-row-can-block-every-synchronous-write). |
@@ -295,6 +297,22 @@ print(missing_id)  # -> 'no-such-store'
    A ``"type:name"`` or ``"type:name#relation"`` string could not be split into its parts.
    The message names the expected form. A ``:`` in the relation part after ``#`` is a
    shape error too, so ``"group:g#b:c"`` raises it on reads and writes alike.
+
+.. py:exception:: zanzibar.UndeclaredTypeOrRelation
+
+   Bases: :py:exc:`zanzibar.ZanzibarError`, :py:exc:`ValueError`
+
+   A read named a type, a relation or a subject relation the schema does not declare.
+   :py:class:`~zanzibar.Store` raises it from ``check``, ``lookup``, ``lookup_reverse`` and
+   ``expand``, and the set engine from the same methods and ``filter_result``, before
+   anything is read. The message is the one a write with the same mistake gets, such as
+   ``type 'doc' declares no relation 'vewer'; did you mean 'viewer'?``. Names are not
+   checked: an unknown object or subject name, and the wildcard names ``user:*`` and
+   ``folder:*``, are not refused. When the subject looks like a lookup result key
+   ``(type, name, predicate)`` passed where ``check`` takes ``(subject_predicate,
+   subject_type, subject_name)``, the message ends with the corrected call. Attributes:
+   ``method``, ``role`` (``'subject'``, ``'object'`` or ``'filter'``), ``type_name`` and
+   ``relation``.
 
 .. py:exception:: zanzibar.AdmissionRejected
 

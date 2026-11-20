@@ -10,14 +10,35 @@ Properties guarded (docs/tk156-lookup-filter-2026-10-19.md):
   the candidate objects the filter keeps; likewise the filtered reverse result passes
   G3/G4 and the oracle half of S3 over the candidate subjects the filter keeps. Since both
   backends must equal the oracle, they equal each other: the equivalence goal.
+  TK185 step 4 (2026-11-20, DEC-16): on the SET side a filter naming an undeclared type or
+  relation (``_UNDECLARED``, and any reverse shape filter built from a from-chain userset
+  its type does not declare) is now a PINNED REFUSAL: ``SetEngine.filter_result`` must
+  raise ``UndeclaredTypeOrRelation``, one message across ``SetOps``, decided from the AST
+  by ``_undeclared_filter`` (``_set_filter_refusal``); likewise the set-side forward lookup
+  of an undeclared subject candidate (``tests/test_lookup_oracle.py::_set_lookup_refusal``).
+  The graph index (``WildcardIndex.filter_result``) stays lenient and still answers those
+  filters against the oracle (an empty result). Declared filters are checked as before.
+  ``_assert_refusals_reached`` is the tripwire that the refusal pins ran in both
+  directions. Sabotage (2026-11-20, ``-k match_oracle``, each restored byte-identical):
+  ``_set_filter_refusal``'s ``except`` class -> ``KeyError``: ``2 failed``,
+  ``zanzibar.schema.errors.UndeclaredTypeOrRelation: filter_result():
+  entity_type='tk156_undeclared' names an undeclared type: type 'tk156_undeclared' is not
+  declared in the schema``; ``_undeclared_filter`` over-wide (every typed relation filter
+  called undeclared): ``2 failed``, ``set.lookup('parent', 'document', 'd1') [py]
+  filter=('folder', 'parent'): answered SetLookupResult(node_ids=set(), markers=set(),
+  excluded_node_ids=set(), implicit_keys=set(), implicit_excluded_keys=set()); a filter
+  naming an undeclared type or relation must raise UndeclaredTypeOrRelation (DEC-16)``.
 * **F2 nothing outside the filter.** Every node id, marker, excluded id and implicit key
   of a filtered result has the filter's shape, and no candidate outside the filter is
   covered by it.
 * **F3 the Store surface.** ``Store.lookup(..., object_type=, relation=)`` and
   ``Store.lookup_reverse(..., subject_type=, subject_predicate=)`` filter in every call
-  form, keep a marker's exclusions with it, answer an undeclared name with an empty result
-  (as ``check`` answers False), refuse a non-``str`` filter with ``TypeError``, and leave
-  the unfiltered call unchanged.
+  form, keep a marker's exclusions with it, refuse a non-``str`` filter with ``TypeError``,
+  and leave the unfiltered call unchanged. They answered an undeclared name with an empty
+  result (as ``check`` answered False) until TK185 step 4 (2026-11-20, DEC-16): a filter
+  naming an undeclared type or relation is now REFUSED with ``UndeclaredTypeOrRelation``,
+  as ``check`` refuses an undeclared relation
+  (``test_store_filter_undeclared_is_refused_and_bad_type_refused``).
 
 The checkers are proven able to fail by a permanent instrument control
 (``test_checker_catches_an_unfiltered_result``).
@@ -78,12 +99,14 @@ import random
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
+from zanzibar import UndeclaredTypeOrRelation
 from zanzibar.graphindex import LookupResult
 from zanzibar.setengine import SetLookupResult, StaleLookupIds
 from zanzibar.store import Store
 from tests.oracle import Oracle, OracleTuple
 from tests.test_lookup_oracle import (_Gate, _check_graph_forward, _check_graph_reverse,
-                                      _check_set_forward, _gnode_id)
+                                      _check_set_forward, _declared_types, _gnode_id,
+                                      _set_lookup_refusal)
 from tests.test_matrix import _boolean_pool
 from tests.test_wildcard_property import OBJECT_WC, _candidate_raw_tuples
 
@@ -124,6 +147,37 @@ def _pick(filters, k, marker_shapes):
 def _match(flt, t, p):
     ft, fp = flt
     return (ft is None or t == ft) and (fp is None or p == fp)
+
+
+def _undeclared_filter(ast, types, flt, *, bare):
+    """TK185 step 4 (DEC-16 sec 2): does ``filter_result(res, *flt)`` name an undeclared
+    type or relation? Decided from the AST here, independently of
+    ``schema/readcheck.py::refuse_undeclared_filter``: the type must be declared; the
+    relation must be declared on the type, or on some type when no type is given; a filter
+    over SUBJECTS (``bare=True``) also accepts ``'...'``. ``SetEngine.filter_result`` does
+    not know which direction its result came from, so it accepts ``'...'`` either way; the
+    forward lists never hold ``'...'``."""
+    ft, fp = flt
+    if ft is not None and ft not in types:
+        return True
+    if fp is None or (bare and fp == '...'):
+        return False
+    if ft is not None:
+        return (ft, fp) not in ast
+    return fp not in {r for (_, r) in ast}
+
+
+def _set_filter_refusal(se, res, flt, where):
+    """TK185 step 4: the set side must REFUSE an undeclared filter (role ``filter``);
+    returns the message so the caller can compare it across ``SetOps``."""
+    try:
+        got = se.filter_result(res, *flt)
+    except UndeclaredTypeOrRelation as e:
+        assert (e.method, e.role) == ('filter_result', 'filter'), (
+            f'{where}: refused with the wrong attributes {(e.method, e.role)}')
+        return str(e)
+    raise AssertionError(f'{where}: answered {got!r}; a filter naming an undeclared type or '
+                         f'relation must raise UndeclaredTypeOrRelation (DEC-16)')
 
 
 # --------------------------------------------------------------------------- checkers
@@ -238,6 +292,14 @@ class _FilterGate(_Gate):
         self.graph_fwd_marker = self.set_fwd_marker = 0
         self.graph_rev_excl = self.set_rev_excl = 0
         self.nonempty = 0
+        # TK185 step 4 (2026-11-20): the set side's undeclared filters, decided from the AST,
+        # and how often each direction's refusal was pinned (non-vacuity)
+        types = _declared_types(self.ast)
+        self.fwd_undeclared = {f for f in self.fwd_filters
+                               if _undeclared_filter(self.ast, types, f, bare=False)}
+        self.rev_undeclared = {f for f in self.rev_filters
+                               if _undeclared_filter(self.ast, types, f, bare=True)}
+        self.set_fwd_refused = self.set_rev_refused = 0
 
     def assert_surfaces(self, context=''):
         oracle = Oracle(self.schema, [OracleTuple(*r) for r in self.present])
@@ -283,13 +345,24 @@ class _FilterGate(_Gate):
                             if s not in keep:
                                 assert not _graph_rev_covers(w, res, s), (
                                     f'{where}: covers {s}, outside the filter')
+            refusals: dict = {}
             for side in self.sets:
                 se = side.se
                 for subject in self.subjects:
+                    if subject in self.undeclared_subjects:
+                        refusals.setdefault(('lookup', subject), set()).add(
+                            _set_lookup_refusal(se, subject))
+                        self.set_lookup_refused += 1
+                        continue
                     whole = se.lookup(*subject)
                     for flt in _pick(self.fwd_filters, self.k, whole.markers):
-                        res = se.filter_result(whole, *flt)
                         where = f'set.lookup{subject} [{se.ops.name}] filter={flt}'
+                        if flt in self.fwd_undeclared:
+                            refusals.setdefault(('fwd', subject, flt), set()).add(
+                                _set_filter_refusal(se, whole, flt, where))
+                            self.set_fwd_refused += 1
+                            continue
+                        res = se.filter_result(whole, *flt)
                         self.set_fwd_marker += bool(res.markers)
                         _set_within(se, flt, res, where)
                         keep = [o for o in self.objects if _match(flt, o[1], o[0])]
@@ -301,8 +374,13 @@ class _FilterGate(_Gate):
                 for obj in self.objects:
                     whole = se.lookup_reverse(*obj)
                     for flt in _pick(self.rev_filters, self.k, whole.markers):
-                        res = se.filter_result(whole, *flt)
                         where = f'set.lookup_reverse{obj} [{se.ops.name}] filter={flt}'
+                        if flt in self.rev_undeclared:
+                            refusals.setdefault(('rev', obj, flt), set()).add(
+                                _set_filter_refusal(se, whole, flt, where))
+                            self.set_rev_refused += 1
+                            continue
+                        res = se.filter_result(whole, *flt)
                         self.set_rev_excl += bool(res.excluded_node_ids)
                         _set_within(se, flt, res, where)
                         keep = [s for s in self.subjects if _match(flt, s[1], s[0])]
@@ -311,6 +389,8 @@ class _FilterGate(_Gate):
                             if s not in keep:
                                 assert not _set_rev_covers(se, res, s), (
                                     f'{where}: covers {s}, outside the filter')
+            for key, messages in refusals.items():
+                assert len(messages) == 1, f'set sides refuse {key} differently: {messages}'
         except AssertionError as e:
             pytest.fail(f'filtered lookup/oracle divergence ({context}): {e}\nhistory:\n'
                         + '\n'.join(f'  {op} {raw}' for op, raw in self.history))
@@ -339,6 +419,20 @@ def _run_filter_gate(schema, object_wc, pool, seed, walk_steps):
     return gate
 
 
+def _assert_refusals_reached(gate):
+    """TK185 step 4 (2026-11-20) tripwire: the set-side refusal pins actually ran, in both
+    directions, and exactly the AST-undeclared filters were routed to them (the
+    ``_UNDECLARED`` name in each slot, so a classifier that waved them through to the
+    answer path, or routed a declared filter to the refusal path, is red)."""
+    assert {(_UNDECLARED, None), (None, _UNDECLARED)} <= gate.fwd_undeclared
+    assert {(_UNDECLARED, None), (None, _UNDECLARED)} <= gate.rev_undeclared
+    assert len(gate.fwd_undeclared) < len(gate.fwd_filters)
+    assert len(gate.rev_undeclared) < len(gate.rev_filters)
+    assert gate.set_fwd_refused > 0 and gate.set_rev_refused > 0, (
+        f'reach: no set-side undeclared-filter refusal was pinned '
+        f'(forward {gate.set_fwd_refused}, reverse {gate.set_rev_refused})')
+
+
 # --------------------------------------------------------------------------- F1 / F2
 
 def test_filtered_lookups_match_oracle_wildcards(load_fga_schema):
@@ -349,6 +443,7 @@ def test_filtered_lookups_match_oracle_wildcards(load_fga_schema):
                             _candidate_raw_tuples(), seed=0, walk_steps=8)
     assert gate.nonempty > 0 and gate.graph_fwd_marker > 0 and gate.set_fwd_marker > 0, (
         'reach: the walk never produced a non-empty filtered result or a filtered marker')
+    _assert_refusals_reached(gate)
 
 
 def test_filtered_lookups_match_oracle_boolean(load_fga_schema):
@@ -359,6 +454,7 @@ def test_filtered_lookups_match_oracle_boolean(load_fga_schema):
     assert gate.graph_rev_excl > 0 and gate.set_rev_excl > 0, (
         f'reach: no filtered reverse result kept an exclusion (graph={gate.graph_rev_excl}, '
         f'set={gate.set_rev_excl}); re-pick the seed as test_lookup_oracle_gate_boolean says')
+    _assert_refusals_reached(gate)
 
 
 def test_checker_catches_an_unfiltered_result(load_fga_schema):
@@ -522,11 +618,61 @@ def test_store_lookup_reverse_filters_subjects_and_keeps_exclusions(store):
     assert usersets == {('group', 'g', 'member')}
 
 
-def test_store_filter_undeclared_is_empty_and_bad_type_refused(store):
-    assert store.check('user:alice', 'nope', 'doc:d1') is False   # the read precedent
-    assert store.lookup('user:alice', object_type='nodoc') == LookupResult()
-    assert store.lookup('user:alice', relation='nope') == LookupResult()
-    assert store.lookup_reverse('viewer', 'doc:d1', subject_type='nouser') == LookupResult()
+def test_store_filter_undeclared_is_refused_and_bad_type_refused(store):
+    """Formerly ``test_store_filter_undeclared_is_empty_and_bad_type_refused``.
+
+    TK185 step 4 (2026-11-20, DEC-16): this pinned LENIENCY, an undeclared filter
+    matching nothing (``== LookupResult()``) as ``check`` of an undeclared relation answered
+    False. The owner decided (2026-11-01) that a read naming an undeclared type or relation
+    is an error, so every such call is now a pinned refusal, on ``Store`` and on the set
+    engine's ``filter_result``; a NAME is still never checked (``user:zed``), ``'...'``
+    is still the bare subject, and the non-``str`` ``TypeError`` half is unchanged.
+
+    Sabotage (2026-11-20, docs/sabotage-procedure.md, this test alone, each restored
+    byte-identical): the ``check`` pin's ``pytest.raises`` class temporarily ``KeyError``:
+    ``1 failed``, ``zanzibar.schema.errors.UndeclaredTypeOrRelation: check() names an
+    undeclared relation doc#nope: type 'doc' declares no relation 'nope'; it declares
+    banned, editor, viewer``; the loop's class temporarily ``KeyError``: ``1 failed``,
+    ``zanzibar.schema.errors.UndeclaredTypeOrRelation: lookup(): object_type='nodoc' names
+    an undeclared type: type 'nodoc' is not declared in the schema; did you mean 'doc'?``.
+    """
+    with pytest.raises(UndeclaredTypeOrRelation,
+                       match=r"^check\(\) names an undeclared relation doc#nope: "):
+        store.check('user:alice', 'nope', 'doc:d1')                # the read precedent
+    se = store.source.engine
+    fwd = se.lookup('...', 'user', 'alice')
+    rev = se.lookup_reverse('viewer', 'doc', 'd1')
+    # (call, method, type_name, relation): Store filters and the set engine's own
+    for call, method, type_name, relation in (
+            (lambda: store.lookup('user:alice', object_type='nodoc'), 'lookup', 'nodoc', None),
+            (lambda: store.lookup('user:alice', relation='nope'), 'lookup', None, 'nope'),
+            # declared on SOME type (doc) is not enough when the type is given
+            (lambda: store.lookup('user:alice', object_type='folder', relation='editor'),
+             'lookup', 'folder', 'editor'),
+            (lambda: store.lookup_reverse('viewer', 'doc:d1', subject_type='nouser'),
+             'lookup_reverse', 'nouser', None),
+            (lambda: store.lookup_reverse('viewer', 'doc:d1', subject_predicate='nope'),
+             'lookup_reverse', None, 'nope'),
+            (lambda: store.lookup_reverse('viewer', 'doc:d1', subject_type='user',
+                                          subject_predicate='member'),
+             'lookup_reverse', 'user', 'member'),
+            (lambda: se.filter_result(fwd, 'nodoc'), 'filter_result', 'nodoc', None),
+            (lambda: se.filter_result(fwd, 'doc', 'nope'), 'filter_result', 'doc', 'nope'),
+            (lambda: se.filter_result(rev, 'nouser'), 'filter_result', 'nouser', None),
+            (lambda: se.filter_result(rev, None, 'nope'), 'filter_result', None, 'nope')):
+        with pytest.raises(UndeclaredTypeOrRelation, match=rf'^{method}\(\): ') as ei:
+            call()
+        assert (ei.value.method, ei.value.role, ei.value.type_name, ei.value.relation) == (
+            method, 'filter', type_name, relation)
+    # controls: a NAME is never checked, and '...' is the bare subject, not a relation
+    assert store.lookup('user:zed', object_type='folder') == LookupResult()   # no user:* there
+    assert store.result_keys(store.lookup_reverse('viewer', 'doc:d1', subject_type='user',
+                                                  subject_predicate='...')) == {
+        ('user', 'alice', '...')}
+    assert se.result_keys(se.filter_result(rev, None, '...')) == {('user', 'alice', '...')}
+    # the graph index stays lenient (DEC-16 sec 5): its filter of an undeclared type is empty
+    assert store.widx.filter_result(store.widx.lookup('...', 'user', 'alice'),
+                                    'nodoc') == LookupResult()
     with pytest.raises(TypeError, match=r'^lookup\(\): relation must be a str or None, not int$'):
         store.lookup('user:alice', relation=3)
     with pytest.raises(TypeError, match=r'^lookup\(\): object_type must be a str'):

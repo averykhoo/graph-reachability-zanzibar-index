@@ -6,6 +6,68 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 may break the API. The newest version heading must equal `zanzibar.__version__`
 (`tests/test_tk122_release_metadata.py`).
 
+## [0.1.3] - 2026-11-20
+
+The fixes from the 0.1.2 fresh-user install trial, and one BEHAVIOUR CHANGE: a read that
+names a type or relation the schema does not declare is now an error instead of `False`
+(see Changed). No answer changes for a read that names only declared types and relations.
+
+### Changed
+- **Behaviour change:** a read that names a type, relation or subject relation the schema
+  does not declare now raises `UndeclaredTypeOrRelation` (a `ValueError`, exported from
+  `zanzibar`) instead of answering `False` or an empty result (TK185): `Store.check`,
+  `lookup`, `lookup_reverse`, `expand` (their `object_type` / `relation` / `subject_type` /
+  `subject_predicate` filters included) and the set engine's `check`, `lookup`,
+  `lookup_reverse`, `expand`, `filter_result`. The message is the one a write with the same
+  mistake gets (`type 'doc' declares no relation 'vewer'; did you mean 'viewer'?`). Unknown
+  NAMES (`doc:999`, `user:*`, `folder:*`) are not refused. A lookup result key passed back
+  as `check(*key, ...)` is refused with the corrected call in the message. The refusal comes
+  first: on a stalled index such a lookup raises it, not `IndexStalled`. The graph index
+  (`WildcardIndex`) is unchanged and still answers `False` / empty. This closes two
+  documented differences from OpenFGA (an undeclared relation, and a userset subject whose
+  type does not declare its relation): both checks are now refused, as OpenFGA does;
+  `lookup_reverse` and `expand` still list such a userset as a member of itself. A test or
+  grid of your own that reads undeclared names and expects `False` now gets the refusal:
+  ask only about declared types and relations, or expect `UndeclaredTypeOrRelation`.
+
+### Fixed
+- `object_wildcard_shapes` accepts a 2-item list of strings as a pair, as a JSON-loaded
+  config gives (`[["folder", "viewer"]]`); it used to fail with Python's own
+  `TypeError: unhashable type: 'list'` (TK185). Any other entry that cannot be a set member
+  is a `TypeError` naming `object_wildcard_shapes` and the entry.
+- A `ShapeNoLongerAccepted` for an `object_wildcard_shapes` entry now ends its message with
+  the rewrite (`. To rewrite: ...`), as the exceptions reference says; it was only in
+  `instead` (TK185). `PersistedSchemaRefused` still quotes it once.
+- `SetEngine.check`, `lookup`, `lookup_reverse`, `expand`, `add_tuple` and `remove_tuple`
+  called with the wrong number of arguments (most often `Store`'s short form,
+  `check("user:a", "viewer", "doc:1")`) raise a `TypeError` that names the form `SetEngine`
+  takes and points at `Store` for the short one, instead of Python's "missing 3 required
+  positional arguments" (TK185). `SetEngine` still has only the six-part form.
+
+### Documentation
+- The 0.1.2 note on argument checking said every wrong type is a `TypeError`. It now says
+  what was always true: a wrong type is a `TypeError`, EXCEPT a write identifier (and a
+  store id), which is `AdmissionRejected` (`add_tuple("user:a", None, "doc:1")`,
+  `Store(session, 123, ...)`) (TK185).
+- `None` as the subject predicate is documented in one place, the tuple-strings reference:
+  the bare subject on a read, refused on a write, and "no filter" for
+  `lookup_reverse(subject_predicate=None)` (TK185).
+- The tuple-strings reference says a result key is `(type, name, predicate)`, which is not
+  the order of the six-part call, and shows how to pass one back to `check` (TK185).
+- Every page that said reads are lenient about undeclared types and relations now says they
+  are refused with `UndeclaredTypeOrRelation`, and that unknown names still match nothing
+  (TK185).
+- Docstrings for `SchemaInfo.bridged_in_shapes` / `bridged_out_shapes`, `Entity.wildcard`,
+  `CompiledBooleans.derived_families` / `leaf_families` and `Node.predicate_or_ellipsis`;
+  every public method and property of an exported class now has one (pinned) (TK185).
+- "Test your permission model" says pytest is needed and is not a dependency
+  (`pip install pytest`) (TK185).
+
+### Development
+- The lint gate prints the Python, mypy, sqlmodel, SQLAlchemy and pydantic versions mypy
+  ran against, so a type-check that is green locally but red on CI shows up in the logs as
+  library drift (TK185).
+
 ## [0.1.2] - 2026-10-30
 
 The fix from the 0.1.1 fresh-user install trial, plus argument checking on every public

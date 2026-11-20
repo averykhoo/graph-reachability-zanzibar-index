@@ -34,7 +34,7 @@ def _reject_non_pair_shapes(object_wildcard_shapes) -> None:
                 f"strings",
                 "write each entry as a (type, relation) tuple such as ('doc', 'viewer'), "
                 "naming a declared relation, or drop it",
-                accepted_through='0.0.5', refused_since='0.1.0')
+                accepted_through='0.0.5', refused_since='0.1.0', rewrite_in_message=True)
 
 
 def _validate_object_wildcard_shapes(
@@ -79,7 +79,7 @@ def _validate_object_wildcard_shapes(
                 f"drop {shape!r} from object_wildcard_shapes (it enabled no object "
                 f"wildcard, so dropping it changes no answer), or correct it to a declared "
                 f"(type, relation) pair",
-                accepted_through='0.0.5', refused_since='0.1.0')
+                accepted_through='0.0.5', refused_since='0.1.0', rewrite_in_message=True)
         if (t, r) not in relations:
             # REFUSED SHAPE (TK147): an object_wildcard_shapes entry naming an undeclared
             # RELATION on a declared type (``('doc', 'nosuchrel')``; also a compiled leaf
@@ -100,7 +100,7 @@ def _validate_object_wildcard_shapes(
                 f"drop {shape!r} from object_wildcard_shapes (it enabled no object "
                 f"wildcard, so dropping it changes no answer), or correct it to a relation "
                 f"type {t!r} declares",
-                accepted_through='0.0.5', refused_since='0.1.0')
+                accepted_through='0.0.5', refused_since='0.1.0', rewrite_in_message=True)
 
 
 def derive_schema_info(

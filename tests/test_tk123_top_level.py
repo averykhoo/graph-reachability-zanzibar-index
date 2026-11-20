@@ -244,6 +244,7 @@ _BUILTIN_BASE = {
     'StaleLookupIds': KeyError, 'TablesOutdated': RuntimeError,   # TK154
     'CascadeNotRun': RuntimeError,   # TK3
     'ForeignToken': RuntimeError,    # TK166 (a StaleRead)
+    'UndeclaredTypeOrRelation': ValueError,   # TK185 step 4 (a read refusal, DEC-16)
 }
 _OUTSIDE_THE_ROOT = {'InvariantViolation', 'UnprovenExtensionWarning'}
 

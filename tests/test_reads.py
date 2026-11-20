@@ -21,6 +21,7 @@ import pytest
 from sqlalchemy import event
 from sqlmodel import Session, SQLModel, create_engine
 
+from zanzibar import UndeclaredTypeOrRelation
 from zanzibar.schema import AdmissionRejected
 from zanzibar.setengine import SetEngine, ALL_SETOPS
 from zanzibar.schema import parse_openfga_schema
@@ -500,7 +501,36 @@ def _walk_and_compare(schema, pool, grid, seed, steps=14):
       * shared over-reject of one relation (``Filter.apply`` False on ``editor``):
         ``2 failed, 1 passed``, ``seed=0: only 10/14`` and ``seed=2: only 9/14``.
       * pre-fix contrast (the ``HEAD`` module under the same three sabotages):
-        ``3 passed`` under EACH, so the gap was real."""
+        ``3 passed`` under EACH, so the gap was real.
+
+    TK185 step 4 (2026-11-20, DEC-16): a grid cell naming a type, relation or subject
+    relation the schema does not declare is no longer answered False by the set engines;
+    they REFUSE it with ``UndeclaredTypeOrRelation``. Such a cell (the De Morgan grid
+    shares one subject list across fixtures, so ``cond`` / ``role`` subjects reach
+    ``demorgans_law_1.fga``, which declares neither) is decided HERE, from the schema
+    text's ``type`` lines and the AST, independently of the engine's validator: the
+    lenient graph index is still compared with the oracle on it, and every set engine
+    must refuse it with ONE message (an answer, False included, fails). Declared cells
+    are compared exactly as before. Returns ``(declared_cells, undeclared_cells)``, the
+    grid's partition, for the callers' anti-vacuity pins. Sabotage, observed 2026-11-20
+    with ``-k demorgans`` (test file restored sha256-identical after each):
+      * the refusal branch catches ``KeyError``: ``2 failed, 6 passed, 19 deselected``
+        (``E   zanzibar.schema.errors.UndeclaredTypeOrRelation: check() names an
+        undeclared subject type 'cond': type 'cond' is not declared in the schema``);
+      * ``undeclared()`` drops its subject-TYPE clause: the same ``2 failed`` / same E;
+      * ``_DEMORGAN_UNDECLARED_SUBJECT_TYPES`` loses ``role`` for law_1: ``2 failed``,
+        ``AssertionError: demorgans_law_1.fga: grid partition (declared, refused)=(108,
+        36), expected (126, 18)``."""
+    from zanzibar.schema import parse_schema_ast
+    declared_types = set(re.findall(r'^type[ \t]+(\S+)', schema, flags=re.MULTILINE))
+    declared_pairs = set(parse_schema_ast(schema))
+
+    def undeclared(q):
+        sp, st, _, rel, ot, _ = q
+        return (st not in declared_types or (ot, rel) not in declared_pairs
+                or (sp not in (None, '...') and (st, sp) not in declared_pairs))
+
+    refused_cells = sum(1 for q in grid if undeclared(q))
     g_session, widx, proc, write = build(schema)
     sets = []
     for ops in ALL_SETOPS:
@@ -542,6 +572,19 @@ def _walk_and_compare(schema, pool, grid, seed, steps=14):
             if got_g != expected:
                 pytest.fail(f'graph/oracle mismatch seed={seed} q={q} graph={got_g} '
                             f'oracle={expected}\n' + '\n'.join(f'  {o} {r}' for o, r in history))
+            if undeclared(q):
+                # TK185 step 4 (DEC-16): every set engine refuses, with one message
+                messages = set()
+                for se, _ in sets:
+                    try:
+                        got_s = se.check(*q)
+                    except UndeclaredTypeOrRelation as e:
+                        messages.add(str(e))
+                        continue
+                    pytest.fail(f'set engine answered {got_s} to the undeclared read '
+                                f'q={q} seed={seed}; it must raise UndeclaredTypeOrRelation')
+                assert len(messages) == 1, f'set engines refuse {q} differently: {messages}'
+                continue
             for se, _ in sets:
                 got_s = se.check(*q)
                 if got_s != expected:
@@ -561,12 +604,15 @@ def _walk_and_compare(schema, pool, grid, seed, steps=14):
     g_session.close()
     for _, s in sets:
         s.close()
+    return len(grid) - refused_cells, refused_cells
 
 
 @pytest.mark.parametrize('seed', [0, 1, 2])
 def test_grid_parity_boolean_wildcards(load_fga_schema, seed):
     schema = load_fga_schema('boolean_wildcards.fga')
-    _walk_and_compare(schema, _boolean_pool(), _boolean_grid(), seed)
+    declared, refused = _walk_and_compare(schema, _boolean_pool(), _boolean_grid(), seed)
+    # TK185 step 4 (2026-11-20): this grid is built from declared pairs only
+    assert declared > 0 and refused == 0, (declared, refused)
 
 
 #: `star_admitting_intersection.fga` joined 2026-09-20g (`TK83`) -- see the note on
@@ -590,4 +636,24 @@ def test_grid_parity_demorgans(load_fga_schema, fixture, seed):
             for (sp, st, sn) in subjects
             for on in ['dc1', 'r1', 'c1', 'at1', 'g1', 'ghost']]
 
-    _walk_and_compare(schema, pool, grid, seed, steps=10)
+    declared, refused = _walk_and_compare(schema, pool, grid, seed, steps=10)
+    # TK185 step 4 (2026-11-20, DEC-16): the shared subject list names types a fixture
+    # may not declare; those cells are pinned refusals in `_walk_and_compare`. WHICH
+    # subject types are undeclared is written down by hand per fixture, so a drift in the
+    # partition (a fixture edit, or an undeclared() that stops seeing `cond`) is red.
+    gone = _DEMORGAN_UNDECLARED_SUBJECT_TYPES[fixture]
+    expected_refused = sum(1 for q in grid if q[1] in gone)
+    assert (declared, refused) == (len(grid) - expected_refused, expected_refused), (
+        f'{fixture}: grid partition (declared, refused)={(declared, refused)}, '
+        f'expected {(len(grid) - expected_refused, expected_refused)}')
+    assert declared > 0, f'{fixture}: no declared cell left to compare'
+
+
+#: TK185 step 4 (2026-11-20): the subject types in `test_grid_parity_demorgans`'s shared
+#: subject list that each fixture does NOT declare (read off the .fga files by hand).
+_DEMORGAN_UNDECLARED_SUBJECT_TYPES = {
+    'demorgans_law_1.fga': {'cond', 'role'},
+    'demorgans_law_2.fga': set(),
+    'demorgans_reverse.fga': set(),
+    'star_admitting_intersection.fga': set(),
+}

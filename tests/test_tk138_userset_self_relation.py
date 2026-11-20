@@ -28,14 +28,34 @@ set engine under both ``SetOps``, the oracle), lookups computed on the graph and
 engines and required to agree after translation to ``(type, name, predicate)`` keys,
 the key channel (``implicit_keys`` / ``implicit_excluded_keys``) included.
 
-The repo differs from OpenFGA on exactly two rows, both deliberate and documented
-(``REPO_EXCEPTIONS``):
+The repo differed from OpenFGA on exactly two rows, both deliberate and documented
+(``REPO_EXCEPTIONS``), until TK185 step 4:
 
 * ``A14`` -- an UNDECLARED relation. OpenFGA answers ``validation_error``; this library
-  reads leniently and answers False (unchanged by TK138).
+  read leniently and answered False (unchanged by TK138).
 * ``D03`` -- a TTU target undeclared on one of the tupleset's types (challenge C3). OpenFGA
-  answers ``validation_error``; this library answers True through the ``ttu_leaf``
+  answers ``validation_error``; this library answered True through the ``ttu_leaf``
   from-chain disjunct, which sub-decision D4 keeps.
+
+TK185 step 4 (2026-11-20, DEC-16): the repo now differs from OpenFGA on NO row, and
+``REPO_EXCEPTIONS`` is empty. A read naming an undeclared type, relation or subject
+relation raises ``UndeclaredTypeOrRelation`` on the set engine (and ``Store``), so both
+rows now match OpenFGA's ``validation_error``: ``A14`` names ``doc#nosuchrel`` and ``D03``
+the subject relation ``team#viewer`` (team declares no relations). ``_ask`` maps that
+refusal to ``ERR``, this file's encoding of OpenFGA's ``validation_error``, and only after
+``ParityEngine.check`` has asserted every set side refuses with one message and the
+lenient graph index and oracle still agree with each other on the cell
+(``tests/parity.py::ParityEngine._assert_refused``). The ``ttu_leaf`` disjunct D4 kept is
+still in the oracle and the graph index; the refusal comes before any answer.
+Sabotage (2026-11-20, this module alone, ``_ask``'s caught class temporarily
+``UndeclaredTypeOrRelation`` -> ``KeyError``): ``2 failed, 10 passed``, first failure
+``zanzibar.schema.errors.UndeclaredTypeOrRelation: check() names an undeclared subject
+relation doc#nosuchrel: type 'doc' declares no relation 'nosuchrel'; it declares banned,
+can_view, editor, fplain, fview, nb, parent, plain, viewer, vu``; restored, ``12 passed``.
+Second sabotage (same day, the refusal recorded as the old lenient answer, ``return ERR``
+-> ``return F`` in ``_ask``): ``2 failed, 10 passed``, ``model A: rows off the pinned
+answer (row: pinned, measured): {'A14': ('ERR', False)}`` and ``model D: ...
+{'D03': ('ERR', False)}``; restored, ``12 passed``.
 
 Rows that must NOT move are in the same tables or in ``REPO_ONLY`` (no OpenFGA probe):
 concrete users, ``user:*``, the userset-star subject (D1: star subjects take no
@@ -110,12 +130,14 @@ from __future__ import annotations
 
 import pytest
 
+from zanzibar import UndeclaredTypeOrRelation
 from zanzibar.graphindex import Node
 
 from tests.parity import ParityEngine
 
 T, F = True, False
-ERR = 'ERR'           # OpenFGA answered 400 validation_error; this repo reads leniently
+ERR = 'ERR'           # OpenFGA answered 400 validation_error; this repo raises
+                      # UndeclaredTypeOrRelation (TK185 step 4, 2026-11-20; `_ask`)
 
 # --------------------------------------------------------------------------- #
 # Schemas
@@ -324,7 +346,9 @@ ROWS_C = [
 
 ROWS_D = [
     # challenge C3 (openfga_probe5.out: "relation 'team#viewer' not found"). This repo
-    # answers True through the ttu_leaf from-chain disjunct, which TK138 keeps (D4).
+    # answered True through the ttu_leaf from-chain disjunct, which TK138 keeps (D4);
+    # since TK185 step 4 (2026-11-20) the read is refused (team#viewer is undeclared),
+    # matching OpenFGA. The disjunct still answers on the lenient graph index / oracle.
     ('D01', 'write', ('WRITE', 'team:1', 'parent', 'doc:1'), 'ok'),
     ('D02', 'write', ('WRITE', 'folder:1', 'parent', 'doc:1'), 'ok'),
     ('D03', 'after', ('CHECK', 'team:1#viewer', 'x', 'doc:1'), ERR),
@@ -382,10 +406,10 @@ REPO_ONLY = {
 }
 
 # The ONLY rows where this repo answers differently from OpenFGA, with the repo's answer.
-REPO_EXCEPTIONS = {
-    'A14': F,     # undeclared relation: OpenFGA validation_error, this repo reads leniently
-    'D03': T,     # D4: the ttu_leaf from-chain disjunct is kept (challenge C3)
-}
+# EMPTY since TK185 step 4 (2026-11-20, DEC-16): it held 'A14': F (undeclared relation,
+# read leniently) and 'D03': T (the ttu_leaf disjunct through an undeclared team#viewer);
+# both reads are now refused, which `_ask` records as ERR, OpenFGA's validation_error.
+REPO_EXCEPTIONS: dict = {}
 
 MODELS = {
     'A': (MODEL_A, ROWS_A),
@@ -453,7 +477,13 @@ def _ask(pe: ParityEngine, query: tuple):
     kind = query[0]
     if kind == 'CHECK':
         _, subject, relation, obj = query
-        return pe.check(*_raw(subject, relation, obj))           # unanimous incl. oracle
+        try:
+            return pe.check(*_raw(subject, relation, obj))       # unanimous incl. oracle
+        except UndeclaredTypeOrRelation:
+            # TK185 step 4 (2026-11-20): an undeclared read is refused, OpenFGA's
+            # validation_error. pe.check raises only after asserting every set side
+            # refuses with one message and the lenient graph and oracle agree.
+            return ERR
     if kind == 'WRITE':
         _, subject, relation, obj = query
         return 'ok' if pe.add_tuple(*_raw(subject, relation, obj)) else 'refused'
@@ -508,6 +538,9 @@ def test_row_ids_are_unique_and_exceptions_name_real_rows():
     for row_id, repo in REPO_EXCEPTIONS.items():
         assert row_id in all_rows, row_id
         assert all_rows[row_id][3] != repo, f'{row_id}: exception equals OpenFGA'
+    # TK185 step 4 (2026-11-20): REPO_EXCEPTIONS is empty, so the two former exceptions
+    # are now plain ERR rows, measured as refusals by test_every_corner_agrees_with_openfga.
+    assert {r for r, row in all_rows.items() if row[3] == ERR} == {'A14', 'D03'}
 
 
 @pytest.mark.parametrize('model', sorted(MODELS))

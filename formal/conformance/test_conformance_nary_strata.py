@@ -109,7 +109,7 @@ from zanzibar.schema import (
     Intersection, Union, parse_openfga_schema,
     parse_schema_ast as prod_parse_schema_ast)
 
-from formal.conformance.backends import graphindex_answers
+from formal.conformance.backends import checked_set_answers, graphindex_answers
 from formal.conformance.corpus import (
     GRAPH_FRAGMENT, MULTI_STRATUM_SCHEMAS, SCHEMAS)
 from formal.conformance.encode import schema_to_json
@@ -744,7 +744,7 @@ def test_zero_coverage_shapes_three_way(name, ops):
             eng.add_tuple(tup.subject_predicate, tup.subject_type,
                           tup.subject_name, tup.relation, tup.object_type,
                           tup.object_name)
-        se = [bool(eng.check(*q)) for q in queries]
+        se = checked_set_answers(eng, schema_text, queries)  # TK185: refusals pinned
     finally:
         session.close()
 
@@ -897,7 +897,7 @@ def test_multi_stratum_three_way(name, ops):
             eng.add_tuple(tup.subject_predicate, tup.subject_type,
                           tup.subject_name, tup.relation, tup.object_type,
                           tup.object_name)
-        se = [bool(eng.check(*q)) for q in queries]
+        se = checked_set_answers(eng, schema_text, queries)  # TK185: refusals pinned
     finally:
         session.close()
 

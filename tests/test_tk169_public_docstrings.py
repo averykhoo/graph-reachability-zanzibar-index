@@ -174,6 +174,62 @@ def test_no_internal_ids_or_private_paths_in_public_docstrings():
         f'  {owner}: {text!r}' for owner, text in unexpected)
 
 
+def _exported_class_members():
+    """``(owner, member)`` for every public method and property of every exported class
+    (the class half of ``_public_docstrings``), docstring or not."""
+    for pkg in PACKAGES:
+        module = importlib.import_module(pkg)
+        for name in getattr(module, '__all__', ()):
+            obj = getattr(module, name)
+            if inspect.isclass(obj) and _is_ours(obj):
+                yield from _class_members(obj)
+
+
+def _undocumented_members():
+    """The exported public methods and properties with no docstring of their own."""
+    return sorted({owner for owner, member in _exported_class_members()
+                   if not (isinstance(member.__doc__, str) and member.__doc__.strip())})
+
+
+#: The six members the 0.1.2 install trial (W21) found with no docstring; spot pins for the
+#: completeness test below, so a walk that stops reaching them cannot pass it vacuously.
+TRIAL_W21 = (
+    'zanzibar.schema.rules.SchemaInfo.bridged_in_shapes',
+    'zanzibar.schema.rules.SchemaInfo.bridged_out_shapes',
+    'zanzibar.schema.rules.Entity.wildcard',
+    'zanzibar.schema.boolean.CompiledBooleans.derived_families',
+    'zanzibar.schema.boolean.CompiledBooleans.leaf_families',
+    'zanzibar.graphindex.models.Node.predicate_or_ellipsis',
+)
+
+
+def test_every_public_method_and_property_has_a_docstring():
+    """TK185 (0.1.2 install trial W21): ``help()`` on a public property showed nothing.
+
+    Every public method and property of an exported class has a docstring of its own
+    (a property's is its getter's). The six the trial found are spot-pinned as visited.
+
+    SABOTAGE (2026-11-20, agent A; this module alone, each restored with the Edit tool and
+    re-run green, ``4 passed``):
+
+    1. the ``Entity.wildcard`` docstring deleted (``src/zanzibar/schema/rules.py``)::
+
+           E       AssertionError: public members with no docstring: ['zanzibar.schema.rules.Entity.wildcard']
+           1 failed, 3 passed in 0.55s
+
+    2. ``return`` as the first statement of ``_exported_class_members`` (a walk that visits
+       nothing, so ``missing`` is empty)::
+
+           E       AssertionError: the walk no longer reaches ['zanzibar.schema.rules.SchemaInfo.bridged_in_shapes', ...
+           1 failed, 3 passed in 0.53s
+    """
+    visited = {owner for owner, _member in _exported_class_members()}
+    unvisited = [owner for owner in TRIAL_W21 if owner not in visited]
+    assert not unvisited, f'the walk no longer reaches {unvisited}'
+    missing = _undocumented_members()
+    assert not missing, f'public members with no docstring: {missing}'
+
+
 def test_allowlist_entries_are_live():
     hits = set(_leaks())
     stale = [key for key in ALLOWLIST if key not in hits]

@@ -33,6 +33,7 @@ from collections import Counter
 
 from sqlmodel import Session, SQLModel, create_engine, select
 
+from zanzibar import UndeclaredTypeOrRelation
 from zanzibar.schema import AdmissionRejected
 from zanzibar.graphindex.invariants import snapshot_rows
 from zanzibar.setengine import SetEngine, ALL_SETOPS
@@ -152,6 +153,13 @@ class ParityEngine:
         self.grid_cap = grid_cap
         self._rng = random.Random(seed)
         self.ast = parse_schema_ast(schema)
+        # TK185 step 4 (DEC-16): the types a read may name -- object types plus every type a
+        # restriction names (a relation-less `type user` is named by some restriction in
+        # every fixture this engine drives; one that is not would read as undeclared here and
+        # fail loudly in `_assert_refused`, never silently).
+        self._types = {t for (t, _) in self.ast} | {
+            r.type for expr in self.ast.values() for d in _iter_directs(expr)
+            for r in d.restrictions}
 
         # Graph joins iff the schema compiles for it. Cyclic derived dependencies
         # (CyclicDerivedDependency, a ValueError subclass) must also degrade to
@@ -199,7 +207,16 @@ class ParityEngine:
         return self._apply(tuple(raw), 'remove')
 
     def check(self, *q) -> bool:
-        """Unanimous check across every backend + the oracle."""
+        """Unanimous check across every backend + the oracle. A read naming an undeclared
+        type or relation is refused by the set engines (``UndeclaredTypeOrRelation``,
+        raised from here too); the lenient graph index and the oracle must still agree."""
+        if self._undeclared(q):
+            answers = {'oracle': self._oracle().check(*q)}
+            if self.graph is not None:
+                answers['graph'] = self.graph.check(q)
+            assert len(set(answers.values())) == 1, f'check disagreement on {q}: {answers}'
+            self._assert_refused(q, 'check')
+            return self.set_sides[0].check(q)        # raises UndeclaredTypeOrRelation
         answers = {b.name: b.check(q) for b in self.stateful}
         answers['oracle'] = self._oracle().check(*q)
         assert len(set(answers.values())) == 1, f'check disagreement on {q}: {answers}'
@@ -254,6 +271,27 @@ class ParityEngine:
             b.post_op()
         self._assert_grid_parity(context=f'{op} {raw}', last=raw)
         return True
+
+    def _undeclared(self, q) -> bool:
+        """Does the read name a type, relation or subject relation the schema does not
+        declare (DEC-16 sec 2)? Decided from the AST here, independently of the engine's own
+        validator, so a validator that waves a leaf through is caught."""
+        sp, st, _, rel, ot, _ = q
+        return (st not in self._types or (ot, rel) not in self.ast
+                or (sp not in (None, '...') and (st, sp) not in self.ast))
+
+    def _assert_refused(self, q, context: str) -> None:
+        """Every set side refuses the undeclared read ``q``, with one message."""
+        messages = set()
+        for b in self.set_sides:
+            try:
+                got = b.check(q)
+            except UndeclaredTypeOrRelation as e:
+                messages.add(str(e))
+                continue
+            raise AssertionError(f'{b.name} answered {got} to the undeclared read {q} after '
+                                 f'{context}; it must raise UndeclaredTypeOrRelation')
+        assert len(messages) == 1, f'set sides refuse {q} differently: {messages}'
 
     def _note_names(self, raw: RawTuple) -> None:
         _, s_type, s_name, _, o_type, o_name = raw
@@ -438,7 +476,16 @@ class ParityEngine:
                       f'compared, so this check passed vacuously')
         for q in grid:
             expected = oracle.check(*q)
+            # TK185 step 4 (DEC-16, owner 2026-11-01): a read naming an undeclared relation
+            # (the BL-2 leaf targets `viewer.0`, the `.zz-junk` control) is REFUSED by the set
+            # engine. The cell stays in the grid: the graph index is lenient and must still
+            # answer as the oracle does (the BL-2 fence), and every set side must refuse it.
+            undeclared = self._undeclared(q)
+            if undeclared:
+                self._assert_refused(q, context)
             for b in self.stateful:
+                if undeclared and b is not self.graph:
+                    continue
                 got = b.check(q)
                 assert got == expected, (
                     f'check parity broken after {context}: q={q} '

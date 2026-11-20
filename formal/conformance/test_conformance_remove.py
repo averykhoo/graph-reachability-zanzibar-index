@@ -56,7 +56,7 @@ from formal.conformance.grid import (
     assert_grid_nonvacuous, queries_for, fmt_mismatches as _fmt)
 from formal.conformance import runner
 from formal.conformance.backends import (
-    _fresh_session, GraphDriver, graphindex_drive_ops, bulk_build_drive)
+    _fresh_session, GraphDriver, checked_set_answers, graphindex_drive_ops, bulk_build_drive)
 
 SEEDS = list(range(5))
 
@@ -282,7 +282,7 @@ def test_remove_sequences(name):
         assert len(final) < len(universe), 'sequence must net-remove something'
         _assert_poisoned('set engine', name, seed, poisoned)
 
-        driven = [bool(eng.check(*q)) for q in queries]
+        driven = checked_set_answers(eng, schema_text, queries)  # TK185: refusals pinned
         fp_driven = _fingerprint(eng)
 
         # The surviving rows ARE the expected final store (no dup/ghost rows).
@@ -298,7 +298,7 @@ def test_remove_sequences(name):
             f'[{name} seed={seed}] driven/rebuilt STATE divergence (remove-path '
             f'residue — freed-id scrub or mask hygiene):\n'
             f'{_fp_diff(fp_driven, fp_rebuilt)}')
-        rebuilt = [bool(eng.check(*q)) for q in queries]
+        rebuilt = checked_set_answers(eng, schema_text, queries)  # TK185: refusals pinned
         mism = [(queries[i], driven[i], rebuilt[i]) for i in range(len(queries))
                 if driven[i] != rebuilt[i]]
         assert not mism, (f'[{name} seed={seed}] driven/rebuilt disagreement:\n'
@@ -371,7 +371,7 @@ def test_full_churn_restores(name):
     for tup in readd_order:
         eng.add_tuple(*tup)
 
-    churned = [bool(eng.check(*q)) for q in queries]
+    churned = checked_set_answers(eng, schema_text, queries)  # TK185: refusals pinned
     fp_churned = _fingerprint(eng)
     eng.rebuild()
     assert fp_churned == _fingerprint(eng), (

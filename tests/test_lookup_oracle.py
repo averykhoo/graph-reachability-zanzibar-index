@@ -85,6 +85,14 @@ it drops information:
       (§6.4 reverse-dependency interning, the X1 fix), and star-object truth is
       carried exactly by the intensional markers MINUS ``excluded_node_ids``
       (TK116, 2026-10-04: every excluded id is concrete, marker-covered and O-false).
+      TK185 step 4 (2026-11-20, DEC-16): a candidate subject that names an undeclared
+      subject relation (a from-chain userset ``folder#r1`` when ``folder`` declares no
+      ``r1``; decided from the AST by ``_undeclared_subject``) is no longer asked for an
+      answer: ``SetEngine.lookup`` must REFUSE it with ``UndeclaredTypeOrRelation``, one
+      message across ``SetOps`` (``_set_lookup_refusal``). The graph index stays lenient
+      and still answers it against the oracle (G1/G2); S1-S3 still classify it as a
+      member. Deterministic reach:
+      ``test_lookup_oracle_gate_undeclared_from_chain_subject_refused``.
 
 Genuine-divergence inventory (each was a wrong/undefined read answer when
 found; FIXED entries are pinned as plain regression tests below, open ones as
@@ -142,6 +150,7 @@ from hypothesis import HealthCheck, assume, given, settings, strategies as st
 # hunt under HYPOTHESIS_PROFILE=deep, a cheap safety net otherwise.
 _GATE_MAX_EXAMPLES = 30 if os.environ.get('HYPOTHESIS_PROFILE') == 'deep' else 6
 
+from zanzibar import UndeclaredTypeOrRelation
 from zanzibar.setengine import ALL_SETOPS, SetEngine
 from zanzibar.setengine.memberset import MemberSet
 from zanzibar.schema import (Direct, TTU, Union, Intersection, Exclusion, Computed, Restriction,
@@ -228,6 +237,25 @@ def _object_candidates(ast, names):
         for n in sorted(names.get(t, set()))[:2] + [GHOST_NAME, '*']:
             objects.append((rel, t, n))
     return objects
+
+
+def _declared_types(ast):
+    """Every type the AST names: object types of declared relations plus every Direct
+    restriction's type (a relation-less ``type user`` appears only there)."""
+    return {t for (t, _) in ast} | {r.type for expr in ast.values()
+                                    for node in _iter_exprs(expr) if isinstance(node, Direct)
+                                    for r in node.restrictions}
+
+
+def _undeclared_subject(ast, types, subject):
+    """TK185 step 4 (DEC-16 sec 2): does a read with this ``(pred, type, name)`` subject
+    name an undeclared type or subject relation? Decided from the AST here, independently
+    of the engine's validator (``schema/readcheck.py``), as
+    ``tests/parity.py::ParityEngine._undeclared`` does: a from-chain userset
+    ``folder#r1`` built by ``_subject_candidates`` from ``r1 from parent`` is undeclared
+    when ``folder`` declares no ``r1``."""
+    sp, st, _ = subject
+    return st not in types or (sp not in (None, '...') and (st, sp) not in ast)
 
 
 # ---------------------------------------------------------------------------
@@ -488,6 +516,23 @@ def _check_set_forward(se, oc, subject, objects, res):
 # surfaces on all backends against the oracle after every accepted op
 # ---------------------------------------------------------------------------
 
+def _set_lookup_refusal(se, subject):
+    """TK185 step 4: ``se.lookup(*subject)`` on an undeclared subject must raise
+    ``UndeclaredTypeOrRelation`` naming the subject; returns the message (compared across
+    ``SetOps`` by the caller). An answer instead of the refusal is an AssertionError."""
+    sp, st, _ = subject
+    try:
+        got = se.lookup(*subject)
+    except UndeclaredTypeOrRelation as e:
+        assert (e.method, e.role, e.type_name) == ('lookup', 'subject', st), (
+            f'set.lookup{subject} [{se.ops.name}] refused with the wrong attributes: '
+            f'{(e.method, e.role, e.type_name, e.relation)}')
+        return str(e)
+    raise AssertionError(f'set.lookup{subject} [{se.ops.name}] answered {got!r}; a read '
+                         f'naming an undeclared subject relation must raise '
+                         f'UndeclaredTypeOrRelation (DEC-16)')
+
+
 class _Gate:
     """Graph + both set engines in lockstep, with the full lookup-surface-vs-oracle
     assertion battery runnable at any state."""
@@ -509,6 +554,16 @@ class _Gate:
         names = _names_by_type(pool)
         self.subjects = _subject_candidates(self.ast, names)
         self.objects = _object_candidates(self.ast, names)
+        # TK185 step 4 (2026-11-20, DEC-16): a set-side read naming an undeclared subject
+        # relation is REFUSED (UndeclaredTypeOrRelation). The from-chain candidates can be
+        # undeclared on their type, so the set-side forward lookup of those subjects is a
+        # pinned refusal (one message across SetOps), counted in ``set_lookup_refused``;
+        # the lenient graph index still answers them against the oracle (G1/G2), and the
+        # reverse surfaces still classify them (they are never a read's argument there).
+        types = _declared_types(self.ast)
+        self.undeclared_subjects = frozenset(
+            s for s in self.subjects if _undeclared_subject(self.ast, types, s))
+        self.set_lookup_refused = 0
         self.derived = (self.graph.widx.schema_info.derived_families if self.graph
                         else frozenset())
         self.present: set[tuple] = set()
@@ -565,10 +620,16 @@ class _Gate:
                 if res.excluded_node_ids:
                     self.graph_reverse_excl += 1
                 _check_graph_reverse(self.graph.widx, oc, self.subjects, obj, res)
+            refusals: dict = {}
             for side in self.sets:
                 se = side.se
                 self.set_checks += 1
                 for subject in self.subjects:
+                    if subject in self.undeclared_subjects:
+                        refusals.setdefault(subject, set()).add(
+                            _set_lookup_refusal(se, subject))
+                        self.set_lookup_refused += 1
+                        continue
                     res = se.lookup(*subject)
                     if res.excluded_node_ids:
                         self.set_forward_excl += 1
@@ -581,6 +642,9 @@ class _Gate:
                             self.set_reverse_neg_graph_joined += 1
                     _check_set_expand(se, oc, self.subjects, obj, m)
                     _check_set_reverse(se, oc, self.subjects, obj, m, se.lookup_reverse(*obj))
+            for subject, messages in refusals.items():
+                assert len(messages) == 1, (
+                    f'set sides refuse lookup{subject} differently: {messages}')
         except AssertionError as e:
             pytest.fail(f'lookup/oracle divergence ({context}): {e}\nhistory:\n'
                         + '\n'.join(f'  {op} {raw}' for op, raw in self.history))
@@ -992,6 +1056,62 @@ def test_lookup_oracle_gate_generated_schemas_exclusion_witness():
         f'TK142 tripwire: the graph-joined witnesses {[w[0] for w in joined]} reached no '
         f'exclusion state (set_reverse_neg_graph_joined={neg_joined}, '
         f'graph_reverse_excl={graph_excl}), so the graph half went unexercised.')
+
+
+# TK185 step 4 (2026-11-20): a from-chain userset undeclared on its type. ``r2: r1 from
+# parent`` with ``parent: [doc, folder]`` makes ``_subject_candidates`` build ``folder#r1``,
+# and ``folder`` declares only ``r0`` (the shape the generated-schema gate drew first).
+_UNDECLARED_FROM_CHAIN_SCHEMA = """model
+  schema 1.1
+type user
+type folder
+  relations
+    define r0: [user]
+type doc
+  relations
+    define parent: [doc, folder]
+    define r1: [user]
+    define r2: r1 from parent
+"""
+
+
+def test_lookup_oracle_gate_undeclared_from_chain_subject_refused():
+    """TK185 step 4 (2026-11-20, DEC-16): the gate's set-side forward lookup of a
+    from-chain userset undeclared on its type is a PINNED REFUSAL on both ``SetOps`` (one
+    message, ``role='subject'``), while the lenient graph index still answers it against the
+    oracle and every declared subject keeps the full S4 battery. The generated-schema gate
+    meets this shape only on some draws, so this is its deterministic reach: the gate must
+    have refused exactly the undeclared candidates, at every state, and nothing else.
+
+    Sabotage, observed 2026-11-20 (docs/sabotage-procedure.md; test file edited, restored
+    byte-identical, product untouched):
+
+    * ``UndeclaredTypeOrRelation`` in ``_set_lookup_refusal``'s ``except`` -> ``KeyError``
+      (``-k "undeclared_from_chain or generated_schemas"``): ``3 failed, 1 passed``, this
+      test, ``test_lookup_oracle_gate_generated_schemas`` and ``..._exclusion_witness``,
+      each ``zanzibar.schema.errors.UndeclaredTypeOrRelation: lookup() names an undeclared
+      subject relation folder#r1: type 'folder' declares no relation 'r1'; it declares r0``.
+    * ``_undeclared_subject`` over-wide (every non-bare predicate routed to the refusal
+      path, so a DECLARED subject is asked to refuse): ``1 failed``, ``set.lookup('parent',
+      'doc', 'd1') [py] answered SetLookupResult(node_ids=set(), markers=set(),
+      excluded_node_ids=set(), implicit_keys={('doc', 'd1', 'parent')},
+      implicit_excluded_keys=set()); a read naming an undeclared subject relation must
+      raise UndeclaredTypeOrRelation (DEC-16)`` -- the helper fails on an answer.
+    """
+    pool = [('...', 'user', 'u1', 'r1', 'doc', 'd1'),
+            ('...', 'folder', 'f1', 'parent', 'doc', 'd1'),
+            ('...', 'doc', 'd2', 'parent', 'doc', 'd1'),
+            ('...', 'user', 'u1', 'r1', 'doc', 'd2')]
+    gate = _run_gate(_UNDECLARED_FROM_CHAIN_SCHEMA, frozenset(), pool, seed=0, walk_steps=6)
+    assert gate.graph is not None
+    assert {s[:2] for s in gate.undeclared_subjects} == {('r1', 'folder')}, (
+        gate.undeclared_subjects)
+    # anti-vacuity: the declared from-chain twin doc#r1 is still a lookup candidate
+    assert any(s[:2] == ('r1', 'doc') for s in gate.subjects)
+    # every state x every SetOps x every undeclared candidate was refused, nothing more
+    per_battery = len(gate.undeclared_subjects) * len(ALL_SETOPS)
+    assert gate.set_lookup_refused > 0 and gate.set_lookup_refused % per_battery == 0
+    assert gate.set_lookup_refused == per_battery * (gate.set_checks // len(ALL_SETOPS))
 
 
 # ---------------------------------------------------------------------------

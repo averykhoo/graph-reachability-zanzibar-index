@@ -151,8 +151,10 @@ def require_parts(method: str, names: tuple[str, ...], values: tuple) -> None:
 
     A WRITE gets the full write validation (``validate_write_identifiers``): a non-``str``
     or out-of-charset part is ``AdmissionRejected``, as it always was, only earlier. A READ
-    stays lenient about VALUES (a name that cannot exist matches nothing) but not about
-    TYPES: a part that is not a ``str`` is a ``TypeError``. ``None`` as a read's subject
+    stays lenient about NAMES (a name that cannot exist matches nothing) but not about
+    TYPES: a part that is not a ``str`` is a ``TypeError``. (An undeclared type or
+    relation in a read is refused later, by the caller, with
+    ``UndeclaredTypeOrRelation``.) ``None`` as a read's subject
     predicate keeps its documented meaning, the bare subject; an ``Ellipsis`` predicate
     gets its own refusal further on."""
     # TK179 G1/G2: a wrong-typed relation or six-part field used to read as "no access"
@@ -204,9 +206,10 @@ def shape_filter(method: str, entity_type, predicate,
     when neither part is given (the caller then returns the result unchanged).
 
     ``entity_type`` / ``predicate`` are each ``None`` (no filter on that part) or a
-    ``str``. An undeclared name is not refused: like every read, it matches nothing and
-    the filtered result is empty. Anything else is a ``TypeError`` naming ``method`` and
-    the argument's name in ``names`` (the caller's own keywords)."""
+    ``str``. Anything else is a ``TypeError`` naming ``method`` and the argument's name in
+    ``names`` (the caller's own keywords). This checks types only: whether the schema
+    declares the type and relation is the caller's check
+    (``readcheck.py::refuse_undeclared_filter``)."""
     # Provenance: TK156 (docs/tk156-lookup-filter-2026-10-19.md); ``names`` from the
     # TK156 review, so a Store-level refusal names the keyword the caller passed.
     for name, value in zip(names, (entity_type, predicate), strict=True):

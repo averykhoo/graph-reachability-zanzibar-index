@@ -19,6 +19,7 @@ from types import EllipsisType
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
+from zanzibar import UndeclaredTypeOrRelation
 from zanzibar.schema import AdmissionRejected
 from zanzibar.graphindex.outbox import outbox_watermark
 from zanzibar.graphindex.processor import DeltaProcessor
@@ -172,6 +173,17 @@ class ConnectedBackend:
 
     def close(self):
         self.session.close()
+
+
+def _refusal(b, q) -> str:
+    """The message of ``b``'s refusal of the undeclared read ``q`` (TK185 step 4, DEC-16:
+    the set engine and Store refuse a leaf target such as ``viewer.0``); answering fails."""
+    try:
+        got = b.check(q)
+    except UndeclaredTypeOrRelation as e:
+        return str(e)
+    pytest.fail(f'{b.name} answered {got} to the undeclared read {q}; it must raise '
+                f'UndeclaredTypeOrRelation')
 
 
 class MultiBackend:
@@ -337,7 +349,15 @@ def test_matrix_4way_boolean(load_fga_schema, seed):
         oracle.bind(present)
         all_backends = [graph, connected, oracle] + set_backends
         for q in grid:
-            answers = {b.name: b.check(q) for b in all_backends}
+            if (q[4], q[3]) in graph.ruleset.compiled.leaf_families:
+                # TK185 step 4 (DEC-16, owner 2026-11-01): a leaf target is undeclared, so
+                # Store (connected) and the set engines REFUSE it, identically; the graph
+                # index stays lenient and must still answer as the oracle (the BL-2 fence).
+                refusals = {_refusal(b, q) for b in [connected] + set_backends}
+                assert len(refusals) == 1, (q, refusals)
+                answers = {b.name: b.check(q) for b in (graph, oracle)}
+            else:
+                answers = {b.name: b.check(q) for b in all_backends}
             if len(set(answers.values())) != 1:
                 pytest.fail(f'boolean check disagreement seed={seed} q={q}: {answers}\n'
                             + '\n'.join(f'  {o} {r}' for o, r in history))

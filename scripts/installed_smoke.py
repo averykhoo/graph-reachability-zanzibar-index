@@ -484,7 +484,8 @@ type doc
     # -- 4. bad input --------------------------------------------------------
     section('bad input')
     # The exceptions' one public home is the top level (TK164).
-    from zanzibar import AdmissionRejected, SchemaMismatch  # noqa: F401 -- public names exist
+    from zanzibar import (AdmissionRejected, SchemaMismatch,  # noqa: F401 -- public names exist
+                          UndeclaredTypeOrRelation)
     eng = engine_at('bad.db')
     with Session(eng) as s:
         # TK124: an empty schema is refused and does NOT brick the store id
@@ -517,6 +518,22 @@ type doc
            'no phantom write after refusals')
         ok(st.check('...', 'user', 'nobody', 'viewer', 'doc', 'nothing') is False,
            'unknown subject/object reads False')
+        # TK185 (0.1.3): a read naming an undeclared relation is refused (it read False),
+        # and a lookup result key passed back as the subject names the corrected call
+        e = raises(('UndeclaredTypeOrRelation',),
+                   lambda: st.check('user:bob', 'vewer', 'doc:d1'),
+                   'TK185: a read naming an undeclared relation refused')
+        ok(e is not None and "did you mean 'viewer'?" in str(e),
+           f'TK185: the read refusal names the declared relation ({e})')
+        e = raises(('UndeclaredTypeOrRelation',),
+                   lambda: st.check('user', 'bob', '...', 'viewer', 'doc', 'd1'),
+                   'TK185: a result key passed as the subject refused')
+        ok(e is not None
+           and str(e).endswith("write check('...', 'user', 'bob', 'viewer', 'doc', 'd1')"),
+           f'TK185: the result-key refusal names the corrected call ({e})')
+        raises(('UndeclaredTypeOrRelation',),
+               lambda: st.lookup('user:bob', object_type='dco'),
+               'TK185: a lookup filter naming an undeclared type refused')
     with Session(eng) as s:
         raises(('SchemaMismatch',), lambda: Store(s, 'x', schema=SCHEMA),
                'reopen with a different schema refused')

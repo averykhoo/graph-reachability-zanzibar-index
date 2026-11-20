@@ -13,11 +13,13 @@ from __future__ import annotations
 import json
 import secrets
 from collections import defaultdict
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
+import functools
+import inspect
 from itertools import chain
 from types import EllipsisType
-from typing import Any, cast
+from typing import Any, ParamSpec, TypeVar, cast
 
 from sqlalchemy import column as _sa_column, inspect as _sa_inspect
 from sqlalchemy import select as _sa_select, table as _sa_table
@@ -49,6 +51,8 @@ from zanzibar.schema.syntax import (DeclaredRelations, declared_relations, expla
                                     first_schema_difference,
                                     no_restriction_message, tuple_text)
 from zanzibar.schema.parser import _parse_schema_ast_checked
+from zanzibar.schema.readcheck import (refuse_undeclared_filter, refuse_undeclared_object,
+                                      refuse_undeclared_subject)
 from zanzibar.schema.tuplestr import (_LOOKUP_LONG, _REVERSE_LONG, _TUPLE_LONG, require_parts,
                                      shape_filter)
 from zanzibar.schema.compiler import _validate_object_wildcard_shapes
@@ -66,6 +70,49 @@ NodeKey = tuple[str, str, str]      # (type, name, predicate) flow-graph node
 # A position-tagged flow key: a concrete NodeKey, or a star's 4-tuple
 # ``(type, '*', pred, 'any'|'all')`` (see ``SetEngine._fk_subject``).
 FlowKey = tuple[str, str, str] | tuple[str, str, str, str]
+
+_P = ParamSpec('_P')
+_R = TypeVar('_R')
+
+
+def _long_form_only(example: str, short: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+    """A ``SetEngine`` method called with the wrong number of arguments (most often the
+    ``Store`` short form, ``check("user:a", "viewer", "doc:1")``) raises a ``TypeError``
+    that says which form ``SetEngine`` takes, as ``Store`` does, instead of Python's own
+    "missing 3 required positional arguments". A correct positional call goes straight
+    through; the binding is checked only on the way to an error, or for keywords."""
+    # TK185 (C6, 0.1.2 install trial). Deliberately NOT the short form on SetEngine (row
+    # decision 2026-11-01): it stays the six-part, interned-key engine.
+    def decorate(fn: Callable[_P, _R]) -> Callable[_P, _R]:
+        signature = inspect.signature(fn)
+        params = [p for p in signature.parameters.values() if p.name != 'self']
+        required = tuple(p.name for p in params if p.default is p.empty)
+        low, high = len(required) + 1, len(params) + 1          # + self
+        label = f'SetEngine.{fn.__name__}'
+        noun = 'argument' if len(required) == 1 else 'arguments'
+        form = f'{len(required)} {noun} ({", ".join(required)})'
+
+        @functools.wraps(fn)
+        def guarded(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+            if not kwargs and low <= len(args) <= high:
+                return fn(*args, **kwargs)
+            try:
+                signature.bind(*args, **kwargs)
+            except TypeError as exc:
+                count = len(args) - 1 + len(kwargs)
+                why = (f'got {count}' if not low <= count + 1 <= high
+                       else str(exc))
+                raise TypeError(
+                    f'{label}() takes {form}; {why}. SetEngine has only this form, with no '
+                    f'{short} short form: write {example}, or call Store.{fn.__name__}, '
+                    f'which takes both forms') from None
+            return fn(*args, **kwargs)
+        return guarded
+    return decorate
+
+
+_SUBJECT_SIDE = "'user:alice'"
+_OBJECT_SIDE = "'doc:1'"
 
 
 class UnloggedWriteRefused(ZanzibarError, RuntimeError):
@@ -632,7 +679,11 @@ class SetEngine:
         except ShapeNoLongerAccepted:
             _refuse_persisted_shape(session, store_id)
             raise
-        self._declared: DeclaredRelations | None = None  # admission-message facts, built on the first refusal
+        # What the schema declares: the write refusals' message facts and, since TK185
+        # step 4, what every read is checked against (``schema/readcheck.py``). ``Store``
+        # reads it from here, so both backends refuse the same reads identically.
+        self._declared: DeclaredRelations = declared_relations(
+            self.ast, self._declared_types)
         # P9: the per-Direct-node restriction key set is fully determined by the
         # (frozen, lifetime-stable) AST node -- cache it once instead of rebuilding
         # the comprehension on every direct_leaf / direct_expand call. Keyed by
@@ -837,6 +888,7 @@ class SetEngine:
     # Writes (§6.1) -- no rewrite expansion, no derived state
     # ------------------------------------------------------------------ #
 
+    @_long_form_only("add_tuple('...', 'user', 'alice', 'viewer', 'doc', '1')", _SUBJECT_SIDE)
     def add_tuple(self, subject_predicate, subject_type: str, subject_name: str,
                   relation: str, object_type: str, object_name: str) -> bool:
         """Add one raw tuple; True if added, False for the idempotent duplicate
@@ -881,6 +933,7 @@ class SetEngine:
         self._apply_add(s_pred, s_type, s_name, relation, o_type, o_name, pairs=pairs)
         return True
 
+    @_long_form_only("remove_tuple('...', 'user', 'alice', 'viewer', 'doc', '1')", _SUBJECT_SIDE)
     def remove_tuple(self, subject_predicate, subject_type: str, subject_name: str,
                      relation: str, object_type: str, object_name: str) -> None:
         """Remove one raw tuple. Does not commit: the caller commits the session.
@@ -1458,6 +1511,7 @@ class SetEngine:
     # check -- pointwise, short-circuiting (§6.3)
     # ------------------------------------------------------------------ #
 
+    @_long_form_only("check('...', 'user', 'alice', 'viewer', 'doc', '1')", _SUBJECT_SIDE)
     def check(self, subject_predicate, subject_type: str, subject_name: str,
               relation: str, object_type: str, object_name: str) -> bool:
         """Is the subject related to the object? ``check("...", "user", "alice",
@@ -1469,6 +1523,9 @@ class SetEngine:
         require_parts('check', _TUPLE_LONG, (subject_predicate, subject_type, subject_name, relation, object_type, object_name))  # TK179: a wrong type is a TypeError
         s_type, s_name, o_type, o_name = subject_type, subject_name, object_type, object_name  # TK123 item 7
         reject_ellipsis_predicate(subject_predicate, 'check', write=False)  # TK123 item 9
+        refuse_undeclared_subject(self._declared, 'check', subject_predicate,  # TK185
+                                  s_type, s_name, (relation, o_type, o_name))
+        refuse_undeclared_object(self._declared, 'check', o_type, relation)
         s_pred = _norm_pred(subject_predicate)
         subject = (s_type, s_name, s_pred)
         memo: dict[tuple[str, str, str], bool] = {}
@@ -1641,6 +1698,7 @@ class SetEngine:
     # expand -- bulk, memoized MemberSets (§6.3)
     # ------------------------------------------------------------------ #
 
+    @_long_form_only("expand('viewer', 'doc', '1')", _OBJECT_SIDE)
     def expand(self, relation: str, o_type: str, o_name: str,
                memo: dict | None = None) -> MemberSet:
         """The full member set of (o_type, o_name, relation) as a MemberSet.
@@ -1651,6 +1709,7 @@ class SetEngine:
         callers wanting keys use ``lookup_reverse`` + ``result_keys`` / ``excluded_keys``."""
         if memo is None:   # TK179: the top-level call only, not each recursion
             require_parts('expand', ('relation', 'o_type', 'o_name'), (relation, o_type, o_name))
+            refuse_undeclared_object(self._declared, 'expand', o_type, relation)  # TK185
         # Provenance (moved out of the docstring, TK123 item 14): §6.3.
         if memo is None:
             memo = {}
@@ -1835,6 +1894,7 @@ class SetEngine:
     # Lookups (§6.4)
     # ------------------------------------------------------------------ #
 
+    @_long_form_only("lookup_reverse('viewer', 'doc', '1')", _OBJECT_SIDE)
     def lookup_reverse(self, relation: str, object_type: str, object_name: str) -> SetLookupResult:
         """Everything that can reach the object: expand rendered as a SetLookupResult.
 
@@ -1851,6 +1911,7 @@ class SetEngine:
         # Provenance (moved out of the docstring, TK123 item 14): TK139.
         # Provenance (moved out of the docstring, TK123 item 14): §6.4.
         o_type, o_name = object_type, object_name  # TK123 item 7
+        refuse_undeclared_object(self._declared, 'lookup_reverse', o_type, relation)  # TK185
         m = self.expand(relation, o_type, o_name)
         result = SetLookupResult(id_stamp=self._id_stamp())
         result.node_ids = set(m.pos)
@@ -1876,6 +1937,10 @@ class SetEngine:
         # on purpose: ``lookup_reverse`` is a content-pinned anchor, and filtering a
         # computed result changes no modelled algorithm.
         matches = shape_filter('filter_result', entity_type, predicate)
+        # TK185 step 4: the lookup filter rules; '...' (a bare subject) is legal because
+        # this also filters lookup_reverse results
+        refuse_undeclared_filter(self._declared, 'filter_result', 'entity_type',
+                                 entity_type, 'predicate', predicate, bare=True)
         if matches is None:
             return res
         key_of = self.interner.key_of
@@ -2028,6 +2093,7 @@ class SetEngine:
                             out.append(rid)
         return out
 
+    @_long_form_only("lookup('...', 'user', 'alice')", _SUBJECT_SIDE)
     def lookup(self, subject_predicate, subject_type: str, subject_name: str) -> SetLookupResult:
         """Everything the subject can reach, found by a reverse walk from the subject.
 
@@ -2108,6 +2174,8 @@ class SetEngine:
         # Provenance (moved out of the docstring, TK123 item 14): §6.4.
         s_type, s_name = subject_type, subject_name  # TK123 item 7
         reject_ellipsis_predicate(subject_predicate, 'lookup', write=False)  # TK123 item 9
+        refuse_undeclared_subject(self._declared, 'lookup', subject_predicate,  # TK185
+                                  subject_type, subject_name)
         s_pred = _norm_pred(subject_predicate)
         result = SetLookupResult(id_stamp=self._id_stamp())
         for (t, rel) in self.ast:                          # declared (type, relation)
