@@ -16,6 +16,7 @@ source_hash:
 created: 2026-11-01
 taskpy_moved: '2026-11-01'
 taskpy_updated: '2026-11-01'
+updated: 2026-11-20a
 ---
 
 From the 0.1.2 fresh-user install trial (`docs/pypi-trial-0.1.2-2026-11-01.md`): 0 BROKEN, 8 CONFUSING / DOC GAP. C4 is its own row. This row holds the rest. Each needs a decision: fix the behaviour or fix the wording. Equivalence is unaffected; no wrong permission answer was found.
@@ -29,6 +30,8 @@ From the 0.1.2 fresh-user install trial (`docs/pypi-trial-0.1.2-2026-11-01.md`):
 - Also from the trial: 6 public attributes have no docstring (`SchemaInfo.bridged_in_shapes` / `bridged_out_shapes`, `Entity.wildcard`, `CompiledBooleans.derived_families` / `leaf_families`, `Node.predicate_or_ellipsis`), and `how-to/test-permissions` needs pytest, which is not a dependency, without saying so.
 
 ## Read first
+
+- docs/tk185-0.1.3-batch-2026-11-20.md
 - docs/pypi-trial-0.1.2-2026-11-01.md
 
 ## Log

@@ -4,6 +4,14 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
+## 2026-11-20a · kind: open
+
+- **opened:** 2026-11-20T14:16:54+08:00 by claude-code/claude-opus-5-5
+- **start head:** fae13a2656170ad8b1936edea0256f49f0117409
+- **tasks:** TK-185
+
+---
+
 ## 2026-11-16a · kind: close
 
 - **rows:** DEC-13..15 (ACCEPTED by decision accept --owners, the 0.6 upgrade step); no board item
