@@ -296,9 +296,12 @@ MASKED_PAIRS = {
         'test_corpus_has_a_star_admitting_intersection_with_a_derived_dep',
 }
 _MASKED_MEMBERS = frozenset().union(*MASKED_PAIRS) if MASKED_PAIRS else frozenset()
-#: OPEN QUESTION (board row P11, ~1/2 session) -- the fixture-TRIPLE question.
-#: Pairwise scoring is what put these five here; a TRIPLE score is what would settle
-#: keep-or-delete. Completion criterion: score feature TRIPLES over these five against
+#: DECIDED, NOT WIDER (2026-11-21a, DEC-21) -- the fixture-TRIPLE question. Its board
+#: row, TK-255 (alias P11), is retired: no row tracks it, by decision, and this block is
+#: kept so a session that ever reopens it has the criterion and the trap. Pairwise
+#: scoring is what put the `KNOWN_SUBSUMED` fixtures here; a TRIPLE score is what would
+#: settle keep-or-delete (`demorgans_law_1` stays whatever it says: see above).
+#: Completion criterion: score feature TRIPLES over the `KNOWN_SUBSUMED` fixtures against
 #: the rest of the corpus; if a listed fixture holds a unique triple it is NOT subsumed
 #: and comes off this list, otherwise its retirement candidacy is confirmed and deletion
 #: becomes a real option.
@@ -306,10 +309,10 @@ _MASKED_MEMBERS = frozenset().union(*MASKED_PAIRS) if MASKED_PAIRS else frozense
 #: `test_fga_corpus_feature_coverage_does_not_regress` to TRIPLE coverage corpus-wide.
 #: The pair space is already this gate's cost centre and triples are cubic in features.
 #: And cost is NOT the only reason -- corpus-wide triple coverage would redden on
-#: exactly these five, and the tempting fix (adding them to an exemption list) is the
-#: hand-maintained-list-beside-a-glob pattern that has ALREADY FAILED TWICE in this
-#: tree. So scoping the triples to a subset to dodge the cost does not make this safe.
-#: Score the five OFFLINE and pin only what the scoring actually settles.
+#: exactly the `KNOWN_SUBSUMED` fixtures, and the tempting fix (adding them to an
+#: exemption list) is the hand-maintained-list-beside-a-glob pattern that has ALREADY
+#: FAILED TWICE in this tree. So scoping the triples to a subset to dodge the cost does
+#: not make this safe. Score them OFFLINE and pin only what the scoring actually settles.
 #: (The board previously cited a `test_fixture_earns_its_place` for this trap; no such
 #: test has ever existed -- corrected 2026-08-16.)
 
