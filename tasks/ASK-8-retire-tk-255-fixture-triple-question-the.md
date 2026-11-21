@@ -4,13 +4,16 @@ id: ASK-8
 title: Retire TK-255 (fixture-triple question; the register test already owns it)?
 brief: 'recommend retire: test_subsumption_register_is_current owns it; title stale (6 fixtures, not 5)'
 pri: LATER
-state: open
+state: closed
 deps: []
 source: session 2026-11-20a
 created: 2026-11-20
 moved: 2026-11-20a
-updated: 2026-11-20a
-last_asked: 2026-11-20a
+updated: 2026-11-21a
+last_asked: 2026-11-21a
+status: deprecated
+closed: 2026-11-21a
+answered: {on: 2026-11-21, session: 2026-11-21a, decision: DEC-21}
 ---
 
 **Question:** Retire TK-255 (the fixture-TRIPLE question for the subsumed .fga fixtures)?
@@ -29,3 +32,5 @@ last_asked: 2026-11-20a
 **Blocks:** none
 
 ## Log
+
+- 2026-11-21a (claude-code/claude-opus-5-5): answered by the owner: DEC-21
