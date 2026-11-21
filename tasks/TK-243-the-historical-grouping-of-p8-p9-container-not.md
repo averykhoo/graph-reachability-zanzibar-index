@@ -5,7 +5,7 @@ aliases: [B2]
 title: the historical grouping of P8 + P9 (container, not work)
 brief:
 pri: SOMEDAY
-state: open
+state: closed
 size: '?'
 deps: []
 related: []
@@ -16,8 +16,10 @@ source_hash: acked-no-row
 created: 2026-08-16
 taskpy_moved: 2026-10-04g
 taskpy_updated: 2026-10-04g
-moved: 2026-11-20a
-updated: 2026-11-20a
+moved: 2026-11-21a
+updated: 2026-11-21a
+status: deprecated
+closed: 2026-11-21a
 ---
 
 The historical grouping of `P8` (write `W4WitnessSelfRef`) and `P9` (lift the remove-gate exclusion). `HANDOFF.md` records it as surviving purely as that grouping after `B1` was retired, so it carries no work of its own: it is done exactly when both children are. Nothing here should be worked directly — promote a child instead.
@@ -43,3 +45,5 @@ No row on HANDOFF.md, and that is correct: B2 is prose-only there -- the board n
 
 Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): pure container ('carries no work of its own'); closable once P8 resolves -- see P8 log 2026-10-04g.
 - 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. A pure container of TK-252 and TK-253 that carries no work of its own; the engine board needs no parent row. Its retirement is put to the owner as a question.
+- 2026-11-21a (claude-code/claude-opus-5-5): closed: retired: a container with no work; TK-252/TK-253 stand alone (both deps: []); DEC-20
+  residual risk: none
