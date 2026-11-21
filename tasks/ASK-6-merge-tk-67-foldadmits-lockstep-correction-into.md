@@ -4,13 +4,16 @@ id: ASK-6
 title: Merge TK-67 (FoldAdmits lockstep correction) into TK-277 as a trap?
 brief: 'recommend merge: TK-277 is its only consumer (2026-10-04g sweep)'
 pri: LATER
-state: open
+state: closed
 deps: []
 source: session 2026-11-20a
 created: 2026-11-20
 moved: 2026-11-20a
-updated: 2026-11-20a
-last_asked: 2026-11-20a
+updated: 2026-11-21a
+last_asked: 2026-11-21a
+status: deprecated
+closed: 2026-11-21a
+answered: {on: 2026-11-21, session: 2026-11-21a, decision: DEC-19}
 ---
 
 **Question:** Merge TK-67 (the FoldAdmits "lockstep" correction) into TK-277 as a trap?
@@ -29,3 +32,5 @@ last_asked: 2026-11-20a
 **Blocks:** none
 
 ## Log
+
+- 2026-11-21a (claude-code/claude-opus-5-5): answered by the owner: DEC-19
