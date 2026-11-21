@@ -5,7 +5,7 @@ aliases: [TK36]
 title: delta post-processing layer to expand symbolic wildcard PermissionDeltas -- no id anywhere
 brief:
 pri: SOMEDAY
-state: open
+state: closed
 size: L
 deps: []
 related: []
@@ -17,6 +17,10 @@ created: 2026-08-21
 taskpy_created: 2026-08-21b
 taskpy_moved: '2026-09-10'
 taskpy_updated: '2026-09-10'
+status: deprecated
+closed: 2026-11-21a
+moved: 2026-11-21a
+updated: 2026-11-21a
 ---
 
 `docs/specs/wildcard-materialization-spec.md:259`: *"`PermissionDelta`s that mention a wildcard node id are **symbolic** ('everyone of shape S gained/lost X'). Pass them through untouched and document this in the README delta section; expansion is a future post-processing layer, out of scope."* The pass-through shipped; the expansion layer has no id and no later doc tracking it.
@@ -45,3 +49,5 @@ LANDED 2026-09-10 (TK53 append), RE-HOMED to `docs/spec-deviations.md` for the s
 The drafted prose said sec 10 keeps expansion a non-goal "until a consumer that actually needs expanded deltas exists". Caught adversarially and dropped: `wildcard-materialization-spec.md:324` lists it among Non-goals with NO condition attached -- the consumer rationale is this task row's, not the spec's. Verified :324 first-hand.
 
 The landed text keeps the half that is actually load-bearing and adds the stronger second reason the read path has since grown: `src/zanzibar/graphindex/wildcard.py::WildcardIndex.lookup_reverse` fences leaf families because a leaf family is storage-internal (`wildcard.py:864`). The sec 6 invariant it is in tension with, "Never enumerate a marker into concretes", is at `:258` -- grepped.
+- 2026-11-21a (claude-code/claude-opus-5-5): closed: retired: a recorded non-goal (docs/specs/wildcard-materialization-spec.md section 10, 'Non-goals (do not build)', no condition attached); its one trap already landed as docs/spec-deviations.md section 2026-09-10 TK36; DEC-18
+  residual risk: none
