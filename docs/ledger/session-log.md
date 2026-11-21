@@ -4,11 +4,30 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
-## 2026-11-21b · kind: open
+## 2026-11-21b · kind: close
 
-- **opened:** 2026-11-21T19:45:09+08:00 by claude-code/claude-sonnet-5-5
+- **rows:** ASK-10 (granted, closed)
+- **receipts:**
+  - guards: 10 passed (phases: lean, conf-tile 1-5, tests-tile 1-4) on 705407e, lint clean,
+    gate_status COVERED
+  - read: orient, ASK-10, subagent report
+  - granted: ASK-10
+  - housekeeping: hk run close: 0 writes, 0 op log lines
+  - banner: kept 2026-11-16a
+- **summary** (the owner digest):
+  - Owner granted the push (ASK-10): "Okay to push, token budget is almost up so use minimal tokens
+    for this".
+  - Gate re-run green on 705407e (all ten phases, lint clean); pushed 84743f4..705407e; CI green
+    (gate run 44908478041, docs run 44908478098).
+  - One tests-tile:1/4 run went red (47 failed, DLL init error 0xC0000142) after a haiku helper
+    backgrounded it and lost the console; re-run in the foreground, all four tiles passed. A haiku
+    helper cannot be trusted with a long phase here.
+- **Still owed:**
+  - Publish dry run (workflow_dispatch of publish.yml), then the v0.1.3 tag on the owner word, then
+    install trial + installed_smoke.py (TK-303)
+  - Review DEC-16 and the 2026-11-20a rerank moves
+  - Delete .context-engine/env-309641b
 - **start head:** 63579c2918db40ab87aff8b159fa2ae7ae5a2ba1
-- **granted:** ASK-10
 
 ---
 
