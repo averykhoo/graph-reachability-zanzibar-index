@@ -4,12 +4,36 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
-## 2026-11-21a · kind: open
+## 2026-11-21a · kind: close
 
-- **opened:** 2026-11-21T14:43:23+08:00 by claude-code/claude-opus-5-5
 - **continues:** 2026-11-20a
+- **rows:** ASK-9 (granted, closed); ASK-4..8 (answered as DEC-17..21, closed); TK-264, TK-36,
+  TK-243 (closed, retired); TK-67 (closed, merged into TK-277); TK-277 (Traps updated); TK-255
+  (closed, retired); TK-303 (push + CI done; dry run and tag still owed)
+- **receipts:**
+  - guards: ten-phase gate at 8768dc6 (2026-11-21): lean PASSED; conformance 1246 passed
+    (250+249+249+249+249); tests 3962 passed (991+991+990+990); gate_status COVERED there; the
+    TK-255 close and this close are records-only and stale the tiles; lint: clean
+  - read: orient (resumed context); tasks/ASK-4..8; .scratch fable second opinion
+  - granted: ASK-9
+  - housekeeping: hk run close: 0 writes, 0 op log lines
+  - banner: kept 2026-11-16a
+- **summary** (the owner digest):
+  - Owner granted the push ("Okay push", ASK-9): gate re-run green at 84743f4, pushed
+    fae13a2..84743f4, CI green (gate run 44883322220: all 10 jobs; docs run 44883322223).
+  - Owner: "Okay to all of fables calls" -> DEC-17..21: TK-264, TK-36, TK-243 retired; TK-67 merged
+    into TK-277 with the FoldAdmits stay-sites re-cited by symbol (checked first-hand); TK-255
+    retired with the test comment rewritten (8768dc6, comment-only).
+  - New standing rule (owner): babysitting gate phases and CI goes to a haiku agent the worker
+    blocks on.
+- **Still owed:**
+  - Push master 84743f4..HEAD (records + the test comment) on the owner's go, after a gate re-run on
+    that tree
+  - Publish dry run (workflow_dispatch of publish.yml), then the v0.1.3 tag on the owner's word,
+    then install trial + installed_smoke.py (TK-303)
+  - Review DEC-16 and the 2026-11-20a rerank moves (accept or overturn)
+  - Delete .context-engine/env-309641b (the 0.5 engine env) once nothing names it
 - **start head:** 3a144e45aad6a24265fe298b897a434eb0147064
-- **granted:** ASK-9
 
 ---
 
