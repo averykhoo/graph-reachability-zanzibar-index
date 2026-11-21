@@ -4,13 +4,16 @@ id: ASK-4
 title: Retire TK-264 (a real service wrapper, a recorded deliberate non-goal)?
 brief: 'recommend retire: a recorded non-goal, no consumer'
 pri: LATER
-state: open
+state: closed
 deps: []
 source: session 2026-11-20a
 created: 2026-11-20
 moved: 2026-11-20a
-updated: 2026-11-20a
-last_asked: 2026-11-20a
+updated: 2026-11-21a
+last_asked: 2026-11-21a
+status: deprecated
+closed: 2026-11-21a
+answered: {on: 2026-11-21, session: 2026-11-21a, decision: DEC-17}
 ---
 
 **Question:** Retire TK-264 (a real service wrapper)?
@@ -29,3 +32,5 @@ last_asked: 2026-11-20a
 **Blocks:** none
 
 ## Log
+
+- 2026-11-21a (claude-code/claude-opus-5-5): answered by the owner: DEC-17
