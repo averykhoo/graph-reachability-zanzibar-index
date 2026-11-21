@@ -5,7 +5,7 @@ aliases: [TK67]
 title: formal/HANDOFF.md and P6 say FoldAdmits moves in lockstep; the correction says 3 sites must stay
 brief:
 pri: LATER
-state: open
+state: closed
 size: S
 deps: []
 related: [TT-1, TK66, P6, P4]
@@ -17,6 +17,10 @@ created: 2026-09-07
 taskpy_created: 2026-09-07b
 taskpy_moved: 2026-10-04g
 taskpy_updated: 2026-10-04g
+status: deprecated
+closed: 2026-11-21a
+moved: 2026-11-21a
+updated: 2026-11-21a
 ---
 
 **VERIFIED FIRST-HAND 2026-09-07b.** Two live navigation documents instruct a session to
@@ -90,3 +94,5 @@ three sites (the `step` constructor exists, at a different line than recorded). 
 ### 2026-10-04g
 
 Closability sweep 2026-10-04g (agent report, UNVERIFIED first-hand unless marked; the session did not act on it): PARTLY DONE. Qualifier now on the P6 task file and the RulesComplete.lean stay-site exists; the two RestrictBase.lean stay-sites are still cited by line only (FoldAdmits now at several later lines). P6 is the only consumer: fold this into P6 as a trap and close as merged.
+- 2026-11-21a (claude-code/claude-opus-5-5): closed: merged into TK-277 (DEC-19): the three FoldAdmits stay-sites resolved first-hand by symbol 2026-11-21a (RulesComplete.lean::ReachedByRulesAdmitted.step hadm; RestrictBase.lean::exists_admitted_restrict and ::exists_admitted_ofAcyclicTarget, each a have hFA) and written into TK-277's Historical trap with the do-not-delete-lockstep warning; formal/HANDOFF.md no longer says lockstep, so the stated hazard is gone
+  residual risk: none

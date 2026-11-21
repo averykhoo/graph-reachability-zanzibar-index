@@ -18,7 +18,7 @@ taskpy_created: 2026-08-20b
 taskpy_moved: 2026-09-17c
 taskpy_updated: '2026-09-22'
 moved: 2026-11-20a
-updated: 2026-11-20a
+updated: 2026-11-21a
 ---
 
 Materialise the in-bridge on the rule-routed write path so the widened star-freeness
@@ -204,6 +204,25 @@ fragment-excluded), so the gate cannot see it and all evidence must be new Lean 
 for part (i). Increment B also **inverts
 `extractor.py::_edge_projection`'s `P2` projection** (it drops PYTHON `w_any` rows because
 "Lean never creates them"); its docstring is already false. Detail: ledger `2026-08-20b`.
+
+**The three `FoldAdmits` stay-sites, by SYMBOL** (resolved first-hand 2026-11-21a, DEC-19; carried
+over from `TK67`, closed as merged here). `PROOF_STATUS.md:4897` cites them by line only
+(`RulesComplete.lean:91`, `RestrictBase.lean:470`, `:531`), and every one of those lines has
+rotted. The sites are:
+- `formal/lean/ZanzibarProofs/GraphIndex/RulesComplete.lean::ReachedByRulesAdmitted.step`, its
+  `hadm : FoldAdmits σ (rewriteClosure S t)` field (line 115 on 2026-11-21);
+- `formal/lean/ZanzibarProofs/GraphIndex/RestrictBase.lean::exists_admitted_restrict`, its
+  `have hFA : FoldAdmits σ'p (rewriteClosure (restrictUntainted S) t)` (line 493 on 2026-11-21);
+- `formal/lean/ZanzibarProofs/GraphIndex/RestrictBase.lean::exists_admitted_ofAcyclicTarget`, its
+  `have hFA : FoldAdmits σp (rewriteClosure S t')` (line 554 on 2026-11-21).
+The mapping is READ, not inferred: at `38aef9c`, the commit that wrote the correction,
+`RestrictBase.lean:470` and `:531` are exactly these two `have hFA` lines inside the same two
+theorems, and both moved by +23 since. A report of "no such site" means the citation rotted
+again, not that the trap is invalid: re-resolve by symbol, never delete it (`TK67` Log
+2026-09-19f: a subagent reporting "there is no `step` constructor" would have deleted a valid trap).
+⚠ **Do not "fix" this by deleting the word lockstep** (`TK67`'s trap). The lockstep claim is
+21/24 true and it is the reason `P3` and `P6` collided. Removing it loses the collision
+argument; qualifying it is the fix.
 
 ⚠ **DO NOT DROP IT.** Without `ttuStarFree`, `graph_correct` and `backend_equivalence` are
 machine-checked **FALSE** — not merely unproven. Part (i) is **INERT**: part (ii)
