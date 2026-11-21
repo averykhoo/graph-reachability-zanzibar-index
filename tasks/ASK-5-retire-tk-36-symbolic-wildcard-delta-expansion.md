@@ -4,13 +4,16 @@ id: ASK-5
 title: Retire TK-36 (symbolic wildcard delta expansion, a spec non-goal with no consumer)?
 brief: 'recommend retire: the spec lists it as a non-goal and no consumer exists'
 pri: LATER
-state: open
+state: closed
 deps: []
 source: session 2026-11-20a
 created: 2026-11-20
 moved: 2026-11-20a
-updated: 2026-11-20a
-last_asked: 2026-11-20a
+updated: 2026-11-21a
+last_asked: 2026-11-21a
+status: deprecated
+closed: 2026-11-21a
+answered: {on: 2026-11-21, session: 2026-11-21a, decision: DEC-18}
 ---
 
 **Question:** Retire TK-36 (a layer that expands symbolic wildcard PermissionDeltas)?
@@ -29,3 +32,5 @@ last_asked: 2026-11-20a
 **Blocks:** none
 
 ## Log
+
+- 2026-11-21a (claude-code/claude-opus-5-5): answered by the owner: DEC-18
