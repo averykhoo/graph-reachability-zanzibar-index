@@ -4,10 +4,33 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
-## 2026-11-22a · kind: open
+## 2026-11-22a · kind: close
 
-- **opened:** 2026-11-22T23:55:01+08:00 by claude-code/claude-opus-5-5
 - **continues:** 2026-11-21b
+- **rows:** TK-275 (closed); TK-304 (closed); RISK-1 (retired); TK-146 (promoted to NOW,
+  provisional); TK-307 (commented)
+- **receipts:**
+  - guards: 10 passed (phases: lean, conf-tile 1-5, tests-tile 1-4) on 4b313ad, lint clean,
+    gate_status COVERED; no fuzz sweep
+  - read: orient, TK-275, TK-304, agent reports
+  - housekeeping: hk run close: 0 writes, 0 op log lines
+  - banner: kept 2026-11-16a
+- **summary** (the owner digest):
+  - Owner: "build stuff until then" (until the 4am token reset). Two rows done, all local, nothing
+    pushed.
+  - TK-275 closed (a727173, 235e9b2): 21 closed-row ACTIVE-PLAN docs frozen; handoff_lint now reds a
+    plan doc whose named rows are all closed (17 sabotages seen red). TK-146 promoted to NOW as a
+    provisional placeholder.
+  - TK-304 closed (019c3c3, 84daa15, 4b313ad): lookup_reverse/expand no longer list a userset key
+    check() refuses, same predicate both backends (D1, PROVISIONAL); RISK-1 retired; MIN_TESTS_ALL
+    3995->4003.
+- **Still owed:**
+  - Fuzz sweep (read algorithm changed, TK-304) before pushing master 705407e..HEAD; push on the
+    owner go
+  - Review TK-304 D1, the TK-275 design calls and the provisional NOW pick (TK-146)
+  - CHANGELOG ### Fixed line for TK-304 at the next release
+  - Publish dry run, v0.1.3 tag on the owner word, install trial (TK-303); review DEC-16 and the
+    2026-11-20a rerank; delete .context-engine/env-309641b
 - **start head:** 8a5051f65b9d00ad97e02a5ad83789044cf0834f
 
 ---
