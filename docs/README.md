@@ -136,9 +136,15 @@ because "there is a lint for it" has been assumed here before it was true):
   `ACTIVE-PLAN` up top — and the check deliberately refuses a hand-maintained filename
   list, because a list beside a glob goes stale the first time someone adds a file. So a
   new record landing in a history dir *is* covered automatically.
-* ⚠ **Not enforced: design docs that live outside a history dir.** Nothing walks
-  `docs/design/` or `docs/specs/`, so the "freeze at landing" rule above is held by hand
-  there. That is the residual half of what was once filed as a one-time sweep.
+* **Enforced since 2026-11-22 (`TK-275`), for plans named after their row.**
+  `scripts/handoff_lint.py::check_active_plans_closed_rows` reds a doc in `docs/`,
+  `docs/architecture/`, `docs/specs/`, `docs/evidence/`, `formal/` or a history dir that still
+  declares ACTIVE-PLAN when every row its file name names (`docs/<id>-<topic>-<date>.md`,
+  aliases resolved) is closed; `context-engine doc freeze <doc>` is the fix it names. Its rule
+  and why the engine's own G-D4 cannot hold it here: the comment above
+  `handoff_lint.PLAN_DOC_DIRS`.
+* ⚠ **Not enforced: a plan whose file name names no row**, and any doc that declares no
+  state at all. Freeze those at landing by hand; the undeclared ones are `TK-307`'s.
 * ⚠ **Not enforceable: a stale DESCRIPTION.** `::check_doc_links` proves a link resolves,
   never that the sentence around it still describes the target. A citation naming a line or
   a section of another doc breaks silently when that doc is rewritten, and no check will

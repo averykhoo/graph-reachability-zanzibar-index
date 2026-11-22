@@ -395,7 +395,8 @@ def test_the_two_checks_are_in_the_list_and_nothing_was_inserted():
     assert names[10] == "check_session_receipt", names
     assert names[11] == "check_restated_counts", names
     assert names[12] == "check_still_owed_fresh", names  # TK97, appended 2026-10-13
-    assert len(names) == 13, names
+    assert names[13] == "check_active_plans_closed_rows", names  # TK-275, appended 2026-11-22
+    assert len(names) == 14, names
 
 
 # --- check_session_receipt: the conditional `asked:` receipt (TK96, 2026-09-27) ----------

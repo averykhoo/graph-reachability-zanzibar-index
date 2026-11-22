@@ -293,6 +293,45 @@ LIVENESS_WINDOW = 10
 _DECLARATION = re.compile(r'\*\*(LIVING|ACTIVE-PLAN)\b')
 _FROZEN_DECL = re.compile(r'\*\*FROZEN\b')
 
+# --- An ACTIVE-PLAN doc whose rows are all closed (added 2026-11-22, task ``TK-275``) -------
+# THE ROT THAT MOTIVATED IT. docs/README.md sec 2 "Freeze at landing" and CLAUDE.md
+# "SCOUTING IS A DELIVERABLE" both say a plan doc is FROZEN when its item closes, and both
+# were held by hand: on 2026-11-22 the census in docs/tk275-plan-freeze-check-2026-11-22.md
+# found a block of `docs/tk<n>-...` plans still reading ACTIVE-PLAN weeks after their rows
+# closed. The engine's own G-D4 holds the same rule, but it cannot be pointed at these docs:
+# its `_named` reads only canonical ids (`TK-106`), while these docs name the task.py alias
+# (`TK106`), and listing docs/ in `[guards] liveness` reds every doc that declares no state at
+# all, which is TK-307's open adjudication, not this check's.
+#
+# THE KEY IS THE FILE NAME, not the ids in the opening lines: the plan-doc convention is
+# `docs/<id>-<topic>-<date>.md` (CLAUDE.md), and the opening lines carry incidental ids (the
+# TK120 rename note sits in most of them), which would hold a plan open on a row it does not
+# serve. Every leading `<letters><digits>-` token of the name is read (`tk91-tk80-...` serves
+# both), resolved as the task.py alias (`TK91`) or the engine id (`TK-91`); a token that names
+# no row (`p22-i14-...`'s `I14`, an invariant) is ignored. Red only when every resolved row is
+# closed. A doc whose name resolves to no row is out of scope (TK-307 holds those).
+#
+# THE DECLARATION IS READ AS THE ENGINE READS IT (`context_engine.guards.declared`, mirrored
+# because the engine runs from its own environment): the topmost line in the window that OPENS
+# A BLOCK and is led, after a blockquote `>` and emphasis, by the word. `context-engine doc
+# freeze` writes an UNBOLDED `FROZEN <date> ...` line above the old declaration, so the bold
+# `_DECLARATION` above would read a frozen plan as still ACTIVE-PLAN. Known gaps in the mirror:
+# no frontmatter `liveness:` key and no BOM strip (on 2026-11-23 they changed the reading of
+# docs/runbooks/* only, which lies outside PLAN_DOC_DIRS; review agent, compared repo-wide).
+PLAN_DOC_DIRS = ('docs', 'docs/architecture', 'docs/specs', 'docs/evidence', 'docs/history',
+                 'formal', 'formal/history')
+_PLAN_ID_PREFIX = re.compile(r'([a-z]{1,3})-?(\d+)-')
+_PLAN_DECLARED = re.compile(r'^\s*(?:>\s*)*(?:\*\*|__|\*|_)?(LIVING|ACTIVE-PLAN|FROZEN)'
+                            r'(?![A-Za-z0-9-])')
+_PLAN_ARCHIVED = re.compile(r'^\s*ARCHIVED \d{4}-\d{2}-\d{2}')
+_PLAN_FENCE = re.compile(r'^\s*(`{3,}|~{3,})')
+_PLAN_HEADING = re.compile(r'^#{1,6}\s')
+# Floor on docs whose file name resolved to a row: the blind-parser control (a prefix regex
+# that stops matching, or a state map that comes back empty, would otherwise pass forever).
+# Measured 2026-11-22: 90 such docs across PLAN_DOC_DIRS. 50 survives archiving half of
+# them and still catches either failure. Same loose-instrument-control idiom as MIN_DOC_LINKS.
+MIN_PLAN_DOCS_KEYED = 50
+
 WARN = u'⚠'      # the trap badge
 STAR = u'★'      # retired from the board files
 
@@ -688,6 +727,109 @@ def check_frozen_banners(fail):
                      'lines. A reader cannot tell whether its status lines are still '
                      'true. See docs/README.md sections 2-3 for the banner text.'
                      % (rel, LIVENESS_WINDOW))
+
+
+def _tree_closed():
+    """Every id the task tree knows (id and aliases) -> whether its record is closed, or None
+    if there is no tree. A record under the pre-engine ``tasks/closed/`` counts as closed."""
+    root = os.path.join(REPO, TASKS_DIR)
+    if not os.path.isdir(root):
+        return None
+    out = {}
+    for d, top in ((root, True), (os.path.join(root, 'closed'), False)):
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            if not name.endswith('.md') or (top and name in TASKS_NON_TASK_MD):
+                continue
+            head = _frontmatter_head(os.path.join(d, name))
+            closed = (not top) or _closed_record(head)
+            for ln in head:
+                ids = [ln[3:].strip()] if ln.startswith('id:') else _aliases(ln)
+                for i in ids:
+                    if i:
+                        out[i] = closed
+    return out
+
+
+def _declared_liveness(lines, window):
+    """The topmost liveness word in ``lines[:window]``, read as the engine's G-D4 reads it
+    (see the comment above ``PLAN_DOC_DIRS``), or None."""
+    end = None
+    if lines and lines[0] == '---' and '---' in lines[1:]:
+        end = lines.index('---', 1)
+    fence = False
+    for i, line in enumerate(lines[:window]):
+        if end is not None and i <= end:
+            continue
+        if _PLAN_FENCE.match(line):
+            fence = not fence
+            continue
+        if fence:
+            continue
+        prev = lines[i - 1] if i else ''
+        opens = (not prev.lstrip(' >').strip() or _PLAN_HEADING.match(prev)
+                 or (end is not None and i == end + 1))
+        if not opens:
+            continue  # a wrapped line: the word at a soft break is the word in passing
+        if _PLAN_ARCHIVED.match(line):
+            return 'FROZEN'
+        m = _PLAN_DECLARED.match(line)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _plan_rows(name, closed):
+    """The rows a plan doc's file name names, as [(id, is_closed)], aliases resolved."""
+    out, rest = [], name
+    while True:
+        m = _PLAN_ID_PREFIX.match(rest)
+        if not m:
+            return out
+        letters, digits = m.group(1).upper(), m.group(2)
+        for cand in (letters + digits, '%s-%s' % (letters, digits)):
+            if cand in closed:
+                out.append((cand, closed[cand]))
+                break
+        rest = rest[m.end():]
+
+
+def check_active_plans_closed_rows(fail):
+    """An ACTIVE-PLAN doc whose file name names rows that are ALL closed is red: freeze it.
+
+    Rule, scope and why: the comment above ``PLAN_DOC_DIRS``. Pinned, with its sabotage
+    record, by tests/test_handoff_lint_active_plans.py.
+    """
+    closed = _tree_closed()
+    if closed is None:
+        return
+    keyed = 0
+    for d in PLAN_DOC_DIRS:
+        full = os.path.join(REPO, d)
+        if not os.path.isdir(full):
+            continue
+        for name in sorted(os.listdir(full)):
+            if not name.endswith('.md'):
+                continue
+            rows = _plan_rows(name, closed)
+            if not rows:
+                continue
+            keyed += 1
+            rel = '%s/%s' % (d, name)
+            if _declared_liveness(_read(rel) or [], LIVENESS_WINDOW) != 'ACTIVE-PLAN':
+                continue
+            if all(c for _, c in rows):
+                fail('%s: declares ACTIVE-PLAN, but every row its file name names (%s) is '
+                     'closed, so it reads as work in progress. Freeze it: '
+                     '`context-engine doc freeze %s` writes a dated FROZEN line above the '
+                     'ACTIVE-PLAN one (docs/README.md sec 2 "Freeze at landing").'
+                     % (rel, ', '.join(i for i, _ in rows), rel))
+    if keyed < MIN_PLAN_DOCS_KEYED:
+        fail('check_active_plans_closed_rows resolved only %d doc file name(s) to a task row '
+             '(floor MIN_PLAN_DOCS_KEYED = %d): the file-name parser or the task-state reader '
+             'has gone blind, so this check would pass on anything.'
+             % (keyed, MIN_PLAN_DOCS_KEYED))
 
 
 def check_ledger_headlines(fail):
@@ -1674,6 +1816,8 @@ CHECKS = (
     # Appended 2026-10-13 (task ``TK97``). Cited by name, never as "check 15" -- that
     # number belongs to task.py's series.
     check_still_owed_fresh,
+    # Appended 2026-11-22 (task ``TK-275``).
+    check_active_plans_closed_rows,
 )
 
 

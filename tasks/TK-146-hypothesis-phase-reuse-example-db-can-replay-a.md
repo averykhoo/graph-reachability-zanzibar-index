@@ -4,7 +4,7 @@ id: TK-146
 aliases: [TK146]
 title: hypothesis Phase.reuse / example DB can replay a stored failure and fake a sabotage catch
 brief: ci profiles keep Phase.reuse and the .hypothesis DB; a sabotage run can pass on a replay
-pri: NEXT
+pri: NOW
 state: open
 size: S
 deps: []
@@ -16,8 +16,8 @@ source_hash:
 created: 2026-10-14
 taskpy_moved: '2026-10-14'
 taskpy_updated: '2026-10-14'
-moved: 2026-11-20a
-updated: 2026-11-20a
+moved: 2026-11-22a
+updated: 2026-11-22a
 ---
 
 Residual of TK142 (challenge C3, `docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md`), not closed by the TK142 build (worktree-wf_9a094007-20b-11 @69080d4 changed no hypothesis profile).
@@ -42,3 +42,4 @@ Done when: a sabotage run of a hypothesis test cannot be satisfied by a replayed
 ## Log
 
 - 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> NEXT. HONEST: the hypothesis example DB can make a sabotage run fake a catch (the house failure mode, on the instrument). Ranked ahead of TK-148 and TK-145 because their sabotage measurements are only trustworthy once this is fixed.
+- 2026-11-22a (claude-code/claude-opus-5-5): PROVISIONAL (agent, 2026-11-22a): NEXT -> NOW as the top of NEXT, because TK-275 closed and the gate (handoff_lint: exactly one NOW) went red with NOW empty. A placeholder pick, cheap to undo: the owner may re-pick NOW from NEXT (TK-148, TK-288, TK-303, TK-304).
