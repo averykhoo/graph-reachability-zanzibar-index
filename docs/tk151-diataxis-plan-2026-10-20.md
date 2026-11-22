@@ -1,5 +1,8 @@
 # TK151 — user docs (Diataxis) + GitHub Pages: plan, 2026-10-20
 
+FROZEN 2026-11-23 (session 2026-11-22a): TK151 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 ACTIVE-PLAN (`docs/README.md` §3). Owner row: `TK151`. Corrections go at the top, dated.
 
 ## Correction 2026-10-23e — diagrams for two-backends and consistency (session 2026-10-23d)

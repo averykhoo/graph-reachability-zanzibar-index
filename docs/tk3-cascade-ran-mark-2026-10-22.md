@@ -1,5 +1,8 @@
 # `TK3` — the always-on cascade-owed mark: the measured plan
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK3 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN, opened 2026-10-22 — the body is provenance, not a living status.** This is
 the execution map for `TK3` (0.1.0 blocker): refuse the COMMIT of a transaction in which a
 `WildcardIndex` write on a boolean schema ran no `DeltaProcessor.run_cascade` /

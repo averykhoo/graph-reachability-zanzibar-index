@@ -1,5 +1,8 @@
 # `TK158` -- make a `ClosureFanoutExceeded` refusal cheap (2026-10-22)
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK158 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN, opened 2026-10-22 -- the body is provenance, not a living status.** This is
 the execution map for `TK158` (count before loading; undo instead of rebuild), written by
 the PLAN stage of the session-2026-10-22 TK158 lane before any product edit. Every figure

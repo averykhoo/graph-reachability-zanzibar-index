@@ -1,5 +1,8 @@
 # `TK106`: a `from`-tupleset must be direct-only (boolean and computed tuplesets are refused)
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK106 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN (`docs/README.md` §3), opened 2026-09-26 (session `2026-09-26b`).** Corrections
 are appended dated at the top. FROZEN when `TK106` closes. Live state is
 `python scripts/task.py show TK106`, never this file. Figures were measured on `2026-09-26`

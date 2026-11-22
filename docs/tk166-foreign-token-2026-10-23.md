@@ -1,5 +1,8 @@
 # TK166 -- refuse a freshness token issued by another store (2026-10-23)
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK166 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 > **ACTIVE-PLAN** (`docs/README.md` sec 3): the working record for `TK166`. Corrections are
 > appended dated at the top, never edited into the body; FROZEN when `TK166` closes.
 

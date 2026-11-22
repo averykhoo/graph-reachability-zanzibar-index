@@ -1,5 +1,8 @@
 # `TK138` — a userset related to itself (`doc:1#viewer` @ `viewer` @ `doc:1`): measured plan
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK138 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN, opened 2026-10-14 — the body is provenance, not a living status.** Scouting
 for `TK138`, produced by the `scout-TK138` workflow agent on 2026-10-14 against HEAD
 `0b09687` (+ an unrelated uncommitted `tasks/TK119-*.md` edit). Live state is the task row

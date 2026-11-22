@@ -9,7 +9,7 @@ deps: []
 source: session 2026-11-20a
 created: 2026-11-20
 moved: 2026-11-20a
-updated: 2026-11-20a
+updated: 2026-11-22a
 ---
 
 TK-275 split: adjudicate the docs/README.md sec 2 undeclared-liveness list (part a) and fix the stale TK107-residue symbol cites (part d).
@@ -29,3 +29,5 @@ Split from TK-275 at the 2026-11-20a re-rank, so that TK-275 (NOW) holds only it
 - docs/README.md sec 2
 
 ## Log
+
+- 2026-11-22a (claude-code/claude-opus-5-5): scope widened by TK-275 (2026-11-23): ACTIVE-PLAN docs named after NO row, which neither handoff_lint check_active_plans_closed_rows nor engine G-D4 sees, are this row's to adjudicate too: docs/adversarial-audit-2026-09-15.md, docs/goal-census-2026-09-22.md, docs/promote-next-triage-2026-10-03.md, docs/pypi-readiness-2026-10-07.md, the docs/pypi-trial-*.md docs, formal/history/echain-widening-plan-2026-07-28.md, formal/history/leaf-family-split-scope-2026-08-05.md (list: docs/tk275-plan-freeze-check-2026-11-22.md sec 3; re-measure first). Also: if (a) ends with docs/ listed in context.toml [guards] liveness, the engine G-D4 would need alias resolution in context_engine.guards._named (it reads TK-106, not TK106) to replace the handoff_lint check.

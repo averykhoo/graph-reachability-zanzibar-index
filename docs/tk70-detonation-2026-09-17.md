@@ -1,5 +1,8 @@
 # `TK70` — the detonation: the latent `w_any --> w_all` cycle, measured and closed
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK70 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN, opened 2026-09-17 — the body is provenance, not a living status.** Live
 state is `python scripts/task.py show TK70` and `python scripts/gate_status.py`, never this
 file. Corrections append **dated at the top**. Freeze it when `TK70` closes.

@@ -1,5 +1,8 @@
 # `TK89` — is the crossable census reproducible?
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK89 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN, opened 2026-09-20g — the body is provenance, not a living status.** Live
 state is `python scripts/task.py show TK89` and `python scripts/gate_status.py`, never this
 file. Corrections append **dated at the top**, never edited into the body. Freeze it when

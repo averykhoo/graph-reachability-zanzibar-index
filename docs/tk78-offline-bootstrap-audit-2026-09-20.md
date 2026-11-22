@@ -1,5 +1,8 @@
 # `TK78` — the offline bootstrap paths, re-measured first-hand
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK78 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN, opened 2026-09-20 — the body is provenance, not a living status.** This is
 the verification pass the `TK78` row demanded as its FIRST ACTION: the row's two readings
 were a subagent's (`TK74` fan-out, 2026-09-18) and explicitly not verified. Every claim

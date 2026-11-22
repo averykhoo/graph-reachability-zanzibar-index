@@ -1,5 +1,8 @@
 # TK73 — the boolean cascade failed to quiesce on a REMOVE
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK73 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN** (`docs/README.md` §3). Opened 2026-09-17. Corrections append **dated at
 the top**. FREEZE when `TK73` closes.
 

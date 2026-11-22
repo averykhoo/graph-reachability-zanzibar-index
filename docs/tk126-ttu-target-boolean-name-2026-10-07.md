@@ -1,5 +1,8 @@
 # `TK126` — a TTU target that shares its NAME with a boolean relation: the measured scout
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK126 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN, opened 2026-10-07 — the body is provenance, not a living status.** Scout-only
 map for task row `TK126` (graph index refuses `x from parent` when `x` names a boolean
 relation on ANY type; variant D crashes both backends with an internal `ValueError`).

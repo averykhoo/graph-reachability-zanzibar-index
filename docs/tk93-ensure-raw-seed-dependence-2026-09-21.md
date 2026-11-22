@@ -1,5 +1,8 @@
 # `TK93` — the census `_ensure/raw` column, localised
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK93 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN, opened 2026-09-21 — the body is provenance, not a living status.** Live state
 is `python scripts/task.py show TK93` and `python scripts/gate_status.py`, never this file.
 Corrections append **dated at the top**, never edited into the body. Freeze it when `TK93`

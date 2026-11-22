@@ -1,5 +1,8 @@
 # TK92 — the bulk `_live_keys_of` mirror's `[rel]` term: REACHABLE, and INERT
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK92 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN** (`docs/README.md` §3). Opened 2026-09-21. Corrections append **dated at
 the top**. FREEZE when `TK92` closes.
 

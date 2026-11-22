@@ -1,5 +1,8 @@
 # `TK87` — giving the swarm a removal pass (the last zero in `TK77`'s acceptance table)
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK87 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN, opened 2026-09-19f — the body is provenance, not a living status.** Every
 figure below was measured first-hand on 2026-09-19f against the live tree, with the commands
 in §6. Live state is the task row (`python scripts/task.py show TK87`) and

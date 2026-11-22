@@ -5,7 +5,7 @@ aliases: [HS-5]
 title: always-living docs declare no liveness state; enumeration+method now in docs/README.md sec 2
 brief:
 pri: NOW
-state: open
+state: closed
 size: M
 deps: []
 related: []
@@ -17,8 +17,10 @@ created: 2026-08-20
 taskpy_created: 2026-08-20b
 taskpy_moved: 2026-10-13d
 taskpy_updated: 2026-10-13d
-moved: 2026-11-20a
-updated: 2026-11-20a
+moved: 2026-11-22a
+updated: 2026-11-22a
+status: deprecated
+closed: 2026-11-22a
 ---
 
 always-living docs declare no liveness state, though [`docs/README.md`](docs/README.md) §2 requires one in the first lines. **The count is method-sensitive and does NOT live here — it lives in `TK49`.**
@@ -73,3 +75,6 @@ Bumped NOW -> NEXT by the user (2026-10-13c): TK141 (verify.sh start banner) goe
 Sprint re-rank 2026-10-13d (user decision in chat): NEXT -> LATER, top of LATER. TK142 (an assurance hole: the broad lookup gates stay green under the TK139 regression) took NOW, and NEXT is full (TK138, TK123, TK137, TK132, TK119). Pick this up first when a NEXT slot frees.
 - 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> NOW. HONEST (make the assurance surface honest and legible): ACTIVE-PLAN docs whose rows are closed. The owner's 2026-10-13d order: 'Pick this up first when a NEXT slot frees'.
 - 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a, scope at NOW: (1) freeze the 12 list-(c) ACTIVE-PLAN docs whose rows are closed (tk106, tk108, tk126, tk70, tk73, tk78, tk83, tk87, tk89, tk91, tk92, tk93; re-verified still ACTIVE-PLAN with closed rows on 2026-11-20 by the re-rank verifier); (2) add a handoff_lint RED check on an ACTIVE-PLAN doc whose row id is closed, keyed on the engine's closed state (state: closed in tasks/, or the ids), NOT on tasks/closed/, which no longer exists since the engine adoption; (3) sabotage it and record the literal output. Parts (a) and (d) are deferred to TK-307 (LATER). SIZE: M, not S (the frontmatter's S is stale, per this row's own 2026-10-13 log).
+- 2026-11-22a (claude-code/claude-opus-5-5): LANDED (2026-11-22a/23): (1) 21 closed-row ACTIVE-PLAN docs frozen with context-engine doc freeze (the 12 of list (c), 7 more found by re-measure, tk151-diataxis-plan found by the check, tk151-site-review found by review); tk185 was already frozen. (2) scripts/handoff_lint.py::check_active_plans_closed_rows, appended to CHECKS: reds an ACTIVE-PLAN doc whose FILE NAME ids (aliases resolved, tasks/ state: closed) are all closed; reads the declaration as engine G-D4 does (doc freeze writes an unbolded FROZEN line); floor MIN_PLAN_DOCS_KEYED. (3) tests/test_handoff_lint_active_plans.py, 17 mutants each killed, literal lines in its docstring; subject sabotage (tk70 pre-freeze) red. docs/README.md sec 3 says what is enforced. PROVISIONAL (agent): file-name key, not window ids; handoff_lint, not engine G-D4 (G-D4 _named reads canonical ids only, and listing docs/ reds every undeclared doc) -- why in docs/tk275-plan-freeze-check-2026-11-22.md sec 1. Out of scope, handed to TK-307: ACTIVE-PLAN docs named after no row. Reviewed by a separate agent: 0 blockers, its 3 should-fix done.
+- 2026-11-22a (claude-code/claude-opus-5-5): closed: closed-row ACTIVE-PLAN docs frozen; handoff_lint check_active_plans_closed_rows holds the rule (sabotaged); parts a and d stay on TK-307
+  residual risk: none

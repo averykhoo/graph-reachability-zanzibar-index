@@ -1,5 +1,8 @@
 # TK179 -- strict public argument types: validators + a census test (2026-10-30)
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK179 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 > **ACTIVE-PLAN** (`docs/README.md` sec 3). Filed 2026-10-30b after the 0.1.1 install trial's
 > F19 (`Store(sync=None)` silently async, fixed as `TK176`). Corrections go at the top, dated.
 > FROZEN when `TK179` closes. Release gate: `TK178` (0.1.2) depends on `TK177`, `TK179`,

@@ -1,5 +1,8 @@
 # TK182 -- ruff + a type checker in the gate (2026-10-30)
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK182 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 > **ACTIVE-PLAN** (`docs/README.md` sec 3). User, 2026-10-30b: "including lint (ruff?) and mypy
 > (why not pyrefly) would be great, let's get that all done before 0.1.2". Release row `TK178`
 > depends on this. Corrections go at the top, dated. FROZEN when `TK182` closes.

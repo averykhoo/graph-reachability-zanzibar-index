@@ -1,5 +1,8 @@
 # TK151 — editorial review of the whole user-docs site before 0.1.0 (2026-10-26)
 
+FROZEN 2026-11-23 (session 2026-11-22a): TK151 closed; below, the review as it stood (its line-34
+ACTIVE-PLAN sat past the window; frozen late, under TK-275)
+
 ## Correction 2026-10-26e (stage "apply-site-review"): what was applied
 
 Applied FIRST-HAND by one agent (again no `Agent` tool in the harness, so no fan-out). After

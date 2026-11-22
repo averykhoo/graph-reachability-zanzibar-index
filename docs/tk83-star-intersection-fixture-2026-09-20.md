@@ -1,5 +1,8 @@
 # `TK83` — putting the star-admitting intersection in the tree
 
+FROZEN 2026-11-22 (session 2026-11-22a): TK83 closed; below, the plan as it stood (banner applied
+late, under TK-275)
+
 **ACTIVE-PLAN, opened 2026-09-20g — the body is provenance, not a living status.** Live
 state is the task row (`python scripts/task.py show TK83`) and
 `python scripts/gate_status.py`, never this file. Corrections append **dated at the top**,
