@@ -4,6 +4,15 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
+## 2026-11-23a · kind: open
+
+- **opened:** 2026-11-23T05:13:18+08:00 by claude-code/claude-opus-5-5
+- **follows:** 2026-11-22a
+- **start head:** 7df03fc5083cb032ecc5cecb7a7d8ba84dedc7d3
+- **granted:** ASK-11
+
+---
+
 ## 2026-11-22a · kind: close
 
 - **continues:** 2026-11-21b
