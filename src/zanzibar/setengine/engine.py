@@ -51,8 +51,8 @@ from zanzibar.schema.syntax import (DeclaredRelations, declared_relations, expla
                                     first_schema_difference,
                                     no_restriction_message, tuple_text)
 from zanzibar.schema.parser import _parse_schema_ast_checked
-from zanzibar.schema.readcheck import (refuse_undeclared_filter, refuse_undeclared_object,
-                                      refuse_undeclared_subject)
+from zanzibar.schema.readcheck import (lists_subject_shape, refuse_undeclared_filter,
+                                      refuse_undeclared_object, refuse_undeclared_subject)
 from zanzibar.schema.tuplestr import (_LOOKUP_LONG, _REVERSE_LONG, _TUPLE_LONG, require_parts,
                                      shape_filter)
 from zanzibar.schema.compiler import _validate_object_wildcard_shapes
@@ -1711,6 +1711,7 @@ class SetEngine:
             require_parts('expand', ('relation', 'o_type', 'o_name'), (relation, o_type, o_name))
             refuse_undeclared_object(self._declared, 'expand', o_type, relation)  # TK185
         # Provenance (moved out of the docstring, TK123 item 14): §6.3.
+        top = memo is None   # TK-304: the listing boundary, as for the refusal above
         if memo is None:
             memo = {}
         inst_memo: dict[str, set[str]] = {}             # N7: per-eval _instances_of_type cache
@@ -1837,8 +1838,31 @@ class SetEngine:
         m = _drive(do(o_type, o_name, relation))
         # Keys a caller-shared memo already held were evaluated by an earlier call, so
         # their subtrees are not in ``visited``; the memo's keys are a superset of them.
-        return self._self_relation_corrected(m, relation, o_type, o_name,
-                                             visited | set(memo))
+        m = self._self_relation_corrected(m, relation, o_type, o_name, visited | set(memo))
+        # TK-304: the top-level call lists only subjects check() takes back; a recursion
+        # (a caller-shared memo) gets the modelled MemberSet unpruned.
+        return self._declared_members(m) if top else m
+
+    def _declared_members(self, m: MemberSet) -> MemberSet:
+        """``m`` without the members, stars and exclusions whose ``(type, predicate)``
+        ``check`` refuses as a subject (``readcheck.py::lists_subject_shape``): a userset
+        ``T:n#p`` a TTU target reached on a tupleset type ``T`` that declares no ``p``. Such a
+        userset has no members, so this drops no user. ``m`` itself when nothing drops."""
+        # Provenance: TK-304 (docs/tk304-prune-undeclared-usersets-2026-11-23.md D1). A
+        # boundary post-filter, outside the modelled ``expand.do`` recursion.
+        declared, key_of = self._declared, self.interner.key_of
+        ok = functools.partial(lists_subject_shape, declared)
+        drop_pos = [i for i in m.pos if not ok(key_of[i][0], key_of[i][2])]
+        drop_neg = [i for i in m.neg if not ok(key_of[i][0], key_of[i][2])]
+        stars = frozenset(s for s in m.stars if ok(s[0], s[1]))
+        ipos = frozenset(k for k in m.ipos if ok(k[0], k[2]))
+        ineg = frozenset(k for k in m.ineg if ok(k[0], k[2]))
+        if not (drop_pos or drop_neg or len(stars) != len(m.stars)
+                or len(ipos) != len(m.ipos) or len(ineg) != len(m.ineg)):
+            return m
+        ops = self.ops
+        return MemberSet(ops.freeze(set(m.pos) - set(drop_pos)), stars,
+                         ops.freeze(set(m.neg) - set(drop_neg)), ipos, ineg)
 
     def _self_relation_corrected(self, m: MemberSet, relation: str, o_type: str,
                                  o_name: str, candidates) -> MemberSet:

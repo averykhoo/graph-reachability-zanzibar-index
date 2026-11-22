@@ -93,6 +93,12 @@ it drops information:
       and still answers it against the oracle (G1/G2); S1-S3 still classify it as a
       member. Deterministic reach:
       ``test_lookup_oracle_gate_undeclared_from_chain_subject_refused``.
+      TK-304 (2026-11-23, docs/tk304-prune-undeclared-usersets-2026-11-23.md D1): S1-S3
+      no longer classify it as a member. The set side's ``expand`` / ``lookup_reverse``
+      never LIST a subject ``check`` refuses (``_listed``: such a subject's reference is
+      False, whatever the oracle says; the oracle is not edited). The lenient graph index
+      still lists it, so G3/G4 still pin it against the oracle. Deterministic reach:
+      ``test_lookup_oracle_gate_undeclared_from_chain_userset_unlisted``.
 
 Genuine-divergence inventory (each was a wrong/undefined read answer when
 found; FIXED entries are pinned as plain regression tests below, open ones as
@@ -368,8 +374,22 @@ def _check_graph_reverse(widx, oc, subjects, obj, res):
 # Set-side checkers
 # ---------------------------------------------------------------------------
 
-def _check_set_expand(se, oc, subjects, obj, m):
+def _listed(oc, unlisted):
+    """TK-304: the set side's reference oracle. A subject ``unlisted`` says ``check``
+    refuses (an undeclared subject relation) is never LISTED by ``expand`` /
+    ``lookup_reverse``, whatever the oracle says of it; every other subject is the oracle's
+    answer. ``unlisted`` is ``None`` for the tamper tests' direct calls (plain oracle)."""
+    if unlisted is None:
+        return oc
+
+    def ref(sp, st, sn, *obj):
+        return False if unlisted((sp, st, sn)) else oc(sp, st, sn, *obj)
+    return ref
+
+
+def _check_set_expand(se, oc, subjects, obj, m, unlisted=None):
     rel, ot, on = obj
+    oc = _listed(oc, unlisted)
     for uid in m.pos:                                           # S2 pos sweep
         t, n, p = se.interner.key(uid)
         assert oc(p, t, n, rel, ot, on), (
@@ -418,8 +438,9 @@ def _check_set_expand(se, oc, subjects, obj, m):
             f'set={got} oracle={expected}')
 
 
-def _check_set_reverse(se, oc, subjects, obj, m, res):
+def _check_set_reverse(se, oc, subjects, obj, m, res, unlisted=None):
     rel, ot, on = obj
+    oc = _listed(oc, unlisted)
     # S3: the exact render of expand (TK139: neg carried as excluded_node_ids)
     assert res.node_ids == set(m.pos), (
         f'set.lookup_reverse{obj} [{se.ops.name}]: node_ids != expand.pos')
@@ -564,6 +585,11 @@ class _Gate:
         self.undeclared_subjects = frozenset(
             s for s in self.subjects if _undeclared_subject(self.ast, types, s))
         self.set_lookup_refused = 0
+        # TK-304 (docs/tk304-prune-undeclared-usersets-2026-11-23.md D1): the set side's
+        # expand / lookup_reverse never LIST a subject check() refuses; decided from the AST,
+        # on any (pred, type, name), by the same independent ``_undeclared_subject``
+        self.unlisted = lambda subj: _undeclared_subject(self.ast, types, subj)
+        self.set_unlisted_true = 0
         self.derived = (self.graph.widx.schema_info.derived_families if self.graph
                         else frozenset())
         self.present: set[tuple] = set()
@@ -640,8 +666,13 @@ class _Gate:
                         self.set_reverse_neg += 1
                         if self.graph:
                             self.set_reverse_neg_graph_joined += 1
-                    _check_set_expand(se, oc, self.subjects, obj, m)
-                    _check_set_reverse(se, oc, self.subjects, obj, m, se.lookup_reverse(*obj))
+                    _check_set_expand(se, oc, self.subjects, obj, m, self.unlisted)
+                    _check_set_reverse(se, oc, self.subjects, obj, m,
+                                       se.lookup_reverse(*obj), self.unlisted)
+                    # TK-304 reach counter: an oracle-true subject the set side must NOT
+                    # list (so the pruning half of S1/S3 had something to catch)
+                    self.set_unlisted_true += sum(
+                        1 for s in self.undeclared_subjects if oc(*s, *obj))
             for subject, messages in refusals.items():
                 assert len(messages) == 1, (
                     f'set sides refuse lookup{subject} differently: {messages}')
@@ -1112,6 +1143,38 @@ def test_lookup_oracle_gate_undeclared_from_chain_subject_refused():
     per_battery = len(gate.undeclared_subjects) * len(ALL_SETOPS)
     assert gate.set_lookup_refused > 0 and gate.set_lookup_refused % per_battery == 0
     assert gate.set_lookup_refused == per_battery * (gate.set_checks // len(ALL_SETOPS))
+
+
+
+def test_lookup_oracle_gate_undeclared_from_chain_userset_unlisted():
+    """TK-304 (2026-11-23): with ``folder:f1`` a parent of ``doc:d1``, the TTU ``r2: r1 from
+    parent`` reaches the userset ``folder:f1#r1``, which ``folder`` does not declare. The
+    oracle calls it a member of ``doc:d1#r2``; ``check`` refuses it (DEC-16), so the set
+    side's ``expand`` / ``lookup_reverse`` must NOT list it (S1-S3 under ``_listed``) while
+    the lenient graph index still does (G3 against the oracle). The random walk of the test
+    above never adds that parent tuple at its seed (READ 2026-11-23: its history holds only
+    the ``doc`` parent), so this one applies it deterministically and drains.
+
+    Sabotage: see ``tests/test_tk304_undeclared_userset_listing.py``'s docstring.
+    """
+    pool = [('...', 'user', 'u1', 'r1', 'doc', 'd1'),
+            ('...', 'folder', 'f1', 'parent', 'doc', 'd1'),
+            ('...', 'doc', 'd2', 'parent', 'doc', 'd1'),
+            ('...', 'user', 'u1', 'r1', 'doc', 'd2')]
+    gate = _Gate(_UNDECLARED_FROM_CHAIN_SCHEMA, frozenset(), pool)
+    assert gate.graph is not None
+    for raw in pool:
+        assert gate.apply('add', raw)
+        gate.assert_surfaces(context=f'add {raw}')
+    folder_userset = gate.graph.widx.idx.node('r1', 'folder', 'f1', create_if_missing=False)
+    # instrument control: the lenient graph index DOES list the undeclared userset ...
+    assert folder_userset.id in gate.graph.widx.lookup_reverse('r2', 'doc', 'd1').node_ids
+    # ... and the oracle-true, set-unlisted case was met on every SetOps
+    assert gate.set_unlisted_true >= len(ALL_SETOPS), gate.set_unlisted_true
+    for raw in reversed(pool):
+        assert gate.apply('remove', raw)
+        gate.assert_surfaces(context=f'remove {raw}')
+    gate.close()
 
 
 # ---------------------------------------------------------------------------

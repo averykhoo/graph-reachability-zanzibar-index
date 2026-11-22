@@ -22,6 +22,7 @@ Transaction semantics: ``write`` commits on success and rolls back on rejection
 
 from __future__ import annotations
 
+import functools
 import json
 from dataclasses import dataclass
 from typing import overload
@@ -44,8 +45,8 @@ from zanzibar.schema import AdmissionRejected, IndexResourceLimit, validate_stor
 from zanzibar.schema.errors import ClosureFanoutExceeded
 from zanzibar.schema.errors import SchemaError, ZanzibarError, reject_ellipsis_predicate
 from zanzibar.schema.json_frontend import _reject_duplicate_json_keys, openfga_json_to_dsl
-from zanzibar.schema.readcheck import (refuse_undeclared_filter, refuse_undeclared_object,
-                                      refuse_undeclared_subject)
+from zanzibar.schema.readcheck import (lists_subject_shape, refuse_undeclared_filter,
+                                      refuse_undeclared_object, refuse_undeclared_subject)
 from zanzibar.schema.tuplestr import lookup_args, lookup_reverse_args, shape_filter, tuple_args
 
 from zanzibar.setengine.models import RelationTuple
@@ -1114,7 +1115,13 @@ class Store:
                                  'subject_predicate', subject_predicate, bare=True)
         self._require_index_freshness(at_least, 'lookup_reverse')
         res = self.widx.lookup_reverse(relation, o_type, o_name)
-        return self.widx.filter_result(res, subject_type, subject_predicate)   # TK156
+        # TK-304: list only subjects check() takes back (the lenient index lists a userset a
+        # TTU reached on a type that declares no such relation; the set engine prunes it in
+        # ``SetEngine.expand``, through the same predicate)
+        listed = functools.partial(lists_subject_shape, declared)
+        wanted = shape_filter('filter_result', subject_type, subject_predicate)  # TK156
+        return self.widx._filter_shapes(
+            res, listed if wanted is None else (lambda t, p: listed(t, p) and wanted(t, p)))
 
     @overload
     def expand(self, relation: str, object: str, *,
@@ -1148,6 +1155,7 @@ class Store:
             self._require_evaluator_at(at_least)
         engine = self.source.engine
         # Delegation only: SetEngine.expand's body is a CORRESPONDENCE.md anchor (TK155 D3).
+        # Its top-level call already drops the subjects check() refuses (TK-304).
         m = engine.expand(relation, o_type, o_name)
         key = engine.interner.key
         keys = frozenset(key(i) for i in m.pos) | frozenset(m.ipos)

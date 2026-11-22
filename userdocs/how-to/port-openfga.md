@@ -135,7 +135,7 @@ print(refused[0][1].startswith("invalid subject_name 'google-oauth2|1234'"))  # 
 ## 4. Compare answers
 
 Before switching traffic, ask both systems the same questions. A few answers can differ
-by design even for a model that loads: for example, a check whose user is a userset
-such as `team:1#viewer`, where `team` declares no `viewer`, is answered here and
-rejected as an error by OpenFGA. The cases are listed in
+by design even for a model that loads. (A check whose user is a userset such as
+`team:1#viewer`, where `team` declares no `viewer`, is refused here as an error, as in
+OpenFGA, and the list calls do not return it.) The cases are listed in
 [semantics and differences from OpenFGA](../explanation/semantics-vs-openfga.md).

@@ -29,6 +29,29 @@ count that went stale on the very next append; `grep -n '^## 20'` is the live li
 
 ---
 
+## 2026-11-23 — `TK-304`: the list calls no longer return a userset `check` refuses
+
+**What changed.** A TTU `p from ts` whose tupleset allows a type `T` that declares no `p`
+reaches the userset `T:n#p`. Since 0.1.3 (`TK-185`, DEC-16) `check` refuses it as a subject,
+but `lookup_reverse` and `expand` still listed it, on both backends (TK-185 residual D03,
+`RISK-1`). Now `Store.lookup_reverse`, `Store.expand`, `SetEngine.lookup_reverse` and
+`SetEngine.expand` drop every key, marker and exclusion whose `(type, predicate)` the read
+refusal rejects, through one predicate (`src/zanzibar/schema/readcheck.py::lists_subject_shape`;
+set side `src/zanzibar/setengine/engine.py::SetEngine._declared_members`). Such a userset has
+no members (no write can name it), so no user is dropped. `WildcardIndex` read directly stays
+lenient (DEC-16 §5) and still lists it. The oracle is unchanged and still calls the userset a
+member; the lookup-oracle gate's set-side reference leaves such subjects out
+(`tests/test_lookup_oracle.py::_listed`). Design: decision D1 of
+`docs/tk304-prune-undeclared-usersets-2026-11-23.md` (PROVISIONAL); pins:
+`tests/test_tk304_undeclared_userset_listing.py`.
+
+**What this refutes in earlier entries (their bodies stay as of their dates):** the
+`## 2026-11-20` entry's "including what still differs (`lookup_reverse` / `expand` still list
+`team:1#viewer`)", and the "Still different" half of the 2026-11-20 blockquote inside
+`## 2026-10-17b`. With a store at HEAD, the D03 model's `lookup_reverse("x", "doc:1")` is
+`[('doc', '1', 'x')]` (the executed example in
+`userdocs/explanation/semantics-vs-openfga.md`, "The difference").
+
 ## 2026-11-20 — `TK-185` step 4: a read naming an undeclared type or relation is refused (DEC-16)
 
 **What changed.** The owner decided on 2026-11-01 that a READ naming an undeclared type or

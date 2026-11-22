@@ -179,8 +179,8 @@ introduced; before 0.1.0 this library answered these checks the other way (see
 
 **The difference** is a `from` whose tupleset allows a type that does not declare the
 target relation. A `check` on such a userset is refused here, as in OpenFGA, because the
-subject names a relation its type does not declare. But the userset still counts as a
-member of itself, so the list calls show it:
+subject names a relation its type does not declare. The list calls leave it out, so every
+key they return is one `check` takes back:
 
 ```python
 s = new_store("""
@@ -198,14 +198,15 @@ type doc
 """)
 s.add_tuple("team:1", "parent", "doc:1")
 print(refused(lambda: s.check("team:1#viewer", "x", "doc:1")))   # -> 'UndeclaredTypeOrRelation'
-print(sorted(s.result_keys(s.lookup_reverse("x", "doc:1"))))   # -> [('doc', '1', 'x'), ('team', '1', 'viewer')]
+print(sorted(s.result_keys(s.lookup_reverse("x", "doc:1"))))   # -> [('doc', '1', 'x')]
+print(sorted(s.expand("x", "doc:1").keys))                      # -> [('doc', '1', 'x')]
 ```
 
-`team` has no `viewer` relation, yet `team:1#viewer` is listed as an `x` of `doc:1` here,
-through the self-membership rule; `expand("x", "doc:1")` lists it too. OpenFGA rejects
-the check with a validation error (`relation 'team#viewer' not found`), and this library
-refuses it with {py:exc}`zanzibar.UndeclaredTypeOrRelation`, so this is a key a list call
-returns that `check` will not take back. OpenFGA has also announced that models whose
+`team` has no `viewer` relation, so `team:1#viewer` can have no members, and neither
+`lookup_reverse` nor `expand` lists it. OpenFGA rejects the check with a validation error
+(`relation 'team#viewer' not found`), and this library refuses it with
+{py:exc}`zanzibar.UndeclaredTypeOrRelation`. In 0.1.3 and earlier the two list calls did return
+`('team', '1', 'viewer')`, a key `check` would not take back (TK-304). OpenFGA has also announced that models whose
 tupleset types lack the target relation will stop building at all, with no date set as of
 October 2026.
 

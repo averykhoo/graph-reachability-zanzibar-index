@@ -31,6 +31,19 @@ def _declares(declared: DeclaredRelations, type_name: str, relation: str) -> boo
     return relation in declared.relations.get(type_name, ())
 
 
+def lists_subject_shape(declared: DeclaredRelations, type_name: str, predicate) -> bool:
+    """Whether a ``lookup_reverse`` / ``expand`` result may LIST a subject of this
+    ``(type, predicate)`` shape: exactly the subjects ``refuse_undeclared_subject`` lets a
+    read take back -- a bare subject (``'...'``) of a declared type, or a userset whose
+    type declares the relation. TK-304: a TTU ``p from ts`` reaches the userset ``T:n#p``
+    for a tupleset type ``T`` that declares no ``p``; that userset has no members (no
+    write can name it), and ``check`` refuses it, so neither backend lists it."""
+    # Provenance: TK-304 (docs/tk304-prune-undeclared-usersets-2026-11-23.md D1).
+    if type_name not in declared.types:
+        return False
+    return predicate in _BARE or _declares(declared, type_name, predicate)
+
+
 def refuse_undeclared_subject(declared: DeclaredRelations, method: str, subject_predicate,
                               subject_type: str, subject_name: str,
                               rest: tuple = ()) -> None:

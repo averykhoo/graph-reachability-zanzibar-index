@@ -1182,6 +1182,12 @@ class WildcardIndex:
         matches = shape_filter('filter_result', entity_type, predicate)
         if matches is None:
             return res
+        return self._filter_shapes(res, matches)
+
+    def _filter_shapes(self, res: LookupResult, matches) -> LookupResult:
+        """A copy of ``res`` keeping the entries whose ``(type, predicate)`` satisfies
+        ``matches(type, predicate)``: ``filter_result``'s body, also used by
+        ``Store.lookup_reverse`` to drop the subjects ``check`` refuses (TK-304)."""
         nodes = self.idx._load_nodes(res.node_ids | res.excluded_node_ids)
         for field_name, ids in (('node_ids', res.node_ids),
                                 ('excluded_node_ids', res.excluded_node_ids)):
