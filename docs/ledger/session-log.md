@@ -4,12 +4,28 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
-## 2026-11-23a · kind: open
+## 2026-11-23a · kind: close
 
-- **opened:** 2026-11-23T05:13:18+08:00 by claude-code/claude-opus-5-5
 - **follows:** 2026-11-22a
+- **rows:** ASK-11 (granted)
+- **receipts:**
+  - guards: 10 passed (lean, conf-tile 1-5, tests-tile 1-4) + lint clean + fuzz 30/30 passed
+  - read: none
+  - asked: none
+  - granted: ASK-11
+  - housekeeping: hk run close: 0 writes, 0 op log lines
+  - banner: kept 2026-11-16a
+  - pushed: 0602841: owner go, ASK-11
+- **summary** (the owner digest):
+  - Owner: "Gate and push" (ASK-11, grant). Ten-phase gate COVERED on 0602841, lint clean; fuzz
+    seeds 7,19,31,53,71,97 x 5 fuzz.yml modules all green (TK-304 read change). Pushed
+    705407e..0602841; CI gate run 45079305281 and docs run 45079305298 green.
+- **Still owed:**
+  - Review TK-304 D1, the TK-275 design calls and the provisional NOW pick (TK-146)
+  - CHANGELOG ### Fixed line for TK-304 at the next release
+  - Publish dry run, v0.1.3 tag on the owner word, install trial (TK-303); review DEC-16 and the
+    2026-11-20a rerank; delete .context-engine/env-309641b
 - **start head:** 7df03fc5083cb032ecc5cecb7a7d8ba84dedc7d3
-- **granted:** ASK-11
 
 ---
 
