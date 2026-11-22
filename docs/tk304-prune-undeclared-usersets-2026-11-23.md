@@ -1,5 +1,7 @@
 # `TK-304` -- lookup_reverse / expand stop listing a userset key check() refuses (2026-11-23)
 
+FROZEN 2026-11-23 (session 2026-11-22a): TK-304 closed (commit 019c3c3); below, the plan as it stood
+
 **ACTIVE-PLAN, opened 2026-11-23 (session `2026-11-22a`) -- the body is provenance, not a living
 status.** Live state is the row (`context-engine task show TK-304`) and
 `python scripts/gate_status.py`, never this file. Corrections append **dated at the top**.
