@@ -29,7 +29,8 @@ pointer. Case histories go to the session log, detail to its home doc (`docs/REA
   may spawn a `claude-fable-5` subagent (`Agent` tool, `model: "fable"`) to think the issue
   through against the goal above and return a decision with reasoning. The subagent's
   answer is a recommendation, not an order — the session records it on the row with the
-  reasoning, then acts. This applies whatever model the session itself runs on.
+  reasoning, then acts. This applies whatever model the session itself runs on. The owner
+  finds a fable second opinion on top of opus worthwhile for such calls (DEC-22, 2026-11-24).
 
 ## Start here (every session)
 - **Start with `context-engine orient`** (the `SessionStart` hook prints it), then `context-engine
@@ -193,8 +194,9 @@ does not check the gate: ask `gate_status.py` first.
   `python scripts/gate_status.py` reports which phases are green **on the current tree**.
   Details and sabotage evidence: [`docs/gate-runbook.md`](docs/gate-runbook.md) §4.
 - **GitHub Actions runs the same gate (`TK122`)**: `.github/workflows/gate.yml` is one job
-  per phase on Linux, and `.github/workflows/fuzz.yml` is the multi-seed sweep, **on demand
-  and before a release only, never scheduled** (user decision). The workflows only provision
+  per phase on Linux, and `.github/workflows/fuzz.yml` is the multi-seed sweep, **on push
+  with a haiku or scripted babysitter, never scheduled** (DEC-22; the workflow still says on
+  demand until TK-308). The workflows only provision
   and call `verify.sh`; floors and budgets stay there. CI does NOT replace the local gate
   (CI installs the newest dependency versions, the local env the pinned ones).
   **Releases deploy ONLY from a `v*` tag** via `.github/workflows/publish.yml`; its header is
