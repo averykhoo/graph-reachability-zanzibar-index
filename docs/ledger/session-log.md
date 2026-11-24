@@ -4,10 +4,31 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
-## 2026-11-24b · kind: open
+## 2026-11-24b · kind: close
 
-- **opened:** 2026-11-24T22:13:15+08:00 by claude-code/claude-opus-5-5
 - **follows:** 2026-11-24a
+- **rows:** DEC-23 (new, owner); TK-308 (comment: DEC-23 relaxes to local and/or CI on push); TK-310
+  (new, SOMEDAY)
+- **receipts:**
+  - guards: verify.sh ten phases at 8ea2950: 10 passed (each rc=0, PASSED line read); gate_status
+    COVERED; context-engine lint clean
+  - read: orient; DEC-22; DEC-23; docs/charter.md; docs/criteria.md
+  - housekeeping: hk run close: 0 writes, 0 op log lines
+  - banner: kept 2026-11-16a
+- **summary** (the owner digest):
+  - Owner words recorded verbatim as DEC-23 (ORM backend abstraction, psycopg locks/pubsub optional,
+    fuzz local and/or CI on push, why G-1 is an attempt).
+  - Charter and CLAUDE.md fuzz clause updated from DEC-23 by a writer, checked by a separate
+    verifier (2 overstatements fixed), gate COVERED, committed 8ea2950; not pushed.
+  - Board prioritization proposed read-only in .scratch/s24b/prioritize/proposal.md: NOW TK-146;
+    NEXT TK-309, TK-148, TK-305, TK-308, TK-303; close TK-239, TK-252 (verify first). Nothing
+    applied.
+- **Still owed:**
+  - Owner: apply the proposed re-rank and the two closes (TK-252 verified first)?
+  - Owner: push the 5 local commits (41b24c0..8ea2950 + close) and tag v0.1.3 (TK-303), then install
+    trial
+  - Owner: write user stories (TK-302)? on-push perf-vs-brute-force check (TK-34)? TK-43 README
+    notes in owner voice?
 - **start head:** 4f919c3a1551e1104c9888cc1b32d4d56b0e795a
 
 ---
