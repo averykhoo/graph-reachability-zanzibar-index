@@ -4,12 +4,28 @@ Append-only, newest first, one entry per session (FRAMEWORK §7.1).
 
 ---
 
-## 2026-11-24a · kind: open
+## 2026-11-24a · kind: close
 
-- **opened:** 2026-11-24T12:03:39+08:00 by claude-code/claude-opus-5-5
 - **follows:** 2026-11-23a
+- **rows:** ASK-12 (granted); DEC-16 (accepted); DEC-22 (new, owner); TK-308 (new, NEXT); TK-309
+  (new, NEXT)
+- **receipts:**
+  - guards: 10 passed (lean, conf-tile 1-5, tests-tile 1-4) at 7f46197 + lint clean
+  - read: docs/charter.md; docs/criteria.md
+  - asked: none
+  - granted: ASK-12
+  - housekeeping: hk run close: 0 writes, 0 op log lines
+  - banner: kept 2026-11-16a
+- **summary** (the owner digest):
+  - Owner: "Okay to all recommendations" (ASK-12, grant): DEC-16 accepted; TK-304 D1, TK-275 calls,
+    2026-11-20a rerank, TK-146 in NOW accepted. 0.1.3 prep 4937211 pushed (CI green), publish dry
+    run green, tag waits on the owner. decision_index removed. Charter and criteria filled from the
+    owner words DEC-22 (7f46197, verified by a second agent, gate COVERED); AC-6 is the headline
+    (engine refuses AC-0). TK-308 fuzz-on-push, TK-309 criterion markers.
+- **Still owed:**
+  - v0.1.3 tag on the owner word, then the install trial + installed_smoke.py (TK-303)
+  - Push 7f46197 and the close commit on the owner go
 - **start head:** 83f17df5dbb4cba68d36497b7d6994143793c92a
-- **granted:** ASK-12
 
 ---
 
