@@ -3,7 +3,7 @@ type: Decision
 id: DEC-16
 title: 'TK-185 step 4: reads refuse an undeclared type or relation -- class, rules, choke points'
 actor: agent (claude-opus-5-5)
-decision_status: PROVISIONAL
+decision_status: ACCEPTED
 refs: [TK-185]
 decided: 2026-11-20
 session: 2026-11-20a

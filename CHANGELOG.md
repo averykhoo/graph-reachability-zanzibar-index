@@ -26,7 +26,7 @@ names a type or relation the schema does not declare is now an error instead of 
   (`WildcardIndex`) is unchanged and still answers `False` / empty. This closes two
   documented differences from OpenFGA (an undeclared relation, and a userset subject whose
   type does not declare its relation): both checks are now refused, as OpenFGA does;
-  `lookup_reverse` and `expand` still list such a userset as a member of itself. A test or
+  `lookup_reverse` and `expand` no longer list such a userset either (TK-304, Fixed). A test or
   grid of your own that reads undeclared names and expects `False` now gets the refusal:
   ask only about declared types and relations, or expect `UndeclaredTypeOrRelation`.
 
@@ -43,6 +43,10 @@ names a type or relation the schema does not declare is now an error instead of 
   `check("user:a", "viewer", "doc:1")`) raise a `TypeError` that names the form `SetEngine`
   takes and points at `Store` for the short one, instead of Python's "missing 3 required
   positional arguments" (TK185). `SetEngine` still has only the six-part form.
+- `lookup_reverse` and `expand` no longer list a userset key that `check()` refuses (a
+  `T:n#p` reached through `p from <tupleset>` where type `T` declares no `p`); `Store` (both
+  index paths) and `SetEngine` drop it the same way (TK-304; see
+  `docs/tk304-prune-undeclared-usersets-2026-11-23.md`).
 
 ### Documentation
 - The 0.1.2 note on argument checking said every wrong type is a `TypeError`. It now says

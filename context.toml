@@ -110,7 +110,6 @@ ask_overdue_sessions = 5     # an owner question not raised in this many session
 ask_overdue_days = 7         # ...or in this many days, whichever comes first; provenance: JUDGEMENT, engine default; wrong as above
 baton_max_age = 2            # sessions closed after the owning one before a baton expires (G-W3); provenance: JUDGEMENT, engine default; wrong if batons expire while still being worked
 register = "docs/invariants.md"   # the residual-risk register (FRAMEWORK §7.4); the first `task close` that files a residual risk creates it
-decision_index = "docs/decisions/index.md"   # generated from the decisions' frontmatter on every decision write; lint G-D6 checks it (FRAMEWORK §6.5)
 criteria = "docs/criteria.md"               # one `| AC-n | ... |` row per criterion; `decision link` refuses an AC-n id that is not a row
 archive = "docs/archive"                    # where `doc archive` moves a doc when given no --to (FRAMEWORK §7.3); its README.md is the directory's redirect table, made by the first archive
 review_triggers = ["record-kind", "guard", "write-op", "git-loss", "long-lived", "shipped"]  # the values a board item's `review:` may take: FRAMEWORK §5.2's design-review threshold, one per clause
