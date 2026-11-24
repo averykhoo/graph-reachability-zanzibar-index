@@ -194,8 +194,8 @@ does not check the gate: ask `gate_status.py` first.
   `python scripts/gate_status.py` reports which phases are green **on the current tree**.
   Details and sabotage evidence: [`docs/gate-runbook.md`](docs/gate-runbook.md) §4.
 - **GitHub Actions runs the same gate (`TK122`)**: `.github/workflows/gate.yml` is one job
-  per phase on Linux, and `.github/workflows/fuzz.yml` is the multi-seed sweep, **on push
-  with a haiku or scripted babysitter, never scheduled** (DEC-22; the workflow still says on
+  per phase on Linux, and `.github/workflows/fuzz.yml` is the multi-seed sweep: **local before push and/or on push
+  with a haiku or scripted babysitter, never scheduled** (DEC-22, DEC-23; the workflow still says on
   demand until TK-308). The workflows only provision
   and call `verify.sh`; floors and budgets stay there. CI does NOT replace the local gate
   (CI installs the newest dependency versions, the local env the pinned ones).

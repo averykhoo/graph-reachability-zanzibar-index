@@ -9,7 +9,7 @@ deps: []
 source: session 2026-11-24a
 created: 2026-11-24
 moved: 2026-11-24a
-updated: 2026-11-24a
+updated: 2026-11-24b
 ---
 
 Run `.github/workflows/fuzz.yml` (the multi-seed hypothesis sweep) on every push, watched by a babysitter, and never on a schedule. Decided by the owner: DEC-22 (2026-11-24): "Fuzz on demand is a side effect of me not watching cicd pipelines and never acting on them, and Claude will usually only see the repo and won't check all historical runs, so there's no point running fuzz on a schedule, it's easier to just run on push with a haiku or scripted babysitter". This supersedes the 2026-10-07 "on demand and before a release only" rule in the workflow's header comment.
@@ -32,3 +32,5 @@ Done when: `fuzz.yml` has a `push` trigger and no `schedule`; one push has shown
 - `docs/gate-runbook.md` sec 3
 
 ## Log
+
+- 2026-11-24b (claude-code/claude-opus-5-5): DEC-23 (owner, 2026-11-24) relaxes this: fuzz and hypothesis may also run locally before push; CI on push, local before push, or both are acceptable ("since GitHub minutes are free for public projects it doesn't really matter"); still never scheduled. The push trigger stays a valid way to close this row; the Done-when wording should accept either route.
