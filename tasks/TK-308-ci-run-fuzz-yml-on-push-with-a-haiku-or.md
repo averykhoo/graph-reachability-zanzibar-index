@@ -9,7 +9,7 @@ deps: []
 source: session 2026-11-24a
 created: 2026-11-24
 moved: 2026-11-24a
-updated: 2026-11-24b
+updated: 2026-11-25a
 ---
 
 Run `.github/workflows/fuzz.yml` (the multi-seed hypothesis sweep) on every push, watched by a babysitter, and never on a schedule. Decided by the owner: DEC-22 (2026-11-24): "Fuzz on demand is a side effect of me not watching cicd pipelines and never acting on them, and Claude will usually only see the repo and won't check all historical runs, so there's no point running fuzz on a schedule, it's easier to just run on push with a haiku or scripted babysitter". This supersedes the 2026-10-07 "on demand and before a release only" rule in the workflow's header comment.
@@ -34,3 +34,4 @@ Done when: `fuzz.yml` has a `push` trigger and no `schedule`; one push has shown
 ## Log
 
 - 2026-11-24b (claude-code/claude-opus-5-5): DEC-23 (owner, 2026-11-24) relaxes this: fuzz and hypothesis may also run locally before push; CI on push, local before push, or both are acceptable ("since GitHub minutes are free for public projects it doesn't really matter"); still never scheduled. The push trigger stays a valid way to close this row; the Done-when wording should accept either route.
+- 2026-11-25a (claude-code/claude-opus-5-5): SALVAGE (2026-11-25a, from gitignored .scratch/s23a/fuzz.tsv + fuzz.sh, the local six-seed sweep of session 2026-11-23a, file dated 2026-11-23 06:43; READ by the 2026-11-25a salvage agent, not re-run): what one sweep costs, the per-push price this row adds. Method (fuzz.sh): the conda env's pytest, one module and one `--hypothesis-seed=N` per command (default ci profile), seeds 7 19 31 53 71 97, each rc and the last log line recorded. Result: 30/30 runs rc=0, "FUZZDONE fail=0". Per module, pass count and wall time per seed (min-max, sum of 6): tests/test_lookup_oracle.py 52 passed, 90-101 s, 572 s; tests/test_lookup_hypothesis.py 17 passed, 38-50 s, 255 s; tests/test_hypothesis.py 34 passed, 37-51 s, 260 s; tests/test_irrelevant_alternatives.py 3 passed, 13-16 s, 87 s; tests/test_generator_coverage.py 35 passed, 62-64 s, 376 s. Total 1550 s (~26 min) run sequentially on the laptop; CI runners in parallel jobs will differ (not measured). Only "all green" was tracked before (docs/ledger/session-log.md, 2026-11-23 entry).

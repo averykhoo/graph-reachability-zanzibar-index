@@ -19,6 +19,7 @@ taskpy_created: 2026-10-15b
 taskpy_moved: 2026-10-19b
 taskpy_updated: 2026-10-19b
 taskpy_closed: 2026-10-19b
+updated: 2026-11-25a
 ---
 
 SPLIT from `TK123` (review item A25b, `docs/tk123-api-review-2026-10-14.md`, call SPLIT).
@@ -45,3 +46,4 @@ DOC: docs/tk157-adopt-helper-2026-10-19.md (FROZEN at this close; dated review-f
 TESTS: tests/test_tk157_store_adopt.py "19 passed"; 24 build_index/IndexExists modules "659 passed".
 SABOTAGE (all RED): S1 commit after save_schema, S2 no node-id check, S3 no isolation check (each "1 failed, 13 passed"), S4 early paranoia/ops checks removed ("4 failed, 15 passed"), S5 shapes dropped ("1 failed, 18 passed").
 DECLINED: bulk=True ValueError vs bulk=False AdmissionRejected for an undeclared doc:* stored row is pre-existing build_index behaviour; documented in the adopt docstring, not unified. PG leg: reasoned skip (no new SQL/locks/isolation logic).
+- 2026-11-25a (claude-code/claude-opus-5-5): SALVAGE (2026-11-25a, from gitignored .scratch/tk155-157/TK157/review-equivalence.md + probes/probe_adopt_equiv.py, probe_adopt_owc.py, probe_adopt_lookup.py, the equivalence review dated 2026-10-19; READ by the 2026-11-25a salvage agent, not re-run; no output files saved, numbers are the reviewer's report). The "no divergence" coverage recorded nowhere tracked: probe_adopt_equiv.py, boolean / TTU / userset self-relation (TK144) x bulk True/False, post-adopt and post-writes grid: 0 divergences graph vs set vs oracle; probe_adopt_owc.py, object_wildcard_shapes given / persisted (schema=None) / omitted-with-star-row: 0 divergences, the omitted case refused with nothing committed and a retry OK; probe_adopt_lookup.py, lookup / lookup_reverse / expand on an adopted store vs a natively built store, by result_keys/excluded_keys: 0 divergences over 6 configs. Its should-fix (late refusal after build_index committed) and nit (bulk=True ValueError vs bulk=False AdmissionRejected) are tracked in docs/tk157-adopt-helper-2026-10-19.md.

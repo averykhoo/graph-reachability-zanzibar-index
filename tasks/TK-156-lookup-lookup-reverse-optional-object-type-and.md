@@ -19,6 +19,7 @@ taskpy_created: 2026-10-15b
 taskpy_moved: 2026-10-19b
 taskpy_updated: 2026-10-19b
 taskpy_closed: 2026-10-19b
+updated: 2026-11-25a
 ---
 
 SPLIT from `TK123` (review item A21b, `docs/tk123-api-review-2026-10-14.md`, call SPLIT).
@@ -47,3 +48,4 @@ DOC: docs/tk156-lookup-filter-2026-10-19.md (FROZEN at this close; review/fix co
 TESTS: tests/test_tk156_lookup_filter.py (oracle gates on wildcards + boolean fixtures, implicit-exclusion shape pin, StaleLookupIds pin on both backends, Store-level pins); with tk155 + tk123_* + tk153*: "219 passed".
 SABOTAGE (all RED): S1-S7 (graph keeps markers, graph drops exclusions, set matches name, set keeps implicit keys, Store ignores filter, Store swaps filters, shape_filter ignores predicate); review mutants M3, M4, M5, M11, M12 each "1 failed, 2 passed". BLOCKING review finding (TK156 cited in three public docstrings -> test_tk123_no_internal_refs red) FIXED and re-run green.
 PG leg: reasoned skip (read-only post-filter). Hypothesis sweep: not applicable (no lookup algorithm change).
+- 2026-11-25a (claude-code/claude-opus-5-5): SALVAGE (2026-11-25a, from gitignored .scratch/tk155-157/TK156/review-equivalence.md + probes/review_eq_probe.py, the equivalence-lens review dated 2026-10-19; READ by the 2026-11-25a salvage agent, not re-run). Verdict NO FINDINGS, recorded nowhere tracked: metamorphic + oracle check on 4 schemas the TK156 module does not walk (userset wildcard [group:*#member] under `but not`; TK144 implicit self-relation with `both: member and admin`; `and` under a [user:*] star; boolean TTU), every declared (type,rel) / type-only / rel-only / undeclared filter, every candidate, asserting covers(filtered graph) == covers(filtered set) == (filter matches AND oracle). Runs: `review_eq_probe.py 1 5` rc=0 "TOTAL mismatches 0"; `review_eq_probe.py 6 14` timed out (rc=124) inside ttu_bool seed 1, its 19 completed runs all mismatches=0; `review_eq_probe.py 4 10 ttu_bool` rc=0 "TOTAL mismatches 0", seeds 1 and 3 reached exclusions (18 / 72 filtered reverse results) and markers (78 / 75). Non-vacuous: userset_star_butnot reached exclusions in seeds 0,1,3 and markers in all.

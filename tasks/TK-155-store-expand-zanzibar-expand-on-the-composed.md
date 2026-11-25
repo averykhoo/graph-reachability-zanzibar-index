@@ -19,6 +19,7 @@ taskpy_created: 2026-10-15b
 taskpy_moved: 2026-10-19b
 taskpy_updated: 2026-10-19b
 taskpy_closed: 2026-10-19b
+updated: 2026-11-25a
 ---
 
 SPLIT from `TK123` (review item A26, `docs/tk123-api-review-2026-10-14.md`, call SPLIT).
@@ -54,3 +55,4 @@ TESTS: tests/test_tk155_store_expand.py, 14 tests, oracle gates (boolean + wildc
 SABOTAGE (all RED): S1 no exclusions, S2 keys without ipos, S3 no catch-up, S4 no StaleRead, S5 no markers, S6/M8 non-bare markers dropped ("1 failed, 13 passed"), helper never raises ("4 failed, 83 passed"). Literal lines in the module docstring.
 NOT COVERED (declared): the `ineg` term of excluded_keys (M1 stays green; no reachable state found).
 OPEN for 0.1.0: ExpandResult.markers are (type, predicate) pairs, LookupResult.markers (type, predicate, any) triples; documented, not aligned. SetEngine.expand docstring pointer deferred to TK151. PG leg: reasoned skip (no locks/watermarks/isolation).
+- 2026-11-25a (claude-code/claude-opus-5-5): SALVAGE (2026-11-25a, from gitignored .scratch/tk155-157/TK155/review-equivalence.md + review-equiv/probe_walks.py, probe_edges.py, the equivalence-lens review dated 2026-10-19; READ by the 2026-11-25a salvage agent, not re-run; the probes saved no output files, so the numbers are the reviewer's report). Coverage recorded nowhere else (docs/tk155-store-expand-2026-10-19.md keeps only "90 fixture walks + 116 generated-schema walks, 0 FAIL"): `probe_walks.py fixtures 3 10`, all 15 tests/fga_schemas x both SetOps x seeds 0-2, 10 steps + drain: 90 walks, 1328 states, 0 FAIL, 761136 checks (module checker E1-E3 plus an extra '*'-subject key `in res` vs oracle); `probe_walks.py gen 150 6`, 150 seeded generated schemas (seeds 1000..1149, SetOps alternating): 116 walks (34 Store-refused, graph out of scope), 1120 states, 0 FAIL; probe_edges.py (but-not, userset, nested group, `and`, TK144 self-relation, ghost object, invalid name, undeclared relation/type, doc:* object): expand `in` == oracle == Store.check on every probed key. Verdict: no equivalence divergence reproduced; its one nit (markers pairs vs triples) is tracked on this row's 2026-10-19 review-fix line.

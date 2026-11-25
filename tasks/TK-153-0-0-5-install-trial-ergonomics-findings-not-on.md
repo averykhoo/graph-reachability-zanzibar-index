@@ -18,6 +18,7 @@ created: 2026-10-15
 taskpy_moved: '2026-10-17'
 taskpy_updated: '2026-10-17'
 taskpy_closed: '2026-10-17'
+updated: 2026-11-25a
 ---
 
 These are the 0.0.5 install-trial CONFUSING / DOC GAP findings that are NOT already on
@@ -80,3 +81,4 @@ RED: nothing known. The full gate was NOT run.
 NEXT: the session runs the full phased gate (lean, conf-tile 1-5, tests-tile 1-4), then commits by path.
 
 Landed (map: docs/tk153-install-trial-ergonomics-2026-10-17.md, FROZEN at close). F3 ASCII-only public docstrings, pinned by tests/test_tk153_ascii_public_text.py. F8 DeltaProcessor exported from zanzibar.graphindex and MissingDeltaProcessor names the import. F9 ShapeNoLongerAccepted.instead documented, undeclared-type message fixed in parser + JSON front end. F11 undeclared-relation lead on both backends via schema/syntax.py::no_restriction_message, plus declares-no-relations wording. F17 one type, PersistedSchemaRefused, from every entry point incl. SetEngine and save_schema/ensure_schema. F6 short reprs for RuleSet / SchemaRecord / IndexCursor, read under no_autoflush. F19 lookup_reverse users recipe in PYPI_README + Store.lookup_reverse docstring. ClosureFanoutExceeded docstring corrected, fan-out comment re-measured (probe formal/probes/tk153_fanout_probe_plugin_2026_10_17.py). Tests: tests/test_tk153_install_trial_ergonomics.py + tests/test_tk153_ascii_public_text.py; sabotage SB1-SB11 all RED, literal output in docstrings. Full phased gate run at close (see the commit).
+- 2026-11-25a (claude-code/claude-opus-5-5): SALVAGE (2026-11-25a, from gitignored .scratch/ultracode-2026-10-17/TK153-assurance.md + probes-TK153-assurance/f19_recipe.py/.out, the assurance review of the TK153 change, files dated 2026-10-17; READ by the 2026-11-25a salvage agent, not re-run). Two measurements recorded nowhere else: (1) the PYPI_README F19 recipe ("list the USERS from lookup_reverse") checked against check() over 180 random stores (60 seeded trials each of three schemas: derived `[user, user:*, group#member] but not banned`, plain union, `a and b`): f19_recipe.out "mismatches 0", non-vacuous per "stats markers/excl/nonempty {'derived': [21, 8, 32], 'union': [35, 0, 47], 'and': [3, 0, 19]}". (2) a full pydoc help() render of every __all__ name in the 5 public packages had 0 non-ASCII lines (report line only, no output file). The review's other results (10 monkeypatch sabotages all RED, the dunder gap in `tests/test_tk153_ascii_public_text.py::_public_doc_targets`) are already in docs/tk153-install-trial-ergonomics-2026-10-17.md.

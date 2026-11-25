@@ -18,6 +18,7 @@ created: 2026-10-08
 taskpy_moved: '2026-10-14'
 taskpy_updated: '2026-10-14'
 taskpy_closed: '2026-10-14'
+updated: 2026-11-25a
 ---
 
 The Lean leaf-allocation model asks whether a TTU arm is PURE by relation NAME:
@@ -93,3 +94,4 @@ LANDED: commit 22d4b16, design L-A amended by X1/X2/X6. GraphIndex/Leaf.lean::is
 Plan doc docs/tk132-lean-ispure-ttu-target-2026-10-14.md is FROZEN now (banner added 2026-10-14).
 Stays open: X3, the accepted scope loss: runCascade2_no_abort and cascade2_drains gain the carry, which is false on D / D_nested / SlXt, so they no longer cover those shapes (their old coverage was of a model that was not the code). Buying D back (design L-B, X5 cost estimate) is TK133. TK149 (LATER): the Lean graph mode under-reports a .ttu inside a derived def (the 2026-08-14 fail-closed class), positively pinned, not hidden.
 Next action: none on this row; the scope loss lives on TK133 and the graph-mode gap on TK149.
+- 2026-11-25a (claude-code/claude-opus-5-5): SALVAGE (2026-11-25a, from gitignored .scratch/now-next-2/review-TK132.md, the read-only review of 22d4b16 written 2026-10-14; READ by the 2026-11-25a salvage agent, not re-run): verdict APPROVE, no blocking issue. Findings recorded nowhere else: (1) Check 3, probe flip_reason.py: with Python `_is_pure` put back on the old NAME test the red set is {TK126:D, TK126:D_nested, TK126:SlXt, WIT:W3}, each diff the EXACT MIRROR (python_only<->lean_only) of the deleted `_TK132_EXPECTED` value from e3581aa ("VERDICT: MIRROR-EXACT"); the permanent sabotage (S4) asserts only the red SET, so the mirror could be pinned permanently (nit, unowned). (2) Check 5, probe ScopeW3.lean (rc=0, output not saved): SlW3 meets the NoTtuTarget and NoBridgedDerived twins but the carry is FALSE, so the headline scope loss is the whole class, W3/SlW3 included, not only D/D_nested/SlXt. (3) the non-headline audited `GraphIndex/Cascade.lean` runCascade_no_abort / cascade_drains (and round2_key_reads_derived) also gained hLTU, which the CORRESPONDENCE carry row omitted (re-READ first-hand 2026-11-25: still true). Out-of-tree sabotage re-runs: control rc=0 0 errors; S5 (.all->.any) exactly 1 error; S1 (revert) exactly 4 errors, matching the builder. LANDED: (2) and (3) as dated corrections on the formal/CORRESPONDENCE.md LeafTtuTargetsUnderived row (2026-11-25).
