@@ -17,7 +17,7 @@ created: 2026-10-14
 taskpy_moved: '2026-10-14'
 taskpy_updated: '2026-10-14'
 moved: 2026-11-20a
-updated: 2026-11-20a
+updated: 2026-11-25a
 ---
 
 Residual of TK142 (challenge C4, `docs/tk142-lookup-oracle-exclusion-gap-2026-10-14.md`), not closed by the TK142 build (worktree-wf_9a094007-20b-11 @69080d4, tests only).
@@ -45,3 +45,4 @@ Done when: a broad seeded walk goes RED under F1 (observed output in its docstri
 ## Log
 
 - 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> NEXT. EQUIV + HONEST: a forward SetEngine.lookup exclusion drop (mutant F1) stays green in every broad gate; only scripted pins catch it. Fix: a seeded broad walk plus a tripwire, sabotaged.
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): stays NEXT, #2; after TK-146 (measure with database=None).

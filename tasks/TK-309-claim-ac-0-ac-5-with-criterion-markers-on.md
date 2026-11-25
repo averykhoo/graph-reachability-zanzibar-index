@@ -9,7 +9,7 @@ deps: []
 source: session 2026-11-24a
 created: 2026-11-24
 moved: 2026-11-24a
-updated: 2026-11-24a
+updated: 2026-11-25a
 ---
 
 Claim the criteria in `docs/criteria.md` (AC-1..AC-6, all `planned`, owner-accepted in DEC-22) with existing tests, and move each row to `tested` only once a claiming test has been seen red with the behaviour broken (FRAMEWORK P7, `docs/sabotage-procedure.md`).
@@ -32,3 +32,5 @@ Done when: every AC-1..AC-6 row is `tested` with a `Claimed by` file, each move 
 - `docs/runbooks/manual-mode.md` § Criteria
 
 ## Log
+
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): stays NEXT, #1; do after TK-146 (hypothesis replay would fake its sabotage catches).

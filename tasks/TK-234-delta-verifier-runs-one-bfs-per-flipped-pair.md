@@ -4,7 +4,7 @@ id: TK-234
 aliases: [R6-8]
 title: delta verifier runs one BFS per flipped PAIR instead of per distinct source (11.0%)
 brief: 'CO-DESIGN TRIPLE with R6-16 + R6-7: take all three in one session or none -- see R6-16'
-pri: LATER
+pri: SOMEDAY
 state: open
 size: '?'
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: 2026-09-22b
 taskpy_updated: 2026-09-22b
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 `src/zanzibar/graphindex/invariants.py::verify_outbox_deltas`
@@ -81,3 +83,4 @@ to break the triple. Note the 11.0% is GATE WALL-CLOCK, not production latency: 
 never runs in production but IS the `tests/` default.
 
 Full audit: docs/r6-sizing-census-2026-09-22.md
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): LATER -> SOMEDAY. Gate-speed perf only, as TK-233; checker rewrite risk.

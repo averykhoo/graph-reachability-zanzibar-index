@@ -5,7 +5,7 @@ aliases: [R6-17]
 title: 'duplicate of R6-3: SetEngine._instances_of_type rescan, multiplied per candidate'
 brief:
 pri: HOLD
-state: open
+state: closed
 size: '?'
 deps: []
 related: []
@@ -16,6 +16,10 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: '2026-08-21'
 taskpy_updated: '2026-08-21'
+updated: 2026-11-25a
+status: deprecated
+closed: 2026-11-25a
+moved: 2026-11-25a
 ---
 
 `src/zanzibar/setengine/engine.py::SetEngine._instances_of_type`
@@ -46,3 +50,6 @@ taskpy_updated: '2026-08-21'
 ### 2026-08-21
 
 **Migrated by `migrate.py`, and this row is a CORRECTION.** The first migration pass classified every id whose disposition string was not literally `closed` as retired, which wrote this live item into `retired-ids.txt` — an irreversible sink, since `task.py` refuses to re-mint a retired id. Its true disposition (`UNREACHED — HOLD`) is taken from `docs/perf-round6-audit-2026-08.md`, the audit that owns these ids, not from the `R6` board row’s summary prose (which undercounts the land list by one and overcounts the declines by one). `parent: R6` makes the round a rollup: closing the last child is what reports that `R6` itself can close. **`created` (`2026-08-15`) is RECORDED, not approximated** — it is the date the audit doc that minted these ids states for itself; `moved` is the `R6` board row’s value.
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a: closing as a duplicate of TK-229 on the owner yes (ASK-13). TK-239 (R6-17) and TK-229 (R6-3, aliases: [R6-3], related lists R6-17) name the same symbol, SetEngine._instances_of_type, and the same fix; this row own trap calls it a LITERAL duplicate. Its note said close when R6-3 is settled; R6-3 is not settled, but this row carries nothing TK-229 lacks, so TK-229 keeps the work.
+- 2026-11-25a (claude-code/claude-opus-5-5): closed: Duplicate of TK-229 (R6-3): same symbol SetEngine._instances_of_type, same fix; TK-229 keeps the work. Owner yes, ASK-13.
+  residual risk: none

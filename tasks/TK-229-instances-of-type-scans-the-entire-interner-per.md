@@ -4,7 +4,7 @@ id: TK-229
 aliases: [R6-3]
 title: _instances_of_type scans the entire interner per type -- 0 calls in any profile
 brief:
-pri: HOLD
+pri: SOMEDAY
 state: open
 size: '?'
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: 2026-08-24b
 taskpy_updated: 2026-08-24b
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 `src/zanzibar/setengine/engine.py::SetEngine._instances_of_type`
@@ -50,3 +52,4 @@ taskpy_updated: 2026-08-24b
 ### 2026-08-24b
 
 related-edge sweep (trial finding F1): added `related: [R6-13, R6-17]`. R6-17 is a literal duplicate and R6-13 the bulk twin; both name R6-3 in their own bodies, and R6-3 named neither -- so a session settling R6-3 (the end that gets worked) would never learn it also discharges R6-17. Edge written on the blind end; `show` computes the incoming half for the other two.
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): HOLD -> SOMEDAY. 0 calls in any profile (2026-08-17, not re-measured); already memoized per evaluation (SetEngine._instances_of_type); no recorded decision behind the HOLD. TK-239 (R6-17) closed as its duplicate.

@@ -4,7 +4,7 @@ id: TK-11
 aliases: [TK11]
 title: Residue.version (I7) is modelled by nothing formal; ZT-P4-5 declared it and never refiled
 brief:
-pri: LATER
+pri: SOMEDAY
 state: open
 size: M
 deps: []
@@ -17,6 +17,8 @@ created: 2026-08-21
 taskpy_created: 2026-08-21b
 taskpy_moved: '2026-09-10'
 taskpy_updated: '2026-09-10'
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 `src/zanzibar/graphindex/models.py::Residue` carries a `version` column, incremented in `src/zanzibar/graphindex/processor.py::DeltaProcessor._store_residue` and checked by **I7** (monotonicity per residue row) in `src/zanzibar/graphindex/invariants.py::_check_residue_rows`. Lean's `Residue` has no version field, so I7 is pinned only by `tests/` paranoia runs. `CORRESPONDENCE.md` calls it *a MODELLING GAP, not a representation difference*, and declares it as projection `P7` (`ZT-P4-5(b)`, 2026-07-27).
@@ -49,3 +51,4 @@ LANDED 2026-09-10 (TK53 append) as a new bullet in `docs/perf-round6-audit-2026-
 The drafted prose asserted that `install_paranoia` is NOT wired into `ConnectedStore`. That is FALSE and was caught by the adversarial pass: `src/zanzibar/connectedstore/store.py:193` calls it. The true and sharper statement, which is what landed, is that it IS wired but `ConnectedStore.DEFAULT_PARANOIA` is `PARANOIA_OFF` (`store.py:98`), so a DEFAULT deployment runs I7 unchecked. Verified both lines first-hand, plus `src/zanzibar/graphindex/invariants.py:408 _check_residue_rows` and the independent P7 projection statement in `formal/FINAL_REVIEW.md` (:147, :554).
 
 The bullet is explicitly date-stamped 2026-09-10 because that section's preamble claims every note below it was checked on 2026-08-29b; an undated append would have inherited a check date it never got.
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): LATER -> SOMEDAY. Lean-model gap, already declared; Lean widening deferred (DEC-22).

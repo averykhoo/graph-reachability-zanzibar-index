@@ -4,7 +4,7 @@ id: TK-28
 aliases: [TK28]
 title: 'unverified R6 lead A12: boolean bulk build holds three full-closure copies in RAM at once'
 brief:
-pri: HOLD
+pri: SOMEDAY
 state: open
 size: '?'
 deps: []
@@ -17,6 +17,8 @@ created: 2026-08-21
 taskpy_created: 2026-08-21b
 taskpy_moved: '2026-09-10'
 taskpy_updated: '2026-09-10'
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 `src/zanzibar/graphindex/bulk_build.py::bulk_build` — lead **A12** of the 16-item appendix, `docs/perf-round6-audit-2026-08.md:895`.
@@ -57,3 +59,4 @@ LANDED 2026-09-10 (TK53 append) into the "Measurement hygiene:" bullet of `docs/
 Verified first-hand: `benchmarks/profile_r6_write.py::target_space` (:600) is an on-disk byte A/B -- two SQLite layouts, VACUUMed, bytes compared -- not a RAM reading; `benchmarks/_harness.py::rss_mb` is defined at :30 and is already wired into `bulk_scale_bench.py` and `set_engine_bench.py` (:43, as the `peak_rss_mb` wrapper).
 
 Wording was chosen to avoid a self-contradiction the adversarial pass flagged: the doc's own :32 advertises `profile_r6_write.py` as covering "space", so the landed text says the profilers are not a RAM instrument and names what `target_space` actually measures, rather than claiming the doc has no space target.
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): HOLD -> SOMEDAY. Unverified lead (space, not time); the HOLD cited a reopening rule, not a recorded decision.

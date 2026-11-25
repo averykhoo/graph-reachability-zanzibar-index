@@ -1,15 +1,15 @@
 ---
 type: Task
 id: TK-302
-title: Charter goals, criteria and first stories in the owner's own words
-brief: Owner words only, verbatim (DEC-15); the body's G-1..G-4 are agent drafts to put to the owner
-pri: SOMEDAY
+title: Write the first user stories (US-n) from the owner-accepted charter and criteria
+brief: charter and criteria landed from DEC-22/DEC-23; docs/stories/ does not exist yet; only the stories remain
+pri: LATER
 state: open
 deps: []
 source: session 2026-11-04a
 created: 2026-11-04
-moved: 2026-11-04a
-updated: 2026-11-04a
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 Fill `docs/charter.md` (goals) and `docs/criteria.md`, and record the first stories, in the owner's own words, in a zanzibar engine session (procedures § Intake). Decided by the owner: DEC-15 (answering context-engine `ASK-31`, "31 yes we should do that eventually"). Until then both stay the kit's templates, which lint accepts; orient lists them under "Templates still unfilled".
@@ -30,3 +30,5 @@ Fill `docs/charter.md` (goals) and `docs/criteria.md`, and record the first stor
 - `docs/architecture/decision-log.md` § "The project goal"
 
 ## Log
+
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a: owner yes (ASK-13): write stories. SOMEDAY -> LATER, retitled to stories only (charter + criteria AC-1..AC-6 already filled from DEC-22/23). Stories not written this session.

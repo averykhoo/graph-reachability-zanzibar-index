@@ -3,13 +3,13 @@ type: Task
 id: TK-305
 title: "TK-185 verifier notes: '...' lookup-filter asymmetry; stale WildcardIndex.check comment; result_keys check-order warning; ensure_schema SchemaMismatch on a bad shape; expand arity message names o_type/o_name"
 brief: small HONEST cleanups; the wildcard.py comment is content-pinned, so move the pin deliberately
-pri: LATER
+pri: NEXT
 state: open
 deps: []
 source: session 2026-11-20a
 created: 2026-11-20
-moved: 2026-11-20a
-updated: 2026-11-20a
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 TK-185 verifier notes: small HONEST cleanups left by the 0.1.3 batch (independent verifier, SHIP WITH NOTES, 2026-11-20).
@@ -29,3 +29,5 @@ TK-185 verifier notes: small HONEST cleanups left by the 0.1.3 batch (independen
 - docs/tk185-0.1.3-batch-2026-11-20.md (section "Residual (filed at the close, not fixed here)")
 
 ## Log
+
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): LATER -> NEXT (#3 after TK-309, TK-148). A backend asymmetry ('...' lookup filter) plus a WildcardIndex.check comment claiming parity is AC-4/AC-6 honesty; S.

@@ -17,6 +17,7 @@ created: 2026-08-21
 taskpy_created: 2026-08-21b
 taskpy_moved: '2026-09-10'
 taskpy_updated: '2026-09-10'
+updated: 2026-11-25a
 ---
 
 Two author's-voice editorial markers in `README.md`: `:142` *"todo: continue story another day"* (§*Overcomplicating things*) and `:150` *"todo: either write something or reference"* (the MAFSA word-count trick). Restated in the FROZEN `formal/history/handoff-status-2026-08-16.md:569-570`, which is why the sweep found them twice.
@@ -44,3 +45,4 @@ LANDED 2026-09-10 (TK53 append) into `docs/README.md` sec 2, between the "Archiv
 Only the TRAP landed, not the two TODOs themselves -- the markers at root `README.md:142` and `:150` stand for unfinished narrative in the author's voice and nobody else can write the prose they stand for. Both markers verified live.
 
 Adversarial pass caught a link hazard that this row had already been bitten by once: a bare `README.md` link from inside `docs/` resolves to the WRONG file. The landed text links `../README.md` explicitly and says why. It also frames the sabotage-procedure residue line as an ANALOGY rather than the governing rule -- that sentence is about coverage residue and a green gate, not prose markers, so presenting it as repo-wide discipline would have been scope inflation.
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a: owner yes (ASK-13) to the README notes. Both TODOs are in the owner voice, so nothing was written into README.md: candidate text (two variants each, plus a combined option) is drafted in .scratch/s25a/tk43-drafts.md (gitignored, so this row is the pointer) and NEEDS THE OWNER to approve or edit a variant before an agent applies it. Stays SOMEDAY until then.

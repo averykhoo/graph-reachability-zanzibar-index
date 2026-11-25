@@ -4,7 +4,7 @@ id: TK-233
 aliases: [R6-7]
 title: I10 outbox-sanity rescans the WHOLE outbox every commit despite a watermark (20.7%)
 brief: 'CO-DESIGN TRIPLE with R6-16 + R6-8: take all three in one session or none -- see R6-16'
-pri: LATER
+pri: SOMEDAY
 state: open
 size: S
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: 2026-09-22b
 taskpy_updated: 2026-09-22b
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 `src/zanzibar/graphindex/invariants.py::_check_outbox_sanity`
@@ -72,3 +74,4 @@ mandatory: insert a malformed row ABOVE the watermark and watch the existing I10
 `tests/test_invariants_derived.py` go red.
 
 Full audit: docs/r6-sizing-census-2026-09-22.md
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): LATER -> SOMEDAY. Gate-speed perf only; a checker rewrite needs its own sabotage.

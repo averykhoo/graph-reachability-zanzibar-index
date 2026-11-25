@@ -4,7 +4,7 @@ id: TK-228
 aliases: [R6-1]
 title: set-engine lookup re-runs check with a fresh memo per candidate (91.4% of lookup)
 brief:
-pri: SOMEDAY
+pri: LATER
 state: open
 size: L
 deps: []
@@ -16,8 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: 2026-09-22b
 taskpy_updated: 2026-09-22b
-moved: 2026-11-20a
-updated: 2026-11-20a
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 `src/zanzibar/setengine/engine.py::SetEngine.lookup`
@@ -83,3 +83,4 @@ this row's evidence block names two. Not re-verified first-hand.
 
 Full audit: docs/r6-sizing-census-2026-09-22.md
 - 2026-11-20a (claude-code/claude-opus-5-5): rerank 2026-11-20a: LATER -> SOMEDAY. Perf work: docs/architecture/decision-log.md, section The project goal, 'Rejected: perf as the goal'; the goal is an honest, legible assurance surface (user 2026-09-22c). When perf reopens, its first move is TK-34.
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): SOMEDAY -> LATER. The only perf row that might breach DEC-22 'not much slower than brute force'; first step (S) is a measurement against brute force, not a fix. A naive shared memo is a correctness bug.

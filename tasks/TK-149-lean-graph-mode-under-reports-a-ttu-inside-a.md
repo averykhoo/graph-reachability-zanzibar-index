@@ -4,7 +4,7 @@ id: TK-149
 aliases: [TK149]
 title: Lean graph mode under-reports a .ttu inside a derived def (2026-08-14 class, fail-closed)
 brief: Lean graph mode misses a TTU-in-derived-def public edge + upos residues (fail-closed, outside W4)
-pri: LATER
+pri: SOMEDAY
 state: open
 size: M
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-10-14
 taskpy_moved: '2026-10-14'
 taskpy_updated: '2026-10-14'
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 ## What
@@ -53,3 +55,5 @@ Per CLAUDE.md "Who decides": the default assumption is that the MODEL is out of 
 since Python matches the oracle.
 
 ## Log
+
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): LATER -> SOMEDAY. Lean-only, fail-closed, Python correct, pinned by test_conformance_tk132_leaf_rows.py; DEC-22.

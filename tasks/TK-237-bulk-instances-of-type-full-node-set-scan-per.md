@@ -4,7 +4,7 @@ id: TK-237
 aliases: [R6-13]
 title: bulk _instances_of_type full node-set scan per check_fn -- 0 calls in any profile
 brief:
-pri: HOLD
+pri: SOMEDAY
 state: open
 size: '?'
 deps: []
@@ -16,6 +16,8 @@ source_hash:
 created: 2026-08-15
 taskpy_moved: '2026-08-21'
 taskpy_updated: '2026-08-21'
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 `src/zanzibar/graphindex/bulk_backfill.py::_BulkBackfill._instances_of_type`
@@ -44,3 +46,4 @@ taskpy_updated: '2026-08-21'
 ### 2026-08-21
 
 **Migrated by `migrate.py`, and this row is a CORRECTION.** The first migration pass classified every id whose disposition string was not literally `closed` as retired, which wrote this live item into `retired-ids.txt` — an irreversible sink, since `task.py` refuses to re-mint a retired id. Its true disposition (`UNREACHED — HOLD`) is taken from `docs/perf-round6-audit-2026-08.md`, the audit that owns these ids, not from the `R6` board row’s summary prose (which undercounts the land list by one and overcounts the declines by one). `parent: R6` makes the round a rollup: closing the last child is what reports that `R6` itself can close. **`created` (`2026-08-15`) is RECORDED, not approximated** — it is the date the audit doc that minted these ids states for itself; `moved` is the `R6` board row’s value.
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): HOLD -> SOMEDAY. Bulk twin of TK-229, same reasoning.

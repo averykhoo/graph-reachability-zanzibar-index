@@ -4,7 +4,7 @@ id: TK-253
 aliases: [P9]
 title: lift the remove-gate exclusion (board B2)
 brief:
-pri: LATER
+pri: SOMEDAY
 state: open
 size: M
 deps: []
@@ -16,6 +16,8 @@ source_hash: 549794abdb73
 created: 2026-08-16
 taskpy_moved: '2026-08-16'
 taskpy_updated: '2026-08-16'
+moved: 2026-11-25a
+updated: 2026-11-25a
 ---
 
 lift the remove-gate exclusion (board `B2`)
@@ -34,3 +36,4 @@ None recorded. This row sits below `NEXT`, so it never had an item block; traps 
 ### 2026-08-21
 
 Migrated from the `HANDOFF.md` board by `migrate.py` (SPEC.md section 7). **`created` is an approximation**: the board never recorded one, so it is set to this row’s `moved` value (`2026-08-16`), which is an upper bound on the real creation date, not a measurement. Body is the board cell: summary line plus the row’s pointer.
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a, applying the 2026-11-24b proposal on the owner yes (ASK-13): LATER -> SOMEDAY. Widens proof scope, against the 'not wider' goal and DEC-22.

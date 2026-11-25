@@ -2,8 +2,8 @@
 type: Task
 id: TK-34
 aliases: [TK34]
-title: 'benchmarks/canary.py nightly perf tripwire: proposed, decision pending, never built'
-brief:
+title: On-push CI check that the graph index is not much slower than brute force (re-scoped from the nightly canary)
+brief: 'owner yes (ASK-13): on-push, never scheduled (DEC-22/23); generous ratio; not a verify.sh phase; sabotage first'
 pri: LATER
 state: open
 size: M
@@ -17,6 +17,7 @@ created: 2026-08-21
 taskpy_created: 2026-08-21b
 taskpy_moved: '2026-09-10'
 taskpy_updated: '2026-09-10'
+updated: 2026-11-25a
 ---
 
 `docs/gate-runbook.md:752-762` carries a concrete lightweight proposal: build one fixed store (e.g. `simple` N=8000), time a fixed op mix (K writes, K lookups, K checks), print rates, compare to a recorded baseline with a *generous* threshold (flag only a >2x regression). *"Runs in seconds"*. It sits between grepping test durations (free, noisy) and a full `scale_bench` sweep (accurate, minutes). The decision was left pending and `benchmarks/canary.py` still does not exist.
@@ -48,3 +49,4 @@ TK53 disposition 2026-09-10: NOT an append. Both passes agree the statement is A
 Verified `:227` first-hand.
 
 No prose was written -- writing it would have been a second home for a rule that already has one, against the routing rule in `docs/README.md`. The row stays open as an undecided PROPOSAL (nightly perf tripwire: never built, decision pending); only its statement is no longer sole-homed.
+- 2026-11-25a (claude-code/claude-opus-5-5): rerank 2026-11-25a: RE-SCOPED on the owner yes (ASK-13). Was: benchmarks/canary.py nightly tripwire against a recorded baseline. Now: an ON-PUSH CI check (never scheduled, DEC-22/DEC-23) that the graph index is not much slower than brute force (DEC-22 bar), e.g. index check/lookup vs the set engine or oracle-style enumeration on one fixed store, with a generous ratio threshold (machine-relative, so no stored baseline to regenerate). The traps still hold: not a verify.sh gate phase (flaky), and sabotage it with a planted slowdown and watch it fire. Kept LATER (proposal said SOMEDAY; NEXT is at its cap of 5). Not implemented this session. Related: TK-228 (the one perf row that might breach the bar).
